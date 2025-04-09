@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/go-ponos/pkg/config"
+	"github.com/Layr-Labs/go-ponos/pkg/executor"
+	"github.com/Layr-Labs/go-ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/go-ponos/pkg/executorRpcServer"
 	"github.com/Layr-Labs/go-ponos/pkg/logger"
 	"github.com/Layr-Labs/go-ponos/pkg/rpcServer"
@@ -17,31 +19,57 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run the worker",
+	Short: "Run the executor",
 	Run: func(cmd *cobra.Command, args []string) {
 		initRunCmd(cmd)
 
 		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 
-		l.Sugar().Infow("worker run")
+		l.Sugar().Infow("executor run")
 
 		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{}, l)
 		if err != nil {
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		_, err = executorRpcServer.NewExecutorRpcServer(baseRpcServer, l)
+		execRpcServer, err := executorRpcServer.NewExecutorRpcServer(baseRpcServer, l)
 		if err != nil {
 			l.Sugar().Fatal("Failed to setup executor RPC server", zap.Error(err))
 		}
 
+		exec := executor.NewExecutor(&executorConfig.ExecutorConfig{
+			AvsPerformers: []*executorConfig.AvsPerformerConfig{
+				{
+					AvsAddress:  "0xtestAvsAddress",
+					ProcessType: "server",
+					Image: executorConfig.PerformerImage{
+						Repository: "test-performer",
+						Tag:        "latest",
+					},
+				},
+			},
+		}, execRpcServer, l)
+
+		if err := exec.Initialize(); err != nil {
+			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
+		}
+
 		ctx, cancel := context.WithCancel(context.Background())
+
+		if err := exec.BootPerformers(ctx); err != nil {
+			l.Sugar().Fatalw("Failed to boot performers", zap.Error(err))
+		}
 
 		go func() {
 			if err := baseRpcServer.Start(ctx); err != nil {
 				l.Sugar().Fatal("Failed to start RPC server", zap.Error(err))
 			}
 		}()
+
+		go func() {
+			exec.Run()
+		}()
+
 		gracefulShutdownNotifier := shutdown.CreateGracefulShutdownChannel()
 		done := make(chan bool)
 		shutdown.ListenForShutdown(gracefulShutdownNotifier, done, func() {

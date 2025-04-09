@@ -15,8 +15,8 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "worker",
-	Short: "Execute avs code",
+	Use:   "executor",
+	Short: "Execute tasks",
 }
 
 func Execute() {
