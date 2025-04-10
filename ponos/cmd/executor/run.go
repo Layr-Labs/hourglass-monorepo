@@ -6,10 +6,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executorRpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -27,17 +27,15 @@ var runCmd = &cobra.Command{
 
 		l.Sugar().Infow("executor run")
 
+		// TODO(seanmcgary): implement a real signer at some point
+		fakeSigner := fauxSigner.NewFauxSigner()
+
 		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{}, l)
 		if err != nil {
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		execRpcServer, err := executorRpcServer.NewExecutorRpcServer(baseRpcServer, l)
-		if err != nil {
-			l.Sugar().Fatal("Failed to setup executor RPC server", zap.Error(err))
-		}
-
-		exec := executor.NewExecutor(&executorConfig.ExecutorConfig{
+		execConfig := &executorConfig.ExecutorConfig{
 			AvsPerformers: []*executorConfig.AvsPerformerConfig{
 				{
 					AvsAddress:  "0xtestAvsAddress",
@@ -48,7 +46,8 @@ var runCmd = &cobra.Command{
 					},
 				},
 			},
-		}, execRpcServer, l)
+		}
+		exec := executor.NewExecutor(execConfig, baseRpcServer, l, fakeSigner)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))

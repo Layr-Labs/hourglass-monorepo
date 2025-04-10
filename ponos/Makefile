@@ -5,6 +5,8 @@ BIN = ./bin
 
 PROTO_OPTS=--proto_path=protos --go_out=paths=source_relative:protos
 
+all: cmd/executor
+
 deps: deps/go
 	./scripts/installDeps.sh
 
@@ -22,6 +24,15 @@ proto:
 	buf generate protos
 
 
-.PHONY: cmd/worker
-cmd/worker:
-	go build -o ${BIN}/worker ./cmd/worker
+.PHONY: cmd/executor
+cmd/executor:
+	go build -o ${BIN}/executor ./cmd/executor
+
+
+.PHONY: run/aggregator
+run/aggregator:
+	go run ./cmd/aggregator/*.go run
+
+.PHONY: run/executor
+run/executor:
+	go run ./cmd/executor/*.go run

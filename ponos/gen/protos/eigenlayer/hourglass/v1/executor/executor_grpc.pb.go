@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ExecutorService_Handshake_FullMethodName = "/eigenlayer.hourglass.v1.executor.ExecutorService/Handshake"
+	ExecutorService_Handshake_FullMethodName  = "/eigenlayer.hourglass.v1.executor.ExecutorService/Handshake"
+	ExecutorService_WorkStream_FullMethodName = "/eigenlayer.hourglass.v1.executor.ExecutorService/WorkStream"
 )
 
 // ExecutorServiceClient is the client API for ExecutorService service.
@@ -29,6 +30,7 @@ const (
 // gRPC service
 type ExecutorServiceClient interface {
 	Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*HandshakeResponse, error)
+	WorkStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse], error)
 }
 
 type executorServiceClient struct {
@@ -49,6 +51,19 @@ func (c *executorServiceClient) Handshake(ctx context.Context, in *HandshakeRequ
 	return out, nil
 }
 
+func (c *executorServiceClient) WorkStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ExecutorService_ServiceDesc.Streams[0], ExecutorService_WorkStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WorkStreamRequest, WorkStreamResponse]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExecutorService_WorkStreamClient = grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse]
+
 // ExecutorServiceServer is the server API for ExecutorService service.
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
@@ -56,6 +71,7 @@ func (c *executorServiceClient) Handshake(ctx context.Context, in *HandshakeRequ
 // gRPC service
 type ExecutorServiceServer interface {
 	Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error)
+	WorkStream(grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]) error
 }
 
 // UnimplementedExecutorServiceServer should be embedded to have
@@ -67,6 +83,9 @@ type UnimplementedExecutorServiceServer struct{}
 
 func (UnimplementedExecutorServiceServer) Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Handshake not implemented")
+}
+func (UnimplementedExecutorServiceServer) WorkStream(grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method WorkStream not implemented")
 }
 func (UnimplementedExecutorServiceServer) testEmbeddedByValue() {}
 
@@ -106,6 +125,13 @@ func _ExecutorService_Handshake_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExecutorService_WorkStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ExecutorServiceServer).WorkStream(&grpc.GenericServerStream[WorkStreamRequest, WorkStreamResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ExecutorService_WorkStreamServer = grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]
+
 // ExecutorService_ServiceDesc is the grpc.ServiceDesc for ExecutorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +144,13 @@ var ExecutorService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ExecutorService_Handshake_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WorkStream",
+			Handler:       _ExecutorService_WorkStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "eigenlayer/hourglass/v1/executor/executor.proto",
 }
