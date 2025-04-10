@@ -5,7 +5,7 @@ BIN = ./bin
 
 PROTO_OPTS=--proto_path=protos --go_out=paths=source_relative:protos
 
-all: cmd/executor
+all: build/cmd/executor build/cmd/aggregator
 
 deps: deps/go
 	./scripts/installDeps.sh
@@ -25,8 +25,12 @@ proto:
 
 
 .PHONY: cmd/executor
-cmd/executor:
+build/cmd/executor:
 	go build -o ${BIN}/executor ./cmd/executor
+
+.PHONY: build/cmd/aggregator
+build/cmd/aggregator:
+	go build -o ${BIN}/aggregator ./cmd/aggregator
 
 
 .PHONY: run/aggregator
