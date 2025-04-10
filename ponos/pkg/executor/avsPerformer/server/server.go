@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/go-ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -67,6 +67,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		zap.String("avsAddress", aps.config.AvsAddress),
 		zap.String("containerID", res.ID),
 	)
+
 	return nil
 }
 

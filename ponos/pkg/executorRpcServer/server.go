@@ -1,8 +1,8 @@
 package executorRpcServer
 
 import (
-	"github.com/Layr-Labs/go-ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	"github.com/Layr-Labs/go-ponos/pkg/rpcServer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )

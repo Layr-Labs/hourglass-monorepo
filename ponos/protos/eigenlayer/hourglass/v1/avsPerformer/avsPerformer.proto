@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package eigenlayer.hourglass.v1.avsPerformer;
 
-option go_package = "github.com/Layr-Labs/go-ponos/gen/protos/eigenlayer/hourglass/v1/avsPerformer";
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/avsPerformer";
 
 message Task {
   string task_id = 1;

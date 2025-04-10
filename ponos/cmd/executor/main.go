@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/Layr-Labs/go-ponos/pkg/config"
-	"github.com/Layr-Labs/go-ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 )
 
 import (

@@ -1,4 +1,4 @@
-module github.com/Layr-Labs/go-ponos
+module github.com/Layr-Labs/hourglass-monorepo/ponos
 
 go 1.23.6
 

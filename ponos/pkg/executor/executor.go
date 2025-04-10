@@ -3,10 +3,10 @@ package executor
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/go-ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/go-ponos/pkg/executor/avsPerformer/server"
-	"github.com/Layr-Labs/go-ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/go-ponos/pkg/executorRpcServer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/server"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executorRpcServer"
 	"go.uber.org/zap"
 )
 

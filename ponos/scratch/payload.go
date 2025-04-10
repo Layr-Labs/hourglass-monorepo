@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/Layr-Labs/go-ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"google.golang.org/protobuf/proto"
 )
 

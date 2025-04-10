@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package eigenlayer.hourglass.v1.executor;
 
-option go_package = "github.com/Layr-Labs/go-ponos/gen/protos/eigenlayer/hourglass/v1/executor";
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor";
 
 message HandshakeRequest {
   string aggregator_address = 1;            // address of the aggregator so the operator knows who sent the message

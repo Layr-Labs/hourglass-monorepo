@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package eigenlayer.hourglass.v1.wire;
 
-option go_package = "github.com/Layr-Labs/go-ponos/gen/protos/eigenlayer/hourglass/v1/wire";
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/wire";
 
 message AuthenticateSocket {
   string aggregator_address = 1;              // address of the aggregator that wants to connect
