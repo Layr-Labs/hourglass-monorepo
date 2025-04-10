@@ -1,0 +1,11 @@
+version: v1
+managed:
+  enabled: true
+plugins:
+  # Generate Go code for annotations in OpenAPI plugin
+  - plugin: go
+    out: gen/protos
+    opt: paths=source_relative
+  - plugin: go-grpc
+    out: gen/protos
+    opt: paths=source_relative,require_unimplemented_servers=false

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package eigenlayer.hourglass.v1.wire;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/wire";
+
+message AuthenticateSocket {
+  string aggregator_address = 1;              // address of the aggregator that wants to connect
+  string operator_signed_nonce = 2;           // the signed nonce the operator sent back in the handshake
+  string operator_signed_nonce_signature = 3; // signature of the operator_signed_nonce signed with aggregator key to verify
+}
+
+message Task {
+  string task_id = 1;                       // ID of the task from the origin inbox contract
+  string operator_address = 2;              // ID of the operator that needs to process the message (mainly for debugging)
+  uint64 chain_id = 3;                      // ID of the chain the message originated on
+  bytes payload = 4;                        // generic bytes to pass off to the AVS software to execute
+  uint64 deadline = 5;                      // unix timestamp of when the task needs to be processed by
+  string task_signature = 6;                // signature of the payload, signed by aggregator
+}
+
+message TaskResult {
+  string task_id = 1;                       // ID of the task processed
+  string operator_address = 2;              // address of the operator that created the result
+  bytes response = 3;                       // the provided response
+  bytes response_signature = 4;             // signature of the response using the operator's key
+  uint64 chain_id = 5;                      // ID of the chain the message originated on
+}
+
+message HeartbeatPing {}
+message HeartbeatPong {
+  uint64 current_time = 1;                  // unix timestamp of the current clock time of the worker
+}
