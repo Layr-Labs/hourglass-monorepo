@@ -1,7 +1,9 @@
-name: CI
+name: Foundry
 
 on:
   push:
+    branches:
+        - master
   pull_request:
   workflow_dispatch:
 
@@ -13,7 +15,7 @@ jobs:
     strategy:
       fail-fast: true
 
-    name: Foundry project
+    name: Foundry toolkit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +24,8 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
 
       - name: Show Forge version
         run: |
@@ -30,14 +34,17 @@ jobs:
       - name: Run Forge fmt
         run: |
           forge fmt --check
+        working-directory: ./contracts
         id: fmt
 
       - name: Run Forge build
         run: |
           forge build --sizes
+        working-directory: ./contracts
         id: build
 
       - name: Run Forge tests
         run: |
           forge test -vvv
+        working-directory: ./contracts
         id: test

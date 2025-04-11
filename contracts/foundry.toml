@@ -9,10 +9,7 @@ gas_reports = ["*"]
 # Defines paths for Solidity imports.
 remappings = [
     "forge-std/=lib/forge-std/src/",
-    "@eigenlayer-middleware/=lib/eigenlayer-middleware/src/",
-    "@eigenlayer-core/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/",
-    "@openzeppelin/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/lib/openzeppelin-contracts/",
-    "@openzeppelin-upgrades/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable/",
+    "@eigenlayer-middleware/=lib/eigenlayer-middleware/",
 ]
 
 # Specifies the exact version of Solidity to use, overriding auto-detection.
