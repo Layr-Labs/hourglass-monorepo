@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/peer"
 	"google.golang.org/protobuf/proto"
 )
 
 func main() {
 
-	p := &executor.PeerInfo{
+	p := &peer.PeerInfo{
 		NetworkAddress: "some-potentially-really-long-address.com",
 		Port:           5432,
 		PublicKey:      "some really long public key",
