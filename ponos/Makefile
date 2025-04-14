@@ -10,13 +10,11 @@ all: build/cmd/executor build/cmd/aggregator
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
-deps: deps/go deps/dev
+deps: deps/go
 	./scripts/installDeps.sh
-
-.PHONY: deps/dev
-deps/dev:
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
 	cd protos && buf dep update
+
 
 .PHONY: deps/go
 deps/go:
