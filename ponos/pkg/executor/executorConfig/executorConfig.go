@@ -1,7 +1,7 @@
 package executorConfig
 
 const (
-	EnvPrefix = "WORKER_"
+	EnvPrefix = "EXECUTOR_"
 )
 
 type PerformerImage struct {
