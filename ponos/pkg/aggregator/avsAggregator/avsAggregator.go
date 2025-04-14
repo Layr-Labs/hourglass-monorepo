@@ -15,6 +15,15 @@ type AvsAggregatorConfig struct {
 	AvsAddress    string
 }
 
+// AvsAggregator represents an aggregator instance for a specific AVS/chain combination.
+//
+// It knows how to handle the following responsibilities:
+//   - Discover peering data on chain (for each configured chain) for AVS operators
+//   - Connecting to Executor peers
+//   - Distributing tasks to Executors
+//   - Handle adding/removing peers from the peer list based on on-chain events when
+//     operators are added/removed from the operator set
+//   - Aggregates results from the Executors for a given task and returns the result to the
 type AvsAggregator struct {
 	config             *AvsAggregatorConfig
 	logger             *zap.Logger
@@ -47,6 +56,7 @@ func (aa *AvsAggregator) DistributeNewTask(chainId config.ChainID, task interfac
 	return nil, nil
 }
 
+// FetchExecutorPeerData fetches the executor peer data from the AVSRegistrar contract
 func (aa *AvsAggregator) FetchExecutorPeerData() {
 
 }

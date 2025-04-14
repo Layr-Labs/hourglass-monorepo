@@ -9,9 +9,10 @@ import (
 )
 
 type AvsAggregatorStore struct {
-	logger      *zap.Logger
-	aggregators []*avsAggregator.AvsAggregator
-	chains      map[config.ChainID]*avsAggregator.AvsAggregator
+	logger              *zap.Logger
+	aggregators         []*avsAggregator.AvsAggregator
+	chains              map[config.ChainID]*avsAggregator.AvsAggregator
+	chainMessageInboxes map[config.ChainID]chan *chainListener.Event
 }
 
 type AggregatorConfig struct {
@@ -40,6 +41,13 @@ func NewAggregator(
 func (a *Aggregator) Start(ctx context.Context) error {
 	a.logger.Sugar().Infow("Starting Aggregator")
 
+	// Startup process:
+	// 1. Initialize the aggregator store using the config
+	// 2. Initialize each aggregator in the store
+	// 3. Start the chain listeners that will listen to events for that chain
+	// 		e.g. inbox events, upgrade events, etc
+	// 4. When new tasks come in from a chain, distribute to the appropriate aggregator
+
 	if err := a.listenToChains(ctx); err != nil {
 		a.logger.Sugar().Errorf("failed to start chain listeners: %v", err)
 		return err
@@ -63,4 +71,12 @@ func (a *Aggregator) listenToChains(ctx context.Context) error {
 		}(chainId, listener)
 	}
 	return nil
+}
+
+// distributeWorkForChainInbox consumes messages from the corresponding chainMessageInboxes for the chainId,
+// determines which AvsAggregator to use based on the event payload, and sends it to that AvsAggregator
+// by calling the `DistributeNewTask` function.
+func (a *Aggregator) distributeWorkForChainInbox(chainId config.ChainID) {
+	// 1. Distribute work to the appropriate AvsAggregator based on the chainId and avsAddress in the event
+	// 2. Receive the result and post it to the corresponding outbox
 }
