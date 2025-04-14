@@ -17,7 +17,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "aggregator",
-	Short: "Execute tasks",
+	Short: "Coordinate task distribution and completion",
 }
 
 func Execute() {
@@ -27,7 +27,14 @@ func Execute() {
 	}
 }
 
+var configFile string
+var Config *aggregatorConfig.AggregatorConfig
+
 func init() {
+	cobra.OnInitialize(initConfigIfPresent)
+
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+
 	initConfig(rootCmd)
 
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
@@ -35,7 +42,6 @@ func init() {
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Simulated, false, `"true" or "false"`)
 	rootCmd.PersistentFlags().Int(aggregatorConfig.SimulatedPort, aggregatorConfig.SimulatedDefaultPort, `"port"`)
 
-	// setup sub commands
 	rootCmd.AddCommand(runCmd)
 
 	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
@@ -48,10 +54,26 @@ func init() {
 
 func initConfig(cmd *cobra.Command) {
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
-
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
-
 	viper.AutomaticEnv()
+}
+
+func initConfigIfPresent() {
+	hasConfig := false
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+		hasConfig = true
+	}
+	if hasConfig {
+		if err := viper.ReadInConfig(); err != nil {
+			panic(err)
+		}
+		if err := viper.Unmarshal(&Config); err != nil {
+			panic(err)
+		}
+	} else {
+		Config = aggregatorConfig.NewAggregatorConfig()
+	}
 }
 
 func main() {

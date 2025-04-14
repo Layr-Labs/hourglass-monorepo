@@ -27,8 +27,8 @@ type Aggregator struct {
 
 func NewAggregator(
 	config *AggregatorConfig,
-	logger *zap.Logger,
 	chainListeners map[config.ChainID]chainListener.IChainListener,
+	logger *zap.Logger,
 ) *Aggregator {
 	return &Aggregator{
 		config:         config,
