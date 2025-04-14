@@ -71,23 +71,14 @@ type EthereumClientConfig struct {
 	BlockType BlockType
 }
 
-func convertStringBlockTypeToBlockType(blockType string) BlockType {
-	switch blockType {
-	case "latest":
-		return BlockType_Latest
-	case "safe":
-	default:
-		return BlockType_Safe
-	}
-	return BlockType_Safe
-}
-
+//nolint:all
 func DefaultNativeCallEthereumClientConfig() *EthereumClientConfig {
 	return &EthereumClientConfig{
 		BlockType: BlockType_Safe,
 	}
 }
 
+//nolint:all
 func DefaultChunkedCallEthereumClientConfig() *EthereumClientConfig {
 	return &EthereumClientConfig{
 		BlockType: BlockType_Safe,
@@ -293,6 +284,7 @@ type BatchRPCRequest[T any] struct {
 	Handler ResponseParserFunc[T]
 }
 
+//nolint:unused
 func (c *Client) batchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		return make([]*RPCResponse, 0), nil
@@ -358,6 +350,7 @@ const (
 	NativeBatchCallSize = 100
 )
 
+//nolint:unused
 func (c *Client) chunkedNativeBatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		c.Logger.Sugar().Warnw("No requests to batch call")

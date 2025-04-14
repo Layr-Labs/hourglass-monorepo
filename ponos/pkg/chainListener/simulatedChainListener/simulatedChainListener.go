@@ -73,7 +73,11 @@ func (scl *SimulatedChainListener) handleEventsRoute(queue chan *chainListener.E
 		queue <- event
 
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Event published to queue"))
+		if _, err = w.Write([]byte("Event published to queue")); err != nil {
+			scl.logger.Sugar().Errorw("Failed to write response",
+				zap.Error(err),
+			)
+		}
 	}
 }
 
@@ -103,9 +107,7 @@ func (scl *SimulatedChainListener) ListenForInboxEvents(
 			}
 		}
 	}()
-	select {
-	case <-ctx.Done():
-		scl.logger.Sugar().Infow("Context done, stopping Ethereum Chain Listener")
-		return nil
-	}
+	<-ctx.Done()
+	scl.logger.Sugar().Infow("Context done, stopping Ethereum Chain Listener")
+	return nil
 }

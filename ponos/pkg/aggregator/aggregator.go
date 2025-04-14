@@ -9,9 +9,13 @@ import (
 )
 
 type AvsAggregatorStore struct {
-	logger              *zap.Logger
-	aggregators         []*avsAggregator.AvsAggregator
-	chains              map[config.ChainID]*avsAggregator.AvsAggregator
+	//nolint:unused
+	logger *zap.Logger
+	//nolint:unused
+	aggregators []*avsAggregator.AvsAggregator
+	//nolint:unused
+	chains map[config.ChainID]*avsAggregator.AvsAggregator
+	//nolint:unused
 	chainMessageInboxes map[config.ChainID]chan *chainListener.Event
 }
 
@@ -20,8 +24,9 @@ type AggregatorConfig struct {
 
 // Aggregator represents the main Aggregator server instance
 type Aggregator struct {
-	config          *AggregatorConfig
-	logger          *zap.Logger
+	config *AggregatorConfig
+	logger *zap.Logger
+	//nolint:unused
 	aggregatorStore *AvsAggregatorStore
 	chainListeners  map[config.ChainID]chainListener.IChainListener
 }
@@ -76,6 +81,8 @@ func (a *Aggregator) listenToChains(ctx context.Context) error {
 // distributeWorkForChainInbox consumes messages from the corresponding chainMessageInboxes for the chainId,
 // determines which AvsAggregator to use based on the event payload, and sends it to that AvsAggregator
 // by calling the `DistributeNewTask` function.
+//
+//nolint:unused
 func (a *Aggregator) distributeWorkForChainInbox(chainId config.ChainID) {
 	// 1. Distribute work to the appropriate AvsAggregator based on the chainId and avsAddress in the event
 	// 2. Receive the result and post it to the corresponding outbox

@@ -41,11 +41,10 @@ func (c *Chain) Validate() field.ErrorList {
 	if !slices.Contains(config.SupportedChainIds, config.ChainID(c.ChainID)) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainID, "unsupported chainId"))
 	}
-
 	if c.RpcURL == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))
 	}
-	return nil
+	return allErrors
 }
 
 type AggregatorAvs struct {
@@ -80,8 +79,8 @@ func (arc *AggregatorConfig) Validate() error {
 
 	if len(arc.Avss) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
-	} else {
-
+	} else { //nolint:staticcheck
+		// TODO: Validate each AVS config
 	}
 	return allErrors.ToAggregate()
 }

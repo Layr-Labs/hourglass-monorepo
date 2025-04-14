@@ -137,10 +137,8 @@ func (pp *PonosPerformer) StartHttpServer(ctx context.Context) error {
 		}
 	}()
 
-	select {
-	case <-ctx.Done():
-		pp.logger.Sugar().Infow("Shutting down HTTP server")
-		_ = server.Shutdown(context.Background())
-		return nil
-	}
+	<-ctx.Done()
+	pp.logger.Sugar().Infow("Shutting down HTTP server")
+	_ = server.Shutdown(context.Background())
+	return nil
 }

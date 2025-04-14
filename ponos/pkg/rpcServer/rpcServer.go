@@ -64,19 +64,17 @@ func (rpc *RpcServer) Start(ctx context.Context) error {
 		}
 	}()
 	go func() {
-		select {
-		case <-ctx.Done():
-			err := ctx.Err()
-			rpc.logger.Sugar().Info("received context.Done()")
-			if errors.Is(err, context.Canceled) {
-				rpc.logger.Sugar().Info("Context canceled, shutting down")
-			} else if errors.Is(err, context.DeadlineExceeded) {
-				rpc.logger.Sugar().Info("Context deadline exceeded, shutting down")
-			} else {
-				rpc.logger.Sugar().Info("Unknown error, shutting down")
-			}
-			rpc.grpcServer.GracefulStop()
+		<-ctx.Done()
+		err := ctx.Err()
+		rpc.logger.Sugar().Info("received context.Done()")
+		if errors.Is(err, context.Canceled) {
+			rpc.logger.Sugar().Info("Context canceled, shutting down")
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			rpc.logger.Sugar().Info("Context deadline exceeded, shutting down")
+		} else {
+			rpc.logger.Sugar().Info("Unknown error, shutting down")
 		}
+		rpc.grpcServer.GracefulStop()
 	}()
 	return nil
 }
