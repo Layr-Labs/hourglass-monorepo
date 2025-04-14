@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 )
@@ -29,7 +30,10 @@ func Execute() {
 func init() {
 	initConfig(rootCmd)
 
-	rootCmd.PersistentFlags().Bool("debug", false, `"true" or "false"`)
+	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
+
+	rootCmd.PersistentFlags().Bool(aggregatorConfig.Simulated, false, `"true" or "false"`)
+	rootCmd.PersistentFlags().Int(aggregatorConfig.SimulatedPort, aggregatorConfig.SimulatedDefaultPort, `"port"`)
 
 	// setup sub commands
 	rootCmd.AddCommand(runCmd)
