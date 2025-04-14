@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 	"slices"
@@ -11,6 +12,12 @@ import (
 
 const (
 	EnvPrefix = "AGGREGATOR_"
+
+	Debug     = "debug"
+	Simulated = "simulated"
+
+	SimulatedPort        = "simulated.port"
+	SimulatedDefaultPort = 8080
 )
 
 type Chain struct {
@@ -41,13 +48,13 @@ func (c *Chain) Validate() field.ErrorList {
 	return nil
 }
 
-type AggregatorConfig struct {
-	Chains []*Chain `json:"chains" yaml:"chains"`
+type AggregatorRuntimeConfig struct {
+	Chains []*Chain `json:"chains"`
 }
 
-func (ac *AggregatorConfig) Validate() error {
+func (arc *AggregatorRuntimeConfig) Validate() error {
 	var allErrors field.ErrorList
-	for _, chain := range ac.Chains {
+	for _, chain := range arc.Chains {
 		if chainErrors := chain.Validate(); len(chainErrors) > 0 {
 			allErrors = append(allErrors, field.Invalid(field.NewPath("chains"), chain, "invalid chain config"))
 		}
@@ -55,20 +62,35 @@ func (ac *AggregatorConfig) Validate() error {
 	return allErrors.ToAggregate()
 }
 
-func NewAggregatorConfigFromJsonBytes(data []byte) (*AggregatorConfig, error) {
-	var c *AggregatorConfig
+func NewAggregatorConfigFromJsonBytes(data []byte) (*AggregatorRuntimeConfig, error) {
+	var c *AggregatorRuntimeConfig
 
 	if err := json.Unmarshal(data, &c); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from JSON")
+		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorRuntimeConfig from JSON")
 	}
 	return c, nil
 }
 
-func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
-	var c *AggregatorConfig
+func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorRuntimeConfig, error) {
+	var c *AggregatorRuntimeConfig
 
 	if err := yaml.Unmarshal(data, &c); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from YAML")
+		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorRuntimeConfig from YAML")
 	}
 	return c, nil
+}
+
+type AggregatorConfig struct {
+	Debug         bool
+	Simulated     bool
+	SimulatedPort int
+	Runtime       AggregatorRuntimeConfig
+}
+
+func NewAggregatorConfig() *AggregatorConfig {
+	return &AggregatorConfig{
+		Debug:         viper.GetBool(config.NormalizeFlagName(Debug)),
+		Simulated:     viper.GetBool(config.NormalizeFlagName(Simulated)),
+		SimulatedPort: config.DefaultInt(viper.GetInt(config.NormalizeFlagName(SimulatedPort)), SimulatedDefaultPort),
+	}
 }

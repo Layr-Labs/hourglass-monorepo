@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/ethereumChainListener"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/simulatedChainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -23,7 +25,10 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		initRunCmd(cmd)
 
-		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+		cfg := aggregatorConfig.NewAggregatorConfig()
+		fmt.Printf("Config: %+v\n", cfg)
+
+		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: cfg.Debug})
 
 		l.Sugar().Infow("aggregator run")
 
@@ -34,11 +39,18 @@ var runCmd = &cobra.Command{
 			BlockType: ethereum.BlockType_Latest,
 		}, l)
 
-		ethListener := ethereumChainListener.NewEthereumChainListener(ethereumClient, l)
+		listeners := map[config.ChainID]chainListener.IChainListener{}
 
-		agg := aggregator.NewAggregator(&aggregator.AggregatorConfig{}, l, map[config.ChainID]chainListener.IChainListener{
-			config.ChainID(1): ethListener,
-		})
+		if cfg.Simulated {
+			listeners[config.ChainID(1)] = simulatedChainListener.NewSimulatedChainListener(&simulatedChainListener.SimulatedChainListenerConfig{
+				Port: cfg.SimulatedPort,
+			}, l)
+			l.Sugar().Infow("Using simulated chain listener")
+		} else {
+			listeners[config.ChainID(1)] = ethereumChainListener.NewEthereumChainListener(ethereumClient, l)
+		}
+
+		agg := aggregator.NewAggregator(&aggregator.AggregatorConfig{}, l, listeners)
 
 		go func() {
 			if err := agg.Start(ctx); err != nil {
