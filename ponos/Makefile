@@ -10,16 +10,15 @@ all: build/cmd/executor build/cmd/aggregator
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
-deps: deps/go
+deps: deps/go deps/dev
 	./scripts/installDeps.sh
 
 .PHONY: deps/dev
 deps/dev:
-	# ${GO} get github.com/grpc-ecosystem/protoc-gen-grpc-gateway-ts
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
 	cd protos && buf dep update
 
-.PHONY: deps
+.PHONY: deps/go
 deps/go:
 	${GO} mod tidy
 
@@ -62,4 +61,18 @@ test:
 
 .PHONY: lint
 lint:
-	$(ALL_FLAGS) golangci-lint run
+	golangci-lint run
+
+.PHONY: fmt
+fmt:
+	gofmt -w .
+
+.PHONY: fmtcheck
+fmtcheck:
+	@unformatted_files=$$(gofmt -l .); \
+	if [ -n "$$unformatted_files" ]; then \
+		echo "The following files are not properly formatted:"; \
+		echo "$$unformatted_files"; \
+		echo "Please run 'gofmt -w .' to format them."; \
+		exit 1; \
+	fi

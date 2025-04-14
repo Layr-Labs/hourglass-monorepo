@@ -1,0 +1,30 @@
+name: PR Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  lint-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          npm install @commitlint/config-conventional @commitlint/cli
+
+      - name: Lint PR
+        run: |
+          message=$(cat << 'EOF'
+          ${{ github.event.pull_request.title }}
+          
+          ${{ github.event.pull_request.body }}
+          EOF
+          )
+          echo "$message" | npx commitlint --verbose
