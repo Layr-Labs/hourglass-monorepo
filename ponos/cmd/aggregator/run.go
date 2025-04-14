@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/ethereumChainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/simulatedChainListener"
@@ -22,13 +21,14 @@ import (
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run the aggregator",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
 
-		cfg := aggregatorConfig.NewAggregatorConfig()
-		fmt.Printf("Config: %+v\n", cfg)
+		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 
-		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: cfg.Debug})
+		if err := Config.Validate(); err != nil {
+			return err
+		}
 
 		l.Sugar().Infow("aggregator run")
 
@@ -41,16 +41,20 @@ var runCmd = &cobra.Command{
 
 		listeners := map[config.ChainID]chainListener.IChainListener{}
 
-		if cfg.Simulated {
+		if Config.Simulated {
 			listeners[config.ChainID(1)] = simulatedChainListener.NewSimulatedChainListener(&simulatedChainListener.SimulatedChainListenerConfig{
-				Port: cfg.SimulatedPort,
+				Port: Config.SimulatedPort,
 			}, l)
 			l.Sugar().Infow("Using simulated chain listener")
 		} else {
 			listeners[config.ChainID(1)] = ethereumChainListener.NewEthereumChainListener(ethereumClient, l)
 		}
 
-		agg := aggregator.NewAggregator(&aggregator.AggregatorConfig{}, l, listeners)
+		agg := aggregator.NewAggregator(
+			&aggregator.AggregatorConfig{},
+			listeners,
+			l,
+		)
 
 		go func() {
 			if err := agg.Start(ctx); err != nil {
@@ -64,6 +68,7 @@ var runCmd = &cobra.Command{
 			l.Sugar().Info("Shutting down...")
 			cancel()
 		}, time.Second*5, l)
+		return nil
 	},
 }
 
@@ -75,6 +80,5 @@ func initRunCmd(cmd *cobra.Command) {
 		if err := viper.BindEnv(f.Name); err != nil {
 			fmt.Printf("Failed to bind env '%s' - %+v\n", f.Name, err)
 		}
-
 	})
 }

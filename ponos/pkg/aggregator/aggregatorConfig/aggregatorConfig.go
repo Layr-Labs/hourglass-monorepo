@@ -16,7 +16,7 @@ const (
 	Debug     = "debug"
 	Simulated = "simulated"
 
-	SimulatedPort        = "simulated.port"
+	SimulatedPort        = "simulated-port"
 	SimulatedDefaultPort = 8080
 )
 
@@ -48,43 +48,60 @@ func (c *Chain) Validate() field.ErrorList {
 	return nil
 }
 
-type AggregatorRuntimeConfig struct {
-	Chains []*Chain `json:"chains"`
-}
-
-func (arc *AggregatorRuntimeConfig) Validate() error {
-	var allErrors field.ErrorList
-	for _, chain := range arc.Chains {
-		if chainErrors := chain.Validate(); len(chainErrors) > 0 {
-			allErrors = append(allErrors, field.Invalid(field.NewPath("chains"), chain, "invalid chain config"))
-		}
-	}
-	return allErrors.ToAggregate()
-}
-
-func NewAggregatorConfigFromJsonBytes(data []byte) (*AggregatorRuntimeConfig, error) {
-	var c *AggregatorRuntimeConfig
-
-	if err := json.Unmarshal(data, &c); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorRuntimeConfig from JSON")
-	}
-	return c, nil
-}
-
-func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorRuntimeConfig, error) {
-	var c *AggregatorRuntimeConfig
-
-	if err := yaml.Unmarshal(data, &c); err != nil {
-		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorRuntimeConfig from YAML")
-	}
-	return c, nil
+type AggregatorAvs struct {
+	Address               string `json:"address"`
+	PrivateKey            string `json:"privateKey"`
+	PrivateSigningKey     string `json:"privateSigningKey"`
+	PrivateSigningKeyType string `json:"privateSigningKeyType"`
+	ResponseTimeout       int    `json:"responseTimeout"`
+	ChainIds              []uint `json:"chainIds"`
 }
 
 type AggregatorConfig struct {
 	Debug         bool
 	Simulated     bool
 	SimulatedPort int
-	Runtime       AggregatorRuntimeConfig
+
+	Chains []Chain         `json:"chains"`
+	Avss   []AggregatorAvs `json:"avss"`
+}
+
+func (arc *AggregatorConfig) Validate() error {
+	var allErrors field.ErrorList
+	if len(arc.Chains) == 0 {
+		allErrors = append(allErrors, field.Required(field.NewPath("chains"), "at least one chain is required"))
+	} else {
+		for _, chain := range arc.Chains {
+			if chainErrors := chain.Validate(); len(chainErrors) > 0 {
+				allErrors = append(allErrors, field.Invalid(field.NewPath("chains"), chain, "invalid chain config"))
+			}
+		}
+	}
+
+	if len(arc.Avss) == 0 {
+		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
+	} else {
+
+	}
+	return allErrors.ToAggregate()
+}
+
+func NewAggregatorConfigFromJsonBytes(data []byte) (*AggregatorConfig, error) {
+	var c *AggregatorConfig
+
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from JSON")
+	}
+	return c, nil
+}
+
+func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
+	var c *AggregatorConfig
+
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from YAML")
+	}
+	return c, nil
 }
 
 func NewAggregatorConfig() *AggregatorConfig {
