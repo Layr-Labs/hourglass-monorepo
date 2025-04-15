@@ -108,16 +108,14 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 		}
 	}
 	go func() {
-		select {
-		case <-ctx.Done():
-			e.logger.Sugar().Info("Shutting down AVS performers")
-			for avsAddress, performer := range e.avsPerformers {
-				if err := performer.Shutdown(); err != nil {
-					e.logger.Sugar().Errorw("Failed to shutdown AVS performer",
-						zap.String("avsAddress", avsAddress),
-						zap.Error(err),
-					)
-				}
+		<-ctx.Done()
+		e.logger.Sugar().Info("Shutting down AVS performers")
+		for avsAddress, performer := range e.avsPerformers {
+			if err := performer.Shutdown(); err != nil {
+				e.logger.Sugar().Errorw("Failed to shutdown AVS performer",
+					zap.String("avsAddress", avsAddress),
+					zap.Error(err),
+				)
 			}
 		}
 	}()

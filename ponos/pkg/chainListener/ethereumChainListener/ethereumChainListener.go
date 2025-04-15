@@ -46,7 +46,7 @@ func (ecl *EthereumChainListener) pollForBlocks(
 		errorCount := 0
 		for {
 			time.Sleep(1 * time.Second)
-			if done.Load() == true {
+			if done.Load() {
 				return
 			}
 			// if we've encountered 5 errors in a row, something is wrong
@@ -73,12 +73,10 @@ func (ecl *EthereumChainListener) pollForBlocks(
 			)
 		}
 	}()
-	select {
-	case <-ctx.Done():
-		ecl.logger.Sugar().Infow("Context done, stopping Ethereum Chain Listener")
-		done.Store(true)
-		return nil
-	}
+	<-ctx.Done()
+	ecl.logger.Sugar().Infow("Context done, stopping Ethereum Chain Listener")
+	done.Store(true)
+	return nil
 }
 
 func (ecl *EthereumChainListener) getNextBlockWithLogs(

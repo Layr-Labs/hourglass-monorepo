@@ -12,8 +12,9 @@ type LocalPeeringDataFetcherConfig struct {
 }
 
 type LocalPeeringDataFetcher struct {
-	config *LocalPeeringDataFetcherConfig
-	logger *zap.Logger
+	config     *LocalPeeringDataFetcherConfig
+	logger     *zap.Logger
+	httpClient *http.Client
 }
 
 func NewLocalPeeringDataFetcher(
@@ -27,8 +28,9 @@ func NewLocalPeeringDataFetcher(
 		}
 	}
 	return &LocalPeeringDataFetcher{
-		config: config,
-		logger: logger,
+		config:     config,
+		logger:     logger,
+		httpClient: httpClient,
 	}
 }
 

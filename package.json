@@ -1,0 +1,23 @@
+{
+	"name": "sidecar",
+	"version": "1.0.0",
+	"description": "The EigenLayer Sidecar is an open source, permissionless, verified indexer enabling anyone (AVS, operator, etc) to access EigenLayer’s protocol rewards in real-time.",
+	"main": "commitlint.config.js",
+	"directories": {
+		"doc": "docs",
+		"example": "examples",
+		"test": "tests"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"@commitlint/cli": "^19.6.1",
+		"@commitlint/config-conventional": "^19.6.0",
+		"@docusaurus/plugin-content-docs": "^3.7.0",
+		"@docusaurus/preset-classic": "^3.7.0"
+	}
+}
