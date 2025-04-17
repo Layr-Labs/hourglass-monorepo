@@ -3,34 +3,75 @@ package simulatedChainListener
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener"
-	"go.uber.org/zap"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"go.uber.org/zap"
 )
 
 type SimulatedChainListenerConfig struct {
 	Port int
 }
 
-// SimulatedChainListener implements the chain listener interface but doesnt actually listen to a chain.
-//
-// Instead, it exposed an HTTP server that allows the developer to manually push event data
-// as if it were coming from the chain to make testing easier.
 type SimulatedChainListener struct {
-	config *SimulatedChainListenerConfig
-	logger *zap.Logger
+	taskQueue  workQueue.IInputQueue[types.Task]
+	config     *SimulatedChainListenerConfig
+	logger     *zap.Logger
+	httpServer *http.Server
+	chainId    *config.ChainId
 }
 
 func NewSimulatedChainListener(
+	taskQueue workQueue.IInputQueue[types.Task],
 	config *SimulatedChainListenerConfig,
 	logger *zap.Logger,
+	chainId *config.ChainId,
 ) *SimulatedChainListener {
 	return &SimulatedChainListener{
-		config: config,
-		logger: logger,
+		taskQueue: taskQueue,
+		config:    config,
+		logger:    logger,
+		chainId:   chainId,
 	}
+}
+
+func (scl *SimulatedChainListener) Start(ctx context.Context) error {
+	scl.logger.Sugar().Infow("SimulatedChainListener starting", zap.Int("port", scl.config.Port))
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/events", scl.handleSubmitTaskRoute())
+
+	scl.httpServer = &http.Server{
+		Addr:    fmt.Sprintf(":%d", scl.config.Port),
+		Handler: scl.httpLoggerMiddleware(mux),
+	}
+
+	go func() {
+		if err := scl.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			scl.logger.Sugar().Errorw("HTTP server error", zap.Error(err))
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		_ = scl.Close()
+	}()
+
+	return nil
+}
+
+func (scl *SimulatedChainListener) Close() error {
+	scl.logger.Sugar().Infow("SimulatedChainListener stopping")
+	if scl.httpServer != nil {
+		return scl.httpServer.Shutdown(context.Background())
+	}
+	return nil
 }
 
 func (scl *SimulatedChainListener) httpLoggerMiddleware(next http.Handler) http.Handler {
@@ -43,7 +84,7 @@ func (scl *SimulatedChainListener) httpLoggerMiddleware(next http.Handler) http.
 	})
 }
 
-func (scl *SimulatedChainListener) handleEventsRoute(queue chan *chainListener.Event) func(w http.ResponseWriter, r *http.Request) {
+func (scl *SimulatedChainListener) handleSubmitTaskRoute() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -52,62 +93,48 @@ func (scl *SimulatedChainListener) handleEventsRoute(queue chan *chainListener.E
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			scl.logger.Sugar().Errorw("Failed to read request body",
-				zap.Error(err),
-			)
+			scl.logger.Sugar().Errorw("Failed to read request body", zap.Error(err))
 			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 			return
 		}
 		defer r.Body.Close()
 
-		var event *chainListener.Event
-		if err := json.Unmarshal(body, &event); err != nil {
-			scl.logger.Sugar().Errorw("Failed to unmarshal event",
-				zap.Error(err),
-			)
-			http.Error(w, "Failed to unmarshal event", http.StatusBadRequest)
+		var taskEvent types.TaskEvent
+		if err := json.Unmarshal(body, &taskEvent); err != nil {
+			scl.logger.Sugar().Errorw("Failed to unmarshal task event", zap.Error(err))
+			http.Error(w, "Failed to unmarshal task event", http.StatusBadRequest)
 			return
 		}
 
-		fmt.Printf("Received event: %+v\n", event)
-		queue <- event
+		task := convertEventToTask(&taskEvent, scl.chainId)
+		scl.logger.Sugar().Infow("Received simulated task event", "taskID", task.TaskId)
+
+		if err := scl.taskQueue.Enqueue(task); err != nil {
+			scl.logger.Sugar().Errorw("Failed to enqueue task event", zap.Error(err))
+			http.Error(w, "Failed to enqueue task event", http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
-		if _, err = w.Write([]byte("Event published to queue")); err != nil {
-			scl.logger.Sugar().Errorw("Failed to write response",
-				zap.Error(err),
-			)
-		}
+		_, _ = w.Write([]byte("Task event enqueued"))
 	}
 }
 
-func (scl *SimulatedChainListener) ListenForInboxEvents(
-	ctx context.Context,
-	queue chan *chainListener.Event,
-	chainId string,
-) error {
-	scl.logger.Sugar().Infow("Simulated chain listener started",
-		zap.Int("port", scl.config.Port),
-	)
+func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.Task {
+	var parsedMeta struct {
+		Deadline               int64   `json:"deadline"`
+		StakeWeightRequiredPct float64 `json:"stakeWeightRequiredPct"`
+	}
+	_ = json.Unmarshal([]byte(event.Metadata), &parsedMeta)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/events", scl.handleEventsRoute(queue))
-	handler := scl.httpLoggerMiddleware(mux)
-
-	go func() {
-		if err := http.ListenAndServe(fmt.Sprintf(":%d", scl.config.Port), handler); err != nil {
-			scl.logger.Sugar().Errorw("Failed to start HTTP server",
-				zap.Int("port", scl.config.Port),
-				zap.Error(err),
-			)
-			cancelCtx, ok := ctx.Value("cancelFunc").(context.CancelFunc)
-			if ok {
-				scl.logger.Sugar().Infow("Cancelling context due to HTTP server error")
-				cancelCtx()
-			}
-		}
-	}()
-	<-ctx.Done()
-	scl.logger.Sugar().Infow("Context done, stopping Ethereum Chain Listener")
-	return nil
+	return &types.Task{
+		TaskId:        event.TaskId,
+		AVSAddress:    event.AVSAddress,
+		OperatorSetId: event.OperatorSetId,
+		CallbackAddr:  event.CallbackAddr,
+		Payload:       event.Payload,
+		Deadline:      time.Now().Unix() + parsedMeta.Deadline,
+		StakeRequired: parsedMeta.StakeWeightRequiredPct,
+		ChainId:       *chainId,
+	}
 }

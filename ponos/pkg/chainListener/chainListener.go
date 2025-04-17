@@ -6,9 +6,12 @@ import (
 )
 
 type Event struct {
-	EventId    string         `json:"eventId"`
-	ChainId    config.ChainID `json:"chainId"`
-	AvsAddress string         `json:"avsAddress"`
+	EventId      string         `json:"eventId"`
+	ChainId      config.ChainId `json:"chainId"`
+	AvsAddress   string         `json:"avsAddress"`
+	BlockNumber  uint64         `json:"blockNumber"`
+	BlockHash    string         `json:"blockHash"`
+	InboxAddress string         `json:"inboxAddress"`
 }
 
 // IChainListener is an interface whose implementation listens for events on the
