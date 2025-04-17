@@ -14,6 +14,11 @@ func (tw *TaskWorker) HandleTask(t *task.Task) (*task.TaskResult, error) {
 	return task.NewTaskResult(t.TaskID, t.Avs, t.OperatorSetID, []byte("result")), nil
 }
 
+func (tw *TaskWorker) ValidateTask(t *task.Task) error {
+	// validate task
+	return nil
+}
+
 func main() {
 	ctx := context.Background()
 	l, _ := zap.NewProduction()
