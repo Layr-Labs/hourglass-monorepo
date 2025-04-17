@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 )
@@ -26,10 +27,17 @@ func Execute() {
 	}
 }
 
+var configFile string
+var Config *executorConfig.ExecutorConfig
+
 func init() {
+	cobra.OnInitialize(initConfigIfPresent)
+
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+
 	initConfig(rootCmd)
 
-	rootCmd.PersistentFlags().Bool("debug", false, `"true" or "false"`)
+	rootCmd.PersistentFlags().Bool(executorConfig.Debug, false, `"true" or "false"`)
 
 	// setup sub commands
 	rootCmd.AddCommand(runCmd)
@@ -44,10 +52,27 @@ func init() {
 
 func initConfig(cmd *cobra.Command) {
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
-
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
-
 	viper.AutomaticEnv()
+}
+
+func initConfigIfPresent() {
+	hasConfig := false
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+		hasConfig = true
+	}
+	if hasConfig {
+		fmt.Printf("Using config file: %s\n", configFile)
+		if err := viper.ReadInConfig(); err != nil {
+			panic(err)
+		}
+		if err := viper.Unmarshal(&Config); err != nil {
+			panic(err)
+		}
+	} else {
+		Config = executorConfig.NewExecutorConfig()
+	}
 }
 
 func main() {
