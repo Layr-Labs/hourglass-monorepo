@@ -7,7 +7,7 @@ operator:
     bls: ""
 avsPerformers:
 - image:
-    repository: "test-performer"
+    repository: "hello-performer"
     tag: "latest"
   processType: "server"
   avsAddress: "0xavs1..."

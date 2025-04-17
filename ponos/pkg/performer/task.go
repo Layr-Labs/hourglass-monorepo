@@ -1,6 +1,6 @@
-package task
+package performer
 
-import "github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go/pkg/util"
+import "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 type Task struct {
 	TaskID        string `json:"taskId"`
