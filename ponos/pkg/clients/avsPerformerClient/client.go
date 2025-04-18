@@ -28,7 +28,7 @@ func NewAvsPerformerClient(fullUrl string, httpClient *http.Client) *AvsPerforme
 	}
 	return &AvsPerformerClient{
 		FullUrl:    fullUrl,
-		httpClient: DefaultHttpClient(),
+		httpClient: httpClient,
 	}
 }
 
