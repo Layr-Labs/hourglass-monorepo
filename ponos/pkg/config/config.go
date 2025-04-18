@@ -1,17 +1,17 @@
 package config
 
-type ChainID uint
+type ChainId uint
 
 const (
-	ChainID_EthereumMainnet ChainID = 1
-	ChainID_EthereumHolesky ChainID = 17000
-	ChainID_EthereumHoodi   ChainID = 560048
+	ChainId_EthereumMainnet ChainId = 1
+	ChainId_EthereumHolesky ChainId = 17000
+	ChainId_EthereumHoodi   ChainId = 560048
 )
 
 var (
-	SupportedChainIds = []ChainID{
-		ChainID_EthereumMainnet,
-		ChainID_EthereumHolesky,
-		ChainID_EthereumHoodi,
+	SupportedChainIds = []ChainId{
+		ChainId_EthereumMainnet,
+		ChainId_EthereumHolesky,
+		ChainId_EthereumHoodi,
 	}
 )

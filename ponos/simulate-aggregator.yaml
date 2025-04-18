@@ -1,0 +1,19 @@
+debug: false
+simulated: true
+simulated_port: 8080
+chains:
+  - name: "ethereum"
+    network: "mainnet"
+    chainId: 1
+    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+  - name: "ethereum"
+    network: "holesky"
+    chainId: 17000
+    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+avss:
+  - address: "0x1234567890abcdef1234567890abcdef12345678"
+    privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+    privateSigningKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+    privateSigningKeyType: "ecdsa"
+    responseTimeout: 3000
+    chainIds: [1]

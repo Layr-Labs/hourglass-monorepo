@@ -43,7 +43,7 @@ build/cmd/aggregator:
 # -----------------------------------------------------------------------------
 .PHONY: run/aggregator
 run/aggregator:
-	go run ./cmd/aggregator/*.go run
+	go run ./cmd/aggregator/*.go run $(ARGS)
 
 .PHONY: run/executor
 run/executor:

@@ -519,8 +519,6 @@ func (c *Client) BatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCR
 		return make([]*RPCResponse, 0), nil
 	}
 	// if c.clientConfig.UseNativeBatchCall {
-	// 	return c.chunkedNativeBatchCall(ctx, requests)
-	// }
 	return c.chunkedBatchCall(ctx, requests)
 }
 

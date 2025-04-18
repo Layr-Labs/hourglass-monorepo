@@ -67,13 +67,15 @@ func (rpc *RpcServer) Start(ctx context.Context) error {
 		<-ctx.Done()
 		err := ctx.Err()
 		rpc.logger.Sugar().Info("received context.Done()")
-		if errors.Is(err, context.Canceled) {
+		switch {
+		case errors.Is(err, context.Canceled):
 			rpc.logger.Sugar().Info("Context canceled, shutting down")
-		} else if errors.Is(err, context.DeadlineExceeded) {
+		case errors.Is(err, context.DeadlineExceeded):
 			rpc.logger.Sugar().Info("Context deadline exceeded, shutting down")
-		} else {
+		default:
 			rpc.logger.Sugar().Info("Unknown error, shutting down")
 		}
+
 		rpc.grpcServer.GracefulStop()
 	}()
 	return nil

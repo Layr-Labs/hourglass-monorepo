@@ -2,88 +2,154 @@ package aggregator
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsAggregator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/coordinator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/ethereumChainListener"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/simulatedChainListener"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
+	"time"
 )
 
-type AvsAggregatorStore struct {
-	//nolint:unused
-	logger *zap.Logger
-	//nolint:unused
-	aggregators []*avsAggregator.AvsAggregator
-	//nolint:unused
-	chains map[config.ChainID]*avsAggregator.AvsAggregator
-	//nolint:unused
-	chainMessageInboxes map[config.ChainID]chan *chainListener.Event
-}
-
-type AggregatorConfig struct {
-}
-
-// Aggregator represents the main Aggregator server instance
 type Aggregator struct {
-	config *AggregatorConfig
-	logger *zap.Logger
-	//nolint:unused
-	aggregatorStore *AvsAggregatorStore
-	chainListeners  map[config.ChainID]chainListener.IChainListener
+	config           *aggregatorConfig.AggregatorConfig
+	logger           *zap.Logger
+	listeners        []lifecycle.Lifecycle
+	writers          []lifecycle.Lifecycle
+	coordinator      lifecycle.Lifecycle
+	executionManager lifecycle.Lifecycle
 }
 
-func NewAggregator(
-	config *AggregatorConfig,
-	chainListeners map[config.ChainID]chainListener.IChainListener,
-	logger *zap.Logger,
-) *Aggregator {
+func NewAggregator(config *aggregatorConfig.AggregatorConfig, logger *zap.Logger) *Aggregator {
+	taskQueue := workQueue.NewWorkQueue[types.Task]()
+	resultQueue := workQueue.NewWorkQueue[types.TaskResult]()
+
+	listeners := buildListeners(config, logger, taskQueue)
+
+	writer := simulatedChainWriter.NewSimulatedChainWriter(
+		&simulatedChainWriter.SimulatedChainWriterConfig{Interval: 50 * time.Millisecond},
+		logger,
+		resultQueue,
+	)
+	writers := []lifecycle.Lifecycle{writer}
+
+	ponosExecutionManager := executionManager.NewInMemorySimulatedExecutionManager()
+	ponosCoordinator := coordinator.NewPonosCoordinator(taskQueue, resultQueue, ponosExecutionManager, logger)
+
 	return &Aggregator{
-		config:         config,
-		logger:         logger,
-		chainListeners: chainListeners,
+		config:           config,
+		logger:           logger,
+		listeners:        listeners,
+		writers:          writers,
+		coordinator:      ponosCoordinator,
+		executionManager: ponosExecutionManager,
 	}
 }
 
 func (a *Aggregator) Start(ctx context.Context) error {
-	a.logger.Sugar().Infow("Starting Aggregator")
+	a.logger.Sugar().Infow("Starting aggregator...")
 
-	// Startup process:
-	// 1. Initialize the aggregator store using the config
-	// 2. Initialize each aggregator in the store
-	// 3. Start the chain listeners that will listen to events for that chain
-	// 		e.g. inbox events, upgrade events, etc
-	// 4. When new tasks come in from a chain, distribute to the appropriate aggregator
+	startAll := func(components []lifecycle.Lifecycle, name string) error {
+		for _, c := range components {
+			a.logger.Sugar().Infow("Starting component", "group", name, "type", fmt.Sprintf("%T", c))
+			if err := c.Start(ctx); err != nil {
+				return fmt.Errorf("failed to start %s: %w", name, err)
+			}
+		}
+		return nil
+	}
 
-	if err := a.listenToChains(ctx); err != nil {
-		a.logger.Sugar().Errorf("failed to start chain listeners: %v", err)
+	if err := startAll(a.listeners, "listener"); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (a *Aggregator) listenToChains(ctx context.Context) error {
-	// Create a channel to receive events from the chain listeners
-	queue := make(chan *chainListener.Event, 1000)
-
-	for chainId, listener := range a.chainListeners {
-		go func(chainId config.ChainID, chainListener chainListener.IChainListener) {
-			a.logger.Sugar().Infow("Starting chain listener",
-				zap.Uint("chainId", uint(chainId)),
-			)
-			err := chainListener.ListenForInboxEvents(ctx, queue, "")
-			if err != nil {
-				a.logger.Sugar().Errorf("failed to listen for inbox events: %v", err)
-			}
-		}(chainId, listener)
+	if err := startAll(a.writers, "writer"); err != nil {
+		return err
 	}
+	if err := a.executionManager.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start executionManager: %w", err)
+	}
+	if err := a.coordinator.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start coordinator: %w", err)
+	}
+
+	a.logger.Sugar().Infow("Aggregator fully started")
 	return nil
 }
 
-// distributeWorkForChainInbox consumes messages from the corresponding chainMessageInboxes for the chainId,
-// determines which AvsAggregator to use based on the event payload, and sends it to that AvsAggregator
-// by calling the `DistributeNewTask` function.
-//
-//nolint:unused
-func (a *Aggregator) distributeWorkForChainInbox(chainId config.ChainID) {
-	// 1. Distribute work to the appropriate AvsAggregator based on the chainId and avsAddress in the event
-	// 2. Receive the result and post it to the corresponding outbox
+func (a *Aggregator) Close() {
+	stopAll := func(components []lifecycle.Lifecycle, name string) {
+		for _, c := range components {
+			if err := c.Close(); err != nil {
+				a.logger.Sugar().Warnw(
+					"Failed to stop component",
+					"group",
+					name, "type",
+					fmt.Sprintf("%T", c),
+					"error",
+					err,
+				)
+			}
+		}
+	}
+
+	stopAll(a.listeners, "listener")
+	stopAll(a.writers, "writer")
+
+	if err := a.coordinator.Close(); err != nil {
+		a.logger.Sugar().Warnw("Failed to stop coordinator", "error", err)
+	}
+	if err := a.executionManager.Close(); err != nil {
+		a.logger.Sugar().Warnw("Failed to stop execution manager", "error", err)
+	}
+
+	a.logger.Sugar().Infow("Aggregator stopped")
+}
+
+func buildListeners(
+	cfg *aggregatorConfig.AggregatorConfig,
+	logger *zap.Logger,
+	taskQueue workQueue.IInputQueue[types.Task],
+) []lifecycle.Lifecycle {
+	var listeners []lifecycle.Lifecycle
+
+	for i, chain := range cfg.Chains {
+		chainId := chain.ChainID
+
+		if cfg.Simulated {
+			port := cfg.SimulatedPort + i
+			listener := simulatedChainListener.NewSimulatedChainListener(
+				taskQueue,
+				&simulatedChainListener.SimulatedChainListenerConfig{
+					Port: port,
+				},
+				logger,
+				&chainId,
+			)
+			listeners = append(listeners, listener)
+			logger.Sugar().Infow("Using simulated chain listener", "chainId", chainId, "port", port)
+		} else {
+			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
+				BaseUrl:   chain.RpcURL,
+				BlockType: ethereum.BlockType_Latest,
+			}, logger)
+
+			listener := ethereumChainListener.NewEthereumChainListener(
+				ethClient,
+				logger,
+				taskQueue,
+				"ethereum-mainnet-inbox",
+				chain.ChainID,
+			)
+			listeners = append(listeners, listener)
+			logger.Sugar().Infow("Using Ethereum chain listener", "chainId", chainId, "url", chain.RpcURL)
+		}
+	}
+
+	return listeners
 }

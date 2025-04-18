@@ -11,7 +11,7 @@ type ExecutorOperatorPeer struct {
 }
 
 type AvsAggregatorConfig struct {
-	EnabledChains []config.ChainID
+	EnabledChains []config.ChainId
 	AvsAddress    string
 }
 
@@ -52,7 +52,7 @@ func (aa *AvsAggregator) Initialize() error {
 	return nil
 }
 
-func (aa *AvsAggregator) DistributeNewTask(chainId config.ChainID, task interface{}) (interface{}, error) {
+func (aa *AvsAggregator) DistributeNewTask(chainId config.ChainId, task interface{}) (interface{}, error) {
 	return nil, nil
 }
 

@@ -21,10 +21,10 @@ const (
 )
 
 type Chain struct {
-	Name    string `json:"name"`
-	Network string `json:"network"`
-	ChainID uint   `json:"chainId"`
-	RpcURL  string `json:"rpcUrl"`
+	Name    string         `json:"name"`
+	Network string         `json:"network"`
+	ChainID config.ChainId `json:"chainId"`
+	RpcURL  string         `json:"rpcUrl"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -38,7 +38,7 @@ func (c *Chain) Validate() field.ErrorList {
 	if c.ChainID == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chainId"), "chainId is required"))
 	}
-	if !slices.Contains(config.SupportedChainIds, config.ChainID(c.ChainID)) {
+	if !slices.Contains(config.SupportedChainIds, config.ChainId(c.ChainID)) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainID, "unsupported chainId"))
 	}
 	if c.RpcURL == "" {
@@ -57,12 +57,11 @@ type AggregatorAvs struct {
 }
 
 type AggregatorConfig struct {
-	Debug         bool
-	Simulated     bool
-	SimulatedPort int
-
-	Chains []Chain         `json:"chains"`
-	Avss   []AggregatorAvs `json:"avss"`
+	Debug         bool            `mapstructure:"debug"`
+	Simulated     bool            `mapstructure:"simulated"`
+	SimulatedPort int             `mapstructure:"simulated_port"`
+	Chains        []Chain         `mapstructure:"chains"`
+	Avss          []AggregatorAvs `mapstructure:"avss"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
