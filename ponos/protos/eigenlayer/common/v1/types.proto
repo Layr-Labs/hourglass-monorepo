@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package eigenlayer.common.v1;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1";
+
+message SubmitAck {
+  bool success = 1;
+  string message = 2;
+}
