@@ -1,0 +1,13 @@
+---
+operator:
+  address: "0xoperator..."
+  operatorPrivateKey: "..."
+  signingKeys:
+    ecdsa: ""
+    bls: ""
+avsPerformers:
+- image:
+    repository: "hello-performer"
+    tag: "latest"
+  processType: "server"
+  avsAddress: "0xavs1..."

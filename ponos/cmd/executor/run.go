@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
@@ -20,10 +19,15 @@ import (
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run the executor",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
 
-		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
+
+		fmt.Printf("Executor config: %+v\n", Config)
+		if err := Config.Validate(); err != nil {
+			return err
+		}
 
 		l.Sugar().Infow("executor run")
 
@@ -35,19 +39,7 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		execConfig := &executorConfig.ExecutorConfig{
-			AvsPerformers: []*executorConfig.AvsPerformerConfig{
-				{
-					AvsAddress:  "0xtestAvsAddress",
-					ProcessType: "server",
-					Image: executorConfig.PerformerImage{
-						Repository: "test-performer",
-						Tag:        "latest",
-					},
-				},
-			},
-		}
-		exec := executor.NewExecutor(execConfig, baseRpcServer, l, fakeSigner)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, fakeSigner)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
@@ -75,6 +67,7 @@ var runCmd = &cobra.Command{
 			l.Sugar().Info("Shutting down...")
 			cancel()
 		}, time.Second*5, l)
+		return nil
 	},
 }
 

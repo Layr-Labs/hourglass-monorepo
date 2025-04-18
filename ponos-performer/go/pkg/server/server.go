@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go/pkg/task"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go/pkg/worker"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
@@ -48,14 +48,16 @@ func (pp *PonosPerformer) WriteJsonError(w http.ResponseWriter, err error, error
 	}
 }
 
-func (pp *PonosPerformer) WriteJsonResponse(w http.ResponseWriter, data interface{}) {
+func (pp *PonosPerformer) WriteJsonResponse(w http.ResponseWriter, data interface{}) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		pp.logger.Sugar().Errorw("Failed to write JSON response",
 			zap.Error(err),
 		)
+		return err
 	}
+	return nil
 }
 
 func (pp *PonosPerformer) loggerMiddleware(next http.Handler) http.Handler {
@@ -66,6 +68,21 @@ func (pp *PonosPerformer) loggerMiddleware(next http.Handler) http.Handler {
 		)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (pp *PonosPerformer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	health := struct {
+		Status string `json:"status"`
+	}{
+		Status: "running",
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := pp.WriteJsonResponse(w, health); err != nil {
+		pp.WriteJsonError(w, fmt.Errorf("failed to write JSON health response - %v", err), http.StatusInternalServerError)
+	}
 }
 
 func (pp *PonosPerformer) handleTask(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +98,7 @@ func (pp *PonosPerformer) handleTask(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	var task *task.Task
+	var task *performer.Task
 	if err := json.Unmarshal(body, &task); err != nil {
 		pp.WriteJsonError(w, fmt.Errorf("failed to parse task json from body - %v", err), http.StatusBadRequest)
 		return
@@ -128,6 +145,7 @@ func (pp *PonosPerformer) StartHttpServer(ctx context.Context) error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/tasks", pp.handleTask)
+	mux.HandleFunc("/health", pp.handleHealth)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", pp.config.Port),
