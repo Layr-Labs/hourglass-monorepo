@@ -3,7 +3,8 @@ package executor
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
+	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/server"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
@@ -31,8 +32,9 @@ type Executor struct {
 	config        *executorConfig.ExecutorConfig
 	avsPerformers map[string]avsPerformer.IAvsPerformer
 	rpcServer     *rpcServer.RpcServer
-	aggregators   map[string]*connectedAggregator.ConnectedAggregator
-	signer        signer.Signer
+	//nolint:unused
+	aggregators map[string]*connectedAggregator.ConnectedAggregator
+	signer      signer.Signer
 }
 
 func NewExecutor(
@@ -122,12 +124,16 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 	return nil
 }
 
+func (e *Executor) SubmitTask(_ context.Context, _ *executorpb.TaskSubmission) (*v1.SubmitAck, error) {
+	return &v1.SubmitAck{Message: "Stubbed message", Success: false}, nil
+}
+
 func (e *Executor) Run() {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
 }
 
 func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {
-	executor.RegisterExecutorServiceServer(grpcServer, e)
+	executorpb.RegisterExecutorServiceServer(grpcServer, e)
 
 	return nil
 }

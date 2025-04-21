@@ -9,8 +9,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 )
 
-// TODO: implement ICapacityManager to inform coordinator of available capacity.
-// TODO: inject IConnectionManager to negotiate connections and communication.
+// TODO: move all simulation out of ExecutionManager and into ExecutorClient & AggregatorService implementations.
 type InMemorySimulatedExecutionManager struct {
 	mu      sync.Mutex
 	results []*types.TaskResult

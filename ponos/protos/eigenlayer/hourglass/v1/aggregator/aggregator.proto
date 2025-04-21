@@ -6,16 +6,15 @@ import "eigenlayer/common/v1/types.proto";
 
 option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1";
 
-service ExecutorService {
-  rpc SubmitTask(TaskSubmission) returns (eigenlayer.common.v1.SubmitAck) {}
+service AggregatorService {
+  rpc SubmitTaskResult(TaskResult) returns (eigenlayer.common.v1.SubmitAck) {}
 }
 
-message TaskSubmission {
+message TaskResult {
   string task_id = 1;
-  string aggregator_address = 2;
-  bytes payload = 4;
+  string operator_address = 3;
+  bytes output = 4;
 
   string public_key = 5;
   bytes signature = 6;
 }
-

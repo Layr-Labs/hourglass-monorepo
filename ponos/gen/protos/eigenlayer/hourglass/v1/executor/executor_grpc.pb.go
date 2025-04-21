@@ -4,10 +4,11 @@
 // - protoc             (unknown)
 // source: eigenlayer/hourglass/v1/executor/executor.proto
 
-package executor
+package v1
 
 import (
 	context "context"
+	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -19,18 +20,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ExecutorService_Handshake_FullMethodName  = "/eigenlayer.hourglass.v1.executor.ExecutorService/Handshake"
-	ExecutorService_WorkStream_FullMethodName = "/eigenlayer.hourglass.v1.executor.ExecutorService/WorkStream"
+	ExecutorService_SubmitTask_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorService/SubmitTask"
 )
 
 // ExecutorServiceClient is the client API for ExecutorService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// gRPC service
 type ExecutorServiceClient interface {
-	Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*HandshakeResponse, error)
-	WorkStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse], error)
+	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error)
 }
 
 type executorServiceClient struct {
@@ -41,37 +38,21 @@ func NewExecutorServiceClient(cc grpc.ClientConnInterface) ExecutorServiceClient
 	return &executorServiceClient{cc}
 }
 
-func (c *executorServiceClient) Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*HandshakeResponse, error) {
+func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HandshakeResponse)
-	err := c.cc.Invoke(ctx, ExecutorService_Handshake_FullMethodName, in, out, cOpts...)
+	out := new(v1.SubmitAck)
+	err := c.cc.Invoke(ctx, ExecutorService_SubmitTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *executorServiceClient) WorkStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ExecutorService_ServiceDesc.Streams[0], ExecutorService_WorkStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WorkStreamRequest, WorkStreamResponse]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ExecutorService_WorkStreamClient = grpc.BidiStreamingClient[WorkStreamRequest, WorkStreamResponse]
-
 // ExecutorServiceServer is the server API for ExecutorService service.
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
-//
-// gRPC service
 type ExecutorServiceServer interface {
-	Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error)
-	WorkStream(grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]) error
+	SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error)
 }
 
 // UnimplementedExecutorServiceServer should be embedded to have
@@ -81,11 +62,8 @@ type ExecutorServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedExecutorServiceServer struct{}
 
-func (UnimplementedExecutorServiceServer) Handshake(context.Context, *HandshakeRequest) (*HandshakeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Handshake not implemented")
-}
-func (UnimplementedExecutorServiceServer) WorkStream(grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method WorkStream not implemented")
+func (UnimplementedExecutorServiceServer) SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitTask not implemented")
 }
 func (UnimplementedExecutorServiceServer) testEmbeddedByValue() {}
 
@@ -107,50 +85,36 @@ func RegisterExecutorServiceServer(s grpc.ServiceRegistrar, srv ExecutorServiceS
 	s.RegisterService(&ExecutorService_ServiceDesc, srv)
 }
 
-func _ExecutorService_Handshake_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HandshakeRequest)
+func _ExecutorService_SubmitTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TaskSubmission)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ExecutorServiceServer).Handshake(ctx, in)
+		return srv.(ExecutorServiceServer).SubmitTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ExecutorService_Handshake_FullMethodName,
+		FullMethod: ExecutorService_SubmitTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ExecutorServiceServer).Handshake(ctx, req.(*HandshakeRequest))
+		return srv.(ExecutorServiceServer).SubmitTask(ctx, req.(*TaskSubmission))
 	}
 	return interceptor(ctx, in, info, handler)
 }
-
-func _ExecutorService_WorkStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ExecutorServiceServer).WorkStream(&grpc.GenericServerStream[WorkStreamRequest, WorkStreamResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type ExecutorService_WorkStreamServer = grpc.BidiStreamingServer[WorkStreamRequest, WorkStreamResponse]
 
 // ExecutorService_ServiceDesc is the grpc.ServiceDesc for ExecutorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ExecutorService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "eigenlayer.hourglass.v1.executor.ExecutorService",
+	ServiceName: "eigenlayer.hourglass.v1.ExecutorService",
 	HandlerType: (*ExecutorServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Handshake",
-			Handler:    _ExecutorService_Handshake_Handler,
+			MethodName: "SubmitTask",
+			Handler:    _ExecutorService_SubmitTask_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "WorkStream",
-			Handler:       _ExecutorService_WorkStream_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "eigenlayer/hourglass/v1/executor/executor.proto",
 }

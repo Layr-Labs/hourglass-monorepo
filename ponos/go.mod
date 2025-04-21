@@ -4,6 +4,7 @@ go 1.23.6
 
 require (
 	github.com/docker/docker v28.0.1+incompatible
+	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.15.7
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
@@ -12,7 +13,6 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
-	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.5
@@ -33,7 +33,6 @@ require (
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
