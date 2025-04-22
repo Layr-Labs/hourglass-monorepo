@@ -50,7 +50,6 @@ func (sec *SimulatedExecutorClient) SubmitTask(task *types.Task) error {
 		TaskId:            task.TaskId,
 		AggregatorAddress: task.CallbackAddr,
 		Payload:           task.Payload,
-		PublicKey:         task.CallbackAddr,
 		Signature:         []byte("signature"),
 	}
 

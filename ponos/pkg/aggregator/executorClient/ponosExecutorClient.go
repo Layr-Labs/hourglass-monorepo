@@ -44,7 +44,6 @@ func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task
 		TaskId:            task.TaskId,
 		AggregatorAddress: task.CallbackAddr,
 		Payload:           task.Payload,
-		PublicKey:         fmt.Sprintf("0x%x", crypto.FromECDSAPub(&pec.privKey.PublicKey)),
 		Signature:         sig,
 	}
 

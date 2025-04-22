@@ -28,7 +28,7 @@ func EthereumAuthInterceptor(allowedAddresses map[string]bool) grpc.UnaryServerI
 		addr, err := VerifyEthereumSubmission(
 			submission.GetPayload(),
 			submission.GetSignature(),
-			submission.GetPublicKey(),
+			"", // TODO: pass the public key here
 		)
 		if err != nil {
 			return nil, status.Errorf(codes.Unauthenticated, "signature verification failed: %v", err)

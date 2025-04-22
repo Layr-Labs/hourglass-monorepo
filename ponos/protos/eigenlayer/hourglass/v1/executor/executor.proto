@@ -16,8 +16,7 @@ message TaskSubmission {
   string avs_address = 3;
   bytes payload = 4;
 
-  string public_key = 5;
-  bytes signature = 6;
-  string aggregator_url = 7;
+  bytes signature = 5;
+  string aggregator_url = 6;
 }
 

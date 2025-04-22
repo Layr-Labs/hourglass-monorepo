@@ -99,7 +99,6 @@ func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 		TaskId:          response.TaskID,
 		OperatorAddress: e.config.Operator.Address,
 		Output:          response.Result,
-		PublicKey:       "",
 		Signature:       sig,
 	})
 	if err != nil {

@@ -12,9 +12,7 @@ service AggregatorService {
 
 message TaskResult {
   string task_id = 1;
-  string operator_address = 3;
-  bytes output = 4;
-
-  string public_key = 5;
-  bytes signature = 6;
+  string operator_address = 2;
+  bytes output = 3;
+  bytes signature = 4;
 }
