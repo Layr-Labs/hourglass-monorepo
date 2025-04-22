@@ -34,7 +34,9 @@ var runCmd = &cobra.Command{
 		// TODO(seanmcgary): implement a real signer at some point
 		fakeSigner := fauxSigner.NewFauxSigner()
 
-		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{}, l)
+		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+			GrpcPort: Config.GrpcPort,
+		}, l)
 		if err != nil {
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
@@ -52,13 +54,9 @@ var runCmd = &cobra.Command{
 		}
 
 		go func() {
-			if err := baseRpcServer.Start(ctx); err != nil {
-				l.Sugar().Fatal("Failed to start RPC server", zap.Error(err))
+			if err := exec.Run(ctx); err != nil {
+				l.Sugar().Fatal("Failed to run executor", zap.Error(err))
 			}
-		}()
-
-		go func() {
-			exec.Run()
 		}()
 
 		gracefulShutdownNotifier := shutdown.CreateGracefulShutdownChannel()

@@ -1,15 +1,18 @@
-package server
+package serverPerformer
 
 import (
 	"context"
 	"fmt"
+	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"sync"
 	"time"
 )
 
@@ -18,16 +21,23 @@ type AvsPerformerServer struct {
 	logger          *zap.Logger
 	containerId     string
 	dockerClient    *client.Client
-	performerClient *avsPerformerClient.AvsPerformerClient
+	performerClient performerV1.PerformerServiceClient
+	// TODO(seanmcgary) make this an actual chan with a type
+	taskBacklog chan *tasks.Task
+
+	reportTaskResponse avsPerformer.ReceiveTaskResponse
 }
 
 func NewAvsPerformerServer(
 	config *avsPerformer.AvsPerformerConfig,
+	reportTaskResponse avsPerformer.ReceiveTaskResponse,
 	logger *zap.Logger,
 ) (*AvsPerformerServer, error) {
 	return &AvsPerformerServer{
-		config: config,
-		logger: logger,
+		config:             config,
+		logger:             logger,
+		taskBacklog:        make(chan *tasks.Task, 50),
+		reportTaskResponse: reportTaskResponse,
 	}, nil
 }
 
@@ -137,50 +147,70 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		exposedPort = portMap[0].HostPort
 	}
 
-	aps.performerClient = avsPerformerClient.NewAvsPerformerClient(fmt.Sprintf("http://localhost:%s", exposedPort), nil)
+	client, err := avsPerformerClient.NewAvsPerformerClient(fmt.Sprintf("localhost:%s", exposedPort), true)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to create performer client",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		shutdownErr := aps.Shutdown()
+		if shutdownErr != nil {
+			err = errors.Wrap(err, "failed to shutdown Docker container")
+		}
+		return err
+	}
+	aps.performerClient = client
 
 	go aps.startHealthCheck(ctx)
 
 	return nil
 }
 
-func (aps *AvsPerformerServer) waitForRunning(ctx context.Context, dockerClient *client.Client, containerId string) (bool, error) {
-	for attempts := 0; attempts < 10; attempts++ {
-		info, err := dockerClient.ContainerInspect(ctx, containerId)
-		if err != nil {
-			return false, err
-		}
-
-		if info.State.Running {
-			return true, nil
-		}
-
-		// Not ready yet, sleep and retry
-		time.Sleep(100 * time.Millisecond * time.Duration(attempts+1))
+func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
+	var wg sync.WaitGroup
+	for i := 0; i < aps.config.WorkerCount; i++ {
+		wg.Add(1)
 	}
-	return false, fmt.Errorf("container %s is not running after 10 attempts", containerId)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		aps.logger.Sugar().Infow("Waiting for tasks", zap.String("avs", aps.config.AvsAddress))
+		for task := range aps.taskBacklog {
+			res, err := aps.processTask(ctx, task)
+			aps.reportTaskResponse(res, err)
+		}
+
+	}(&wg)
+	return nil
 }
 
-func (aps *AvsPerformerServer) startHealthCheck(ctx context.Context) {
-	for {
-		time.Sleep(5 * time.Second)
-		res, err := aps.performerClient.GetHealth(ctx)
-		if err != nil {
-			aps.logger.Sugar().Errorw("Failed to get health from performer",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.Error(err),
-			)
-			continue
-		}
-		aps.logger.Sugar().Infow("Got health response",
+func (aps *AvsPerformerServer) processTask(ctx context.Context, task *tasks.Task) (*tasks.TaskResult, error) {
+	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
+
+	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.Task{
+		TaskId:     task.TaskID,
+		AvsAddress: task.Avs,
+		Metadata:   task.Metadata,
+		Payload:    task.Payload,
+	})
+	if err != nil {
+		aps.logger.Sugar().Errorw("Performer failed to handle task",
 			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("status", res.Status),
+			zap.Error(err),
 		)
+		return nil, err
 	}
+
+	return tasks.NewTaskResultFromResultProto(res), nil
 }
 
-func (aps *AvsPerformerServer) RunTask(ctx context.Context) error {
-	// Implement the logic to run the task
+func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *tasks.Task) error {
+	select {
+	case aps.taskBacklog <- task:
+		aps.logger.Sugar().Infow("Task added to backlog")
+	default:
+		aps.logger.Sugar().Infow("Task backlog is full, dropping task")
+		return fmt.Errorf("task backlog is full for avs %s", aps.config.AvsAddress)
+	}
 	return nil
 }
 

@@ -3,29 +3,18 @@ package executor
 import (
 	"context"
 	"fmt"
-	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/server"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"strings"
+	"sync"
 )
-
-type ConnectedAggregatorStore struct {
-	connectedAggregators map[string]*connectedAggregator.ConnectedAggregator
-	logger               *zap.Logger
-}
-
-func NewConnectedAggregatorStore(logger *zap.Logger) *ConnectedAggregatorStore {
-	return &ConnectedAggregatorStore{
-		connectedAggregators: make(map[string]*connectedAggregator.ConnectedAggregator),
-		logger:               logger,
-	}
-}
 
 type Executor struct {
 	logger        *zap.Logger
@@ -35,6 +24,8 @@ type Executor struct {
 	//nolint:unused
 	aggregators map[string]*connectedAggregator.ConnectedAggregator
 	signer      signer.Signer
+
+	inflightTasks sync.Map
 }
 
 func NewExecutor(
@@ -56,32 +47,34 @@ func (e *Executor) Initialize() error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
 	for _, avs := range e.config.AvsPerformers {
-		if _, ok := e.avsPerformers[avs.AvsAddress]; ok {
+		avsAddress := strings.ToLower(avs.AvsAddress)
+		if _, ok := e.avsPerformers[avsAddress]; ok {
 			e.logger.Sugar().Errorw("AVS performer already exists",
-				zap.String("avsAddress", avs.AvsAddress),
+				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
 			)
 		}
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := server.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
-				AvsAddress:  avs.AvsAddress,
+			performer, err := serverPerformer.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
+				AvsAddress:  avsAddress,
 				ProcessType: avsPerformer.AvsProcessType(avs.ProcessType),
 				Image:       avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
-			}, e.logger)
+				WorkerCount: avs.WorkerCount,
+			}, e.receiveTaskResponse, e.logger)
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to create AVS performer server",
-					zap.String("avsAddress", avs.AvsAddress),
+					zap.String("avsAddress", avsAddress),
 					zap.Error(err),
 				)
 				return fmt.Errorf("failed to create AVS performer server: %v", err)
 			}
-			e.avsPerformers[avs.AvsAddress] = performer
+			e.avsPerformers[avsAddress] = performer
 
 		default:
 			e.logger.Sugar().Errorw("Unsupported AVS performer process type",
-				zap.String("avsAddress", avs.AvsAddress),
+				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
 			)
 			return fmt.Errorf("unsupported AVS performer process type: %s", avs.ProcessType)
@@ -108,6 +101,13 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 			)
 			return fmt.Errorf("failed to initialize AVS performer: %v", err)
 		}
+		if err := performer.ProcessTasks(ctx); err != nil {
+			e.logger.Sugar().Errorw("Failed to process tasks",
+				zap.String("avsAddress", avsAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to process tasks: %v", err)
+		}
 	}
 	go func() {
 		<-ctx.Done()
@@ -124,16 +124,16 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 	return nil
 }
 
-func (e *Executor) SubmitTask(_ context.Context, _ *executorpb.TaskSubmission) (*v1.SubmitAck, error) {
-	return &v1.SubmitAck{Message: "Stubbed message", Success: false}, nil
-}
-
-func (e *Executor) Run() {
+func (e *Executor) Run(ctx context.Context) error {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
+	if err := e.rpcServer.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start RPC server: %v", err)
+	}
+	return nil
 }
 
 func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {
-	executorpb.RegisterExecutorServiceServer(grpcServer, e)
+	executorV1.RegisterExecutorServiceServer(grpcServer, e)
 
 	return nil
 }

@@ -1,25 +1,23 @@
 ## HTTP/JSON interface
 
 Task payload request
-```json
-{
-    "taskId": "0x...",
-    "avs": "0xavs1...",
-    "operatorSetId": 1234,
-    "chainId": 1,
-    "metadata": "...", // base64 encoded bytes
-    "payload": "...", // base64 encoded bytes"
+```protobuf
+message Task {
+	string task_id = 1;
+	string avs_address = 2;
+	bytes metadata = 3;
+	bytes payload = 4;
 }
 ```
 
 Task payload response
-```json
-{
-	"taskId": "0x...",
-	"avs": "0xavs1...",
-	"operatorSetId": 1234,
-    "payload": "..." // base64 encoded bytes
+```protobuf
+message TaskResult {
+	string task_id = 1;
+	string avs_address = 2;
+	bytes result = 3;
 }
+
 ```
 
 ### Example Go implementation
@@ -31,30 +29,69 @@ package main
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go/pkg/server"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go/pkg/task"
+	"encoding/json"
+	"fmt"
+	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/server"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"time"
 )
 
-type TaskWorker struct{}
+// Example task worker that implements the IWorker interface
+type TaskWorker struct {
+	logger *zap.Logger
+}
 
-func (tw *TaskWorker) HandleTask(t *task.Task) (*task.TaskResult, error) {
-	return task.NewTaskResult(t.TaskID, t.Avs, t.OperatorSetID, []byte("result")), nil
+func NewTaskWorker(logger *zap.Logger) *TaskWorker {
+	return &TaskWorker{
+		logger: logger,
+	}
+}
+
+func (tw *TaskWorker) ValidateTask(t *performerV1.Task) error {
+	tw.logger.Sugar().Infow("Validating task",
+		zap.Any("task", t),
+	)
+
+	// ------------------------------------
+	// verify payload structure
+	// ------------------------------------
+	
+	
+	return nil
+}
+
+func (tw *TaskWorker) HandleTask(t *performerV1.Task) (*performerV1.TaskResult, error) {
+	tw.logger.Sugar().Infow("Handling task",
+		zap.Any("task", t),
+	)
+	
+	// ------------------------------------
+	// Logic to handle the task goes here
+	// ------------------------------------
+
+	return &performerV1.TaskResult{
+		TaskId:     t.TaskId,
+		AvsAddress: t.AvsAddress,
+		Result:     responseBytes,
+	}, nil
 }
 
 func main() {
 	ctx := context.Background()
 	l, _ := zap.NewProduction()
 
-	w := &TaskWorker{}
+	w := NewTaskWorker(l)
 
-	pp := server.NewPonosPerformer(&server.PonosPerformerConfig{
+	pp, err := server.NewPonosPerformerWithRpcServer(&server.PonosPerformerConfig{
 		Port:    8080,
-		Timeout: 5 * time.Second,
 	}, w, l)
+	if err != nil {
+		panic(fmt.Errorf("failed to create performer: %w", err))
+	}
 
-	if err := pp.StartHttpServer(ctx); err != nil {
+	if err := pp.Start(ctx); err != nil {
 		panic(err)
 	}
 }

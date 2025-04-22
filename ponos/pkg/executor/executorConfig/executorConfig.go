@@ -11,7 +11,8 @@ import (
 const (
 	EnvPrefix = "EXECUTOR_"
 
-	Debug = "debug"
+	Debug    = "debug"
+	GrpcPort = "grpc-port"
 )
 
 type PerformerImage struct {
@@ -23,6 +24,31 @@ type AvsPerformerConfig struct {
 	Image       *PerformerImage
 	ProcessType string
 	AvsAddress  string
+	WorkerCount int
+}
+
+func (ap *AvsPerformerConfig) Validate() error {
+	var allErrors field.ErrorList
+	if ap.AvsAddress == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("avsAddress"), "avsAddress is required"))
+	}
+	if ap.Image == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("image"), "image is required"))
+	} else {
+		if ap.Image.Repository == "" {
+			allErrors = append(allErrors, field.Required(field.NewPath("image.repository"), "image.repository is required"))
+		}
+		if ap.Image.Tag == "" {
+			allErrors = append(allErrors, field.Required(field.NewPath("image.tag"), "image.tag is required"))
+		}
+	}
+	if ap.WorkerCount == 0 {
+		allErrors = append(allErrors, field.Required(field.NewPath("workerCount"), "workerCount is required"))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type SingingKeys struct {
@@ -38,6 +64,7 @@ type OperatorConfig struct {
 
 type ExecutorConfig struct {
 	Debug         bool
+	GrpcPort      int                   `json:"grpcPort" yaml:"grpcPort"`
 	Operator      *OperatorConfig       `json:"operator" yaml:"operator"`
 	AvsPerformers []*AvsPerformerConfig `json:"avsPerformers" yaml:"avsPerformers"`
 }
@@ -49,6 +76,12 @@ func (ec *ExecutorConfig) Validate() error {
 	}
 	if len(ec.AvsPerformers) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one AVS performer is required"))
+	} else {
+		for _, avs := range ec.AvsPerformers {
+			if err := avs.Validate(); err != nil {
+				allErrors = append(allErrors, field.Invalid(field.NewPath("avsPerformers"), avs, err.Error()))
+			}
+		}
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
@@ -58,7 +91,8 @@ func (ec *ExecutorConfig) Validate() error {
 
 func NewExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
-		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
+		Debug:    viper.GetBool(config.NormalizeFlagName(Debug)),
+		GrpcPort: viper.GetInt(config.NormalizeFlagName(GrpcPort)),
 	}
 }
 func NewExecutorConfigFromYamlBytes(data []byte) (*ExecutorConfig, error) {

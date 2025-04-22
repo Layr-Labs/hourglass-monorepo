@@ -2,6 +2,7 @@ package avsPerformer
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 )
 
 type AvsProcessType string
@@ -20,10 +21,14 @@ type AvsPerformerConfig struct {
 	AvsAddress  string
 	ProcessType AvsProcessType
 	Image       PerformerImage
+	WorkerCount int
 }
 
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
-	RunTask(ctx context.Context) error
+	ProcessTasks(ctx context.Context) error
+	RunTask(ctx context.Context, task *tasks.Task) error
 	Shutdown() error
 }
+
+type ReceiveTaskResponse func(response *tasks.TaskResult, err error)
