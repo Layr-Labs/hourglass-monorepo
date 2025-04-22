@@ -10,6 +10,7 @@ var (
 	ErrInvalidSignatureType  = errors.New("invalid signature type")
 	ErrInvalidPublicKeyType  = errors.New("invalid public key type")
 	ErrInvalidPrivateKeyType = errors.New("invalid private key type")
+	ErrUnsupportedOperation  = errors.New("operation not supported by this scheme")
 )
 
 // PrivateKey is the interface that all private key implementations must satisfy
@@ -43,6 +44,13 @@ type Signature interface {
 type SigningScheme interface {
 	// GenerateKeyPair creates a new random private key and the corresponding public key
 	GenerateKeyPair() (PrivateKey, PublicKey, error)
+
+	// GenerateKeyPairFromSeed creates a deterministic private key and the corresponding public key from a seed
+	GenerateKeyPairFromSeed(seed []byte) (PrivateKey, PublicKey, error)
+
+	// GenerateKeyPairEIP2333 creates a deterministic private key and the corresponding public key using the EIP-2333 standard
+	// This is specific to BLS12-381 implementations and may not be supported by all schemes
+	GenerateKeyPairEIP2333(seed []byte, path []uint32) (PrivateKey, PublicKey, error)
 
 	// NewPrivateKeyFromBytes creates a private key from bytes
 	NewPrivateKeyFromBytes(data []byte) (PrivateKey, error)

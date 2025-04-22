@@ -2,11 +2,13 @@ package bn254
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"math/big"
 
 	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -45,6 +47,42 @@ func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate random private key: %w", err)
 	}
+
+	// Compute the public key
+	pkPoint := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)
+
+	// Create private key
+	privateKey := &PrivateKey{
+		scalar:      sk,
+		ScalarBytes: sk.Bytes(),
+	}
+
+	// Create public key
+	publicKey := &PublicKey{
+		point:      pkPoint,
+		PointBytes: pkPoint.Marshal(),
+	}
+
+	return privateKey, publicKey, nil
+}
+
+// GenerateKeyPairFromSeed creates a deterministic private key and the corresponding public key from a seed
+func GenerateKeyPairFromSeed(seed []byte) (*PrivateKey, *PublicKey, error) {
+	if len(seed) < 32 {
+		return nil, nil, fmt.Errorf("seed must be at least 32 bytes")
+	}
+
+	// Generate deterministic private key from seed using HKDF with SHA-256
+	kdf := hkdf.New(sha256.New, seed, nil, []byte("BN254-SeedGeneration"))
+	keyBytes := make([]byte, 32)
+	if _, err := kdf.Read(keyBytes); err != nil {
+		return nil, nil, fmt.Errorf("failed to derive key from seed: %w", err)
+	}
+
+	// Ensure the key is in the field's range
+	frOrder := fr.Modulus()
+	sk := new(big.Int).SetBytes(keyBytes)
+	sk.Mod(sk, frOrder)
 
 	// Compute the public key
 	pkPoint := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)

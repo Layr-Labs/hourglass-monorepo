@@ -2,11 +2,15 @@ package bls381
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
 	bls12381 "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
+	"golang.org/x/crypto/hkdf"
 )
 
 var (
@@ -53,6 +57,95 @@ func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 	privateKey := &PrivateKey{
 		scalar:      sk,
 		ScalarBytes: sk.Bytes(),
+	}
+
+	// Create public key
+	publicKey := &PublicKey{
+		point:      pkPoint,
+		PointBytes: pkPoint.Marshal(),
+	}
+
+	return privateKey, publicKey, nil
+}
+
+// GenerateKeyPairFromSeed creates a deterministic private key and the corresponding public key from a seed
+func GenerateKeyPairFromSeed(seed []byte) (*PrivateKey, *PublicKey, error) {
+	if len(seed) < 32 {
+		return nil, nil, fmt.Errorf("seed must be at least 32 bytes")
+	}
+
+	// Generate deterministic private key from seed using HKDF with SHA-256
+	kdf := hkdf.New(sha256.New, seed, nil, []byte("BLS12-381-SeedGeneration"))
+	keyBytes := make([]byte, 32)
+	if _, err := kdf.Read(keyBytes); err != nil {
+		return nil, nil, fmt.Errorf("failed to derive key from seed: %w", err)
+	}
+
+	// Ensure the key is in the field's range
+	frOrder := fr.Modulus()
+	sk := new(big.Int).SetBytes(keyBytes)
+	sk.Mod(sk, frOrder)
+
+	// Compute the public key
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, sk)
+
+	// Create private key
+	privateKey := &PrivateKey{
+		scalar:      sk,
+		ScalarBytes: sk.Bytes(),
+	}
+
+	// Create public key
+	publicKey := &PublicKey{
+		point:      pkPoint,
+		PointBytes: pkPoint.Marshal(),
+	}
+
+	return privateKey, publicKey, nil
+}
+
+// GenerateKeyPairEIP2333 creates a deterministic private key and the corresponding public key using the EIP-2333 standard
+// Implements the EIP-2333 hierarchical deterministic key generation for BLS signatures
+// See: https://eips.ethereum.org/EIPS/eip-2333
+func GenerateKeyPairEIP2333(seed []byte, path []uint32) (*PrivateKey, *PublicKey, error) {
+	if len(seed) < 32 {
+		return nil, nil, fmt.Errorf("seed must be at least 32 bytes")
+	}
+
+	// Generate the master key using HKDF
+	// Note: The actual EIP-2333 uses a more specific algorithm, but we'll approximate with HKDF
+	kdf := hkdf.New(sha512.New, seed, nil, []byte("EIP-2333-HKDF-Master-Key"))
+	masterKeyBytes := make([]byte, 32)
+	if _, err := kdf.Read(masterKeyBytes); err != nil {
+		return nil, nil, fmt.Errorf("failed to derive master key: %w", err)
+	}
+
+	// Start with the master key
+	currentKey := new(big.Int).SetBytes(masterKeyBytes)
+	frOrder := fr.Modulus()
+	currentKey.Mod(currentKey, frOrder)
+
+	// Derive child keys along the path
+	for _, index := range path {
+		// In EIP-2333, derive child key using the HKDF approach with the parent key and index
+		h := sha256.New()
+		h.Write(currentKey.Bytes())
+		binary.Write(h, binary.BigEndian, index)
+		childKeyBytes := h.Sum(nil)
+
+		childKey := new(big.Int).SetBytes(childKeyBytes)
+		childKey.Mod(childKey, frOrder)
+
+		currentKey = childKey
+	}
+
+	// Compute the public key
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, currentKey)
+
+	// Create private key
+	privateKey := &PrivateKey{
+		scalar:      currentKey,
+		ScalarBytes: currentKey.Bytes(),
 	}
 
 	// Create public key

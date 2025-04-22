@@ -38,6 +38,61 @@ func Test_BN254(t *testing.T) {
 		}
 	})
 
+	t.Run("KeyGenerationFromSeed", func(t *testing.T) {
+		// Test with the same seed to ensure deterministic behavior
+		seed := []byte("a seed phrase that is at least 32 bytes long")
+
+		// Generate first key pair
+		privateKey1, publicKey1, err := GenerateKeyPairFromSeed(seed)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair from seed: %v", err)
+		}
+
+		// Generate second key pair with the same seed
+		privateKey2, publicKey2, err := GenerateKeyPairFromSeed(seed)
+		if err != nil {
+			t.Fatalf("Failed to generate second key pair from seed: %v", err)
+		}
+
+		// Keys generated from the same seed should be identical
+		if !bytes.Equal(privateKey1.Bytes(), privateKey2.Bytes()) {
+			t.Error("Private keys generated from the same seed are not equal")
+		}
+		if !bytes.Equal(publicKey1.Bytes(), publicKey2.Bytes()) {
+			t.Error("Public keys generated from the same seed are not equal")
+		}
+
+		// Test with a different seed
+		differentSeed := []byte("a different seed phrase at least 32 bytes")
+		privateKey3, publicKey3, err := GenerateKeyPairFromSeed(differentSeed)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair from different seed: %v", err)
+		}
+
+		// Keys generated from different seeds should be different
+		if bytes.Equal(privateKey1.Bytes(), privateKey3.Bytes()) {
+			t.Error("Private keys generated from different seeds are equal")
+		}
+		if bytes.Equal(publicKey1.Bytes(), publicKey3.Bytes()) {
+			t.Error("Public keys generated from different seeds are equal")
+		}
+
+		// Make sure keys can be used for signing and verification
+		message := []byte("test message for seed-based keys")
+		signature, err := privateKey1.Sign(message)
+		if err != nil {
+			t.Fatalf("Failed to sign with seed-based key: %v", err)
+		}
+
+		valid, err := signature.Verify(publicKey1, message)
+		if err != nil {
+			t.Fatalf("Failed to verify signature from seed-based key: %v", err)
+		}
+		if !valid {
+			t.Error("Signature verification with seed-based key failed")
+		}
+	})
+
 	t.Run("SerializationDeserialization", func(t *testing.T) {
 		// Generate a key pair
 		privateKey, publicKey, err := GenerateKeyPair()
@@ -302,6 +357,21 @@ func Test_BN254(t *testing.T) {
 					t.Errorf("Point for message %d is not in the correct subgroup", i)
 				}
 			})
+		}
+	})
+
+	t.Run("EIP2333NotSupported", func(t *testing.T) {
+		// Test using the scheme
+		scheme := NewScheme()
+		seed := []byte("a seed phrase that is at least 32 bytes long")
+		path := []uint32{3, 14, 15, 92}
+
+		// Attempt to create a key pair using EIP-2333
+		_, _, err := scheme.GenerateKeyPairEIP2333(seed, path)
+
+		// Should return an unsupported operation error
+		if err == nil {
+			t.Error("Expected EIP-2333 to be unsupported, but no error was returned")
 		}
 	})
 }

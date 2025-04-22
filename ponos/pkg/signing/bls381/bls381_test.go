@@ -38,6 +38,117 @@ func Test_BLS381(t *testing.T) {
 		}
 	})
 
+	t.Run("KeyGenerationFromSeed", func(t *testing.T) {
+		// Test with the same seed to ensure deterministic behavior
+		seed := []byte("a seed phrase that is at least 32 bytes long")
+
+		// Generate first key pair
+		privateKey1, publicKey1, err := GenerateKeyPairFromSeed(seed)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair from seed: %v", err)
+		}
+
+		// Generate second key pair with the same seed
+		privateKey2, publicKey2, err := GenerateKeyPairFromSeed(seed)
+		if err != nil {
+			t.Fatalf("Failed to generate second key pair from seed: %v", err)
+		}
+
+		// Keys generated from the same seed should be identical
+		if !bytes.Equal(privateKey1.Bytes(), privateKey2.Bytes()) {
+			t.Error("Private keys generated from the same seed are not equal")
+		}
+		if !bytes.Equal(publicKey1.Bytes(), publicKey2.Bytes()) {
+			t.Error("Public keys generated from the same seed are not equal")
+		}
+
+		// Test with a different seed
+		differentSeed := []byte("a different seed phrase at least 32 bytes")
+		privateKey3, publicKey3, err := GenerateKeyPairFromSeed(differentSeed)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair from different seed: %v", err)
+		}
+
+		// Keys generated from different seeds should be different
+		if bytes.Equal(privateKey1.Bytes(), privateKey3.Bytes()) {
+			t.Error("Private keys generated from different seeds are equal")
+		}
+		if bytes.Equal(publicKey1.Bytes(), publicKey3.Bytes()) {
+			t.Error("Public keys generated from different seeds are equal")
+		}
+
+		// Make sure keys can be used for signing and verification
+		message := []byte("test message for seed-based keys")
+		signature, err := privateKey1.Sign(message)
+		if err != nil {
+			t.Fatalf("Failed to sign with seed-based key: %v", err)
+		}
+
+		valid, err := signature.Verify(publicKey1, message)
+		if err != nil {
+			t.Fatalf("Failed to verify signature from seed-based key: %v", err)
+		}
+		if !valid {
+			t.Error("Signature verification with seed-based key failed")
+		}
+	})
+
+	t.Run("KeyGenerationEIP2333", func(t *testing.T) {
+		// Test with the same seed and path to ensure deterministic behavior
+		seed := []byte("a seed phrase that is at least 32 bytes long")
+		path := []uint32{3, 14, 15, 92}
+
+		// Generate first key pair
+		privateKey1, publicKey1, err := GenerateKeyPairEIP2333(seed, path)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair using EIP-2333: %v", err)
+		}
+
+		// Generate second key pair with the same seed and path
+		privateKey2, publicKey2, err := GenerateKeyPairEIP2333(seed, path)
+		if err != nil {
+			t.Fatalf("Failed to generate second key pair using EIP-2333: %v", err)
+		}
+
+		// Keys generated from the same seed and path should be identical
+		if !bytes.Equal(privateKey1.Bytes(), privateKey2.Bytes()) {
+			t.Error("Private keys generated with the same parameters are not equal")
+		}
+		if !bytes.Equal(publicKey1.Bytes(), publicKey2.Bytes()) {
+			t.Error("Public keys generated with the same parameters are not equal")
+		}
+
+		// Test with a different path
+		differentPath := []uint32{42, 42, 42, 42}
+		privateKey3, publicKey3, err := GenerateKeyPairEIP2333(seed, differentPath)
+		if err != nil {
+			t.Fatalf("Failed to generate key pair with different path: %v", err)
+		}
+
+		// Keys generated from the same seed but different paths should be different
+		if bytes.Equal(privateKey1.Bytes(), privateKey3.Bytes()) {
+			t.Error("Private keys generated with different paths are equal")
+		}
+		if bytes.Equal(publicKey1.Bytes(), publicKey3.Bytes()) {
+			t.Error("Public keys generated with different paths are equal")
+		}
+
+		// Make sure keys can be used for signing and verification
+		message := []byte("test message for EIP-2333 keys")
+		signature, err := privateKey1.Sign(message)
+		if err != nil {
+			t.Fatalf("Failed to sign with EIP-2333 key: %v", err)
+		}
+
+		valid, err := signature.Verify(publicKey1, message)
+		if err != nil {
+			t.Fatalf("Failed to verify signature from EIP-2333 key: %v", err)
+		}
+		if !valid {
+			t.Error("Signature verification with EIP-2333 key failed")
+		}
+	})
+
 	t.Run("SerializationDeserialization", func(t *testing.T) {
 		// Generate a key pair
 		privateKey, publicKey, err := GenerateKeyPair()

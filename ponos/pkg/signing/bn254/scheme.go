@@ -25,6 +25,22 @@ func (s *Scheme) GenerateKeyPair() (signing.PrivateKey, signing.PublicKey, error
 	return &privateKeyAdapter{privKey}, &publicKeyAdapter{pubKey}, nil
 }
 
+// GenerateKeyPairFromSeed creates a deterministic private key and the corresponding public key from a seed
+func (s *Scheme) GenerateKeyPairFromSeed(seed []byte) (signing.PrivateKey, signing.PublicKey, error) {
+	privKey, pubKey, err := GenerateKeyPairFromSeed(seed)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &privateKeyAdapter{privKey}, &publicKeyAdapter{pubKey}, nil
+}
+
+// GenerateKeyPairEIP2333 creates a deterministic private key and the corresponding public key using the EIP-2333 standard
+func (s *Scheme) GenerateKeyPairEIP2333(seed []byte, path []uint32) (signing.PrivateKey, signing.PublicKey, error) {
+	// EIP-2333 is specific to BLS12-381 and not implemented for BN254
+	return nil, nil, signing.ErrUnsupportedOperation
+}
+
 // NewPrivateKeyFromBytes creates a private key from bytes
 func (s *Scheme) NewPrivateKeyFromBytes(data []byte) (signing.PrivateKey, error) {
 	privKey, err := NewPrivateKeyFromBytes(data)
