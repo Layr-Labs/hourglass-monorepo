@@ -10,10 +10,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"strings"
+	"sync"
 )
 
 type Executor struct {
@@ -24,6 +24,8 @@ type Executor struct {
 	//nolint:unused
 	aggregators map[string]*connectedAggregator.ConnectedAggregator
 	signer      signer.Signer
+
+	inflightTasks sync.Map
 }
 
 func NewExecutor(
@@ -122,15 +124,12 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 	return nil
 }
 
-func (e *Executor) Run() {
+func (e *Executor) Run(ctx context.Context) error {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
-}
-
-func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
-	// Handle the response from the AVS performer
-	e.logger.Sugar().Infow("Received task response",
-		zap.Any("response", response),
-	)
+	if err := e.rpcServer.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start RPC server: %v", err)
+	}
+	return nil
 }
 
 func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {

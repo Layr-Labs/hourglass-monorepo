@@ -54,13 +54,9 @@ var runCmd = &cobra.Command{
 		}
 
 		go func() {
-			if err := baseRpcServer.Start(ctx); err != nil {
-				l.Sugar().Fatal("Failed to start RPC server", zap.Error(err))
+			if err := exec.Run(ctx); err != nil {
+				l.Sugar().Fatal("Failed to run executor", zap.Error(err))
 			}
-		}()
-
-		go func() {
-			exec.Run()
 		}()
 
 		gracefulShutdownNotifier := shutdown.CreateGracefulShutdownChannel()
