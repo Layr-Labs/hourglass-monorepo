@@ -4,7 +4,7 @@ ADD . /build
 
 WORKDIR /build/ponos-performer/go
 
-RUN ls -al && go build -o ponos-performer ./example/*.go
+RUN ls -al && go build -o ponos-performer main.go
 
 EXPOSE 8080
 

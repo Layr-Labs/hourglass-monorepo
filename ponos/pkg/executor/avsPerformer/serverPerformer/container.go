@@ -3,6 +3,7 @@ package serverPerformer
 import (
 	"context"
 	"fmt"
+	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
 	"time"
@@ -45,7 +46,7 @@ func (aps *AvsPerformerServer) waitForRunning(ctx context.Context, dockerClient 
 func (aps *AvsPerformerServer) startHealthCheck(ctx context.Context) {
 	for {
 		time.Sleep(5 * time.Second)
-		res, err := aps.performerClient.GetHealth(ctx)
+		res, err := aps.performerClient.Health(ctx, &performerV1.HealthRequest{})
 		if err != nil {
 			aps.logger.Sugar().Errorw("Failed to get health from performer",
 				zap.String("avsAddress", aps.config.AvsAddress),

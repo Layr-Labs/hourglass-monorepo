@@ -19,99 +19,137 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AvsService_ExecuteTask_FullMethodName = "/eigenlayer.hourglass.v1.performer.AvsService/ExecuteTask"
+	PerformerService_ExecuteTask_FullMethodName = "/eigenlayer.hourglass.v1.performer.PerformerService/ExecuteTask"
+	PerformerService_Health_FullMethodName      = "/eigenlayer.hourglass.v1.performer.PerformerService/Health"
 )
 
-// AvsServiceClient is the client API for AvsService service.
+// PerformerServiceClient is the client API for PerformerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type AvsServiceClient interface {
+type PerformerServiceClient interface {
 	ExecuteTask(ctx context.Context, in *Task, opts ...grpc.CallOption) (*TaskResult, error)
+	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
 
-type avsServiceClient struct {
+type performerServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewAvsServiceClient(cc grpc.ClientConnInterface) AvsServiceClient {
-	return &avsServiceClient{cc}
+func NewPerformerServiceClient(cc grpc.ClientConnInterface) PerformerServiceClient {
+	return &performerServiceClient{cc}
 }
 
-func (c *avsServiceClient) ExecuteTask(ctx context.Context, in *Task, opts ...grpc.CallOption) (*TaskResult, error) {
+func (c *performerServiceClient) ExecuteTask(ctx context.Context, in *Task, opts ...grpc.CallOption) (*TaskResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TaskResult)
-	err := c.cc.Invoke(ctx, AvsService_ExecuteTask_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, PerformerService_ExecuteTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// AvsServiceServer is the server API for AvsService service.
-// All implementations should embed UnimplementedAvsServiceServer
-// for forward compatibility.
-type AvsServiceServer interface {
-	ExecuteTask(context.Context, *Task) (*TaskResult, error)
+func (c *performerServiceClient) Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HealthResponse)
+	err := c.cc.Invoke(ctx, PerformerService_Health_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-// UnimplementedAvsServiceServer should be embedded to have
+// PerformerServiceServer is the server API for PerformerService service.
+// All implementations should embed UnimplementedPerformerServiceServer
+// for forward compatibility.
+type PerformerServiceServer interface {
+	ExecuteTask(context.Context, *Task) (*TaskResult, error)
+	Health(context.Context, *HealthRequest) (*HealthResponse, error)
+}
+
+// UnimplementedPerformerServiceServer should be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedAvsServiceServer struct{}
+type UnimplementedPerformerServiceServer struct{}
 
-func (UnimplementedAvsServiceServer) ExecuteTask(context.Context, *Task) (*TaskResult, error) {
+func (UnimplementedPerformerServiceServer) ExecuteTask(context.Context, *Task) (*TaskResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteTask not implemented")
 }
-func (UnimplementedAvsServiceServer) testEmbeddedByValue() {}
+func (UnimplementedPerformerServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Health not implemented")
+}
+func (UnimplementedPerformerServiceServer) testEmbeddedByValue() {}
 
-// UnsafeAvsServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to AvsServiceServer will
+// UnsafePerformerServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to PerformerServiceServer will
 // result in compilation errors.
-type UnsafeAvsServiceServer interface {
-	mustEmbedUnimplementedAvsServiceServer()
+type UnsafePerformerServiceServer interface {
+	mustEmbedUnimplementedPerformerServiceServer()
 }
 
-func RegisterAvsServiceServer(s grpc.ServiceRegistrar, srv AvsServiceServer) {
-	// If the following call pancis, it indicates UnimplementedAvsServiceServer was
+func RegisterPerformerServiceServer(s grpc.ServiceRegistrar, srv PerformerServiceServer) {
+	// If the following call pancis, it indicates UnimplementedPerformerServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&AvsService_ServiceDesc, srv)
+	s.RegisterService(&PerformerService_ServiceDesc, srv)
 }
 
-func _AvsService_ExecuteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PerformerService_ExecuteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Task)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AvsServiceServer).ExecuteTask(ctx, in)
+		return srv.(PerformerServiceServer).ExecuteTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AvsService_ExecuteTask_FullMethodName,
+		FullMethod: PerformerService_ExecuteTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AvsServiceServer).ExecuteTask(ctx, req.(*Task))
+		return srv.(PerformerServiceServer).ExecuteTask(ctx, req.(*Task))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// AvsService_ServiceDesc is the grpc.ServiceDesc for AvsService service.
+func _PerformerService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PerformerServiceServer).Health(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PerformerService_Health_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PerformerServiceServer).Health(ctx, req.(*HealthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// PerformerService_ServiceDesc is the grpc.ServiceDesc for PerformerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var AvsService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "eigenlayer.hourglass.v1.performer.AvsService",
-	HandlerType: (*AvsServiceServer)(nil),
+var PerformerService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "eigenlayer.hourglass.v1.performer.PerformerService",
+	HandlerType: (*PerformerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "ExecuteTask",
-			Handler:    _AvsService_ExecuteTask_Handler,
+			Handler:    _PerformerService_ExecuteTask_Handler,
+		},
+		{
+			MethodName: "Health",
+			Handler:    _PerformerService_Health_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

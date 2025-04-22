@@ -17,6 +17,13 @@ message TaskResult {
   bytes result = 3;
 }
 
-service AvsService {
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+}
+
+service PerformerService {
   rpc ExecuteTask(Task) returns (TaskResult) {}
+  rpc Health(HealthRequest) returns (HealthResponse) {}
 }

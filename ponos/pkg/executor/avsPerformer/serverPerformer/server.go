@@ -3,9 +3,10 @@ package serverPerformer
 import (
 	"context"
 	"fmt"
+	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
@@ -20,12 +21,9 @@ type AvsPerformerServer struct {
 	logger          *zap.Logger
 	containerId     string
 	dockerClient    *client.Client
-	performerClient *avsPerformerClient.AvsPerformerClient
+	performerClient performerV1.PerformerServiceClient
 	// TODO(seanmcgary) make this an actual chan with a type
-	taskBacklog chan *performer.Task
-
-	// map of tasks by taskID
-	inflightTasks sync.Map
+	taskBacklog chan *tasks.Task
 
 	reportTaskResponse avsPerformer.ReceiveTaskResponse
 }
@@ -38,7 +36,7 @@ func NewAvsPerformerServer(
 	return &AvsPerformerServer{
 		config:             config,
 		logger:             logger,
-		taskBacklog:        make(chan *performer.Task, 50),
+		taskBacklog:        make(chan *tasks.Task, 50),
 		reportTaskResponse: reportTaskResponse,
 	}, nil
 }
@@ -149,15 +147,23 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		exposedPort = portMap[0].HostPort
 	}
 
-	aps.performerClient = avsPerformerClient.NewAvsPerformerClient(fmt.Sprintf("http://localhost:%s", exposedPort), nil)
+	client, err := avsPerformerClient.NewAvsPerformerClient(fmt.Sprintf("localhost:%s", exposedPort), true)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to create performer client",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		shutdownErr := aps.Shutdown()
+		if shutdownErr != nil {
+			err = errors.Wrap(err, "failed to shutdown Docker container")
+		}
+		return err
+	}
+	aps.performerClient = client
 
 	go aps.startHealthCheck(ctx)
 
 	return nil
-}
-
-func (aps *AvsPerformerServer) doWork() {
-
 }
 
 func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
@@ -177,10 +183,15 @@ func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 	return nil
 }
 
-func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performer.Task) (*performer.TaskResult, error) {
+func (aps *AvsPerformerServer) processTask(ctx context.Context, task *tasks.Task) (*tasks.TaskResult, error) {
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
 
-	res, err := aps.performerClient.SendTask(ctx, task)
+	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.Task{
+		TaskId:     task.TaskID,
+		AvsAddress: task.Avs,
+		Metadata:   task.Metadata,
+		Payload:    task.Payload,
+	})
 	if err != nil {
 		aps.logger.Sugar().Errorw("Performer failed to handle task",
 			zap.String("avsAddress", aps.config.AvsAddress),
@@ -189,10 +200,10 @@ func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performer.
 		return nil, err
 	}
 
-	return res, nil
+	return tasks.NewTaskResultFromResultProto(res), nil
 }
 
-func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performer.Task) error {
+func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *tasks.Task) error {
 	select {
 	case aps.taskBacklog <- task:
 		aps.logger.Sugar().Infow("Task added to backlog")

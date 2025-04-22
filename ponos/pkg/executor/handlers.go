@@ -5,7 +5,7 @@ import (
 	"fmt"
 	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strings"
@@ -39,7 +39,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) error {
 		return fmt.Errorf("AVS avsPerformer not found for address %s", task.AvsAddress)
 	}
 
-	performerTask := performer.NewTaskFromProto(task)
+	performerTask := tasks.NewTaskFromTaskSubmissionProto(task)
 
 	err := avsPerformer.RunTask(context.Background(), performerTask)
 	if err != nil {

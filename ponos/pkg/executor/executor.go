@@ -8,9 +8,9 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"strings"
@@ -126,7 +126,7 @@ func (e *Executor) Run() {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
 }
 
-func (e *Executor) receiveTaskResponse(response *performer.TaskResult, err error) {
+func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 	// Handle the response from the AVS performer
 	e.logger.Sugar().Infow("Received task response",
 		zap.Any("response", response),
