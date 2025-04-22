@@ -74,7 +74,7 @@ func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 	}
 	task := storedTask.(*executorV1.TaskSubmission)
 
-	aggClient, err := aggregatorClient.NewAggregatorClient(task.AggregatorAddress, false)
+	aggClient, err := aggregatorClient.NewAggregatorClient(task.AggregatorUrl, false)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to create aggregator client",
 			zap.String("taskId", task.TaskId),
@@ -97,7 +97,7 @@ func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 	// TODO(seanmcgary): add a retry wrapper around this call to handle cases where the aggregator is unreachable
 	_, err = aggClient.SubmitTaskResult(context.Background(), &aggregatorV1.TaskResult{
 		TaskId:          response.TaskID,
-		OperatorAddress: "",
+		OperatorAddress: e.config.Operator.Address,
 		Output:          response.Result,
 		PublicKey:       "",
 		Signature:       sig,
@@ -110,6 +110,7 @@ func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 		)
 		return
 	}
+	e.inflightTasks.Delete(task.TaskId)
 }
 
 func (e *Executor) signResult(result *tasks.TaskResult) ([]byte, error) {

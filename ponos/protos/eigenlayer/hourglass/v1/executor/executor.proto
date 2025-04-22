@@ -18,5 +18,6 @@ message TaskSubmission {
 
   string public_key = 5;
   bytes signature = 6;
+  string aggregator_url = 7;
 }
 
