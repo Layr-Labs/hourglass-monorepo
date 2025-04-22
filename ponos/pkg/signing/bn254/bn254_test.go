@@ -1,4 +1,4 @@
-package bls381
+package bn254
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func Test_BLS381(t *testing.T) {
+func Test_BN254(t *testing.T) {
 	t.Run("KeyGeneration", func(t *testing.T) {
 		privateKey, publicKey, err := GenerateKeyPair()
 		if err != nil {

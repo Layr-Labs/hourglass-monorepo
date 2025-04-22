@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description: Apply to all go files
+globs: *.go
 alwaysApply: false
 ---
 # Go Cursor Rules
@@ -109,10 +109,10 @@ alwaysApply: false
    - Organize test files to mirror the structure of the package they test
 
 2. **Test Naming**
-   - Use `TestXxx` for standard tests
+   - Use `Test_Xxx` for standard tests
    - Use `BenchmarkXxx` for benchmarks
    - Use descriptive test names that indicate what is being tested
-   - Follow a pattern like `TestSubject_Scenario_ExpectedBehavior`
+   - Follow a pattern like `Test_Subject_Scenario_ExpectedBehavior`
 
 3. **Test Implementation**
    - Make tests self-contained and independent
