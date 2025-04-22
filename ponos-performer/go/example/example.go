@@ -57,7 +57,7 @@ func (tw *TaskWorker) HandleTask(t *performer.Task) (*performer.TaskResult, erro
 	}
 	responseBytes, err := json.Marshal(responsePayload)
 
-	return performer.NewTaskResult(t.TaskID, t.Avs, t.OperatorSetID, responseBytes), nil
+	return performer.NewTaskResult(t.TaskID, t.Avs, responseBytes), nil
 }
 
 func main() {

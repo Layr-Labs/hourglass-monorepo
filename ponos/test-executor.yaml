@@ -1,4 +1,5 @@
 ---
+grpcPort: 9090
 operator:
   address: "0xoperator..."
   operatorPrivateKey: "..."

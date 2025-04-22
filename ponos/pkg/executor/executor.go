@@ -8,10 +8,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"strings"
 )
 
 type Executor struct {
@@ -43,9 +45,10 @@ func (e *Executor) Initialize() error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
 	for _, avs := range e.config.AvsPerformers {
-		if _, ok := e.avsPerformers[avs.AvsAddress]; ok {
+		avsAddress := strings.ToLower(avs.AvsAddress)
+		if _, ok := e.avsPerformers[avsAddress]; ok {
 			e.logger.Sugar().Errorw("AVS performer already exists",
-				zap.String("avsAddress", avs.AvsAddress),
+				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
 			)
 		}
@@ -53,23 +56,23 @@ func (e *Executor) Initialize() error {
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
 			performer, err := serverPerformer.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
-				AvsAddress:  avs.AvsAddress,
+				AvsAddress:  avsAddress,
 				ProcessType: avsPerformer.AvsProcessType(avs.ProcessType),
 				Image:       avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
 				WorkerCount: avs.WorkerCount,
 			}, e.receiveTaskResponse, e.logger)
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to create AVS performer server",
-					zap.String("avsAddress", avs.AvsAddress),
+					zap.String("avsAddress", avsAddress),
 					zap.Error(err),
 				)
 				return fmt.Errorf("failed to create AVS performer server: %v", err)
 			}
-			e.avsPerformers[avs.AvsAddress] = performer
+			e.avsPerformers[avsAddress] = performer
 
 		default:
 			e.logger.Sugar().Errorw("Unsupported AVS performer process type",
-				zap.String("avsAddress", avs.AvsAddress),
+				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
 			)
 			return fmt.Errorf("unsupported AVS performer process type: %s", avs.ProcessType)
@@ -123,8 +126,11 @@ func (e *Executor) Run() {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
 }
 
-func (e *Executor) receiveTaskResponse(response interface{}, err error) {
+func (e *Executor) receiveTaskResponse(response *performer.TaskResult, err error) {
 	// Handle the response from the AVS performer
+	e.logger.Sugar().Infow("Received task response",
+		zap.Any("response", response),
+	)
 }
 
 func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {

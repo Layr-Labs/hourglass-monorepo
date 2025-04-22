@@ -38,6 +38,7 @@ func init() {
 	initConfig(rootCmd)
 
 	rootCmd.PersistentFlags().Bool(executorConfig.Debug, false, `"true" or "false"`)
+	rootCmd.PersistentFlags().Int(executorConfig.GrpcPort, 9090, "gRPC port")
 
 	// setup sub commands
 	rootCmd.AddCommand(runCmd)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
@@ -21,7 +22,7 @@ type AvsPerformerServer struct {
 	dockerClient    *client.Client
 	performerClient *avsPerformerClient.AvsPerformerClient
 	// TODO(seanmcgary) make this an actual chan with a type
-	taskBacklog chan interface{}
+	taskBacklog chan *performer.Task
 
 	// map of tasks by taskID
 	inflightTasks sync.Map
@@ -37,7 +38,7 @@ func NewAvsPerformerServer(
 	return &AvsPerformerServer{
 		config:             config,
 		logger:             logger,
-		taskBacklog:        make(chan interface{}, 50),
+		taskBacklog:        make(chan *performer.Task, 50),
 		reportTaskResponse: reportTaskResponse,
 	}, nil
 }
@@ -155,36 +156,43 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	return nil
 }
 
+func (aps *AvsPerformerServer) doWork() {
+
+}
+
 func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 	var wg sync.WaitGroup
 	for i := 0; i < aps.config.WorkerCount; i++ {
 		wg.Add(1)
 	}
-	go func() {
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
 		aps.logger.Sugar().Infow("Waiting for tasks", zap.String("avs", aps.config.AvsAddress))
-		for {
-			select {
-			case task := <-aps.taskBacklog:
-				res, err := aps.processTask(ctx, task)
-				aps.reportTaskResponse(res, err)
-			case <-ctx.Done():
-				aps.logger.Sugar().Infow("Shutting down task processing")
-				wg.Done()
-				return
-			}
+		for task := range aps.taskBacklog {
+			res, err := aps.processTask(ctx, task)
+			aps.reportTaskResponse(res, err)
 		}
-	}()
+
+	}(&wg)
 	return nil
 }
 
-func (aps *AvsPerformerServer) processTask(ctx context.Context, task interface{}) (interface{}, error) {
-	// TODO(seanmcgary): implement task processing
-	// This is a placeholder implementation
+func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performer.Task) (*performer.TaskResult, error) {
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
-	return nil, nil
+
+	res, err := aps.performerClient.SendTask(ctx, task)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Performer failed to handle task",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	return res, nil
 }
 
-func (aps *AvsPerformerServer) RunTask(ctx context.Context, task interface{}) error {
+func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performer.Task) error {
 	select {
 	case aps.taskBacklog <- task:
 		aps.logger.Sugar().Infow("Task added to backlog")

@@ -108,7 +108,6 @@ func (pp *PonosPerformer) handleTask(w http.ResponseWriter, r *http.Request) {
 		pp.logger.Sugar().Errorw("Task is invalid",
 			zap.String("taskId", task.TaskID),
 			zap.String("avs", task.Avs),
-			zap.Uint64("operatorSetId", task.OperatorSetID),
 			zap.Error(err),
 		)
 		pp.WriteJsonError(w, fmt.Errorf("task is invalid - %v", err), http.StatusBadRequest)
@@ -120,7 +119,6 @@ func (pp *PonosPerformer) handleTask(w http.ResponseWriter, r *http.Request) {
 		pp.logger.Sugar().Errorw("Failed to handle task",
 			zap.String("taskId", task.TaskID),
 			zap.String("avs", task.Avs),
-			zap.Uint64("operatorSetId", task.OperatorSetID),
 			zap.Error(err),
 		)
 		pp.WriteJsonError(w, fmt.Errorf("failed to handle task - %v", err), http.StatusInternalServerError)
@@ -131,7 +129,6 @@ func (pp *PonosPerformer) handleTask(w http.ResponseWriter, r *http.Request) {
 		pp.logger.Sugar().Errorw("Failed to marshal task result",
 			zap.String("taskId", task.TaskID),
 			zap.String("avs", task.Avs),
-			zap.Uint64("processType", task.OperatorSetID),
 			zap.Error(err),
 		)
 		pp.WriteJsonError(w, fmt.Errorf("failed to marshal task result - %v", err), http.StatusInternalServerError)

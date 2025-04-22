@@ -11,7 +11,8 @@ import (
 const (
 	EnvPrefix = "EXECUTOR_"
 
-	Debug = "debug"
+	Debug    = "debug"
+	GrpcPort = "grpc-port"
 )
 
 type PerformerImage struct {
@@ -63,6 +64,7 @@ type OperatorConfig struct {
 
 type ExecutorConfig struct {
 	Debug         bool
+	GrpcPort      int                   `json:"grpcPort" yaml:"grpcPort"`
 	Operator      *OperatorConfig       `json:"operator" yaml:"operator"`
 	AvsPerformers []*AvsPerformerConfig `json:"avsPerformers" yaml:"avsPerformers"`
 }
@@ -89,7 +91,8 @@ func (ec *ExecutorConfig) Validate() error {
 
 func NewExecutorConfig() *ExecutorConfig {
 	return &ExecutorConfig{
-		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
+		Debug:    viper.GetBool(config.NormalizeFlagName(Debug)),
+		GrpcPort: viper.GetInt(config.NormalizeFlagName(GrpcPort)),
 	}
 }
 func NewExecutorConfigFromYamlBytes(data []byte) (*ExecutorConfig, error) {

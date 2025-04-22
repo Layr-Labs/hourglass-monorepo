@@ -96,6 +96,7 @@ func (apc *AvsPerformerClient) SendTask(ctx context.Context, t *performer.Task) 
 	}
 
 	var data *performer.TaskResult
+	fmt.Printf("Raw result: %s\n", string(resData))
 	if err := json.Unmarshal(resData, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}

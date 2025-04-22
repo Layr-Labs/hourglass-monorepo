@@ -13,6 +13,7 @@ service ExecutorService {
 message TaskSubmission {
   string task_id = 1;
   string aggregator_address = 2;
+  string avs_address = 3;
   bytes payload = 4;
 
   string public_key = 5;
