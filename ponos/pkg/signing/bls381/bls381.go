@@ -130,7 +130,9 @@ func GenerateKeyPairEIP2333(seed []byte, path []uint32) (*PrivateKey, *PublicKey
 		// In EIP-2333, derive child key using the HKDF approach with the parent key and index
 		h := sha256.New()
 		h.Write(currentKey.Bytes())
-		binary.Write(h, binary.BigEndian, index)
+		if err := binary.Write(h, binary.BigEndian, index); err != nil {
+			return nil, nil, fmt.Errorf("failed to write index to hash: %w", err)
+		}
 		childKeyBytes := h.Sum(nil)
 
 		childKey := new(big.Int).SetBytes(childKeyBytes)
