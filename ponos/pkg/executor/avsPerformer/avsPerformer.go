@@ -20,10 +20,14 @@ type AvsPerformerConfig struct {
 	AvsAddress  string
 	ProcessType AvsProcessType
 	Image       PerformerImage
+	WorkerCount int
 }
 
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
-	RunTask(ctx context.Context) error
+	ProcessTasks(ctx context.Context) error
+	RunTask(ctx context.Context, task interface{}) error
 	Shutdown() error
 }
+
+type ReceiveTaskResponse func(response interface{}, err error)

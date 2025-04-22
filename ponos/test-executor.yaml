@@ -11,3 +11,4 @@ avsPerformers:
     tag: "latest"
   processType: "server"
   avsAddress: "0xavs1..."
+  workerCount: 1

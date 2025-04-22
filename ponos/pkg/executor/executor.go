@@ -6,7 +6,7 @@ import (
 	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/server"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -65,11 +65,12 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := server.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
+			performer, err := serverPerformer.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
 				AvsAddress:  avs.AvsAddress,
 				ProcessType: avsPerformer.AvsProcessType(avs.ProcessType),
 				Image:       avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
-			}, e.logger)
+				WorkerCount: avs.WorkerCount,
+			}, e.receiveTaskResponse, e.logger)
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to create AVS performer server",
 					zap.String("avsAddress", avs.AvsAddress),
@@ -98,6 +99,10 @@ func (e *Executor) Initialize() error {
 	return nil
 }
 
+func (e *Executor) receiveTaskResponse(response interface{}, err error) {
+	// Handle the response from the AVS performer
+}
+
 func (e *Executor) BootPerformers(ctx context.Context) error {
 	e.logger.Sugar().Infow("Booting AVS performers")
 	for avsAddress, performer := range e.avsPerformers {
@@ -107,6 +112,13 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 				zap.Error(err),
 			)
 			return fmt.Errorf("failed to initialize AVS performer: %v", err)
+		}
+		if err := performer.ProcessTasks(ctx); err != nil {
+			e.logger.Sugar().Errorw("Failed to process tasks",
+				zap.String("avsAddress", avsAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to process tasks: %v", err)
 		}
 	}
 	go func() {
