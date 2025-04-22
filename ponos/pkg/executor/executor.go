@@ -3,8 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
-	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
@@ -14,18 +13,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
-
-type ConnectedAggregatorStore struct {
-	connectedAggregators map[string]*connectedAggregator.ConnectedAggregator
-	logger               *zap.Logger
-}
-
-func NewConnectedAggregatorStore(logger *zap.Logger) *ConnectedAggregatorStore {
-	return &ConnectedAggregatorStore{
-		connectedAggregators: make(map[string]*connectedAggregator.ConnectedAggregator),
-		logger:               logger,
-	}
-}
 
 type Executor struct {
 	logger        *zap.Logger
@@ -99,10 +86,6 @@ func (e *Executor) Initialize() error {
 	return nil
 }
 
-func (e *Executor) receiveTaskResponse(response interface{}, err error) {
-	// Handle the response from the AVS performer
-}
-
 func (e *Executor) BootPerformers(ctx context.Context) error {
 	e.logger.Sugar().Infow("Booting AVS performers")
 	for avsAddress, performer := range e.avsPerformers {
@@ -136,16 +119,16 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 	return nil
 }
 
-func (e *Executor) SubmitTask(_ context.Context, _ *executorpb.TaskSubmission) (*v1.SubmitAck, error) {
-	return &v1.SubmitAck{Message: "Stubbed message", Success: false}, nil
-}
-
 func (e *Executor) Run() {
 	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
 }
 
+func (e *Executor) receiveTaskResponse(response interface{}, err error) {
+	// Handle the response from the AVS performer
+}
+
 func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {
-	executorpb.RegisterExecutorServiceServer(grpcServer, e)
+	executorV1.RegisterExecutorServiceServer(grpcServer, e)
 
 	return nil
 }
