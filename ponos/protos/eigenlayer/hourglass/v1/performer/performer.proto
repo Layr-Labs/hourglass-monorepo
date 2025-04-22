@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package eigenlayer.hourglass.v1.performer;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer";
+
+message Task {
+  string task_id = 1;
+  string avs_address = 2;
+  bytes metadata = 3;
+  bytes payload = 4;
+}
+
+message TaskResult {
+  string task_id = 1;
+  string avs_address = 2;
+  bytes result = 3;
+}
+
+service AvsService {
+  rpc ExecuteTask(Task) returns (TaskResult) {}
+}
