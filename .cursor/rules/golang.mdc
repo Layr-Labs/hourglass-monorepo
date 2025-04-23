@@ -1,0 +1,161 @@
+---
+description: Apply to all go files
+globs: *.go
+alwaysApply: false
+---
+# Go Cursor Rules
+
+## Code Organization
+
+1. **Package Structure**
+   - Use domain-driven package organization, with each package focused on a specific domain concept
+   - Maintain a clear hierarchy with `cmd` for entry points and `pkg` for libraries
+   - Keep packages small and focused on a single responsibility
+   - Use subdirectories to organize related packages
+
+2. **File Organization**
+   - Limit files to a single primary type or closely related types
+   - Keep file size manageable, typically under ~500 lines
+   - Group related functions together in the file
+   - Order functions from most important/public to least important/private
+
+3. **Import Organization**
+   - Group imports by standard library, external packages, and internal packages
+   - Separate import groups with blank lines
+   - Sort imports alphabetically within groups
+
+## Naming Conventions
+
+1. **Package Names**
+   - Use short, concise, lowercase names
+   - Avoid underscores and mixed case
+   - Choose descriptive names that represent the domain
+   - Examples: `aggregator`, `executor`, `config`, `types`
+
+2. **Variable Names**
+   - Use camelCase for variable names
+   - Choose descriptive names that explain purpose, not implementation
+   - Use short names for limited scopes, longer names for wider scopes
+   - Prefix boolean variables with words like `is`, `has`, `should`
+
+3. **Type Names**
+   - Use PascalCase for type names (structs, interfaces)
+   - Prefer nouns for concrete types (`Aggregator`, `Task`)
+   - Prefix interfaces with "I" when paired with implementation (`IInputQueue`)
+   - Use clear, descriptive names that communicate behavior
+
+4. **Function Names**
+   - Use PascalCase for exported functions
+   - Use camelCase for unexported functions
+   - Use verb phrases for functions that perform actions
+   - Use noun phrases for functions that return values
+
+## Coding Practices
+
+1. **Error Handling**
+   - Always check error returns from functions
+   - Propagate errors up with additional context using `fmt.Errorf("failed to X: %w", err)`
+   - Use structured logging when reporting errors
+   - Return early on error conditions
+
+2. **Context Usage**
+   - Pass `context.Context` as the first parameter to functions that perform I/O
+   - Respect cancellation signals from context
+   - Don't store context in structs (pass it to methods instead)
+   - Use contexts with timeouts for operations that shouldn't run indefinitely
+
+3. **Dependency Injection**
+   - Pass dependencies to structs during initialization instead of having structs create their dependencies
+   - Use constructor functions (NewXxx) to create properly initialized objects
+   - Accept interfaces instead of concrete types when possible
+   - Make dependencies explicit in function parameters
+
+4. **Configuration Management**
+   - Use dedicated configuration structs with validation methods
+   - Support multiple configuration sources (flags, environment variables, config files)
+   - Provide sensible defaults for all configuration options
+   - Use strongly typed configuration over stringly typed
+
+5. **Concurrency**
+   - Use goroutines for concurrent operations
+   - Use channels for communication between goroutines
+   - Protect shared state with mutexes
+   - Prefer context-based cancellation over custom mechanisms
+
+## Comments and Documentation
+
+1. **Package Documentation**
+   - Every package should have a package comment that describes its purpose
+   - Include usage examples in package documentation for libraries
+
+2. **Function Documentation**
+   - Document all exported functions, types, and constants
+   - Focus on what the function does, not how it does it
+   - Include information about parameters, return values, and errors
+   - Document any non-obvious behavior or edge cases
+
+3. **Implementation Comments**
+   - Comment complex or non-obvious pieces of code
+   - Explain why, not what (the code shows what, comments explain why)
+   - Keep comments up to date with code changes
+   - Use TODOs sparingly, and include a reason or reference
+
+## Testing
+
+1. **Test Organization**
+   - Place tests in the same package as the code they test, with `_test.go` suffix
+   - Group related tests together
+   - Use table-driven tests for testing multiple cases of the same function
+   - Organize test files to mirror the structure of the package they test
+
+2. **Test Naming**
+   - Use `Test_Xxx` for standard tests
+   - Use `BenchmarkXxx` for benchmarks
+   - Use descriptive test names that indicate what is being tested
+   - Follow a pattern like `Test_Subject_Scenario_ExpectedBehavior`
+
+3. **Test Implementation**
+   - Make tests self-contained and independent
+   - Use test helpers for common setup and teardown
+   - Check for specific expected results rather than general patterns
+   - Test both happy paths and error conditions
+
+## Code Generation
+
+1. **Generated Code**
+   - Keep generated code separate from handwritten code
+   - Add comments indicating that files are generated
+   - Do not edit generated code directly
+   - Version control the generation source (e.g., proto files) alongside generated code
+
+2. **Protocol Buffers**
+   - Organize proto files by domain
+   - Use versioned packages (v1, v2) for API stability
+   - Follow proto style guide for message and field naming
+   - Keep proto definitions focused and concise
+
+## Common Patterns
+
+1. **Lifecycle Management**
+   - Implement common lifecycle interfaces (Start, Close)
+   - Ensure proper resource cleanup on shutdown
+   - Use context for cancellation
+   - Implement graceful shutdown handling
+
+2. **Command-Line Interfaces**
+   - Use Cobra for command-line applications
+   - Organize commands hierarchically
+   - Provide help text for all commands and flags
+   - Support multiple configuration sources (flags, env vars, config files)
+
+3. **Logging**
+   - Use structured logging with leveled loggers
+   - Include relevant context in log entries
+   - Configure log levels and output format based on environment
+   - Log at appropriate levels (debug, info, warn, error)
+
+4. **Error Types**
+   - Use custom error types for domain-specific errors
+   - Include enough context for debugging
+   - Make errors serializable
+   - Use error wrapping to maintain error chains 
