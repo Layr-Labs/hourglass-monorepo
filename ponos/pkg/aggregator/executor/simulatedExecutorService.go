@@ -2,21 +2,17 @@ package executor
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
-	"log"
-	"net"
-
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	"log"
 )
 
 type SimulatedExecutorServer struct {
 	rpcServer        *rpcServer.RpcServer
 	aggregatorClient aggregatorpb.AggregatorServiceClient
 	operatorAddress  string
-
-	listener net.Listener
 }
 
 func NewSimulatedExecutorServer(

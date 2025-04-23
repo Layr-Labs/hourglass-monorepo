@@ -30,10 +30,10 @@ func init() {
 	cobra.OnInitialize(initConfigIfPresent)
 
 	rootCmd.PersistentFlags().String("config", "", "config file path")
-	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+	rootCmd.PersistentFlags().Lookup("config")
 
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
-	viper.BindPFlag(aggregatorConfig.Debug, rootCmd.PersistentFlags().Lookup(aggregatorConfig.Debug))
+	rootCmd.PersistentFlags().Lookup(aggregatorConfig.Debug)
 
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))

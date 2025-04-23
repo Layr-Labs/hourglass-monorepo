@@ -29,8 +29,6 @@ type Aggregator struct {
 	writers          []lifecycle.Lifecycle
 	executionManager lifecycle.Lifecycle
 	executors        []lifecycle.Lifecycle
-
-	cancel context.CancelFunc
 }
 
 func NewAggregator(config *aggregatorConfig.AggregatorConfig, logger *zap.Logger) *Aggregator {
