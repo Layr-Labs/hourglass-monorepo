@@ -23,7 +23,7 @@ func RunWithShutdown(startFunc func(ctx context.Context) error, logger *zap.Logg
 		logger.Sugar().Info("Shutting down aggregator...")
 		cancel()
 	}, 5*time.Second, logger)
-	
+
 	return nil
 }
 
