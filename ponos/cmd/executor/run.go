@@ -24,7 +24,7 @@ var runCmd = &cobra.Command{
 
 		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 
-		fmt.Printf("Executor config: %+v\n", Config)
+		fmt.Printf("Executor config: %+v\n", Config.Operator.SigningKeys)
 		if err := Config.Validate(); err != nil {
 			return err
 		}
