@@ -1,6 +1,13 @@
 debug: false
-simulated: false
-simulated_port: 8080
+simulation:
+  enabled: true
+  port: 8080
+  secure_connection: false
+
+server_config:
+  port: 9000
+  secure_connection: false
+
 chains:
   - name: "ethereum"
     network: "mainnet"

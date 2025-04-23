@@ -2,40 +2,33 @@ package executorClient
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
-
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"google.golang.org/grpc"
 )
 
 type PonosExecutorClient struct {
-	client  executorpb.ExecutorServiceClient
-	conn    *grpc.ClientConn
-	privKey *ecdsa.PrivateKey
+	client executorpb.ExecutorServiceClient
+	conn   *grpc.ClientConn
+	signer signer.Signer
 }
 
-func NewPonosExecutorClient(grpcAddr string, privateKey *ecdsa.PrivateKey) (*PonosExecutorClient, error) {
-	conn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to executor: %w", err)
-	}
-
-	client := executorpb.NewExecutorServiceClient(conn)
+func NewPonosExecutorClient(
+	executorClient executorpb.ExecutorServiceClient,
+	signer signer.Signer,
+) *PonosExecutorClient {
 
 	return &PonosExecutorClient{
-		client:  client,
-		conn:    conn,
-		privKey: privateKey,
-	}, nil
+		client: executorClient,
+		signer: signer,
+	}
 }
 
 func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task) error {
-	sig, err := signTask(task, pec.privKey)
+	sig, err := pec.signer.SignMessage([]byte(task.TaskId))
 	if err != nil {
 		return fmt.Errorf("failed to sign task: %w", err)
 	}
@@ -57,16 +50,6 @@ func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task
 	}
 
 	return nil
-}
-
-func signTask(task *types.Task, privKey *ecdsa.PrivateKey) ([]byte, error) {
-	// Very simple message hash using task ID (for demo purposes only!)
-	hash := crypto.Keccak256([]byte(task.TaskId))
-	sig, err := crypto.Sign(hash, privKey)
-	if err != nil {
-		return nil, err
-	}
-	return sig, nil
 }
 
 func (pec *PonosExecutorClient) Close() error {

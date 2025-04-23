@@ -1,17 +1,13 @@
 package main
 
 import (
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-)
-
-import (
 	"os"
 	"strings"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -33,44 +29,30 @@ var Config *aggregatorConfig.AggregatorConfig
 func init() {
 	cobra.OnInitialize(initConfigIfPresent)
 
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
-
-	initConfig(rootCmd)
+	rootCmd.PersistentFlags().String("config", "", "config file path")
+	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
+	viper.BindPFlag(aggregatorConfig.Debug, rootCmd.PersistentFlags().Lookup(aggregatorConfig.Debug))
 
-	rootCmd.PersistentFlags().Bool(aggregatorConfig.Simulated, false, `"true" or "false"`)
-	rootCmd.PersistentFlags().Int(aggregatorConfig.SimulatedPort, aggregatorConfig.SimulatedDefaultPort, `"port"`)
-
-	rootCmd.AddCommand(runCmd)
-
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		key := config.KebabToSnakeCase(f.Name)
-		viper.BindPFlag(key, f) //nolint:errcheck
-		viper.BindEnv(key)      //nolint:errcheck
-	})
-
-}
-
-func initConfig(cmd *cobra.Command) {
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
+
+	rootCmd.AddCommand(runCmd)
 }
 
 func initConfigIfPresent() {
-	hasConfig := false
 	if configFile != "" {
-		viper.SetConfigFile(configFile)
-		hasConfig = true
-	}
-	if hasConfig {
-		if err := viper.ReadInConfig(); err != nil {
+		data, err := os.ReadFile(configFile)
+		if err != nil {
 			panic(err)
 		}
-		if err := viper.Unmarshal(&Config); err != nil {
+		config, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes(data)
+		if err != nil {
 			panic(err)
 		}
+		Config = config
 	} else {
 		Config = aggregatorConfig.NewAggregatorConfig()
 	}
