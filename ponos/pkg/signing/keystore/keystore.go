@@ -28,6 +28,40 @@ type Keystore struct {
 	CurveType string              `json:"curveType"` // Either "bls381" or "bn254"
 }
 
+// GetPrivateKey decrypts and returns the private key from the keystore
+func (k *Keystore) GetPrivateKey(password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+	if k == nil {
+		return nil, fmt.Errorf("keystore data cannot be nil")
+	}
+
+	// Decrypt the private key
+	keyBytes, err := keystore.DecryptDataV3(k.Crypto, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
+	}
+
+	// If scheme is nil, try to determine the scheme from the curve type in the keystore
+	if scheme == nil && k.CurveType != "" {
+		scheme, err = GetSigningScheme(k.CurveType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine signing scheme: %w", err)
+		}
+	}
+
+	// If scheme is still nil, we can't proceed
+	if scheme == nil {
+		return nil, fmt.Errorf("no signing scheme provided and unable to determine from keystore")
+	}
+
+	// Recreate the private key using the provided scheme
+	privateKey, err := scheme.NewPrivateKeyFromBytes(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create private key from decrypted data: %w", err)
+	}
+
+	return privateKey, nil
+}
+
 // Options provides configuration options for keystore operations
 type Options struct {
 	// ScryptN is the N parameter of scrypt encryption algorithm
@@ -175,52 +209,38 @@ func LoadKeystoreFile(filePath string) (*Keystore, error) {
 	return ParseKeystoreJSON(string(content))
 }
 
-// LoadPrivateKeyFromKeystore loads a private key from a keystore JSON string
-func LoadPrivateKeyFromKeystore(keystoreJSON, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+// LoadPrivateKeyFromKeystore loads a private key from a Keystore object (deprecated, use keystore.GetPrivateKey instead)
+func LoadPrivateKeyFromKeystore(keystoreData *Keystore, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+	if keystoreData == nil {
+		return nil, fmt.Errorf("keystore data cannot be nil")
+	}
+
+	// Use the object's method
+	return keystoreData.GetPrivateKey(password, scheme)
+}
+
+// LoadPrivateKeyFromKeystoreJSON loads a private key from a keystore JSON string
+func LoadPrivateKeyFromKeystoreJSON(keystoreJSON, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
 	// Parse keystore
 	keystoreData, err := ParseKeystoreJSON(keystoreJSON)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decrypt the private key
-	keyBytes, err := keystore.DecryptDataV3(keystoreData.Crypto, password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
-	}
-
-	// If scheme is nil, try to determine the scheme from the curve type in the keystore
-	if scheme == nil && keystoreData.CurveType != "" {
-		scheme, err = GetSigningScheme(keystoreData.CurveType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine signing scheme: %w", err)
-		}
-	}
-
-	// If scheme is still nil, we can't proceed
-	if scheme == nil {
-		return nil, fmt.Errorf("no signing scheme provided and unable to determine from keystore")
-	}
-
-	// Recreate the private key using the provided scheme
-	privateKey, err := scheme.NewPrivateKeyFromBytes(keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create private key from decrypted data: %w", err)
-	}
-
-	return privateKey, nil
+	// Use the object's method
+	return keystoreData.GetPrivateKey(password, scheme)
 }
 
-// LoadFromKeystore loads a private key from a keystore file (deprecated, use LoadKeystoreFile + LoadPrivateKeyFromKeystore instead)
+// LoadFromKeystore loads a private key from a keystore file (deprecated, use LoadKeystoreFile + keystore.GetPrivateKey instead)
 func LoadFromKeystore(filePath, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
-	// Read keystore file
-	content, err := os.ReadFile(filepath.Clean(filePath))
+	// Load keystore file
+	keystoreData, err := LoadKeystoreFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read keystore file: %w", err)
+		return nil, err
 	}
 
-	// Use the new function with the file content
-	return LoadPrivateKeyFromKeystore(string(content), password, scheme)
+	// Use the object's method
+	return keystoreData.GetPrivateKey(password, scheme)
 }
 
 // GetKeystoreInfo retrieves basic info from a keystore file without decrypting
@@ -243,14 +263,8 @@ func TestKeystore(filePath, password string, scheme signing.SigningScheme) error
 		return fmt.Errorf("failed to load keystore file: %w", err)
 	}
 
-	// Convert the keystore to JSON
-	keystoreJSON, err := json.Marshal(keystoreData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal keystore data: %w", err)
-	}
-
 	// Load the private key from keystore
-	privateKey, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, scheme)
+	privateKey, err := keystoreData.GetPrivateKey(password, scheme)
 	if err != nil {
 		return fmt.Errorf("failed to load private key from keystore: %w", err)
 	}

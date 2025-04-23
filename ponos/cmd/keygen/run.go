@@ -163,21 +163,21 @@ var infoCmd = &cobra.Command{
 		// Check if the file might be a keystore
 		if strings.HasSuffix(keyFile, ".json") {
 			// Try to parse as a keystore (without decrypting)
-			keystoreInfo, err := keystore.GetKeystoreInfo(keyFile)
+			keystoreData, err := keystore.LoadKeystoreFile(keyFile)
 			if err == nil {
 				// Get curve type from keystore if available, otherwise use the one from config
 				curveType := Config.CurveType
-				if keystoreInfo.CurveType != "" {
-					curveType = keystoreInfo.CurveType
+				if keystoreData.CurveType != "" {
+					curveType = keystoreData.CurveType
 				}
 
 				// This appears to be a valid keystore
 				l.Sugar().Infow("Key Information",
 					"type", "keystore",
 					"curve", curveType,
-					"publicKey", keystoreInfo.PublicKey,
-					"uuid", keystoreInfo.UUID,
-					"version", keystoreInfo.Version,
+					"publicKey", keystoreData.PublicKey,
+					"uuid", keystoreData.UUID,
+					"version", keystoreData.Version,
 				)
 				return nil
 			}

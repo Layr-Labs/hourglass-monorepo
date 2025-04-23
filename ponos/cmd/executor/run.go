@@ -8,7 +8,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -31,8 +32,22 @@ var runCmd = &cobra.Command{
 
 		l.Sugar().Infow("executor run")
 
-		// TODO(seanmcgary): implement a real signer at some point
-		fakeSigner := fauxSigner.NewFauxSigner()
+		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
+		if err != nil {
+			return fmt.Errorf("failed to parse keystore JSON: %w", err)
+		}
+
+		keyScheme, err := keystore.GetSigningScheme(storedKeys.CurveType)
+		if err != nil {
+			return fmt.Errorf("failed to get signing scheme: %w", err)
+		}
+
+		privateSigningKey, err := storedKeys.GetPrivateKey(Config.Operator.SigningKeys.BLS.Password, keyScheme)
+		if err != nil {
+			return fmt.Errorf("failed to get private key: %w", err)
+		}
+
+		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
 		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 			GrpcPort: Config.GrpcPort,
@@ -41,7 +56,7 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, fakeSigner)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, sig)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))

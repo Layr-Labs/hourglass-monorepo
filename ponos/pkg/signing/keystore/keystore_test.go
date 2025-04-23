@@ -1,7 +1,6 @@
 package keystore
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,12 +50,8 @@ func TestKeystoreBN254(t *testing.T) {
 	assert.Equal(t, keystoreInfo.PublicKey, loadedKeystore.PublicKey)
 	assert.Equal(t, keystoreInfo.CurveType, loadedKeystore.CurveType)
 
-	// Convert to JSON
-	keystoreJSON, err := json.Marshal(loadedKeystore)
-	require.NoError(t, err)
-
-	// Load private key from keystore JSON
-	loadedKey, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, scheme)
+	// Load private key from keystore object
+	loadedKey, err := loadedKeystore.GetPrivateKey(password, scheme)
 	require.NoError(t, err)
 
 	// Verify the loaded key matches the original
@@ -68,11 +63,11 @@ func TestKeystoreBN254(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with incorrect password
-	_, err = LoadPrivateKeyFromKeystore(string(keystoreJSON), "wrong-password", scheme)
+	_, err = loadedKeystore.GetPrivateKey("wrong-password", scheme)
 	assert.Error(t, err)
 
 	// Test loading without providing a scheme (should use the curve type from the keystore)
-	loadedKey2, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, nil)
+	loadedKey2, err := loadedKeystore.GetPrivateKey(password, nil)
 	require.NoError(t, err)
 	assert.Equal(t, privateKey.Bytes(), loadedKey2.Bytes())
 
@@ -85,6 +80,11 @@ func TestKeystoreBN254(t *testing.T) {
 	assert.Equal(t, keystoreInfo.UUID, parsedKeystore.UUID)
 	assert.Equal(t, keystoreInfo.Version, parsedKeystore.Version)
 	assert.Equal(t, keystoreInfo.CurveType, parsedKeystore.CurveType)
+
+	// Test LoadPrivateKeyFromKeystoreJSON
+	loadedKey3, err := LoadPrivateKeyFromKeystoreJSON(string(fileContent), password, scheme)
+	require.NoError(t, err)
+	assert.Equal(t, privateKey.Bytes(), loadedKey3.Bytes())
 }
 
 func TestKeystoreBLS381(t *testing.T) {
@@ -124,12 +124,8 @@ func TestKeystoreBLS381(t *testing.T) {
 	loadedKeystore, err := LoadKeystoreFile(keystorePath)
 	require.NoError(t, err)
 
-	// Convert to JSON
-	keystoreJSON, err := json.Marshal(loadedKeystore)
-	require.NoError(t, err)
-
-	// Load private key from keystore JSON
-	loadedKey, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, scheme)
+	// Load private key from keystore object
+	loadedKey, err := loadedKeystore.GetPrivateKey(password, scheme)
 	require.NoError(t, err)
 
 	// Verify the loaded key matches the original
@@ -141,11 +137,11 @@ func TestKeystoreBLS381(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with incorrect password
-	_, err = LoadPrivateKeyFromKeystore(string(keystoreJSON), "wrong-password", scheme)
+	_, err = loadedKeystore.GetPrivateKey("wrong-password", scheme)
 	assert.Error(t, err)
 
 	// Test loading without providing a scheme (should use the curve type from the keystore)
-	loadedKey2, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, nil)
+	loadedKey2, err := loadedKeystore.GetPrivateKey(password, nil)
 	require.NoError(t, err)
 	assert.Equal(t, privateKey.Bytes(), loadedKey2.Bytes())
 }
@@ -189,12 +185,8 @@ func TestKeystoreBackwardCompatibility(t *testing.T) {
 	loadedKeystore, err := LoadKeystoreFile(keystorePath)
 	require.NoError(t, err)
 
-	// Convert to JSON
-	keystoreJSON, err := json.Marshal(loadedKeystore)
-	require.NoError(t, err)
-
 	// Load from keystore - we need to provide the scheme explicitly
-	loadedKey, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, scheme)
+	loadedKey, err := loadedKeystore.GetPrivateKey(password, scheme)
 	require.NoError(t, err)
 
 	// Verify the loaded key matches the original
@@ -202,7 +194,7 @@ func TestKeystoreBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, publicKey.Bytes(), loadedKey.Public().Bytes())
 
 	// Test loading without providing a scheme (should fail since there's no curve type in the keystore)
-	_, err = LoadPrivateKeyFromKeystore(string(keystoreJSON), password, nil)
+	_, err = loadedKeystore.GetPrivateKey(password, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no signing scheme provided and unable to determine from keystore")
 }
@@ -254,9 +246,14 @@ func TestInvalidKeystore(t *testing.T) {
 	assert.Error(t, err)
 
 	// Try to load an invalid JSON
-	scheme := bn254.NewScheme()
-	_, err = LoadPrivateKeyFromKeystore("{\"not_a_keystore\": true}", "password", scheme)
+	_, err = LoadPrivateKeyFromKeystoreJSON("{\"not_a_keystore\": true}", "password", bn254.NewScheme())
 	assert.Error(t, err)
+
+	// Test with nil keystore
+	var nilKeystore *Keystore
+	_, err = nilKeystore.GetPrivateKey("password", bn254.NewScheme())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "keystore data cannot be nil")
 
 	// Test with non-existent file
 	_, err = LoadKeystoreFile("/nonexistent/file.json")
