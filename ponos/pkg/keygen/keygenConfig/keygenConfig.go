@@ -2,69 +2,135 @@ package keygenConfig
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/spf13/viper"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 )
 
 const (
 	EnvPrefix = "KEYGEN_"
 
-	Debug      = "debug"
-	CurveType  = "curve-type"
-	OutputDir  = "output-dir"
+	// Debug enables debug logging
+	Debug = "debug"
+	// CurveType is the curve type (bls381 or bn254)
+	CurveType = "curve-type"
+	// OutputDir is the directory to write output files to (Private Key, Public Key, Mnemonic)
+	OutputDir = "output-dir"
+	// FilePrefix is the string that file names will start with (e.g. bn254-0)
 	FilePrefix = "file-prefix"
-	KeyFile    = "key-file"
-	Seed       = "seed"
-	Path       = "path"
-	Password   = "password"
+	// KeyFile to use for deriving private keys (e.g. a .pkey file containing a private key)
+	KeyFile = "key-file"
+	// Seed value to use for random number generation (defaults to system entropy)
+	Seed = "seed"
+	// Path for deriving keys from seed
+	Path = "path"
+	// Password to use for encrypting/decrypting private key files
+	Password = "password"
+	// UseKeystore enables keystore format for private key storage
+	UseKeystore = "use-keystore"
+	// UseRandomPassword generates a random password for keystore encryption
+	UseRandomPassword = "use-random-password"
+	// LightEncryption uses lighter encryption parameters for keystore (faster but less secure)
+	LightEncryption = "light-encryption"
 )
 
-// KeygenConfig represents the configuration for the key generation utility
+// KeygenConfig encapsulates the configuration for the key generation utility
 type KeygenConfig struct {
-	Debug      bool   `json:"debug" yaml:"debug"`
-	CurveType  string `json:"curveType" yaml:"curveType"`
-	OutputDir  string `json:"outputDir" yaml:"outputDir"`
-	FilePrefix string `json:"filePrefix" yaml:"filePrefix"`
-	KeyFile    string `json:"keyFile" yaml:"keyFile"`
-	Seed       string `json:"seed" yaml:"seed"`
-	Path       string `json:"path" yaml:"path"`
-	Password   string `json:"password" yaml:"password"`
+	Debug             bool   `mapstructure:"debug" yaml:"debug" json:"debug"`
+	CurveType         string `mapstructure:"curve_type" yaml:"curve_type" json:"curve_type"`
+	OutputDir         string `mapstructure:"output_dir" yaml:"output_dir" json:"output_dir"`
+	FilePrefix        string `mapstructure:"file_prefix" yaml:"file_prefix" json:"file_prefix"`
+	KeyFile           string `mapstructure:"key_file" yaml:"key_file" json:"key_file"`
+	Seed              string `mapstructure:"seed" yaml:"seed" json:"seed"`
+	Path              string `mapstructure:"path" yaml:"path" json:"path"`
+	Password          string `mapstructure:"password" yaml:"password" json:"password"`
+	UseKeystore       bool   `mapstructure:"use_keystore" yaml:"use_keystore" json:"use_keystore"`
+	UseRandomPassword bool   `mapstructure:"use_random_password" yaml:"use_random_password" json:"use_random_password"`
+	LightEncryption   bool   `mapstructure:"light_encryption" yaml:"light_encryption" json:"light_encryption"`
 }
 
-// Validate ensures that all required fields are set
-func (kc *KeygenConfig) Validate() error {
-	var allErrors field.ErrorList
-
-	// CurveType must be bls381 or bn254
-	if kc.CurveType != "bls381" && kc.CurveType != "bn254" {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("curveType"), kc.CurveType, "must be either 'bls381' or 'bn254'"))
+// Validate validates the config required for key generation
+func (c *KeygenConfig) Validate() error {
+	if c.OutputDir == "" {
+		return fmt.Errorf("output directory is required")
 	}
 
-	// If we're generating keys, output directory is required
-	if kc.KeyFile == "" && kc.OutputDir == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("outputDir"), "outputDir is required for key generation"))
+	if c.CurveType == "" {
+		return fmt.Errorf("curve type is required")
 	}
 
-	if len(allErrors) > 0 {
-		return allErrors.ToAggregate()
+	curveType := strings.ToLower(c.CurveType)
+	if curveType != "bls381" && curveType != "bn254" {
+		return fmt.Errorf("invalid curve type: must be either 'bls381' or 'bn254'")
 	}
+
+	// If using keystore but not using random password, then a password must be provided
+	if c.UseKeystore && !c.UseRandomPassword && c.Password == "" {
+		return fmt.Errorf("password is required when using keystore without random password generation")
+	}
+
 	return nil
+}
+
+// LoadConfigFromJSON loads configuration from a JSON file
+func LoadConfigFromJSON(filePath string) (*KeygenConfig, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config KeygenConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return &config, nil
+}
+
+// LoadConfigFromYAML loads configuration from a YAML file
+func LoadConfigFromYAML(filePath string) (*KeygenConfig, error) {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var config KeygenConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+	}
+
+	return &config, nil
 }
 
 // NewKeygenConfig creates a new KeygenConfig with values from viper
 func NewKeygenConfig() *KeygenConfig {
 	return &KeygenConfig{
-		Debug:      viper.GetBool(config.NormalizeFlagName(Debug)),
-		CurveType:  viper.GetString(config.NormalizeFlagName(CurveType)),
-		OutputDir:  viper.GetString(config.NormalizeFlagName(OutputDir)),
-		FilePrefix: viper.GetString(config.NormalizeFlagName(FilePrefix)),
-		KeyFile:    viper.GetString(config.NormalizeFlagName(KeyFile)),
-		Seed:       viper.GetString(config.NormalizeFlagName(Seed)),
-		Path:       viper.GetString(config.NormalizeFlagName(Path)),
-		Password:   viper.GetString(config.NormalizeFlagName(Password)),
+		Debug:             viper.GetBool(config.NormalizeFlagName(Debug)),
+		CurveType:         viper.GetString(config.NormalizeFlagName(CurveType)),
+		OutputDir:         viper.GetString(config.NormalizeFlagName(OutputDir)),
+		FilePrefix:        viper.GetString(config.NormalizeFlagName(FilePrefix)),
+		KeyFile:           viper.GetString(config.NormalizeFlagName(KeyFile)),
+		Seed:              viper.GetString(config.NormalizeFlagName(Seed)),
+		Path:              viper.GetString(config.NormalizeFlagName(Path)),
+		Password:          viper.GetString(config.NormalizeFlagName(Password)),
+		UseKeystore:       viper.GetBool(config.NormalizeFlagName(UseKeystore)),
+		UseRandomPassword: viper.GetBool(config.NormalizeFlagName(UseRandomPassword)),
+		LightEncryption:   viper.GetBool(config.NormalizeFlagName(LightEncryption)),
 	}
 }
 

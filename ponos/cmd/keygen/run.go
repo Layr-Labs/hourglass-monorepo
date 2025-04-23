@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,10 +14,115 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bls381"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
+
+// encryptedKeyV4 represents a private key encrypted using keystore V4 format
+type encryptedKeyV4 struct {
+	PublicKey string              `json:"publicKey"`
+	Crypto    keystore.CryptoJSON `json:"crypto"`
+	UUID      string              `json:"uuid"`
+	Version   int                 `json:"version"`
+}
+
+// keystoreOptions provides configuration options for keystore operations
+type keystoreOptions struct {
+	ScryptN int
+	ScryptP int
+}
+
+// Default keystore options
+func defaultKeystoreOptions() *keystoreOptions {
+	return &keystoreOptions{
+		ScryptN: keystore.StandardScryptN,
+		ScryptP: keystore.StandardScryptP,
+	}
+}
+
+// Light keystore options (faster but less secure)
+func lightKeystoreOptions() *keystoreOptions {
+	return &keystoreOptions{
+		ScryptN: keystore.LightScryptN,
+		ScryptP: keystore.LightScryptP,
+	}
+}
+
+// generateRandomPassword generates a cryptographically secure random password
+func generateRandomPassword(length int) (string, error) {
+	if length < 16 {
+		length = 16 // Minimum password length for security
+	}
+
+	// Create a byte slice to hold the random password
+	bytes := make([]byte, length)
+
+	// Fill with random bytes
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+
+	// Define character set (alphanumeric + special chars)
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?"
+	charsetLen := len(charset)
+
+	// Convert random bytes to character set
+	for i := 0; i < length; i++ {
+		bytes[i] = charset[int(bytes[i])%charsetLen]
+	}
+
+	return string(bytes), nil
+}
+
+// saveToKeystore saves a private key to a keystore file using the Web3 Secret Storage format
+func saveToKeystore(privateKey signing.PrivateKey, publicKey signing.PublicKey, filePath, password string, opts *keystoreOptions) error {
+	// Generate UUID
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return fmt.Errorf("failed to generate UUID: %w", err)
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Encrypt the private key
+	cryptoStruct, err := keystore.EncryptDataV3(
+		privateKey.Bytes(),
+		[]byte(password),
+		opts.ScryptN,
+		opts.ScryptP,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt private key: %w", err)
+	}
+
+	// Create the keystore structure
+	encryptedKey := encryptedKeyV4{
+		PublicKey: fmt.Sprintf("%x", publicKey.Bytes()),
+		Crypto:    cryptoStruct,
+		UUID:      id.String(),
+		Version:   4,
+	}
+
+	// Marshal to JSON
+	content, err := json.MarshalIndent(encryptedKey, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal keystore: %w", err)
+	}
+
+	// Write to file
+	if err := os.WriteFile(filePath, content, 0600); err != nil {
+		return fmt.Errorf("failed to write keystore file: %w", err)
+	}
+
+	return nil
+}
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
@@ -86,12 +193,46 @@ var generateCmd = &cobra.Command{
 			}
 		}
 
+		// Get the password to use for keystore
+		var password string
+		if Config.UseRandomPassword {
+			// Generate a random password if requested
+			var err error
+			password, err = generateRandomPassword(32)
+			if err != nil {
+				return fmt.Errorf("failed to generate random password: %w", err)
+			}
+			l.Sugar().Infow("Generated random password", "password", password)
+		} else {
+			password = Config.Password
+		}
+
+		// Determine keystore options
+		var keystoreOpts *keystoreOptions
+		if Config.LightEncryption {
+			keystoreOpts = lightKeystoreOptions()
+			l.Sugar().Warn("Using light encryption - this is less secure but faster")
+		} else {
+			keystoreOpts = defaultKeystoreOptions()
+		}
+
+		// Curve type determines the file naming
+		curveStr := strings.ToLower(Config.CurveType)
+
 		// Save the keys in the appropriate format
-		switch strings.ToLower(Config.CurveType) {
-		case "bls381":
-			// TODO: Implement EIP-2335 format for BLS12-381
-			privFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_bls381.pri", Config.FilePrefix))
-			pubFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_bls381.pub", Config.FilePrefix))
+		if Config.UseKeystore {
+			// Save using Web3 Secret Storage format
+			keystorePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_%s.json", Config.FilePrefix, curveStr))
+			if err := saveToKeystore(privateKey, publicKey, keystorePath, password, keystoreOpts); err != nil {
+				return fmt.Errorf("failed to save keystore: %w", err)
+			}
+			l.Sugar().Infow(fmt.Sprintf("Generated %s keys in keystore format", strings.ToUpper(curveStr)),
+				"keystoreFile", keystorePath,
+				"publicKey", hex.EncodeToString(publicKey.Bytes()))
+		} else {
+			// Save in raw format
+			privFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_%s.pri", Config.FilePrefix, curveStr))
+			pubFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_%s.pub", Config.FilePrefix, curveStr))
 
 			if err := os.WriteFile(privFilePath, privateKey.Bytes(), 0600); err != nil {
 				return fmt.Errorf("failed to write private key: %w", err)
@@ -101,24 +242,7 @@ var generateCmd = &cobra.Command{
 				return fmt.Errorf("failed to write public key: %w", err)
 			}
 
-			l.Sugar().Infow("Generated BLS12-381 keys",
-				"privateKeyFile", privFilePath,
-				"publicKeyFile", pubFilePath)
-
-		case "bn254":
-			// TODO: Implement Web3 Secret Storage format for BN254
-			privFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_bn254.pri", Config.FilePrefix))
-			pubFilePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_bn254.pub", Config.FilePrefix))
-
-			if err := os.WriteFile(privFilePath, privateKey.Bytes(), 0600); err != nil {
-				return fmt.Errorf("failed to write private key: %w", err)
-			}
-
-			if err := os.WriteFile(pubFilePath, publicKey.Bytes(), 0644); err != nil {
-				return fmt.Errorf("failed to write public key: %w", err)
-			}
-
-			l.Sugar().Infow("Generated BN254 keys",
+			l.Sugar().Infow(fmt.Sprintf("Generated %s keys in raw format", strings.ToUpper(curveStr)),
 				"privateKeyFile", privFilePath,
 				"publicKeyFile", pubFilePath)
 		}
@@ -136,12 +260,41 @@ var infoCmd = &cobra.Command{
 		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 
 		keyFile := Config.KeyFile
+		fmt.Printf("cofnig: %+v\n", Config)
 		if keyFile == "" {
 			return fmt.Errorf("key file path is required")
 		}
 
 		l.Sugar().Infow("Reading key file", "file", keyFile)
 
+		// Check if the file might be a keystore
+		if strings.HasSuffix(keyFile, ".json") {
+			// Try to parse as a keystore (without decrypting)
+			content, err := os.ReadFile(keyFile)
+			if err != nil {
+				return fmt.Errorf("failed to read key file: %w", err)
+			}
+
+			var keyData struct {
+				PublicKey string `json:"publicKey"`
+				UUID      string `json:"uuid"`
+				Version   int    `json:"version"`
+			}
+
+			if err := json.Unmarshal(content, &keyData); err == nil && keyData.PublicKey != "" {
+				// This appears to be a valid keystore
+				l.Sugar().Infow("Key Information",
+					"type", "keystore",
+					"curve", Config.CurveType,
+					"publicKey", keyData.PublicKey,
+					"uuid", keyData.UUID,
+					"version", keyData.Version,
+				)
+				return nil
+			}
+		}
+
+		// If not a keystore (or couldn't parse as one), try as raw key
 		keyData, err := os.ReadFile(keyFile)
 		if err != nil {
 			return fmt.Errorf("failed to read key file: %w", err)
@@ -181,27 +334,103 @@ var infoCmd = &cobra.Command{
 			return nil
 		}
 
-		return fmt.Errorf("could not parse key as either private or public key for curve %s", Config.CurveType)
+		return fmt.Errorf("could not parse key as either private or public key or keystore for curve %s", Config.CurveType)
 	},
 }
 
-func init() {
-	// Generate command flags
-	generateCmd.Flags().String("seed", "", "Hex-encoded seed for deterministic key generation")
-	generateCmd.Flags().String("path", "", "Derivation path for EIP-2333 (BLS12-381 only), e.g., m/12381/3600/0/0")
-	generateCmd.Flags().String("password", "", "Password for encrypting the private key (not used yet)")
+var testCmd = &cobra.Command{
+	Use:   "test",
+	Short: "Test a keystore by signing a test message",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		initRunCmd(cmd)
 
-	// Info command flags
-	infoCmd.Flags().String("key-file", "", "Path to the key file to display information about")
+		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 
-	// Bind the flags to viper
-	for _, cmd := range []*cobra.Command{generateCmd, infoCmd} {
-		cmd.Flags().VisitAll(func(f *pflag.Flag) {
-			if err := viper.BindPFlag(config.KebabToSnakeCase(f.Name), f); err != nil {
-				fmt.Printf("Failed to bind flag '%s' - %+v\n", f.Name, err)
-			}
-		})
-	}
+		keyFile := Config.KeyFile
+		if keyFile == "" {
+			return fmt.Errorf("key file path is required")
+		}
+
+		password := Config.Password
+		if password == "" {
+			return fmt.Errorf("password is required to decrypt the keystore")
+		}
+
+		l.Sugar().Infow("Testing keystore", "file", keyFile)
+
+		// Check if the file is a keystore
+		if !strings.HasSuffix(keyFile, ".json") {
+			return fmt.Errorf("file must be a keystore JSON file")
+		}
+
+		var scheme signing.SigningScheme
+		switch strings.ToLower(Config.CurveType) {
+		case "bls381":
+			scheme = bls381.NewScheme()
+		case "bn254":
+			scheme = bn254.NewScheme()
+		default:
+			return fmt.Errorf("unsupported curve type: %s", Config.CurveType)
+		}
+
+		// Read keystore file
+		content, err := os.ReadFile(filepath.Clean(keyFile))
+		if err != nil {
+			return fmt.Errorf("failed to read keystore file: %w", err)
+		}
+
+		// Parse keystore to get public key (without decrypting)
+		var keyData struct {
+			PublicKey string              `json:"publicKey"`
+			Crypto    keystore.CryptoJSON `json:"crypto"`
+			UUID      string              `json:"uuid"`
+			Version   int                 `json:"version"`
+		}
+
+		if err := json.Unmarshal(content, &keyData); err != nil {
+			return fmt.Errorf("failed to parse keystore file: %w", err)
+		}
+
+		// Decrypt the private key
+		keyBytes, err := keystore.DecryptDataV3(keyData.Crypto, password)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt private key: %w", err)
+		}
+
+		// Recreate the private key
+		privateKey, err := scheme.NewPrivateKeyFromBytes(keyBytes)
+		if err != nil {
+			return fmt.Errorf("failed to create private key from decrypted data: %w", err)
+		}
+
+		// Get the public key
+		publicKey := privateKey.Public()
+
+		// Test signing a message
+		testMessage := []byte("Test message for keystore verification")
+		sig, err := privateKey.Sign(testMessage)
+		if err != nil {
+			return fmt.Errorf("failed to sign test message: %w", err)
+		}
+
+		// Verify signature
+		valid, err := sig.Verify(publicKey, testMessage)
+		if err != nil {
+			return fmt.Errorf("failed to verify signature: %w", err)
+		}
+
+		if valid {
+			l.Sugar().Infow("Keystore test successful",
+				"curve", Config.CurveType,
+				"publicKey", hex.EncodeToString(publicKey.Bytes()),
+				"signature", hex.EncodeToString(sig.Bytes()),
+			)
+		} else {
+			return fmt.Errorf("keystore verification failed: signature is invalid")
+		}
+
+		return nil
+	},
 }
 
 func initRunCmd(cmd *cobra.Command) {
