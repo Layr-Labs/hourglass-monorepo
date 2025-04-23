@@ -59,7 +59,7 @@ func init() {
 	infoCmd.PersistentFlags().String("key-file", "", "Path to the key file to display information about")
 
 	// Test command flags
-	//testCmd.PersistentFlags().String("key-file", "", "Path to the keystore file to test")
+	// testCmd.PersistentFlags().String("key-file", "", "Path to the keystore file to test")
 	testCmd.PersistentFlags().String("password", "", "Password to decrypt the keystore")
 
 	for _, cmd := range []*cobra.Command{rootCmd, generateCmd, infoCmd, testCmd} {

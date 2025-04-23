@@ -42,20 +42,25 @@ const (
 // KeygenConfig encapsulates the configuration for the key generation utility
 type KeygenConfig struct {
 	Debug             bool   `mapstructure:"debug" yaml:"debug" json:"debug"`
-	CurveType         string `mapstructure:"curve_type" yaml:"curve_type" json:"curve_type"`
-	OutputDir         string `mapstructure:"output_dir" yaml:"output_dir" json:"output_dir"`
-	FilePrefix        string `mapstructure:"file_prefix" yaml:"file_prefix" json:"file_prefix"`
-	KeyFile           string `mapstructure:"key_file" yaml:"key_file" json:"key_file"`
+	CurveType         string `mapstructure:"curve_type" yaml:"curveType" json:"curveType"`
+	OutputDir         string `mapstructure:"output_dir" yaml:"outputDir" json:"outputDir"`
+	FilePrefix        string `mapstructure:"file_prefix" yaml:"filePrefix" json:"filePrefix"`
+	KeyFile           string `mapstructure:"key_file" yaml:"keyFile" json:"keyFile"`
 	Seed              string `mapstructure:"seed" yaml:"seed" json:"seed"`
 	Path              string `mapstructure:"path" yaml:"path" json:"path"`
 	Password          string `mapstructure:"password" yaml:"password" json:"password"`
-	UseKeystore       bool   `mapstructure:"use_keystore" yaml:"use_keystore" json:"use_keystore"`
-	UseRandomPassword bool   `mapstructure:"use_random_password" yaml:"use_random_password" json:"use_random_password"`
-	LightEncryption   bool   `mapstructure:"light_encryption" yaml:"light_encryption" json:"light_encryption"`
+	UseKeystore       bool   `mapstructure:"use_keystore" yaml:"useKeystore" json:"useKeystore"`
+	UseRandomPassword bool   `mapstructure:"use_random_password" yaml:"useRandomPassword" json:"useRandomPassword"`
+	LightEncryption   bool   `mapstructure:"light_encryption" yaml:"lightEncryption" json:"lightEncryption"`
 }
 
 // Validate validates the config required for key generation
 func (c *KeygenConfig) Validate() error {
+	// For info command, we only need a key file path
+	if c.KeyFile != "" {
+		return nil
+	}
+
 	if c.OutputDir == "" {
 		return fmt.Errorf("output directory is required")
 	}
@@ -136,18 +141,18 @@ func NewKeygenConfig() *KeygenConfig {
 
 // NewKeygenConfigFromYamlBytes creates a KeygenConfig from YAML bytes
 func NewKeygenConfigFromYamlBytes(data []byte) (*KeygenConfig, error) {
-	var kc *KeygenConfig
+	var kc KeygenConfig
 	if err := yaml.Unmarshal(data, &kc); err != nil {
 		return nil, err
 	}
-	return kc, nil
+	return &kc, nil
 }
 
 // NewKeygenConfigFromJsonBytes creates a KeygenConfig from JSON bytes
 func NewKeygenConfigFromJsonBytes(data []byte) (*KeygenConfig, error) {
-	var kc *KeygenConfig
+	var kc KeygenConfig
 	if err := json.Unmarshal(data, &kc); err != nil {
 		return nil, err
 	}
-	return kc, nil
+	return &kc, nil
 }
