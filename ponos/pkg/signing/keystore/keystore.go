@@ -19,8 +19,8 @@ import (
 // ErrInvalidKeystoreFile is returned when a keystore file is not valid or is corrupted
 var ErrInvalidKeystoreFile = errors.New("invalid keystore file")
 
-// encryptedKeyV4 represents a private key encrypted using keystore V4 format
-type encryptedKeyV4 struct {
+// Keystore represents a private key encrypted using keystore V4 format
+type Keystore struct {
 	PublicKey string              `json:"publicKey"`
 	Crypto    keystore.CryptoJSON `json:"crypto"`
 	UUID      string              `json:"uuid"`
@@ -50,6 +50,27 @@ func Light() *Options {
 		ScryptN: keystore.LightScryptN,
 		ScryptP: keystore.LightScryptP,
 	}
+}
+
+// ParseKeystoreJSON takes a string representation of the keystore JSON and returns the Keystore struct
+func ParseKeystoreJSON(keystoreJSON string) (*Keystore, error) {
+	var keystore Keystore
+	if err := json.Unmarshal([]byte(keystoreJSON), &keystore); err != nil {
+		return nil, fmt.Errorf("failed to parse keystore JSON: %w", err)
+	}
+
+	// Verify it's a valid keystore by checking required fields
+	if keystore.PublicKey == "" {
+		return nil, ErrInvalidKeystoreFile
+	}
+
+	// Verify crypto field has required components
+	if keystore.Crypto.Cipher == "" || keystore.Crypto.CipherText == "" ||
+		keystore.Crypto.KDF == "" || len(keystore.Crypto.KDFParams) == 0 {
+		return nil, fmt.Errorf("%w: missing required crypto fields", ErrInvalidKeystoreFile)
+	}
+
+	return &keystore, nil
 }
 
 // DetermineCurveType attempts to determine the curve type based on the private key
@@ -108,7 +129,7 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 	curveType = DetermineCurveType(curveType)
 
 	// Create the keystore structure
-	encryptedKey := encryptedKeyV4{
+	encryptedKey := Keystore{
 		PublicKey: fmt.Sprintf("%x", publicKey.Bytes()),
 		Crypto:    cryptoStruct,
 		UUID:      id.String(),
@@ -142,34 +163,35 @@ func GetSigningScheme(curveType string) (signing.SigningScheme, error) {
 	}
 }
 
-// LoadFromKeystore loads a private key from a keystore file
-func LoadFromKeystore(filePath, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+// LoadKeystoreFile loads a keystore from a file and returns the parsed Keystore struct
+func LoadKeystoreFile(filePath string) (*Keystore, error) {
 	// Read keystore file
 	content, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read keystore file: %w", err)
 	}
 
-	// Unmarshal JSON
-	var encryptedKey encryptedKeyV4
-	if err := json.Unmarshal(content, &encryptedKey); err != nil {
-		return nil, fmt.Errorf("failed to parse keystore file: %w", err)
-	}
+	// Parse and return the keystore
+	return ParseKeystoreJSON(string(content))
+}
 
-	// Verify it's a valid keystore
-	if encryptedKey.PublicKey == "" {
-		return nil, ErrInvalidKeystoreFile
+// LoadPrivateKeyFromKeystore loads a private key from a keystore JSON string
+func LoadPrivateKeyFromKeystore(keystoreJSON, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+	// Parse keystore
+	keystoreData, err := ParseKeystoreJSON(keystoreJSON)
+	if err != nil {
+		return nil, err
 	}
 
 	// Decrypt the private key
-	keyBytes, err := keystore.DecryptDataV3(encryptedKey.Crypto, password)
+	keyBytes, err := keystore.DecryptDataV3(keystoreData.Crypto, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
 	}
 
 	// If scheme is nil, try to determine the scheme from the curve type in the keystore
-	if scheme == nil && encryptedKey.CurveType != "" {
-		scheme, err = GetSigningScheme(encryptedKey.CurveType)
+	if scheme == nil && keystoreData.CurveType != "" {
+		scheme, err = GetSigningScheme(keystoreData.CurveType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine signing scheme: %w", err)
 		}
@@ -189,34 +211,48 @@ func LoadFromKeystore(filePath, password string, scheme signing.SigningScheme) (
 	return privateKey, nil
 }
 
-// GetKeystoreInfo retrieves basic info from a keystore file without decrypting
-func GetKeystoreInfo(filePath string) (map[string]interface{}, error) {
+// LoadFromKeystore loads a private key from a keystore file (deprecated, use LoadKeystoreFile + LoadPrivateKeyFromKeystore instead)
+func LoadFromKeystore(filePath, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
 	// Read keystore file
 	content, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read keystore file: %w", err)
 	}
 
-	// Unmarshal JSON
-	var data map[string]interface{}
-	if err := json.Unmarshal(content, &data); err != nil {
-		return nil, fmt.Errorf("failed to parse keystore file: %w", err)
+	// Use the new function with the file content
+	return LoadPrivateKeyFromKeystore(string(content), password, scheme)
+}
+
+// GetKeystoreInfo retrieves basic info from a keystore file without decrypting
+func GetKeystoreInfo(filePath string) (*Keystore, error) {
+	// Read keystore file
+	content, err := os.ReadFile(filepath.Clean(filePath))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read keystore file: %w", err)
 	}
 
-	// Check if it's a valid keystore
-	if _, ok := data["publicKey"]; !ok {
-		return nil, ErrInvalidKeystoreFile
-	}
-
-	return data, nil
+	// Parse keystore
+	return ParseKeystoreJSON(string(content))
 }
 
 // TestKeystore tests a keystore by signing a test message
 func TestKeystore(filePath, password string, scheme signing.SigningScheme) error {
-	// Load the private key from keystore
-	privateKey, err := LoadFromKeystore(filePath, password, scheme)
+	// Load the keystore file
+	keystoreData, err := LoadKeystoreFile(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to load keystore: %w", err)
+		return fmt.Errorf("failed to load keystore file: %w", err)
+	}
+
+	// Convert the keystore to JSON
+	keystoreJSON, err := json.Marshal(keystoreData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal keystore data: %w", err)
+	}
+
+	// Load the private key from keystore
+	privateKey, err := LoadPrivateKeyFromKeystore(string(keystoreJSON), password, scheme)
+	if err != nil {
+		return fmt.Errorf("failed to load private key from keystore: %w", err)
 	}
 
 	// Get the public key

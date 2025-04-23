@@ -13,8 +13,7 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.NotNil(t, ec)
 			assert.Equal(t, "0xoperator...", ec.Operator.Address)
 			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey)
-			assert.Equal(t, "", ec.Operator.SigningKeys.ECDSA)
-			assert.Equal(t, "", ec.Operator.SigningKeys.BLS)
+			assert.NotNil(t, ec.Operator.SigningKeys.BLS)
 
 			assert.Equal(t, "v1.0.0", ec.AvsPerformers[0].Image.Tag)
 			assert.Equal(t, "eigenlabs/avs", ec.AvsPerformers[0].Image.Repository)
@@ -34,8 +33,7 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.NotNil(t, ec)
 			assert.Equal(t, "0xoperator...", ec.Operator.Address)
 			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey)
-			assert.Equal(t, "", ec.Operator.SigningKeys.ECDSA)
-			assert.Equal(t, "", ec.Operator.SigningKeys.BLS)
+			assert.NotNil(t, ec.Operator.SigningKeys.BLS)
 
 			assert.Equal(t, "v1.0.0", ec.AvsPerformers[0].Image.Tag)
 			assert.Equal(t, "eigenlabs/avs", ec.AvsPerformers[0].Image.Repository)
@@ -57,8 +55,9 @@ operator:
   address: "0xoperator..."
   operatorPrivateKey: "..."
   signingKeys:
-    ecdsa: ""
-    bls: ""
+    bls: 
+        keystore: ""
+        password: ""
 avsPerformers:
 - image:
     repository: "eigenlabs/avs"
@@ -73,8 +72,9 @@ operator:
   address: "0xoperator..."
   operatorPrivateKey: "..."
   signingKeys:
-    ecdsa: ""
-    bls: ""
+    bls:
+        keystore: ""
+        password: ""
 avsPerformers:
    image:
     repository: "eigenlabs/avs"
@@ -88,8 +88,10 @@ avsPerformers:
     "address": "0xoperator...",
     "operatorPrivateKey": "...",
     "signingKeys": {
-      "ecdsa": "",
-      "bls": ""
+      "bls": {
+        keystore: "",
+        password: ""
+      }
     }
   },
   "avsPerformers": [
@@ -109,8 +111,10 @@ avsPerformers:
     "address": "0xoperator...",
     "operatorPrivateKey": "...",
     "signingKeys": {
-      "ecdsa": "",
-      "bls": ""
+      "bls": {
+        keystore: "",
+        password: ""
+      }
     }
   },
   "avsPerformers": {
