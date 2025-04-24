@@ -38,6 +38,10 @@ build/cmd/executor:
 build/cmd/aggregator:
 	go build -o ${BIN}/aggregator ./cmd/aggregator
 
+.PHONY: build/cmd/keygen
+build/cmd/keygen:
+	go build -o ${BIN}/keygen ./cmd/keygen
+
 # -----------------------------------------------------------------------------
 # Run binaries
 # -----------------------------------------------------------------------------
