@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package eigenlayer.hourglass.v1;
+package eigenlayer.hourglass.v1.aggregator;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator";
 
 import "eigenlayer/common/v1/types.proto";
-
-option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1";
 
 service AggregatorService {
   rpc SubmitTaskResult(TaskResult) returns (eigenlayer.common.v1.SubmitAck) {}
