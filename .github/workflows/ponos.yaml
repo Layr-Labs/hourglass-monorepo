@@ -48,7 +48,6 @@ jobs:
           make ci-test
   build-container:
     runs-on: ubuntu-24.04
-    needs: [ponos-lint, ponos-test]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,8 +55,7 @@ jobs:
         env:
           REF: ${{ github.ref }}
         run: |
-          cd ponos
-          ./scripts/version.sh $REF
+          cd ponos && ./scripts/version.sh $REF
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -78,12 +76,11 @@ jobs:
           REGISTRY: "public.ecr.aws/z6g0f8n7"
           REPOSITORY: "eigenlayer-hourglass"
         run: |
-          cd ponos
-          VERSION=$(cat VERSION | tr -d '[:space:]' | sed 's/+/_/g')
+          VERSION=$(cat ./ponos/VERSION | tr -d '[:space:]' | sed 's/+/_/g')
           if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
-            docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push .
+            docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
           else
-            docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:$VERSION --push .
+            docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:$VERSION --push -f ./ponos/Dockerfile .
           fi
   build-binaries:
     runs-on: ubuntu-24.04

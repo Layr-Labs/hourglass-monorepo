@@ -14,3 +14,5 @@ services:
     command:
       - "executor"
       - "run"
+    volumes:
+      - .:/ponos-config
