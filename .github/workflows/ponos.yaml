@@ -45,4 +45,4 @@ jobs:
           cd ponos
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
-          make test
+          make ci-test

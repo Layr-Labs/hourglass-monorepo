@@ -53,9 +53,16 @@ run/executor:
 # Tests and linting
 # -----------------------------------------------------------------------------
 
+.PHONY: build/test-performer
+build/test-performer:
+	cd ../ && docker build -t hello-performer:latest -f ponos-performer/go/Dockerfile .
+
 .PHONY: test
 test:
 	$(GO) test -v -p 1 -parallel 1 ./...
+
+.PHONY: ci-test
+ci-test: build/test-performer test
 
 .PHONY: lint
 lint:

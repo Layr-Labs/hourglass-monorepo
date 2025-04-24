@@ -87,9 +87,32 @@ func Test_Executor(t *testing.T) {
 	success.Store(false)
 
 	simAggregator, err := simulatedAggregator.NewSimulatedAggregator(simAggConfig, l, aggBaseRpcServer, func(result *aggregatorV1.TaskResult) {
-		fmt.Printf("Received task result: %s\n", result.TaskId)
-		success.Store(true)
-		cancel()
+		errors := false
+		defer func() {
+			success.Store(!errors)
+			cancel()
+		}()
+
+		sig, err := keyScheme.NewSignatureFromBytes(result.Signature)
+		if err != nil {
+			errors = true
+			t.Errorf("Failed to create signature from bytes: %v", err)
+			return
+		}
+
+		verified, err := sig.Verify(privateSigningKey.Public(), result.Output)
+		if err != nil {
+			errors = true
+			t.Errorf("Failed to verify signature: %v", err)
+			return
+		}
+
+		if !verified {
+			errors = true
+			t.Errorf("Signature verification failed")
+			return
+		}
+		t.Logf("Successfully verified signature for task %s", result.TaskId)
 	})
 	if err != nil {
 		t.Fatalf("Failed to create simulated aggregator: %v", err)
