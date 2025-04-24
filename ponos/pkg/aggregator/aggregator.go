@@ -7,9 +7,9 @@ import (
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/ethereumChainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/simulatedChainListener"
@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 	"time"
@@ -44,11 +45,12 @@ func NewAggregator(config *aggregatorConfig.AggregatorConfig, logger *zap.Logger
 		resultQueue,
 	)
 	writers := []lifecycle.Lifecycle{writer}
-	peeringFetcher := peering.NewLocalPeeringDataFetcher(
+	peeringFetcher := fetcher.NewLocalPeeringDataFetcher[peering.ExecutorOperatorPeerInfo](
 		convertSimulationPeeringConfig(config.SimulationConfig.ExecutorPeerConfigs),
 		logger,
 	)
 	var executors []lifecycle.Lifecycle
+	// TODO: abstract this out into a separate SimulatedAggregator impl -- shouldn't have reference in real agg.
 	if config.SimulationConfig.Enabled {
 		aggregatorUrl := fmt.Sprintf("localhost:%d", config.SimulationConfig.Port)
 		executors = append(executors, buildExecutors(
@@ -67,6 +69,7 @@ func NewAggregator(config *aggregatorConfig.AggregatorConfig, logger *zap.Logger
 		taskQueue,
 		resultQueue,
 		peeringFetcher,
+		executionManager.NewPonosExecutionManagerConfig(config.ServerConfig.SecureConnection),
 		logger,
 	)
 	return &Aggregator{
@@ -184,7 +187,7 @@ func buildExecutors(
 		}
 		aggregatorClient := aggregatorpb.NewAggregatorServiceClient(clientConn)
 
-		exe := executor.NewSimulatedExecutorServer(rpc, aggregatorClient, config.PublicKey)
+		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, config.PublicKey)
 		executorpb.RegisterExecutorServiceServer(rpc.GetGrpcServer(), exe)
 
 		executors = append(executors, exe)
@@ -193,7 +196,9 @@ func buildExecutors(
 	return executors
 }
 
-func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfig) *peering.LocalPeeringDataFetcherConfig {
+func convertSimulationPeeringConfig(
+	configs []aggregatorConfig.ExecutorPeerConfig,
+) *fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo] {
 	var infos []*peering.ExecutorOperatorPeerInfo
 	for _, config := range configs {
 		info := &peering.ExecutorOperatorPeerInfo{
@@ -203,7 +208,7 @@ func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfi
 		}
 		infos = append(infos, info)
 	}
-	return &peering.LocalPeeringDataFetcherConfig{
+	return &fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo]{
 		Peers: infos,
 	}
 }

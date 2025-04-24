@@ -9,23 +9,33 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"sync"
 )
+
+type PonosExecutionManagerConfig struct {
+	secureConnection bool
+}
+
+func NewPonosExecutionManagerConfig(secureConnection bool) *PonosExecutionManagerConfig {
+	return &PonosExecutionManagerConfig{
+		secureConnection: secureConnection,
+	}
+}
 
 type PonosExecutionManager struct {
 	aggregatorServer   *rpcServer.RpcServer
 	taskQueue          workQueue.IOutputQueue[types.Task]
 	resultQueue        workQueue.IInputQueue[types.TaskResult]
-	peeringDataFetcher *peering.LocalPeeringDataFetcher
+	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo]
 	execClients        map[string]executorClient.IExecutorClient
 	running            sync.Map
 	wg                 sync.WaitGroup
+	config             *PonosExecutionManagerConfig
 
 	cancel context.CancelFunc
 	logger *zap.Logger
@@ -35,7 +45,8 @@ func NewPonosExecutionManager(
 	server *rpcServer.RpcServer,
 	taskQueue workQueue.IOutputQueue[types.Task],
 	resultQueue workQueue.IInputQueue[types.TaskResult],
-	peeringDataFetcher *peering.LocalPeeringDataFetcher,
+	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo],
+	config *PonosExecutionManagerConfig,
 	logger *zap.Logger,
 ) *PonosExecutionManager {
 	manager := &PonosExecutionManager{
@@ -44,6 +55,7 @@ func NewPonosExecutionManager(
 		resultQueue:        resultQueue,
 		peeringDataFetcher: peeringDataFetcher,
 		execClients:        map[string]executorClient.IExecutorClient{},
+		config:             config,
 		logger:             logger,
 	}
 	aggregatorpb.RegisterAggregatorServiceServer(server.GetGrpcServer(), manager)
@@ -64,9 +76,9 @@ func (em *PonosExecutionManager) Close() error {
 	if em.cancel != nil {
 		em.cancel()
 	}
-	em.logger.Info("Waiting for all execution results to arrive...")
+	em.logger.Sugar().Info("Waiting for all execution results to arrive...")
 	em.wg.Wait()
-	em.logger.Info("Shutdown complete")
+	em.logger.Sugar().Info("Shutdown complete")
 	return nil
 }
 
@@ -74,7 +86,7 @@ func (em *PonosExecutionManager) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			em.logger.Info("ExecutionManager shutting down")
+			em.logger.Sugar().Info("ExecutionManager shutting down")
 			return
 		default:
 			em.refreshExecutorClients()
@@ -86,7 +98,7 @@ func (em *PonosExecutionManager) run(ctx context.Context) {
 				for addr, execClient := range em.execClients {
 					err := execClient.SubmitTask(context.Background(), task)
 					if err != nil {
-						em.logger.Error("Failed to submit task to executor", zap.String("executor_address", addr), zap.String("task_id", task.TaskId), zap.Error(err))
+						em.logger.Sugar().Error("Failed to submit task to executor", zap.String("executor_address", addr), zap.String("task_id", task.TaskId), zap.Error(err))
 						em.running.Delete(task.TaskId)
 						em.wg.Done()
 					}
@@ -104,7 +116,7 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 	taskID := result.TaskId
 	value, ok := em.running.Load(taskID)
 	if !ok {
-		em.logger.Warn("Received result for unknown task", zap.String("task_id", taskID))
+		em.logger.Sugar().Warn("Received result for unknown task", zap.String("task_id", taskID))
 		return &v1.SubmitAck{Success: false, Message: "unknown task"}, nil
 	}
 	em.running.Delete(taskID)
@@ -122,11 +134,11 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 	}
 
 	if err := em.resultQueue.Enqueue(taskResult); err != nil {
-		em.logger.Error("Failed to enqueue task result", zap.String("task_id", taskID), zap.Error(err))
+		em.logger.Sugar().Error("Failed to enqueue task result", zap.String("task_id", taskID), zap.Error(err))
 		return &v1.SubmitAck{Success: false, Message: "enqueue error"}, nil
 	}
 
-	em.logger.Info("Task result accepted", zap.String("task_id", taskID))
+	em.logger.Sugar().Info("Task result accepted", zap.String("task_id", taskID))
 	em.wg.Done()
 	return &v1.SubmitAck{Success: true, Message: "ok"}, nil
 }
@@ -134,28 +146,31 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 func (em *PonosExecutionManager) refreshExecutorClients() {
 	peers, err := em.peeringDataFetcher.ListExecutorOperators()
 	if err != nil {
-		em.logger.Error("Failed to list executor peers", zap.Error(err))
+		em.logger.Sugar().Error("Failed to list executor peers", zap.Error(err))
 		return
 	}
 	for _, peer := range peers {
 		if _, exists := em.execClients[peer.PublicKey]; !exists {
-			client, err := em.loadExecutorClient(peer)
+			client, err := em.loadExecutorClient(peer, em.config.secureConnection)
 			if err != nil {
 				// TODO: emit metric
-				em.logger.Error("Failed to create executor client", zap.String("public_key", peer.PublicKey), zap.Error(err))
+				em.logger.Sugar().Error("Failed to create executor client", zap.String("public_key", peer.PublicKey), zap.Error(err))
 				continue
 			}
 			em.execClients[peer.PublicKey] = client
 			// TODO: emit metric
-			em.logger.Info("Registered new executor client", zap.String("public_key", peer.PublicKey))
+			em.logger.Sugar().Info("Registered new executor client", zap.String("public_key", peer.PublicKey))
 		}
 	}
 }
 
-func (em *PonosExecutionManager) loadExecutorClient(peer *peering.ExecutorOperatorPeerInfo) (executorClient.IExecutorClient, error) {
-	conn, err := grpc.NewClient(
+func (em *PonosExecutionManager) loadExecutorClient(
+	peer *peering.ExecutorOperatorPeerInfo,
+	secureConnection bool,
+) (executorClient.IExecutorClient, error) {
+	conn, err := clients.NewGrpcClient(
 		fmt.Sprintf("%s:%d", peer.NetworkAddress, peer.Port),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		secureConnection,
 	)
 	if err != nil {
 		return nil, err

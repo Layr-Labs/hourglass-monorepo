@@ -1,4 +1,4 @@
-package executor
+package service
 
 import (
 	"context"

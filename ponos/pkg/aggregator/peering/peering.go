@@ -6,6 +6,6 @@ type ExecutorOperatorPeerInfo struct {
 	PublicKey      string
 }
 
-type IPeeringDataFetcher interface {
-	ListExecutorOperators() ([]*ExecutorOperatorPeerInfo, error)
+type IPeeringDataFetcher[T any] interface {
+	ListExecutorOperators() ([]*T, error)
 }
