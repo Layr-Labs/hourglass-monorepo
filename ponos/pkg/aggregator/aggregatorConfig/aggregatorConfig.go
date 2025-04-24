@@ -53,27 +53,27 @@ type AggregatorAvs struct {
 }
 
 type ExecutorPeerConfig struct {
-	NetworkAddress string `json:"network_address" yaml:"network_address"`
+	NetworkAddress string `json:"networkAddress" yaml:"networkAddress"`
 	Port           int    `json:"port" yaml:"port"`
-	PublicKey      string `json:"public_key" yaml:"public_key"`
+	PublicKey      string `json:"publicKey" yaml:"publicKey"`
 }
 
 type SimulationConfig struct {
 	Enabled             bool                 `json:"enabled" yaml:"enabled"`
 	Port                int                  `json:"port" yaml:"port"`
-	SecureConnection    bool                 `json:"secure_connection" yaml:"secure_connection"`
-	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executor_peer_configs" yaml:"executor_peer_configs"`
+	SecureConnection    bool                 `json:"secureConnection" yaml:"secureConnection"`
+	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executorPeerConfigs" yaml:"executorPeerConfigs"`
 }
 
 type ServerConfig struct {
 	Port             int  `json:"port" yaml:"port"`
-	SecureConnection bool `json:"secure_connection" yaml:"secure_connection"`
+	SecureConnection bool `json:"secureConnection" yaml:"secureConnection"`
 }
 
 type AggregatorConfig struct {
 	Debug            bool             `json:"debug" yaml:"debug"`
-	SimulationConfig SimulationConfig `json:"simulation_config" yaml:"simulation_config"`
-	ServerConfig     ServerConfig     `json:"server_config" yaml:"server_config"`
+	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
+	ServerConfig     ServerConfig     `json:"serverConfig" yaml:"serverConfig"`
 	Chains           []Chain          `json:"chains" yaml:"chains"`
 	Avss             []AggregatorAvs  `json:"avss" yaml:"avss"`
 }
@@ -117,7 +117,7 @@ func NewAggregatorConfig() *AggregatorConfig {
 		SimulationConfig: SimulationConfig{
 			Enabled:          viper.GetBool("enabled"),
 			Port:             viper.GetInt("port"),
-			SecureConnection: viper.GetBool("secure_connection"),
+			SecureConnection: viper.GetBool("secureConnection"),
 		},
 	}
 }

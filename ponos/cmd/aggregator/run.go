@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"os"
 )
 
 var runCmd = &cobra.Command{
@@ -20,24 +19,6 @@ var runCmd = &cobra.Command{
 	Short: "Run the aggregator",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
-		configFile := viper.GetString("config")
-
-		if configFile != "" {
-			data, err := os.ReadFile(configFile)
-			fmt.Printf("config bytes: %s", data)
-			if err != nil {
-				return err
-			}
-			Config, err = aggregatorConfig.NewAggregatorConfigFromYamlBytes(data)
-			fmt.Printf("config simulation enabled: %t", Config.SimulationConfig.Enabled)
-			fmt.Printf("Config object: %+v\n", Config)
-			if err != nil {
-				return err
-			}
-		} else {
-			Config = aggregatorConfig.NewAggregatorConfig()
-		}
-
 		log, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 		sugar := log.Sugar()
 
@@ -46,11 +27,10 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Starting aggregator...")
-
-		fmt.Printf("simulation enabled: %t", Config.SimulationConfig.Enabled)
 		return lifecycle.RunWithShutdown(func(ctx context.Context) error {
-			return startAggregator(ctx, Config, log)
+			return startAggregator(ctx, &Config, log)
 		}, log)
 	},
 }

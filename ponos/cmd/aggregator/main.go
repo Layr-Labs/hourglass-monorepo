@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/spf13/pflag"
 	"os"
 	"strings"
 
@@ -24,37 +27,50 @@ func Execute() {
 }
 
 var configFile string
-var Config *aggregatorConfig.AggregatorConfig
+var Config aggregatorConfig.AggregatorConfig
 
 func init() {
 	cobra.OnInitialize(initConfigIfPresent)
 
-	rootCmd.PersistentFlags().String("config", "", "config file path")
-	rootCmd.PersistentFlags().Lookup("config")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
+
+	initConfig()
 
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
 	rootCmd.PersistentFlags().Lookup(aggregatorConfig.Debug)
 
+	rootCmd.AddCommand(runCmd)
+	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		key := config.KebabToSnakeCase(f.Name)
+		viper.BindPFlag(key, f) //nolint:errcheck
+		viper.BindEnv(key)      //nolint:errcheck
+	})
+}
+
+func initConfig() {
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
-
-	rootCmd.AddCommand(runCmd)
 }
 
 func initConfigIfPresent() {
+	hasConfig := false
 	if configFile != "" {
-		data, err := os.ReadFile(configFile)
-		if err != nil {
+		viper.SetConfigFile(configFile)
+		hasConfig = true
+	}
+	if hasConfig {
+		fmt.Printf("Using config file: %s\n", configFile)
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("Failed to read config: %v\n", err)
 			panic(err)
 		}
-		config, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes(data)
-		if err != nil {
+		if err := viper.Unmarshal(&Config); err != nil {
+			fmt.Printf("Failed to unmarshal config: %v\n", err)
 			panic(err)
 		}
-		Config = config
 	} else {
-		Config = aggregatorConfig.NewAggregatorConfig()
+		Config = *aggregatorConfig.NewAggregatorConfig()
 	}
 }
 

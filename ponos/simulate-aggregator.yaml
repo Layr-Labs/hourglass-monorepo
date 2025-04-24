@@ -1,16 +1,16 @@
 debug: false
-simulation_config:
+simulationConfig:
   enabled: true
   port: 8080
-  secure_connection: false
-  executor_peer_configs:
-    - public_key: "publicKey"
-      network_address: "localhost"
+  secureConnection: false
+  executorPeerConfigs:
+    - publicKey: "publicKey"
+      networkAddress: "localhost"
       port: 8095
 
-server_config:
+serverConfig:
   port: 9000
-  secure_connection: false
+  secureConnection: false
 
 chains:
   - name: "ethereum"
