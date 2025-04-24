@@ -1,7 +1,10 @@
 package executorClient
 
-import "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+import (
+	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+)
 
 type IExecutorClient interface {
-	SubmitTask(task *types.Task) error
+	SubmitTask(ctx context.Context, task *types.Task) error
 }

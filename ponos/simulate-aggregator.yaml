@@ -1,6 +1,17 @@
 debug: false
-simulated: true
-simulated_port: 8080
+simulationConfig:
+  enabled: true
+  port: 8080
+  secureConnection: false
+  executorPeerConfigs:
+    - publicKey: "publicKey"
+      networkAddress: "localhost"
+      port: 8095
+
+serverConfig:
+  port: 9000
+  secureConnection: false
+
 chains:
   - name: "ethereum"
     network: "mainnet"
@@ -10,6 +21,7 @@ chains:
     network: "holesky"
     chainId: 17000
     rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+
 avss:
   - address: "0x1234567890abcdef1234567890abcdef12345678"
     privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"

@@ -13,18 +13,14 @@ import (
 const (
 	EnvPrefix = "AGGREGATOR_"
 
-	Debug     = "debug"
-	Simulated = "simulated"
-
-	SimulatedPort        = "simulated-port"
-	SimulatedDefaultPort = 8080
+	Debug = "debug"
 )
 
 type Chain struct {
-	Name    string         `json:"name"`
-	Network string         `json:"network"`
-	ChainID config.ChainId `json:"chainId"`
-	RpcURL  string         `json:"rpcUrl"`
+	Name    string         `json:"name" yaml:"name"`
+	Network string         `json:"network" yaml:"network"`
+	ChainID config.ChainId `json:"chainId" yaml:"chainId"`
+	RpcURL  string         `json:"rpcUrl" yaml:"rpcUrl"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -38,7 +34,7 @@ func (c *Chain) Validate() field.ErrorList {
 	if c.ChainID == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chainId"), "chainId is required"))
 	}
-	if !slices.Contains(config.SupportedChainIds, config.ChainId(c.ChainID)) {
+	if !slices.Contains(config.SupportedChainIds, c.ChainID) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainID, "unsupported chainId"))
 	}
 	if c.RpcURL == "" {
@@ -48,20 +44,38 @@ func (c *Chain) Validate() field.ErrorList {
 }
 
 type AggregatorAvs struct {
-	Address               string `json:"address"`
-	PrivateKey            string `json:"privateKey"`
-	PrivateSigningKey     string `json:"privateSigningKey"`
-	PrivateSigningKeyType string `json:"privateSigningKeyType"`
-	ResponseTimeout       int    `json:"responseTimeout"`
-	ChainIds              []uint `json:"chainIds"`
+	Address               string `json:"address" yaml:"address"`
+	PrivateKey            string `json:"privateKey" yaml:"privateKey"`
+	PrivateSigningKey     string `json:"privateSigningKey" yaml:"privateSigningKey"`
+	PrivateSigningKeyType string `json:"privateSigningKeyType" yaml:"privateSigningKeyType"`
+	ResponseTimeout       int    `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds              []uint `json:"chainIds" yaml:"chainIds"`
+}
+
+type ExecutorPeerConfig struct {
+	NetworkAddress string `json:"networkAddress" yaml:"networkAddress"`
+	Port           int    `json:"port" yaml:"port"`
+	PublicKey      string `json:"publicKey" yaml:"publicKey"`
+}
+
+type SimulationConfig struct {
+	Enabled             bool                 `json:"enabled" yaml:"enabled"`
+	Port                int                  `json:"port" yaml:"port"`
+	SecureConnection    bool                 `json:"secureConnection" yaml:"secureConnection"`
+	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executorPeerConfigs" yaml:"executorPeerConfigs"`
+}
+
+type ServerConfig struct {
+	Port             int  `json:"port" yaml:"port"`
+	SecureConnection bool `json:"secureConnection" yaml:"secureConnection"`
 }
 
 type AggregatorConfig struct {
-	Debug         bool            `mapstructure:"debug"`
-	Simulated     bool            `mapstructure:"simulated"`
-	SimulatedPort int             `mapstructure:"simulated_port"`
-	Chains        []Chain         `mapstructure:"chains"`
-	Avss          []AggregatorAvs `mapstructure:"avss"`
+	Debug            bool             `json:"debug" yaml:"debug"`
+	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
+	ServerConfig     ServerConfig     `json:"serverConfig" yaml:"serverConfig"`
+	Chains           []Chain          `json:"chains" yaml:"chains"`
+	Avss             []AggregatorAvs  `json:"avss" yaml:"avss"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
@@ -75,37 +89,35 @@ func (arc *AggregatorConfig) Validate() error {
 			}
 		}
 	}
-
 	if len(arc.Avss) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
-	} else { //nolint:staticcheck
-		// TODO: Validate each AVS config
 	}
 	return allErrors.ToAggregate()
 }
 
 func NewAggregatorConfigFromJsonBytes(data []byte) (*AggregatorConfig, error) {
-	var c *AggregatorConfig
-
+	var c AggregatorConfig
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from JSON")
 	}
-	return c, nil
+	return &c, nil
 }
 
 func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
-	var c *AggregatorConfig
-
+	var c AggregatorConfig
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal AggregatorConfig from YAML")
 	}
-	return c, nil
+	return &c, nil
 }
 
 func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
-		Debug:         viper.GetBool(config.NormalizeFlagName(Debug)),
-		Simulated:     viper.GetBool(config.NormalizeFlagName(Simulated)),
-		SimulatedPort: config.DefaultInt(viper.GetInt(config.NormalizeFlagName(SimulatedPort)), SimulatedDefaultPort),
+		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
+		SimulationConfig: SimulationConfig{
+			Enabled:          viper.GetBool("enabled"),
+			Port:             viper.GetInt("port"),
+			SecureConnection: viper.GetBool("secureConnection"),
+		},
 	}
 }

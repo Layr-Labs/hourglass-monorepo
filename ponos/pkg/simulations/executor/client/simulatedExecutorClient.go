@@ -1,4 +1,4 @@
-package executorClient
+package client
 
 import (
 	"errors"

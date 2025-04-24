@@ -1,17 +1,16 @@
 package main
 
 import (
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-)
-
-import (
+	"github.com/spf13/pflag"
 	"os"
 	"strings"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -28,31 +27,27 @@ func Execute() {
 }
 
 var configFile string
-var Config *aggregatorConfig.AggregatorConfig
+var Config aggregatorConfig.AggregatorConfig
 
 func init() {
 	cobra.OnInitialize(initConfigIfPresent)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")
 
-	initConfig(rootCmd)
+	initConfig()
 
 	rootCmd.PersistentFlags().Bool(aggregatorConfig.Debug, false, `"true" or "false"`)
-
-	rootCmd.PersistentFlags().Bool(aggregatorConfig.Simulated, false, `"true" or "false"`)
-	rootCmd.PersistentFlags().Int(aggregatorConfig.SimulatedPort, aggregatorConfig.SimulatedDefaultPort, `"port"`)
+	rootCmd.PersistentFlags().Lookup(aggregatorConfig.Debug)
 
 	rootCmd.AddCommand(runCmd)
-
 	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		key := config.KebabToSnakeCase(f.Name)
 		viper.BindPFlag(key, f) //nolint:errcheck
 		viper.BindEnv(key)      //nolint:errcheck
 	})
-
 }
 
-func initConfig(cmd *cobra.Command) {
+func initConfig() {
 	viper.SetEnvPrefix(executorConfig.EnvPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv()
@@ -65,14 +60,17 @@ func initConfigIfPresent() {
 		hasConfig = true
 	}
 	if hasConfig {
+		fmt.Printf("Using config file: %s\n", configFile)
 		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("Failed to read config: %v\n", err)
 			panic(err)
 		}
 		if err := viper.Unmarshal(&Config); err != nil {
+			fmt.Printf("Failed to unmarshal config: %v\n", err)
 			panic(err)
 		}
 	} else {
-		Config = aggregatorConfig.NewAggregatorConfig()
+		Config = *aggregatorConfig.NewAggregatorConfig()
 	}
 }
 
