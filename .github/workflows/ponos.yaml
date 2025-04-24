@@ -80,7 +80,7 @@ jobs:
           if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
             docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
           else
-            docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:$VERSION --push -f ./ponos/Dockerfile .
+            docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION --push -f ./ponos/Dockerfile .
           fi
   build-binaries:
     runs-on: ubuntu-24.04

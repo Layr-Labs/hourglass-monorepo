@@ -10,7 +10,7 @@ services:
     environment: {}
     restart: unless-stopped
   executor:
-    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:latest
+    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_c2f2a26
     command:
       - "executor"
       - "run"
