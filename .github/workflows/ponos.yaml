@@ -46,3 +46,61 @@ jobs:
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
           make ci-test
+  build-container:
+    runs-on: ubuntu-24.04
+    needs: [ponos-lint, ponos-test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set release version
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          cd ponos
+          ./scripts/version.sh $REF
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Login to Amazon ECR
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build, tag, and push docker image to Amazon ECR
+        env:
+          REGISTRY: "public.ecr.aws/z6g0f8n7"
+          REPOSITORY: "eigenlayer-hourglass"
+        run: |
+          cd ponos
+          VERSION=$(cat VERSION | tr -d '[:space:]' | sed 's/+/_/g')
+          if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
+            docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push .
+          else
+            docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:$VERSION --push .
+          fi
+  build-binaries:
+    runs-on: ubuntu-24.04
+    needs: [ponos-lint, ponos-test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check and set release version
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          ./ponos/scripts/version.sh $REF
+      - name: Build binary
+        run: |
+          cd ponos
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Building binary for version $VERSION"
+          make release-with-docker
+          sudo chown -R $USER:$USER .
+          ./scripts/bundleReleases.sh $VERSION
