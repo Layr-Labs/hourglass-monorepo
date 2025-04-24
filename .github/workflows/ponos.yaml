@@ -49,6 +49,7 @@ jobs:
   build-container:
     runs-on: ubuntu-24.04
     needs: [ponos-lint, ponos-test]
+    environment: "staging"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
