@@ -85,6 +85,7 @@ jobs:
   build-binaries:
     runs-on: ubuntu-24.04
     needs: [ponos-lint, ponos-test]
+    permissions: write-all
     steps:
       - name: Checkout
         uses: actions/checkout@v4

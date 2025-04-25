@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"log"
