@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   executor:
-    # image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_2ebbe49
-    build:
-      context: ..
-      dockerfile: ponos/Dockerfile
+    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_9409fac
+    # build:
+    #   context: ..
+    #   dockerfile: ponos/Dockerfile
     networks:
       - hourglass-demo
     ports:

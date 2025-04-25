@@ -73,6 +73,9 @@ build/cmd/aggregator/darwin-arm64:
 build/cmd/aggregator/darwin-amd64:
 	GOOS=darwin GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/aggregator ./cmd/aggregator
 
+.PHONY: build/local-container
+build/local-container:
+	cd ../ && docker build -t hourglass:latest -f ./ponos/Dockerfile .
 
 # -----------------------------------------------------------------------------
 # Release builds
