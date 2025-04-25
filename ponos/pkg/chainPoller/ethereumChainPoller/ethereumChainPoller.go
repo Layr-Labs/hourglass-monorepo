@@ -40,9 +40,9 @@ func NewEthereumChainPollerDefaultConfig(
 
 func NewEthereumChainPoller(
 	ethClient *ethereum.Client,
-	logger *zap.Logger,
 	taskQueue chan *types.Task,
 	config *EthereumChainPollerConfig,
+	logger *zap.Logger,
 ) *EthereumChainPoller {
 	return &EthereumChainPoller{
 		ethClient:  ethClient,

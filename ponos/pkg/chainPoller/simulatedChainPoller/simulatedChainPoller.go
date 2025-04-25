@@ -22,9 +22,9 @@ type SimulatedChainPollerConfig struct {
 
 type SimulatedChainPoller struct {
 	taskQueue  chan *types.Task
+	httpServer *http.Server
 	config     *SimulatedChainPollerConfig
 	logger     *zap.Logger
-	httpServer *http.Server
 }
 
 func NewSimulatedChainPoller(

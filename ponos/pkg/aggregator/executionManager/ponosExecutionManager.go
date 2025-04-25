@@ -19,14 +19,14 @@ import (
 )
 
 type PonosExecutionManagerConfig struct {
-	SecureConnection bool
 	RefreshInterval  time.Duration
+	SecureConnection bool
 }
 
 func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
 	return &PonosExecutionManagerConfig{
-		SecureConnection: false,
 		RefreshInterval:  30 * time.Second,
+		SecureConnection: false,
 	}
 }
 

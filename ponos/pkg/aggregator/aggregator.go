@@ -9,18 +9,18 @@ import (
 )
 
 type Aggregator struct {
-	logger           *zap.Logger
 	chainPollers     []runnable.IRunnable
 	chainWriters     []runnable.IRunnable
 	executionManager runnable.IRunnable
+	logger           *zap.Logger
 	inboxAddress     string
 }
 
 type AggregatorConfig struct {
-	Logger           *zap.Logger
 	ChainPollers     []runnable.IRunnable
 	ChainWriters     []runnable.IRunnable
 	ExecutionManager runnable.IRunnable
+	Logger           *zap.Logger
 	InboxAddress     string
 }
 
