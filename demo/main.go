@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/server"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"math/big"
 	"time"
 )
 
@@ -22,11 +23,19 @@ func NewTaskWorker(logger *zap.Logger) *TaskWorker {
 }
 
 type TaskRequestPayload struct {
-	Message string
+	NumberToBeSquared json.Number `json:"numberToBeSquared"`
+}
+
+func (trp *TaskRequestPayload) GetBigInt() (*big.Int, error) {
+	i, success := new(big.Int).SetString(trp.NumberToBeSquared.String(), 10)
+	if !success {
+		return nil, fmt.Errorf("failed to convert json.Number to big.Int")
+	}
+	return i, nil
 }
 
 type TaskResponsePayload struct {
-	Message       string
+	Result        *big.Int
 	UnixTimestamp uint64
 }
 
@@ -47,9 +56,16 @@ func (tw *TaskWorker) ValidateTask(t *performerV1.Task) error {
 	tw.logger.Sugar().Infow("Validating task",
 		zap.Any("task", t),
 	)
-	if _, err := tw.marshalPayload(t); err != nil {
+	payload, err := tw.marshalPayload(t)
+	if err != nil {
 		return errors.Wrap(err, "invalid task payload")
 	}
+
+	_, err = payload.GetBigInt()
+	if err != nil {
+		return errors.Wrap(err, "failed to get big.Int from payload")
+	}
+
 	return nil
 }
 
@@ -62,8 +78,15 @@ func (tw *TaskWorker) HandleTask(t *performerV1.Task) (*performerV1.TaskResult, 
 		return nil, errors.Wrap(err, "failed to marshal payload")
 	}
 
+	i, err := payload.GetBigInt()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get big.Int from payload")
+	}
+
+	squaredNumber := new(big.Int).Exp(i, big.NewInt(2), nil)
+
 	responsePayload := &TaskResponsePayload{
-		Message:       fmt.Sprintf("Hello %s", payload.Message),
+		Result:        squaredNumber,
 		UnixTimestamp: uint64(time.Now().Unix()),
 	}
 	responseBytes, err := json.Marshal(responsePayload)

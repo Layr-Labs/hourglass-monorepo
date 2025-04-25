@@ -58,7 +58,15 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) error {
 	return nil
 }
 
-func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
+func (e *Executor) receiveTaskResponse(originalTask *tasks.Task, response *tasks.TaskResult, err error) {
+	if err != nil {
+		e.logger.Sugar().Errorw("Encountered error while receiving task response",
+			zap.String("taskId", originalTask.TaskID),
+			zap.String("avsAddress", originalTask.Avs),
+			zap.Error(err),
+		)
+		return
+	}
 	e.logger.Sugar().Infow("Received task response",
 		zap.Any("response", response),
 	)

@@ -25,7 +25,7 @@ type Executor struct {
 	aggregators map[string]*connectedAggregator.ConnectedAggregator
 	signer      signer.Signer
 
-	inflightTasks sync.Map
+	inflightTasks *sync.Map
 }
 
 func NewExecutor(
@@ -40,6 +40,7 @@ func NewExecutor(
 		avsPerformers: make(map[string]avsPerformer.IAvsPerformer),
 		rpcServer:     rpcServer,
 		signer:        signer,
+		inflightTasks: &sync.Map{},
 	}
 }
 

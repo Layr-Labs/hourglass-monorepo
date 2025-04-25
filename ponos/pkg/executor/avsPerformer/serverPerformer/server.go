@@ -236,7 +236,7 @@ func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 		aps.logger.Sugar().Infow("Waiting for tasks", zap.String("avs", aps.config.AvsAddress))
 		for task := range aps.taskBacklog {
 			res, err := aps.processTask(ctx, task)
-			aps.reportTaskResponse(res, err)
+			aps.reportTaskResponse(task, res, err)
 		}
 
 	}(&wg)

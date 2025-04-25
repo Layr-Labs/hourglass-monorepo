@@ -32,4 +32,4 @@ type IAvsPerformer interface {
 	Shutdown() error
 }
 
-type ReceiveTaskResponse func(response *tasks.TaskResult, err error)
+type ReceiveTaskResponse func(originalTask *tasks.Task, response *tasks.TaskResult, err error)
