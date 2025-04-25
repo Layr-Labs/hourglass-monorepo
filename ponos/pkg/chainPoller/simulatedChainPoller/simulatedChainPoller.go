@@ -17,6 +17,7 @@ import (
 type SimulatedChainPollerConfig struct {
 	ChainId         *config.ChainId
 	PollingInterval time.Duration
+	TaskInterval    time.Duration
 	Port            int
 }
 
@@ -68,7 +69,7 @@ func (scl *SimulatedChainPoller) Start(ctx context.Context) error {
 		}
 	}()
 
-	if scl.config.PollingInterval > 0 {
+	if scl.config.TaskInterval > 0 {
 		go func() {
 			scl.generatePeriodicTasks(ctx)
 		}()

@@ -53,7 +53,6 @@ func (scw *SimulatedChainWriter) processQueue() {
 	for {
 		select {
 		case <-scw.ctx.Done():
-			// TODO: implement persist state to disk.
 			sugar.Infow("SimulatedChainWriter shutting down")
 			return
 		case <-ticker.C:
