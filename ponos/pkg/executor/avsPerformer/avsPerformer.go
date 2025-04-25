@@ -18,10 +18,11 @@ type PerformerImage struct {
 }
 
 type AvsPerformerConfig struct {
-	AvsAddress  string
-	ProcessType AvsProcessType
-	Image       PerformerImage
-	WorkerCount int
+	AvsAddress           string
+	ProcessType          AvsProcessType
+	Image                PerformerImage
+	WorkerCount          int
+	PerformerNetworkName string
 }
 
 type IAvsPerformer interface {

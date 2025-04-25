@@ -29,7 +29,6 @@ var configFile string
 var Config *keygenConfig.KeygenConfig
 
 func init() {
-	fmt.Printf("INIT\n")
 	cobra.OnInitialize(initConfigIfPresent)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file path")

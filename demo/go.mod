@@ -1,4 +1,4 @@
-module github.com/Layr-Labs/hourglass-monorepo/ponos-performer/go
+module github.com/Layr-Labs/hourglass-monorepo/demo
 
 go 1.23.6
 
@@ -20,4 +20,4 @@ require (
 	google.golang.org/protobuf v1.36.5 // indirect
 )
 
-replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../../ponos
+replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../ponos

@@ -40,6 +40,7 @@ func init() {
 
 	rootCmd.PersistentFlags().Bool(executorConfig.Debug, false, `"true" or "false"`)
 	rootCmd.PersistentFlags().Int(executorConfig.GrpcPort, 9090, "gRPC port")
+	rootCmd.PersistentFlags().String(executorConfig.PerformerNetworkName, "", "Docker network name for executor (leave blank if using localhost)")
 
 	// setup sub commands
 	rootCmd.AddCommand(runCmd)
@@ -69,7 +70,6 @@ func initConfigIfPresent() {
 		hasConfig = true
 	}
 	if hasConfig {
-		fmt.Printf("Using config file: %s\n", configFile)
 		if err := viper.ReadInConfig(); err != nil {
 			panic(err)
 		}

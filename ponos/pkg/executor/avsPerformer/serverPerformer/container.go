@@ -4,12 +4,19 @@ import (
 	"context"
 	"fmt"
 	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"go.uber.org/zap"
 	"time"
 )
 
-func (aps *AvsPerformerServer) waitForRunning(ctx context.Context, dockerClient *client.Client, containerId string) (bool, error) {
+func (aps *AvsPerformerServer) waitForRunning(
+	ctx context.Context,
+	dockerClient *client.Client,
+	containerId string,
+	containerPort nat.Port,
+) (bool, error) {
 	for attempts := 0; attempts < 10; attempts++ {
 		info, err := dockerClient.ContainerInspect(ctx, containerId)
 		if err != nil {
@@ -41,6 +48,44 @@ func (aps *AvsPerformerServer) waitForRunning(ctx context.Context, dockerClient 
 		time.Sleep(100 * time.Millisecond * time.Duration(attempts+1))
 	}
 	return false, fmt.Errorf("container %s is not running after 10 attempts", containerId)
+}
+
+func (aps *AvsPerformerServer) createNetworkIfNotExists(ctx context.Context, dockerClient *client.Client, networkName string) error {
+	networks, err := dockerClient.NetworkList(ctx, network.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list networks: %w", err)
+	}
+
+	var n *network.Summary
+	for _, net := range networks {
+		if net.Name == networkName {
+			n = &net
+			break
+		}
+	}
+
+	// net already exists
+	if n != nil {
+		return nil
+	}
+
+	_, err = dockerClient.NetworkCreate(
+		ctx,
+		networkName,
+		network.CreateOptions{
+			Driver: "bridge",
+			Options: map[string]string{
+				"com.docker.net.bridge.enable_icc": "true",
+			},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create net: %w", err)
+	}
+	aps.logger.Sugar().Infow("Created net",
+		zap.String("networkName", networkName),
+	)
+	return nil
 }
 
 func (aps *AvsPerformerServer) startHealthCheck(ctx context.Context) {

@@ -9,10 +9,6 @@ WORKDIR /build/ponos
 
 RUN make all
 
-
-FROM alpine:latest
-
-COPY --from=0 /build/ponos/bin/executor /usr/local/bin/
-COPY --from=0 /build/ponos/bin/aggregator /usr/local/bin/
+RUN cp bin/* /usr/local/bin
 
 

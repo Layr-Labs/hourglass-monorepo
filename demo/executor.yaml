@@ -1,0 +1,16 @@
+---
+grpcPort: 9090
+performerNetworkName: "demo_hourglass-demo"
+operator:
+  address: "0xoperator..."
+  operatorPrivateKey: "..."
+  signingKeys:
+    ecdsa: ""
+    bls: ""
+avsPerformers:
+  - image:
+      repository: "hello-performer"
+      tag: "latest"
+    processType: "server"
+    avsAddress: "0xavs1..."
+    workerCount: 1
