@@ -129,9 +129,9 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 
 			listener := ethereumChainPoller.NewEthereumChainPoller(
 				ethClient,
-				logger,
 				taskQueue,
 				listenerConfig,
+				logger,
 			)
 			listeners = append(listeners, listener)
 			logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainID, "url", chain.RpcURL)
