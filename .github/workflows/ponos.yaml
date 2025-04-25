@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run linter
+      - name: Run tests
         run: |
           cd ponos
           make deps

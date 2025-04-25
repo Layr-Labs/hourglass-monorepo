@@ -114,12 +114,16 @@ run/executor:
 build/test-performer:
 	cd ../demo && make build
 
+.PHONY: build/test-performer-container
+build/test-performer-container:
+	cd ../demo && make build-container
+
 .PHONY: test
 test:
 	$(GO) test -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
-ci-test: build/test-performer test
+ci-test: build/test-performer-container test
 
 .PHONY: lint
 lint:
