@@ -3,48 +3,48 @@ package executionManager
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
-	"sync"
 )
 
 type PonosExecutionManagerConfig struct {
-	secureConnection bool
+	SecureConnection bool
+	RefreshInterval  time.Duration
 }
 
-func NewPonosExecutionManagerConfig(secureConnection bool) *PonosExecutionManagerConfig {
+func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
 	return &PonosExecutionManagerConfig{
-		secureConnection: secureConnection,
+		SecureConnection: false,
+		RefreshInterval:  30 * time.Second,
 	}
 }
 
 type PonosExecutionManager struct {
 	aggregatorServer   *rpcServer.RpcServer
-	taskQueue          workQueue.IOutputQueue[types.Task]
-	resultQueue        workQueue.IInputQueue[types.TaskResult]
-	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo]
+	taskQueue          chan *types.Task
+	resultQueue        chan *types.TaskResult
 	execClients        map[string]executorClient.IExecutorClient
+	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo]
 	running            sync.Map
-	wg                 sync.WaitGroup
 	config             *PonosExecutionManagerConfig
-
-	cancel context.CancelFunc
-	logger *zap.Logger
+	logger             *zap.Logger
 }
 
 func NewPonosExecutionManager(
 	server *rpcServer.RpcServer,
-	taskQueue workQueue.IOutputQueue[types.Task],
-	resultQueue workQueue.IInputQueue[types.TaskResult],
+	taskQueue chan *types.Task,
+	resultQueue chan *types.TaskResult,
 	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo],
 	config *PonosExecutionManagerConfig,
 	logger *zap.Logger,
@@ -63,62 +63,102 @@ func NewPonosExecutionManager(
 }
 
 func (em *PonosExecutionManager) Start(ctx context.Context) error {
-	ctx, em.cancel = context.WithCancel(ctx)
+	em.logger.Sugar().Infow("Starting PonosExecutionManager",
+		"secureConnection", em.config.SecureConnection,
+		"refreshInterval", em.config.RefreshInterval,
+	)
+
 	err := em.aggregatorServer.Start(ctx)
 	if err != nil {
 		return err
 	}
-	go em.run(ctx)
+
+	go em.processTaskQueue(ctx)
+	go em.refreshExecutorClientsLoop(ctx)
+
 	return nil
 }
 
-func (em *PonosExecutionManager) Close() error {
-	if em.cancel != nil {
-		em.cancel()
-	}
-	em.logger.Sugar().Info("Waiting for all execution results to arrive...")
-	em.wg.Wait()
-	em.logger.Sugar().Info("Shutdown complete")
-	return nil
-}
+func (em *PonosExecutionManager) refreshExecutorClientsLoop(ctx context.Context) {
+	ticker := time.NewTicker(em.config.RefreshInterval)
+	defer ticker.Stop()
 
-func (em *PonosExecutionManager) run(ctx context.Context) {
+	sugar := em.logger.Sugar()
+	sugar.Info("Starting executor client refresh loop")
+
+	em.refreshExecutorClients()
+
 	for {
 		select {
 		case <-ctx.Done():
-			em.logger.Sugar().Info("ExecutionManager shutting down")
+			sugar.Info("Stopping executor client refresh loop")
 			return
-		default:
+		case <-ticker.C:
 			em.refreshExecutorClients()
-
-			task := em.taskQueue.Dequeue()
-			em.wg.Add(1)
-			go func() {
-				em.running.Store(task.TaskId, task)
-				for addr, execClient := range em.execClients {
-					err := execClient.SubmitTask(context.Background(), task)
-					if err != nil {
-						em.logger.Sugar().Error("Failed to submit task to executor", zap.String("executor_address", addr), zap.String("task_id", task.TaskId), zap.Error(err))
-						em.running.Delete(task.TaskId)
-						em.wg.Done()
-					}
-				}
-			}()
-
 		}
 	}
 }
 
+func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
+	sugar := em.logger.Sugar()
+	sugar.Info("Starting task processing loop")
+
+	for {
+		select {
+		case <-ctx.Done():
+			sugar.Info("Stopping task processing loop")
+			return
+		case task, ok := <-em.taskQueue:
+			if !ok {
+				sugar.Warn("Task queue channel closed, exiting")
+				return
+			}
+
+			go em.processTask(ctx, task)
+		}
+	}
+}
+
+func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Task) {
+	sugar := em.logger.Sugar()
+	sugar.Infow("Processing task", "taskId", task.TaskId)
+
+	em.running.Store(task.TaskId, task)
+	clientCount := 0
+	for addr, execClient := range em.execClients {
+		clientCount++
+
+		go func(address string, client executorClient.IExecutorClient) {
+			err := client.SubmitTask(ctx, task)
+			if err != nil {
+				sugar.Errorw("Failed to submit task to executor",
+					"executor_address", address,
+					"task_id", task.TaskId,
+					"error", err,
+				)
+			} else {
+				sugar.Debugw("Successfully submitted task to executor",
+					"executor_address", address,
+					"task_id", task.TaskId,
+				)
+			}
+		}(addr, execClient)
+	}
+}
+
 func (em *PonosExecutionManager) SubmitTaskResult(
-	_ context.Context,
+	ctx context.Context,
 	result *aggregatorpb.TaskResult,
 ) (*v1.SubmitAck, error) {
+	sugar := em.logger.Sugar()
 	taskID := result.TaskId
+
 	value, ok := em.running.Load(taskID)
 	if !ok {
-		em.logger.Sugar().Warn("Received result for unknown task", zap.String("task_id", taskID))
+		sugar.Warnw("Received result for unknown task", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "unknown task"}, nil
 	}
+
 	em.running.Delete(taskID)
 	task := value.(*types.Task)
 
@@ -133,34 +173,50 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 		BlockHash:     task.BlockHash,
 	}
 
-	if err := em.resultQueue.Enqueue(taskResult); err != nil {
-		em.logger.Sugar().Error("Failed to enqueue task result", zap.String("task_id", taskID), zap.Error(err))
+	select {
+	case em.resultQueue <- taskResult:
+		sugar.Infow("Task result accepted", "task_id", taskID)
+		return &v1.SubmitAck{Success: true, Message: "ok"}, nil
+	case <-time.After(1 * time.Second):
+		sugar.Errorw("Failed to enqueue task result (channel full or closed)", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "enqueue error"}, nil
+	case <-ctx.Done():
+		sugar.Warnw("Context cancelled while enqueueing result", "task_id", taskID)
+		return &v1.SubmitAck{Success: false, Message: "context cancelled"}, nil
 	}
-
-	em.logger.Sugar().Info("Task result accepted", zap.String("task_id", taskID))
-	em.wg.Done()
-	return &v1.SubmitAck{Success: true, Message: "ok"}, nil
 }
 
 func (em *PonosExecutionManager) refreshExecutorClients() {
+	sugar := em.logger.Sugar()
+
 	peers, err := em.peeringDataFetcher.ListExecutorOperators()
 	if err != nil {
-		em.logger.Sugar().Error("Failed to list executor peers", zap.Error(err))
+		sugar.Errorw("Failed to list executor peers", "error", err)
 		return
 	}
+
+	newClientCount := 0
+
 	for _, peer := range peers {
 		if _, exists := em.execClients[peer.PublicKey]; !exists {
-			client, err := em.loadExecutorClient(peer, em.config.secureConnection)
+			client, err := em.loadExecutorClient(peer, em.config.SecureConnection)
 			if err != nil {
 				// TODO: emit metric
-				em.logger.Sugar().Error("Failed to create executor client", zap.String("public_key", peer.PublicKey), zap.Error(err))
+				sugar.Errorw("Failed to create executor client",
+					"public_key", peer.PublicKey,
+					"error", err,
+				)
 				continue
 			}
 			em.execClients[peer.PublicKey] = client
+			newClientCount++
 			// TODO: emit metric
-			em.logger.Sugar().Info("Registered new executor client", zap.String("public_key", peer.PublicKey))
+			sugar.Infow("Registered new executor client", "public_key", peer.PublicKey)
 		}
+	}
+
+	if newClientCount > 0 {
+		sugar.Infow("Refreshed executor clients", "newClients", newClientCount, "totalClients", len(em.execClients))
 	}
 }
 

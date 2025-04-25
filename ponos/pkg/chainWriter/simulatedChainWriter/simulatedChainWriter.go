@@ -3,11 +3,8 @@ package simulatedChainWriter
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"sync"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
@@ -18,90 +15,96 @@ type SimulatedChainWriterConfig struct {
 
 type SimulatedChainWriter struct {
 	config          *SimulatedChainWriterConfig
-	logger          *zap.SugaredLogger
-	workOutputQueue workQueue.IOutputQueue[types.TaskResult]
-	client          *http.Client
+	logger          *zap.Logger
+	workOutputQueue chan *types.TaskResult
 	ctx             context.Context
 	cancel          context.CancelFunc
-	wg              sync.WaitGroup
 }
 
 func NewSimulatedChainWriter(
 	config *SimulatedChainWriterConfig,
+	workOutputQueue chan *types.TaskResult,
 	logger *zap.Logger,
-	workOutputQueue workQueue.IOutputQueue[types.TaskResult],
 ) *SimulatedChainWriter {
 	return &SimulatedChainWriter{
 		config:          config,
-		logger:          logger.Sugar(),
 		workOutputQueue: workOutputQueue,
-		client:          &http.Client{Timeout: 5 * time.Second},
+		logger:          logger,
 	}
 }
 
-func (scw *SimulatedChainWriter) Start(parent context.Context) error {
-	scw.ctx, scw.cancel = context.WithCancel(parent)
-	scw.wg.Add(1)
+func (scw *SimulatedChainWriter) Start(ctx context.Context) error {
+	scw.ctx, scw.cancel = context.WithCancel(ctx)
 
 	go func() {
-		defer scw.wg.Done()
-		ticker := time.NewTicker(scw.config.Interval)
-		defer ticker.Stop()
-
-		scw.logger.Infow("SimulatedChainWriter started")
-
-		for {
-			select {
-			case <-scw.ctx.Done():
-				scw.logger.Infow("SimulatedChainWriter shutting down")
-				return
-			case <-ticker.C:
-				scw.drainQueue()
-			}
-		}
+		scw.processQueue()
 	}()
 
 	return nil
 }
 
-func (scw *SimulatedChainWriter) drainQueue() {
+func (scw *SimulatedChainWriter) processQueue() {
+	ticker := time.NewTicker(scw.config.Interval)
+	defer ticker.Stop()
+
+	sugar := scw.logger.Sugar()
+	sugar.Infow("SimulatedChainWriter started")
+
 	for {
 		select {
 		case <-scw.ctx.Done():
+			// TODO: implement persist state to disk.
+			sugar.Infow("SimulatedChainWriter shutting down")
 			return
-		default:
-			task := scw.workOutputQueue.Dequeue()
+		case <-ticker.C:
+			scw.processBatch()
+		case task, ok := <-scw.workOutputQueue:
+			if !ok {
+				sugar.Infow("Work output queue has been closed")
+				return
+			}
 			_ = scw.submitResult(task)
 		}
 	}
 }
 
-func (scw *SimulatedChainWriter) submitResult(result *types.TaskResult) error {
-	scw.logger.Infow("Simulating submitResult", "task_id", result.TaskId)
+func (scw *SimulatedChainWriter) processBatch() {
+	scw.logger.Sugar().Debugw("Processing batch of tasks")
 
-	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 10; i++ {
+		select {
+		case <-scw.ctx.Done():
+			return
+		case task, ok := <-scw.workOutputQueue:
+			if !ok {
+				return
+			}
+			_ = scw.submitResult(task)
+		default:
+			return
+		}
+	}
+}
+
+func (scw *SimulatedChainWriter) submitResult(result *types.TaskResult) error {
+	sugar := scw.logger.Sugar()
+	sugar.Infow("Simulating submitResult", "task_id", result.TaskId)
+
+	time.Sleep(5 * time.Millisecond)
 
 	payload, err := json.Marshal(result)
 	if err != nil {
-		scw.logger.Errorw("Failed to marshal result", "err", err)
+		sugar.Errorw("Failed to marshal result", "err", err)
 		return err
 	}
-	scw.logger.Infow("Simulating submitResult",
+
+	sugar.Infow("Simulating submitResult",
 		"task_id", result.TaskId,
 		"avs_address", result.AvsAddress,
 		"callback_address", result.CallbackAddr,
 		"chain_id", result.ChainId,
 		"block_number", result.BlockNumber,
-		"payload", payload,
+		"payload", string(payload),
 	)
-	return nil
-}
-
-func (scw *SimulatedChainWriter) Close() error {
-	if scw.cancel != nil {
-		scw.cancel()
-	}
-	scw.wg.Wait()
-	scw.logger.Infow("SimulatedChainWriter closed")
 	return nil
 }

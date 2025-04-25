@@ -2,102 +2,149 @@ package ethereumChainListener
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/workQueue"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
 
+type EthereumChainListenerConfig struct {
+	ChainId                  config.ChainId
+	PollingInterval          time.Duration
+	InboxAddr                string
+	MaxConsecutiveErrorCount int
+}
+
 type EthereumChainListener struct {
 	ethClient         *ethereum.Client
-	logger            *zap.Logger
 	lastObservedBlock *ethereum.EthereumBlock
-	ctx               context.Context
-	cancel            context.CancelFunc
-	queue             workQueue.IInputQueue[types.Task]
-	inboxAddr         string
-	chainId           config.ChainId
+	logger            *zap.Logger
+	taskQueue         chan *types.Task
+	errorCount        int
+	config            *EthereumChainListenerConfig
+}
+
+func NewEthereumChainListenerDefaultConfig(
+	chainId config.ChainId,
+	inboxAddr string,
+) *EthereumChainListenerConfig {
+	return &EthereumChainListenerConfig{
+		ChainId:                  chainId,
+		InboxAddr:                inboxAddr,
+		PollingInterval:          10 * time.Millisecond,
+		MaxConsecutiveErrorCount: 5,
+	}
 }
 
 func NewEthereumChainListener(
 	ethClient *ethereum.Client,
 	logger *zap.Logger,
-	queue workQueue.IInputQueue[types.Task],
-	inboxAddr string,
-	chainId config.ChainId,
+	taskQueue chan *types.Task,
+	config *EthereumChainListenerConfig,
 ) *EthereumChainListener {
 	return &EthereumChainListener{
-		ethClient: ethClient,
-		logger:    logger,
-		queue:     queue,
-		inboxAddr: inboxAddr,
-		chainId:   chainId,
+		ethClient:  ethClient,
+		logger:     logger,
+		taskQueue:  taskQueue,
+		config:     config,
+		errorCount: 0,
 	}
 }
 
 func (ecl *EthereumChainListener) Start(ctx context.Context) error {
-	ecl.logger.Info("Starting Ethereum Chain Listener")
-	ecl.ctx, ecl.cancel = context.WithCancel(ctx)
-
-	go ecl.pollForBlocks()
+	sugar := ecl.logger.Sugar()
+	sugar.Infow("Starting Ethereum Chain Listener",
+		"chainId", ecl.config.ChainId,
+		"inboxAddr", ecl.config.InboxAddr,
+		"pollingInterval", ecl.config.PollingInterval,
+	)
+	go ecl.pollForBlocks(ctx)
 	return nil
 }
 
-func (ecl *EthereumChainListener) Close() error {
-	ecl.logger.Info("Stopping Ethereum Chain Listener")
-	if ecl.cancel != nil {
-		ecl.cancel()
-	}
-	return nil
-}
-
-func (ecl *EthereumChainListener) pollForBlocks() {
-	ticker := time.NewTicker(1 * time.Second)
+func (ecl *EthereumChainListener) pollForBlocks(ctx context.Context) {
+	ticker := time.NewTicker(ecl.config.PollingInterval)
 	defer ticker.Stop()
 
-	errorCount := 0
+	sugar := ecl.logger.Sugar()
+
 	for {
 		select {
-		case <-ecl.ctx.Done():
-			ecl.logger.Info("Ethereum Chain Listener context cancelled, exiting poll loop")
+		case <-ctx.Done():
+			sugar.Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
 			return
 		case <-ticker.C:
-			block, logs, err := ecl.getNextBlockWithLogs(ecl.ctx)
-			if err != nil {
-				ecl.logger.Sugar().Errorw("Failed to get next block", zap.Error(err))
-				errorCount++
-				if errorCount > 5 {
-					ecl.logger.Error("Too many errors, stopping poll loop")
-					return
-				}
-				continue
-			}
-			errorCount = 0
+			shouldContinue := ecl.processNextBlock(ctx)
 
-			if block == nil {
-				continue
-			}
-
-			ecl.logger.Sugar().Infow("Got new block",
-				zap.Uint64("blockNum", block.Number.Value()),
-				zap.String("blockHash", block.Hash.Value()),
-				zap.Int("logCount", len(logs)),
-			)
-
-			for range logs {
-				task := &types.Task{
-					ChainId:      ecl.chainId,
-					BlockNumber:  block.Number.Value(),
-					BlockHash:    block.Hash.Value(),
-					CallbackAddr: ecl.inboxAddr,
-				}
-				_ = ecl.queue.Enqueue(task)
+			if !shouldContinue {
+				return
 			}
 		}
 	}
+}
+
+func (ecl *EthereumChainListener) processNextBlock(ctx context.Context) bool {
+	sugar := ecl.logger.Sugar()
+
+	block, logs, err := ecl.getNextBlockWithLogs(ctx)
+	if err != nil {
+		sugar.Errorw("Failed to get next block", "error", err)
+		ecl.errorCount++
+		if ecl.errorCount > ecl.config.MaxConsecutiveErrorCount {
+			sugar.Errorw("Too many consecutive errors, stopping poll loop",
+				"errorCount", ecl.errorCount,
+				"maxErrorCount", ecl.config.MaxConsecutiveErrorCount,
+			)
+			return false
+		}
+		return true
+	}
+
+	ecl.errorCount = 0
+	if block == nil {
+		return true
+	}
+
+	sugar.Infow("New Ethereum Block:",
+		"blockNum", block.Number.Value(),
+		"blockHash", block.Hash.Value(),
+		"logCount", len(logs),
+	)
+
+	return ecl.processLogs(ctx, block, logs)
+}
+
+func (ecl *EthereumChainListener) processLogs(
+	ctx context.Context,
+	block *ethereum.EthereumBlock,
+	logs []*ethereum.EthereumEventLog,
+) bool {
+	for range logs {
+		task := &types.Task{
+			ChainId:      ecl.config.ChainId,
+			BlockNumber:  block.Number.Value(),
+			BlockHash:    block.Hash.Value(),
+			CallbackAddr: ecl.config.InboxAddr,
+		}
+
+		select {
+		case ecl.taskQueue <- task:
+			ecl.logger.Sugar().Debugw("Enqueued task for processing",
+				"blockNumber", task.BlockNumber,
+				"blockHash", task.BlockHash,
+			)
+		case <-time.After(100 * time.Millisecond):
+			ecl.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
+				"blockNumber", task.BlockNumber,
+				"blockHash", task.BlockHash,
+			)
+		case <-ctx.Done():
+			return false
+		}
+	}
+	return true
 }
 
 func (ecl *EthereumChainListener) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
@@ -116,7 +163,7 @@ func (ecl *EthereumChainListener) getNextBlockWithLogs(ctx context.Context) (*et
 	}
 	ecl.lastObservedBlock = block
 
-	logs, err := ecl.ethClient.GetLogs(ctx, ecl.inboxAddr, block.Number.Value(), block.Number.Value())
+	logs, err := ecl.ethClient.GetLogs(ctx, ecl.config.InboxAddr, block.Number.Value(), block.Number.Value())
 	if err != nil {
 		return nil, nil, err
 	}
