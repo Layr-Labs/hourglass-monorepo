@@ -15,10 +15,9 @@ import (
 )
 
 type SimulatedChainPollerConfig struct {
-	ChainId         *config.ChainId
-	PollingInterval time.Duration
-	TaskInterval    time.Duration
-	Port            int
+	ChainId      *config.ChainId
+	TaskInterval time.Duration
+	Port         int
 }
 
 type SimulatedChainPoller struct {
@@ -81,7 +80,7 @@ func (scl *SimulatedChainPoller) Start(ctx context.Context) error {
 }
 
 func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
-	ticker := time.NewTicker(scl.config.PollingInterval)
+	ticker := time.NewTicker(scl.config.TaskInterval)
 	defer ticker.Stop()
 
 	sugar := scl.logger.Sugar()

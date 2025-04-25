@@ -104,10 +104,9 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 			port := cfg.SimulationConfig.Port + i + 1
 
 			listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-				ChainId:         &chain.ChainID,
-				Port:            port,
-				PollingInterval: 500 * time.Millisecond,
-				TaskInterval:    250 * time.Millisecond,
+				ChainId:      &chain.ChainID,
+				Port:         port,
+				TaskInterval: 250 * time.Millisecond,
 			}
 
 			listener := simulatedChainPoller.NewSimulatedChainPoller(
