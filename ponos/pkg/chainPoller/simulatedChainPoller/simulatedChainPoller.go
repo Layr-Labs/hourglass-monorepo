@@ -14,34 +14,34 @@ import (
 	"go.uber.org/zap"
 )
 
-type SimulatedChainListenerConfig struct {
+type SimulatedChainPollerConfig struct {
 	ChainId         *config.ChainId
-	Port            int
 	PollingInterval time.Duration
+	Port            int
 }
 
-type SimulatedChainListener struct {
+type SimulatedChainPoller struct {
 	taskQueue  chan *types.Task
-	config     *SimulatedChainListenerConfig
+	config     *SimulatedChainPollerConfig
 	logger     *zap.Logger
 	httpServer *http.Server
 }
 
-func NewSimulatedChainListener(
+func NewSimulatedChainPoller(
 	taskQueue chan *types.Task,
-	config *SimulatedChainListenerConfig,
+	config *SimulatedChainPollerConfig,
 	logger *zap.Logger,
-) *SimulatedChainListener {
-	return &SimulatedChainListener{
+) *SimulatedChainPoller {
+	return &SimulatedChainPoller{
 		taskQueue: taskQueue,
 		config:    config,
 		logger:    logger,
 	}
 }
 
-func (scl *SimulatedChainListener) Start(ctx context.Context) error {
+func (scl *SimulatedChainPoller) Start(ctx context.Context) error {
 	sugar := scl.logger.Sugar()
-	sugar.Infow("SimulatedChainListener starting", "port", scl.config.Port)
+	sugar.Infow("SimulatedChainPoller starting", "port", scl.config.Port)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/events", scl.handleSubmitTaskRoute(ctx))
@@ -59,7 +59,7 @@ func (scl *SimulatedChainListener) Start(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		sugar.Infow("SimulatedChainListener stopping due to context cancellation")
+		sugar.Infow("SimulatedChainPoller stopping due to context cancellation")
 		if scl.httpServer != nil {
 			err := scl.httpServer.Shutdown(context.Background())
 			if err != nil {
@@ -79,7 +79,7 @@ func (scl *SimulatedChainListener) Start(ctx context.Context) error {
 	return nil
 }
 
-func (scl *SimulatedChainListener) generatePeriodicTasks(ctx context.Context) {
+func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
 	ticker := time.NewTicker(scl.config.PollingInterval)
 	defer ticker.Stop()
 
@@ -115,7 +115,7 @@ func (scl *SimulatedChainListener) generatePeriodicTasks(ctx context.Context) {
 	}
 }
 
-func (scl *SimulatedChainListener) httpLoggerMiddleware(next http.Handler) http.Handler {
+func (scl *SimulatedChainPoller) httpLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scl.logger.Sugar().Infow("Received HTTP request",
 			"method", r.Method,
@@ -125,7 +125,7 @@ func (scl *SimulatedChainListener) httpLoggerMiddleware(next http.Handler) http.
 	})
 }
 
-func (scl *SimulatedChainListener) handleSubmitTaskRoute(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
+func (scl *SimulatedChainPoller) handleSubmitTaskRoute(ctx context.Context) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)

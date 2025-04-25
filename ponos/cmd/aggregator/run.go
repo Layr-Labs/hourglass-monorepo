@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
@@ -11,8 +13,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering/fetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/ethereumChainListener"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainListener/simulatedChainListener"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -103,13 +103,13 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 		if cfg.SimulationConfig.Enabled {
 			port := cfg.SimulationConfig.Port + i + 1
 
-			listenerConfig := &simulatedChainListener.SimulatedChainListenerConfig{
+			listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
 				ChainId:         &chain.ChainID,
 				Port:            port,
 				PollingInterval: 5 * time.Second,
 			}
 
-			listener := simulatedChainListener.NewSimulatedChainListener(
+			listener := simulatedChainPoller.NewSimulatedChainPoller(
 				taskQueue,
 				listenerConfig,
 				logger,
@@ -122,12 +122,12 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 				BlockType: ethereum.BlockType_Latest,
 			}, logger)
 
-			listenerConfig := ethereumChainListener.NewEthereumChainListenerDefaultConfig(
+			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
 				chain.ChainID,
 				"ethereum-mainnet-inbox",
 			)
 
-			listener := ethereumChainListener.NewEthereumChainListener(
+			listener := ethereumChainPoller.NewEthereumChainPoller(
 				ethClient,
 				logger,
 				taskQueue,
