@@ -272,7 +272,7 @@ var testCmd = &cobra.Command{
 		if err == nil {
 			// If the keystore has a curveType field, use it
 			if keystoreData.CurveType != "" {
-				scheme, err = keystore.GetSigningScheme(keystoreData.CurveType)
+				scheme, err = keystore.GetSigningSchemeForCurveType(keystoreData.CurveType)
 				if err != nil {
 					// If we can't get a scheme from the stored curve type, fall back to config
 					l.Sugar().Warnw("Failed to get signing scheme from stored curve type, using config value",

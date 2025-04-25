@@ -38,7 +38,7 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("failed to parse keystore JSON: %v", err)
 	}
 
-	keyScheme, err := keystore.GetSigningScheme(storedKeys.CurveType)
+	keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
 	if err != nil {
 		t.Fatalf("failed to get signing scheme: %v", err)
 	}

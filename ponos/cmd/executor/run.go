@@ -37,7 +37,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse keystore JSON: %w", err)
 		}
 
-		keyScheme, err := keystore.GetSigningScheme(storedKeys.CurveType)
+		keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
 		if err != nil {
 			return fmt.Errorf("failed to get signing scheme: %w", err)
 		}
