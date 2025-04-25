@@ -112,7 +112,7 @@ run/executor:
 
 .PHONY: build/test-performer
 build/test-performer:
-	cd ../ && docker build -t hello-performer:latest -f ponos-performer/go/Dockerfile .
+	cd ../demo && make build
 
 .PHONY: test
 test:
