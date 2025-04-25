@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: eigenlayer/hourglass/v1/executor/executor.proto
 
-package v1
+package executor
 
 import (
 	context "context"

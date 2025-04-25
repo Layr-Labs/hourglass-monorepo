@@ -94,6 +94,14 @@ func (e *Executor) receiveTaskResponse(response *tasks.TaskResult, err error) {
 		return
 	}
 
+	e.logger.Sugar().Infow("Submitting task result to aggregator",
+		zap.String("taskId", task.TaskId),
+		zap.String("avsAddress", task.AvsAddress),
+		zap.String("aggregatorUrl", task.AggregatorUrl),
+		zap.String("operatorAddress", e.config.Operator.Address),
+		zap.String("signature", string(sig)),
+	)
+
 	// TODO(seanmcgary): add a retry wrapper around this call to handle cases where the aggregator is unreachable
 	_, err = aggClient.SubmitTaskResult(context.Background(), &aggregatorV1.TaskResult{
 		TaskId:          response.TaskID,

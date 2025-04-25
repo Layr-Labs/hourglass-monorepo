@@ -51,15 +51,47 @@ func (ap *AvsPerformerConfig) Validate() error {
 	return nil
 }
 
-type SingingKeys struct {
-	ECDSA string `json:"ecdsa"`
-	BLS   string `json:"bls"`
+type SigningKey struct {
+	Keystore string `json:"keystore"`
+	Password string `json:"password"`
+}
+
+type SigningKeys struct {
+	BLS *SigningKey `json:"bls"`
+}
+
+func (sk *SigningKeys) Validate() error {
+	var allErrors field.ErrorList
+	if sk.BLS == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("bls"), "bls is required"))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type OperatorConfig struct {
 	Address            string      `json:"address" yaml:"address"`
 	OperatorPrivateKey string      `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
-	SigningKeys        SingingKeys `json:"signingKeys" yaml:"signingKeys"`
+	SigningKeys        SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+}
+
+func (oc *OperatorConfig) Validate() error {
+	var allErrors field.ErrorList
+	if oc.Address == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
+	}
+	if oc.OperatorPrivateKey == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("operatorPrivateKey"), "operatorPrivateKey is required"))
+	}
+	if err := oc.SigningKeys.Validate(); err != nil {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), oc.SigningKeys, err.Error()))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type ExecutorConfig struct {
@@ -73,7 +105,12 @@ func (ec *ExecutorConfig) Validate() error {
 	var allErrors field.ErrorList
 	if ec.Operator == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("operator"), "operator is required"))
+	} else {
+		if err := ec.Operator.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("operator"), ec.Operator, err.Error()))
+		}
 	}
+
 	if len(ec.AvsPerformers) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one AVS performer is required"))
 	} else {

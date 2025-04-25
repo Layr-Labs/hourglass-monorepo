@@ -163,21 +163,21 @@ var infoCmd = &cobra.Command{
 		// Check if the file might be a keystore
 		if strings.HasSuffix(keyFile, ".json") {
 			// Try to parse as a keystore (without decrypting)
-			info, err := keystore.GetKeystoreInfo(keyFile)
+			keystoreData, err := keystore.LoadKeystoreFile(keyFile)
 			if err == nil {
 				// Get curve type from keystore if available, otherwise use the one from config
 				curveType := Config.CurveType
-				if storedCurveType, ok := info["curveType"].(string); ok && storedCurveType != "" {
-					curveType = storedCurveType
+				if keystoreData.CurveType != "" {
+					curveType = keystoreData.CurveType
 				}
 
 				// This appears to be a valid keystore
 				l.Sugar().Infow("Key Information",
 					"type", "keystore",
 					"curve", curveType,
-					"publicKey", info["publicKey"],
-					"uuid", info["uuid"],
-					"version", info["version"],
+					"publicKey", keystoreData.PublicKey,
+					"uuid", keystoreData.UUID,
+					"version", keystoreData.Version,
 				)
 				return nil
 			}
@@ -266,17 +266,17 @@ var testCmd = &cobra.Command{
 			return fmt.Errorf("file must be a keystore JSON file")
 		}
 
-		// First, try to get the curve type from the keystore
+		// First, try to get the keystore from the file
 		var scheme signing.SigningScheme
-		info, err := keystore.GetKeystoreInfo(keyFile)
+		keystoreData, err := keystore.LoadKeystoreFile(keyFile)
 		if err == nil {
 			// If the keystore has a curveType field, use it
-			if storedCurveType, ok := info["curveType"].(string); ok && storedCurveType != "" {
-				scheme, err = keystore.GetSigningScheme(storedCurveType)
+			if keystoreData.CurveType != "" {
+				scheme, err = keystore.GetSigningSchemeForCurveType(keystoreData.CurveType)
 				if err != nil {
 					// If we can't get a scheme from the stored curve type, fall back to config
 					l.Sugar().Warnw("Failed to get signing scheme from stored curve type, using config value",
-						"storedCurveType", storedCurveType,
+						"storedCurveType", keystoreData.CurveType,
 						"error", err)
 				}
 			}
@@ -301,8 +301,8 @@ var testCmd = &cobra.Command{
 
 		// Get the curve type string for display
 		curveTypeStr := "unknown"
-		if storedCurveType, ok := info["curveType"].(string); ok && storedCurveType != "" {
-			curveTypeStr = storedCurveType
+		if keystoreData != nil && keystoreData.CurveType != "" {
+			curveTypeStr = keystoreData.CurveType
 		} else if Config.CurveType != "" {
 			curveTypeStr = Config.CurveType
 		}

@@ -4,7 +4,7 @@
 // - protoc             (unknown)
 // source: eigenlayer/hourglass/v1/aggregator/aggregator.proto
 
-package v1
+package aggregator
 
 import (
 	context "context"
@@ -20,7 +20,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AggregatorService_SubmitTaskResult_FullMethodName = "/eigenlayer.hourglass.v1.AggregatorService/SubmitTaskResult"
+	AggregatorService_SubmitTaskResult_FullMethodName = "/eigenlayer.hourglass.v1.aggregator.AggregatorService/SubmitTaskResult"
 )
 
 // AggregatorServiceClient is the client API for AggregatorService service.
@@ -107,7 +107,7 @@ func _AggregatorService_SubmitTaskResult_Handler(srv interface{}, ctx context.Co
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AggregatorService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "eigenlayer.hourglass.v1.AggregatorService",
+	ServiceName: "eigenlayer.hourglass.v1.aggregator.AggregatorService",
 	HandlerType: (*AggregatorServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

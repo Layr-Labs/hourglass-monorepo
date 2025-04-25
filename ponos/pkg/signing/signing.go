@@ -7,10 +7,9 @@ import (
 
 // Common errors
 var (
-	ErrInvalidSignatureType  = errors.New("invalid signature type")
-	ErrInvalidPublicKeyType  = errors.New("invalid public key type")
-	ErrInvalidPrivateKeyType = errors.New("invalid private key type")
-	ErrUnsupportedOperation  = errors.New("operation not supported by this scheme")
+	ErrInvalidSignatureType = errors.New("invalid signature type")
+	ErrInvalidPublicKeyType = errors.New("invalid public key type")
+	ErrUnsupportedOperation = errors.New("operation not supported by this scheme")
 )
 
 // PrivateKey is the interface that all private key implementations must satisfy

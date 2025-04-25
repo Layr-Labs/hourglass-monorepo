@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"log"
 )
 
 import (
@@ -45,8 +46,12 @@ func init() {
 
 	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		key := config.KebabToSnakeCase(f.Name)
-		viper.BindPFlag(key, f) //nolint:errcheck
-		viper.BindEnv(key)      //nolint:errcheck
+		if err := viper.BindPFlag(key, f); err != nil {
+			log.Fatalf("Failed to bind flag '%s' - %+v\n", f.Name, err)
+		}
+		if err := viper.BindEnv(key); err != nil {
+			log.Fatalf("Failed to bind env '%s' - %+v\n", key, err)
+		}
 	})
 
 }

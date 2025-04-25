@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package eigenlayer.hourglass.v1;
 
-import "eigenlayer/common/v1/types.proto";
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor";
 
-option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1";
+import "eigenlayer/common/v1/types.proto";
 
 service ExecutorService {
   rpc SubmitTask(TaskSubmission) returns (eigenlayer.common.v1.SubmitAck) {}
