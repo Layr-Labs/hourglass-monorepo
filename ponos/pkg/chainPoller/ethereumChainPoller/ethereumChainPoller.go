@@ -1,4 +1,4 @@
-package ethereumChainListener
+package ethereumChainPoller
 
 import (
 	"context"

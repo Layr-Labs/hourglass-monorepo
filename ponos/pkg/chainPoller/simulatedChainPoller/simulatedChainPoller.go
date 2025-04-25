@@ -1,4 +1,4 @@
-package simulatedChainListener
+package simulatedChainPoller
 
 import (
 	"context"
