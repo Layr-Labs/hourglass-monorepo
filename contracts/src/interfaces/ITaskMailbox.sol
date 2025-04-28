@@ -12,12 +12,18 @@ import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifie
 
 interface ITaskMailboxTypes {
     // TODO: Pack Storage efficiently.
+    struct AvsConfig {
+        address resultSubmitter;
+        uint32 aggregatorOperatorSetId;
+        uint32[] executorOperatorSetIds;
+    }
+
+    // TODO: Pack Storage efficiently.
     // TODO: We need to support proportional, nominal, none and custom verifications.
     // TODO: We also need to support BN254, ECDSA, BLS and custom curves.
-    struct OperatorSetTaskConfig {
+    struct ExecutorOperatorSetTaskConfig {
         address certificateVerifier;
         IAVSTaskHook taskHook;
-        address aggregator;
         IERC20 feeToken;
         address feeCollector;
         uint96 taskSLA;
@@ -28,7 +34,7 @@ interface ITaskMailboxTypes {
     struct TaskParams {
         address refundCollector;
         uint96 avsFee;
-        OperatorSet operatorSet;
+        OperatorSet executorOperatorSet;
         bytes payload;
     }
 
@@ -44,31 +50,40 @@ interface ITaskMailboxTypes {
         address creator;
         uint96 creationTime;
         TaskStatus status;
-        OperatorSet operatorSet;
+        address avs;
+        uint32 executorOperatorSetId;
+        uint32 aggregatorOperatorSetId;
+        address resultSubmitter;
         address refundCollector;
         uint96 avsFee;
         uint16 feeSplit;
-        OperatorSetTaskConfig operatorSetTaskConfig;
+        ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;
         bytes result;
     }
 }
 
 interface ITaskMailboxErrors is ITaskMailboxTypes {
+    /// @dev Thrown when an AVS is not registered
+    error AvsNotRegistered();
     /// @dev Thrown when a certificate verification fails
     error CertificateVerificationFailed();
+    /// @dev Thrown when an executor operator set id is already in the set
+    error DuplicateExecutorOperatorSetId();
+    /// @dev Thrown when an executor operator set is not registered
+    error ExecutorOperatorSetNotRegistered();
+    /// @dev Thrown when an executor operator set task config is not set
+    error ExecutorOperatorSetTaskConfigNotSet();
     /// @dev Thrown when an input address is zero
     error InvalidAddressZero();
-    /// @dev Thrown when an aggregator is invalid
-    error InvalidTaskAggregator();
+    /// @dev Thrown when an aggregator operator set id is also an executor operator set id
+    error InvalidAggregatorOperatorSetId();
     /// @dev Thrown when a task creator is invalid
     error InvalidTaskCreator();
+    /// @dev Thrown when a task result submitter is invalid
+    error InvalidTaskResultSubmitter();
     /// @dev Thrown when a task status is invalid
     error InvalidTaskStatus(TaskStatus expected, TaskStatus actual);
-    /// @dev Thrown when an operator set is not registered to the task mailbox
-    error OperatorSetNotRegistered();
-    /// @dev Thrown when an operator set task config is not set
-    error OperatorSetTaskConfigNotSet();
     /// @dev Thrown when a payload is empty
     error PayloadIsEmpty();
     /// @dev Thrown when a task SLA is zero
@@ -78,29 +93,44 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 }
 
 interface ITaskMailboxEvents is ITaskMailboxTypes {
-    event OperatorSetRegistered(
-        address indexed caller, address indexed avs, uint32 indexed operatorSetId, bool isRegistered
+    event AvsRegistered(address indexed caller, address indexed avs, bool isRegistered);
+
+    event AvsConfigSet(
+        address indexed caller,
+        address indexed avs,
+        address resultSubmitter,
+        uint32 aggregatorOperatorSetId,
+        uint32[] executorOperatorSetIds
     );
 
-    event OperatorSetTaskConfigSet(
-        address indexed caller, address indexed avs, uint32 indexed operatorSetId, OperatorSetTaskConfig config
+    event ExecutorOperatorSetTaskConfigSet(
+        address indexed caller,
+        address indexed avs,
+        uint32 indexed executorOperatorSetId,
+        ExecutorOperatorSetTaskConfig config
     );
 
     event TaskCreated(
         address indexed creator,
         bytes32 indexed taskHash,
         address indexed avs,
-        uint32 operatorSetId,
+        uint32 executorOperatorSetId,
         address refundCollector,
         uint96 avsFee,
         uint256 taskDeadline,
         bytes payload
     );
 
-    event TaskCanceled(address indexed creator, bytes32 indexed taskHash, address indexed avs, uint32 operatorSetId);
+    event TaskCanceled(
+        address indexed creator, bytes32 indexed taskHash, address indexed avs, uint32 executorOperatorSetId
+    );
 
     event TaskVerified(
-        address indexed aggregator, bytes32 indexed taskHash, address indexed avs, uint32 operatorSetId, bytes result
+        address indexed aggregator,
+        bytes32 indexed taskHash,
+        address indexed avs,
+        uint32 executorOperatorSetId,
+        bytes result
     );
 }
 
@@ -110,9 +140,14 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         EXTERNAL FUNCTIONS
      *
      */
-    function registerOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
+    function registerAvs(address avs, bool isRegistered) external;
 
-    function setOperatorSetTaskConfig(OperatorSet memory operatorSet, OperatorSetTaskConfig memory config) external;
+    function setAvsConfig(address avs, AvsConfig memory config) external;
+
+    function setExecutorOperatorSetTaskConfig(
+        OperatorSet memory operatorSet,
+        ExecutorOperatorSetTaskConfig memory config
+    ) external;
 
     function createTask(
         TaskParams memory taskParams
@@ -133,9 +168,21 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         VIEW FUNCTIONS
      *
      */
-    function getOperatorSetTaskConfig(
+    function isAvsRegistered(
+        address avs
+    ) external view returns (bool);
+
+    function isExecutorOperatorSetRegistered(
+        bytes32 operatorSetKey
+    ) external view returns (bool);
+
+    function getAvsConfig(
+        address avs
+    ) external view returns (AvsConfig memory);
+
+    function getExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet
-    ) external view returns (OperatorSetTaskConfig memory);
+    ) external view returns (ExecutorOperatorSetTaskConfig memory);
 
     function getTaskInfo(
         bytes32 taskHash
@@ -144,4 +191,8 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function getTaskStatus(
         bytes32 taskHash
     ) external view returns (TaskStatus);
+
+    function getTaskResult(
+        bytes32 taskHash
+    ) external view returns (bytes memory);
 }
