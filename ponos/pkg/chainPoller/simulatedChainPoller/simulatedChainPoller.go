@@ -168,13 +168,12 @@ func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.
 		Deadline               int64   `json:"deadline"`
 		StakeWeightRequiredPct float64 `json:"stakeWeightRequiredPct"`
 	}
-	_ = json.Unmarshal([]byte(event.Metadata), &parsedMeta)
+	_ = json.Unmarshal(event.Metadata, &parsedMeta)
 
 	return &types.Task{
 		TaskId:        event.TaskId,
 		AVSAddress:    event.AVSAddress,
 		OperatorSetId: event.OperatorSetId,
-		CallbackAddr:  event.CallbackAddr,
 		Payload:       event.Payload,
 		Deadline:      time.Now().Unix() + parsedMeta.Deadline,
 		StakeRequired: parsedMeta.StakeWeightRequiredPct,
