@@ -3,9 +3,11 @@
 GO = $(shell which go)
 BIN = ./bin
 
+GO_FLAGS=-ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Version=$(shell cat VERSION)' -X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Commit=$(shell cd ../ && git rev-parse --short HEAD)'"
+
 PROTO_OPTS=--proto_path=protos --go_out=paths=source_relative:protos
 
-all: build/cmd/executor build/cmd/aggregator
+all: deps/go build/cmd/executor build/cmd/aggregator
 
 # -----------------------------------------------------------------------------
 # Dependencies
@@ -32,11 +34,65 @@ proto:
 # -----------------------------------------------------------------------------
 .PHONY: cmd/executor
 build/cmd/executor:
-	go build -o ${BIN}/executor ./cmd/executor
+	go build $(GO_FLAGS) -o ${BIN}/executor ./cmd/executor
+
+.PHONY: build/cmd/executor/linux-arm64
+build/cmd/executor/linux-arm64:
+	GOOS=linux GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/executor ./cmd/executor
+
+.PHONY: build/cmd/executor/linux-amd64
+build/cmd/executor/linux-amd64:
+	GOOS=linux GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/executor ./cmd/executor
+
+.PHONY: build/cmd/executor/darwin-arm64
+build/cmd/executor/darwin-arm64:
+	GOOS=darwin GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/darwin/arm64/executor ./cmd/executor
+
+.PHONY: build/cmd/executor/darwin-amd64
+build/cmd/executor/darwin-amd64:
+	GOOS=darwin GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/darwin/arm64/executor ./cmd/executor
+
 
 .PHONY: build/cmd/aggregator
 build/cmd/aggregator:
-	go build -o ${BIN}/aggregator ./cmd/aggregator
+	go build $(GO_FLAGS) -o ${BIN}/aggregator ./cmd/aggregator
+
+.PHONY: build/cmd/aggregator/linux-arm64
+build/cmd/aggregator/linux-arm64:
+	GOOS=linux GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/aggregator ./cmd/aggregator
+
+.PHONY: build/cmd/aggregator/linux-amd64
+build/cmd/aggregator/linux-amd64:
+	GOOS=linux GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/aggregator ./cmd/aggregator
+
+.PHONY: build/cmd/aggregator/darwin-arm64
+build/cmd/aggregator/darwin-arm64:
+	GOOS=darwin GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/aggregator ./cmd/aggregator
+
+.PHONY: build/cmd/aggregator/darwin-amd64
+build/cmd/aggregator/darwin-amd64:
+	GOOS=darwin GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/aggregator ./cmd/aggregator
+
+.PHONY: build/local-container
+build/local-container:
+	cd ../ && docker build -t hourglass:latest -f ./ponos/Dockerfile .
+
+# -----------------------------------------------------------------------------
+# Release builds
+# -----------------------------------------------------------------------------
+.PHONY: release
+release:
+	$(MAKE) build/cmd/aggregator/darwin-arm64
+	$(MAKE) build/cmd/aggregator/darwin-amd64
+	$(MAKE) build/cmd/aggregator/linux-arm64
+	$(MAKE) build/cmd/aggregator/linux-amd64
+	$(MAKE) build/cmd/executor/darwin-arm64
+	$(MAKE) build/cmd/executor/darwin-amd64
+	$(MAKE) build/cmd/executor/linux-arm64
+	$(MAKE) build/cmd/executor/linux-amd64
+
+release-with-docker:
+	cd ../ && docker run --rm -v `pwd`:/build golang:1.23.6-bookworm /bin/bash -c "git config --global --add safe.directory /build && cd /build/ponos && make release"
 
 .PHONY: build/cmd/keygen
 build/cmd/keygen:
@@ -59,14 +115,18 @@ run/executor:
 
 .PHONY: build/test-performer
 build/test-performer:
-	cd ../ && docker build -t hello-performer:latest -f ponos-performer/go/Dockerfile .
+	cd ../demo && make build
+
+.PHONY: build/test-performer-container
+build/test-performer-container:
+	cd ../demo && make build-container
 
 .PHONY: test
 test:
 	$(GO) test -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
-ci-test: build/test-performer test
+ci-test: build/test-performer-container test
 
 .PHONY: lint
 lint:
@@ -85,3 +145,4 @@ fmtcheck:
 		echo "Please run 'gofmt -w .' to format them."; \
 		exit 1; \
 	fi
+

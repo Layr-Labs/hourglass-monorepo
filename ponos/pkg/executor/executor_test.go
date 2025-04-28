@@ -140,7 +140,7 @@ func Test_Executor(t *testing.T) {
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 
-	payload := []byte(`{"message": "hello world"}`)
+	payload := []byte(`{"numberToBeSquared": 4}`)
 
 	// TODO(seanmcgary): sign this with an aggregators key
 

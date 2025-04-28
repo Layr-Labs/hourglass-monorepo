@@ -25,7 +25,7 @@ type Executor struct {
 	aggregators map[string]*connectedAggregator.ConnectedAggregator
 	signer      signer.Signer
 
-	inflightTasks sync.Map
+	inflightTasks *sync.Map
 }
 
 func NewExecutor(
@@ -40,6 +40,7 @@ func NewExecutor(
 		avsPerformers: make(map[string]avsPerformer.IAvsPerformer),
 		rpcServer:     rpcServer,
 		signer:        signer,
+		inflightTasks: &sync.Map{},
 	}
 }
 
@@ -58,10 +59,11 @@ func (e *Executor) Initialize() error {
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
 			performer, err := serverPerformer.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
-				AvsAddress:  avsAddress,
-				ProcessType: avsPerformer.AvsProcessType(avs.ProcessType),
-				Image:       avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
-				WorkerCount: avs.WorkerCount,
+				AvsAddress:           avsAddress,
+				ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
+				Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
+				WorkerCount:          avs.WorkerCount,
+				PerformerNetworkName: e.config.PerformerNetworkName,
 			}, e.receiveTaskResponse, e.logger)
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to create AVS performer server",

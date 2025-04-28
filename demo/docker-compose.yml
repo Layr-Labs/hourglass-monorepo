@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  executor:
+    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_9409fac
+    # build:
+    #   context: ..
+    #   dockerfile: ponos/Dockerfile
+    networks:
+      - hourglass-demo
+    ports:
+      - "127.0.0.1:9090:9090"
+    command:
+      - "executor"
+      - "run"
+      - "--config"
+      - "/ponos-config/executor.yaml"
+      - "--performer-network-name"
+      - "custom-network"
+    volumes:
+      - .:/ponos-config
+      - /var/run/docker.sock:/var/run/docker.sock # required for DinD
+networks:
+  hourglass-demo:
+    driver: bridge
