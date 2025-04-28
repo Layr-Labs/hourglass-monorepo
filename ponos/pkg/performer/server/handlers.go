@@ -13,7 +13,6 @@ func (pp *PonosPerformer) ExecuteTask(ctx context.Context, task *performerV1.Tas
 	if err := pp.taskWorker.ValidateTask(task); err != nil {
 		pp.logger.Sugar().Errorw("Task is invalid",
 			zap.String("taskId", task.TaskId),
-			zap.String("avs", task.AvsAddress),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "Task is invalid: %s", err.Error())
@@ -23,16 +22,14 @@ func (pp *PonosPerformer) ExecuteTask(ctx context.Context, task *performerV1.Tas
 	if err != nil {
 		pp.logger.Sugar().Errorw("Failed to handle task",
 			zap.String("taskId", task.TaskId),
-			zap.String("avs", task.AvsAddress),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to handle task: %s", err.Error())
 	}
 
 	return &performerV1.TaskResult{
-		TaskId:     task.TaskId,
-		AvsAddress: task.AvsAddress,
-		Result:     res.Result,
+		TaskId: task.TaskId,
+		Result: res.Result,
 	}, nil
 }
 

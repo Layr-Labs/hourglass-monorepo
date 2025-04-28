@@ -27,6 +27,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ExecutorServiceClient interface {
+	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error)
 }
 
@@ -52,6 +53,7 @@ func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmissi
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
 type ExecutorServiceServer interface {
+	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error)
 }
 

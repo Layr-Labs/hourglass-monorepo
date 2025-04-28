@@ -7,7 +7,7 @@ import (
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/aggregatorClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -42,7 +42,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) error {
 		return fmt.Errorf("AVS avsPerformer not found for address %s", task.AvsAddress)
 	}
 
-	performerTask := tasks.NewTaskFromTaskSubmissionProto(task)
+	performerTask := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
 
 	e.inflightTasks.Store(task.TaskId, task)
 
@@ -58,7 +58,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) error {
 	return nil
 }
 
-func (e *Executor) receiveTaskResponse(originalTask *tasks.Task, response *tasks.TaskResult, err error) {
+func (e *Executor) receiveTaskResponse(originalTask *performerTask.PerformerTask, response *performerTask.PerformerTaskResult, err error) {
 	if err != nil {
 		e.logger.Sugar().Errorw("Encountered error while receiving task response",
 			zap.String("taskId", originalTask.TaskID),
@@ -73,9 +73,8 @@ func (e *Executor) receiveTaskResponse(originalTask *tasks.Task, response *tasks
 
 	storedTask, ok := e.inflightTasks.Load(response.TaskID)
 	if !ok {
-		e.logger.Sugar().Errorw("Task not found in inflight tasks",
+		e.logger.Sugar().Errorw("PerformerTask not found in inflight tasks",
 			zap.String("taskId", response.TaskID),
-			zap.String("avsAddress", response.Avs),
 			zap.Error(err),
 		)
 		return
@@ -128,6 +127,6 @@ func (e *Executor) receiveTaskResponse(originalTask *tasks.Task, response *tasks
 	e.inflightTasks.Delete(task.TaskId)
 }
 
-func (e *Executor) signResult(result *tasks.TaskResult) ([]byte, error) {
+func (e *Executor) signResult(result *performerTask.PerformerTaskResult) ([]byte, error) {
 	return e.signer.SignMessage(result.Result)
 }

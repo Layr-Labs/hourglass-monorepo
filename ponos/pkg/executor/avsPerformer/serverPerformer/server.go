@@ -8,7 +8,7 @@ import (
 	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
@@ -26,7 +26,7 @@ type AvsPerformerServer struct {
 	dockerClient    *client.Client
 	performerClient performerV1.PerformerServiceClient
 	// TODO(seanmcgary) make this an actual chan with a type
-	taskBacklog chan *tasks.Task
+	taskBacklog chan *performerTask.PerformerTask
 
 	reportTaskResponse avsPerformer.ReceiveTaskResponse
 }
@@ -39,7 +39,7 @@ func NewAvsPerformerServer(
 	return &AvsPerformerServer{
 		config:             config,
 		logger:             logger,
-		taskBacklog:        make(chan *tasks.Task, 50),
+		taskBacklog:        make(chan *performerTask.PerformerTask, 50),
 		reportTaskResponse: reportTaskResponse,
 	}, nil
 }
@@ -243,14 +243,13 @@ func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 	return nil
 }
 
-func (aps *AvsPerformerServer) processTask(ctx context.Context, task *tasks.Task) (*tasks.TaskResult, error) {
+func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
 
 	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.Task{
-		TaskId:     task.TaskID,
-		AvsAddress: task.Avs,
-		Metadata:   task.Metadata,
-		Payload:    task.Payload,
+		TaskId:   task.TaskID,
+		Metadata: task.Metadata,
+		Payload:  task.Payload,
 	})
 	if err != nil {
 		aps.logger.Sugar().Errorw("Performer failed to handle task",
@@ -260,15 +259,15 @@ func (aps *AvsPerformerServer) processTask(ctx context.Context, task *tasks.Task
 		return nil, err
 	}
 
-	return tasks.NewTaskResultFromResultProto(res), nil
+	return performerTask.NewTaskResultFromResultProto(res), nil
 }
 
-func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *tasks.Task) error {
+func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) error {
 	select {
 	case aps.taskBacklog <- task:
-		aps.logger.Sugar().Infow("Task added to backlog")
+		aps.logger.Sugar().Infow("PerformerTask added to backlog")
 	default:
-		aps.logger.Sugar().Infow("Task backlog is full, dropping task")
+		aps.logger.Sugar().Infow("PerformerTask backlog is full, dropping task")
 		return fmt.Errorf("task backlog is full for avs %s", aps.config.AvsAddress)
 	}
 	return nil

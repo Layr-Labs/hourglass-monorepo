@@ -1,15 +1,28 @@
 package types
 
-import "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+import (
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+)
 
+// TaskEvent is a struct that represents a task event as consumed from on-chain events
 type TaskEvent struct {
-	TaskId        string         `json:"taskId"`
-	AVSAddress    string         `json:"avsAddress"`
-	OperatorSetId uint32         `json:"operatorSetId"`
-	CallbackAddr  string         `json:"callbackAddress"`
-	Metadata      string         `json:"metadata"`
-	Payload       []byte         `json:"payload"`
-	ChainID       config.ChainId `json:"chainId"`
+	// The address of who created the task
+	CreatorAddress string `json:"creatorAddress"`
+
+	// Unique hash of task metadata to identify the task globally
+	TaskId string `json:"taskId"`
+
+	// Address of the AVS
+	AVSAddress string `json:"avsAddress"`
+
+	// The ID of the operator set to distribute the task to
+	OperatorSetId uint32 `json:"operatorSetId"`
+
+	// The payload of the task
+	Payload []byte `json:"payload"`
+
+	// Metadata of the task, sourced from the on-chain AVS config
+	Metadata []byte `json:"metadata"`
 }
 
 type Task struct {

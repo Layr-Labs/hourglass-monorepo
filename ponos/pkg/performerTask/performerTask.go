@@ -1,19 +1,20 @@
-package tasks
+package performerTask
 
 import (
 	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 )
 
-type Task struct {
+type PerformerTask struct {
 	TaskID   string
 	Avs      string
 	Metadata []byte
 	Payload  []byte
 }
 
-func NewTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *Task {
-	return &Task{
+// NewPerformerTaskFromTaskSubmissionProto creates a new PerformerTask from a TaskSubmission proto
+func NewPerformerTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *PerformerTask {
+	return &PerformerTask{
 		TaskID:   t.TaskId,
 		Avs:      t.AvsAddress,
 		Metadata: []byte{},
@@ -21,24 +22,21 @@ func NewTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *Task {
 	}
 }
 
-type TaskResult struct {
+type PerformerTaskResult struct {
 	TaskID string `json:"taskId"`
-	Avs    string `json:"avs"`
 	Result []byte `json:"result"`
 }
 
-func NewTaskResult(taskID string, avs string, result []byte) *TaskResult {
-	return &TaskResult{
+func NewPerformerTaskResult(taskID string, result []byte) *PerformerTaskResult {
+	return &PerformerTaskResult{
 		TaskID: taskID,
-		Avs:    avs,
 		Result: result,
 	}
 }
 
-func NewTaskResultFromResultProto(result *performerV1.TaskResult) *TaskResult {
-	return &TaskResult{
+func NewTaskResultFromResultProto(result *performerV1.TaskResult) *PerformerTaskResult {
+	return &PerformerTaskResult{
 		TaskID: result.TaskId,
-		Avs:    result.AvsAddress,
 		Result: result.Result,
 	}
 }
