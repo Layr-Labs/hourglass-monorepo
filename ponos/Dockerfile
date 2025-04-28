@@ -11,7 +11,7 @@ RUN make all
 
 RUN cp bin/* /usr/local/bin
 
-FROM alpine:3.21
+FROM debian:stable-slim
 
 COPY --from=0 /usr/local/bin/executor /usr/local/bin/
 COPY --from=0 /usr/local/bin/aggregator /usr/local/bin/
