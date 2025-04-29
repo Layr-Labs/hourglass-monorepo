@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {BN254} from "lib/eigenlayer-middleware/src/libraries/BN254.sol";
+import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
 interface IBN254CertificateVerifier {
     struct BN254OperatorInfo {
