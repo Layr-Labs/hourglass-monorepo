@@ -44,13 +44,11 @@ func (c *Chain) Validate() field.ErrorList {
 }
 
 type AggregatorAvs struct {
-	Address               string             `json:"address" yaml:"address"`
-	PrivateKey            string             `json:"privateKey" yaml:"privateKey"`
-	PrivateSigningKey     string             `json:"privateSigningKey" yaml:"privateSigningKey"`
-	PrivateSigningKeyType string             `json:"privateSigningKeyType" yaml:"privateSigningKeyType"`
-	ResponseTimeout       int                `json:"responseTimeout" yaml:"responseTimeout"`
-	ChainIds              []uint             `json:"chainIds" yaml:"chainIds"`
-	SigningKeys           config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+	Address         string             `json:"address" yaml:"address"`
+	PrivateKey      string             `json:"privateKey" yaml:"privateKey"`
+	ResponseTimeout int                `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds        []uint             `json:"chainIds" yaml:"chainIds"`
+	SigningKeys     config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
 }
 
 func (aa *AggregatorAvs) Validate() error {

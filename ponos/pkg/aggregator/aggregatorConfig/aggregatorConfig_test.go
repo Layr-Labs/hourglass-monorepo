@@ -28,8 +28,6 @@ func Test_AggregatorConfig(t *testing.T) {
 				assert.Equal(t, 1, len(c.Avss))
 				assert.Equal(t, "0x1234avs", c.Avss[0].Address)
 				assert.Equal(t, "some private key", c.Avss[0].PrivateKey)
-				assert.Equal(t, "some private signing key", c.Avss[0].PrivateSigningKey)
-				assert.Equal(t, "ecdsa", c.Avss[0].PrivateSigningKeyType)
 				assert.Equal(t, 3000, c.Avss[0].ResponseTimeout)
 				assert.Equal(t, 1, len(c.Avss[0].ChainIds))
 			})
@@ -62,8 +60,6 @@ func Test_AggregatorConfig(t *testing.T) {
 				assert.Equal(t, 1, len(c.Avss))
 				assert.Equal(t, "0x1234avs", c.Avss[0].Address)
 				assert.Equal(t, "some private key", c.Avss[0].PrivateKey)
-				assert.Equal(t, "some private signing key", c.Avss[0].PrivateSigningKey)
-				assert.Equal(t, "ecdsa", c.Avss[0].PrivateSigningKeyType)
 				assert.Equal(t, 3000, c.Avss[0].ResponseTimeout)
 				assert.Equal(t, 1, len(c.Avss[0].ChainIds))
 			})
@@ -102,8 +98,6 @@ const (
 		{
 			"address": "0x1234avs",
 			"privateKey": "some private key",
-			"privateSigningKey": "some private signing key",
-			"privateSigningKeyType": "ecdsa",
 			"responseTimeout": 3000,
 			"chainIds": [1],
 			"signingKeys": {
@@ -140,8 +134,6 @@ const (
 		{
 			"address": 1234,
 			"privateKey": "some private key",
-			"privateSigningKey": "some private signing key",
-			"privateSigningKeyType": "ecdsa",
 			"responseTimeout": 3000,
 			"chainIds": [1],
 			"signingKeys": {
@@ -172,8 +164,6 @@ chains:
 avss:
   - address: "0x1234avs"
     privateKey: "some private key"
-    privateSigningKey: "some private signing key"
-    privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
     signingKeys:
@@ -200,8 +190,6 @@ chains:
 avss:
   - address: 12345
     privateKey: "some private key"
-    privateSigningKey: "some private signing key"
-    privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
     signingKeys:
