@@ -6,17 +6,18 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
@@ -163,7 +164,7 @@ func buildExecutionManager(
 	resultQueue chan *types.TaskResult,
 	logger *zap.Logger,
 ) runnable.IRunnable {
-	peeringFetcher := fetcher.NewLocalPeeringDataFetcher[peering.ExecutorOperatorPeerInfo](
+	peeringFetcher := fetcher.NewLocalPeeringDataFetcher(
 		convertSimulationPeeringConfig(cfg.SimulationConfig.ExecutorPeerConfigs),
 		logger,
 	)
@@ -230,19 +231,14 @@ func loadAggregatorServer(cfg *aggregatorConfig.AggregatorConfig, logger *zap.Lo
 	}
 }
 
-func convertSimulationPeeringConfig(
-	configs []aggregatorConfig.ExecutorPeerConfig,
-) *fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo] {
-	var infos []*peering.ExecutorOperatorPeerInfo
-	for _, config := range configs {
-		info := &peering.ExecutorOperatorPeerInfo{
-			NetworkAddress: config.NetworkAddress,
-			Port:           config.Port,
-			PublicKey:      config.PublicKey,
-		}
-		infos = append(infos, info)
-	}
-	return &fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo]{
-		Peers: infos,
+func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfig) *fetcher.LocalPeeringDataFetcherConfig {
+	return &fetcher.LocalPeeringDataFetcherConfig{
+		OperatorPeers: util.Map(configs, func(config aggregatorConfig.ExecutorPeerConfig, i uint64) *peering.OperatorPeerInfo {
+			return &peering.OperatorPeerInfo{
+				NetworkAddress: config.NetworkAddress,
+				Port:           config.Port,
+				PublicKey:      config.PublicKey,
+			}
+		}),
 	}
 }

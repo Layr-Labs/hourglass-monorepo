@@ -10,8 +10,8 @@ import (
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executorClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
@@ -35,7 +35,7 @@ type PonosExecutionManager struct {
 	taskQueue          chan *types.Task
 	resultQueue        chan *types.TaskResult
 	execClients        map[string]executorClient.IExecutorClient
-	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo]
+	peeringDataFetcher peering.IPeeringDataFetcher
 	running            sync.Map
 	config             *PonosExecutionManagerConfig
 	logger             *zap.Logger
@@ -45,7 +45,7 @@ func NewPonosExecutionManager(
 	server *rpcServer.RpcServer,
 	taskQueue chan *types.Task,
 	resultQueue chan *types.TaskResult,
-	peeringDataFetcher peering.IPeeringDataFetcher[peering.ExecutorOperatorPeerInfo],
+	peeringDataFetcher peering.IPeeringDataFetcher,
 	config *PonosExecutionManagerConfig,
 	logger *zap.Logger,
 ) *PonosExecutionManager {
@@ -221,7 +221,7 @@ func (em *PonosExecutionManager) refreshExecutorClients() {
 }
 
 func (em *PonosExecutionManager) loadExecutorClient(
-	peer *peering.ExecutorOperatorPeerInfo,
+	peer *peering.OperatorPeerInfo,
 	secureConnection bool,
 ) (executorClient.IExecutorClient, error) {
 	conn, err := clients.NewGrpcClient(

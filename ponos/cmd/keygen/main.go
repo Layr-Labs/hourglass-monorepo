@@ -88,7 +88,6 @@ func initConfigIfPresent() {
 	}
 
 	if hasConfig {
-		fmt.Printf("Using config file: %s\n", configFile)
 		if err := viper.ReadInConfig(); err != nil {
 			panic(err)
 		}

@@ -6,19 +6,23 @@ import (
 )
 
 type PerformerTask struct {
-	TaskID   string
-	Avs      string
-	Metadata []byte
-	Payload  []byte
+	TaskID            string
+	Avs               string
+	Metadata          []byte
+	Payload           []byte
+	Signature         []byte
+	AggregatorAddress string
 }
 
 // NewPerformerTaskFromTaskSubmissionProto creates a new PerformerTask from a TaskSubmission proto
 func NewPerformerTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *PerformerTask {
 	return &PerformerTask{
-		TaskID:   t.TaskId,
-		Avs:      t.AvsAddress,
-		Metadata: []byte{},
-		Payload:  t.Payload,
+		TaskID:            t.TaskId,
+		Avs:               t.AvsAddress,
+		Metadata:          []byte{},
+		Payload:           t.Payload,
+		Signature:         t.Signature,
+		AggregatorAddress: t.AggregatorAddress,
 	}
 }
 

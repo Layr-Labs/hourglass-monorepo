@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -55,7 +59,24 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, sig)
+		var pdf *fetcher.LocalPeeringDataFetcher
+		if Config.Simulation.SimulatePeering.Enabled {
+			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
+				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p executorConfig.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
+					return &peering.OperatorPeerInfo{
+						OperatorAddress: p.OperatorAddress,
+						Port:            p.Port,
+						PublicKey:       p.PublicKey,
+						OperatorSetId:   p.OperatorSetId,
+						NetworkAddress:  p.NetworkAddress,
+					}
+				}),
+			}, l)
+		} else {
+			return fmt.Errorf("peering data fetcher not implemented")
+		}
+
+		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))

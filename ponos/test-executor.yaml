@@ -36,3 +36,4 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   workerCount: 1
+  signingCurve: "bn254"

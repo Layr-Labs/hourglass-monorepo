@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
+	"slices"
 )
 
 const (
@@ -22,10 +23,11 @@ type PerformerImage struct {
 }
 
 type AvsPerformerConfig struct {
-	Image       *PerformerImage
-	ProcessType string
-	AvsAddress  string
-	WorkerCount int
+	Image        *PerformerImage
+	ProcessType  string
+	AvsAddress   string
+	WorkerCount  int
+	SigningCurve string // bn254, bls381, etc
 }
 
 func (ap *AvsPerformerConfig) Validate() error {
@@ -43,6 +45,12 @@ func (ap *AvsPerformerConfig) Validate() error {
 			allErrors = append(allErrors, field.Required(field.NewPath("image.tag"), "image.tag is required"))
 		}
 	}
+	if ap.SigningCurve == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
+	} else if !slices.Contains([]string{"bn254", "bls381"}, ap.SigningCurve) {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), ap.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
+	}
+
 	if ap.WorkerCount == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("workerCount"), "workerCount is required"))
 	}
@@ -75,12 +83,30 @@ func (oc *OperatorConfig) Validate() error {
 	return nil
 }
 
+type SimulatedPeer struct {
+	NetworkAddress  string `json:"networkAddress" yaml:"networkAddress"`
+	Port            int    `json:"port" yaml:"port"`
+	PublicKey       string `json:"publicKey" yaml:"publicKey"`
+	OperatorAddress string `json:"operatorAddress" yaml:"operatorAddress"`
+	OperatorSetId   uint64 `json:"operatorSetId" yaml:"operatorSetId"`
+}
+
+type SimulatedPeeringConfig struct {
+	Enabled         bool            `json:"enabled" yaml:"enabled"`
+	AggregatorPeers []SimulatedPeer `json:"aggregatorPeers" yaml:"aggregatorPeers"`
+}
+
+type SimulationConfig struct {
+	SimulatePeering *SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
+}
+
 type ExecutorConfig struct {
 	Debug                bool
 	GrpcPort             int                   `json:"grpcPort" yaml:"grpcPort"`
 	PerformerNetworkName string                `json:"performerNetworkName" yaml:"performerNetworkName"`
 	Operator             *OperatorConfig       `json:"operator" yaml:"operator"`
 	AvsPerformers        []*AvsPerformerConfig `json:"avsPerformers" yaml:"avsPerformers"`
+	Simulation           *SimulationConfig     `json:"simulation" yaml:"simulation"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
