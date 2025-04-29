@@ -52,30 +52,10 @@ func (ap *AvsPerformerConfig) Validate() error {
 	return nil
 }
 
-type SigningKey struct {
-	Keystore string `json:"keystore"`
-	Password string `json:"password"`
-}
-
-type SigningKeys struct {
-	BLS *SigningKey `json:"bls"`
-}
-
-func (sk *SigningKeys) Validate() error {
-	var allErrors field.ErrorList
-	if sk.BLS == nil {
-		allErrors = append(allErrors, field.Required(field.NewPath("bls"), "bls is required"))
-	}
-	if len(allErrors) > 0 {
-		return allErrors.ToAggregate()
-	}
-	return nil
-}
-
 type OperatorConfig struct {
-	Address            string      `json:"address" yaml:"address"`
-	OperatorPrivateKey string      `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
-	SigningKeys        SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+	Address            string             `json:"address" yaml:"address"`
+	OperatorPrivateKey string             `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
+	SigningKeys        config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
 }
 
 func (oc *OperatorConfig) Validate() error {
