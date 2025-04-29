@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 	"slices"
+	"time"
 )
 
 const (
@@ -17,10 +18,12 @@ const (
 )
 
 type Chain struct {
-	Name    string         `json:"name" yaml:"name"`
-	Network string         `json:"network" yaml:"network"`
-	ChainID config.ChainId `json:"chainId" yaml:"chainId"`
-	RpcURL  string         `json:"rpcUrl" yaml:"rpcUrl"`
+	Name           string         `json:"name" yaml:"name"`
+	Network        string         `json:"network" yaml:"network"`
+	ChainID        config.ChainId `json:"chainId" yaml:"chainId"`
+	RpcURL         string         `json:"rpcUrl" yaml:"rpcUrl"`
+	BlockNumber    uint64         `json:"blockNumber" yaml:"blockNumber"`
+	MailboxAddress string         `json:"mailboxAddress" yaml:"mailboxAddress"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -86,9 +89,21 @@ type ServerConfig struct {
 type AggregatorConfig struct {
 	Debug            bool             `json:"debug" yaml:"debug"`
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
+	LoadGenConfig    LoadGenConfig    `json:"loadGenConfig" yaml:"loadGenConfig"`
 	ServerConfig     ServerConfig     `json:"serverConfig" yaml:"serverConfig"`
 	Chains           []Chain          `json:"chains" yaml:"chains"`
 	Avss             []AggregatorAvs  `json:"avss" yaml:"avss"`
+}
+
+type LoadGenConfig struct {
+	Enabled      bool          `json:"enabled" yaml:"enabled"`
+	AvsAddress   string        `json:"avsAddress" yaml:"avsAddress"`
+	ContractAddr string        `json:"contractAddr" yaml:"contractAddr"`
+	PrivateKey   string        `json:"privateKey" yaml:"privateKey"`
+	RpcURL       string        `json:"rpcUrl" yaml:"rpcUrl"`
+	TPS          int           `json:"tps" yaml:"tps"`
+	Duration     time.Duration `json:"duration" yaml:"duration"`
+	TaskData     string        `json:"taskData" yaml:"taskData"`
 }
 
 func (arc *AggregatorConfig) Validate() error {

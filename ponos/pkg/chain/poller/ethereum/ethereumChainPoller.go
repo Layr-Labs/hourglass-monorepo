@@ -1,4 +1,4 @@
-package ethereumChainPoller
+package ethereum
 
 import (
 	"context"
@@ -6,7 +6,9 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"go.uber.org/zap"
 )
 
@@ -21,6 +23,8 @@ type EthereumChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
 	taskQueue         chan *types.Task
+	logParser         *transactionLogParser.TransactionLogParser
+	contractABI       *abi.ABI
 	config            *EthereumChainPollerConfig
 	logger            *zap.Logger
 	errorCount        int
@@ -41,15 +45,21 @@ func NewEthereumChainPollerDefaultConfig(
 func NewEthereumChainPoller(
 	ethClient *ethereum.Client,
 	taskQueue chan *types.Task,
+	logParser *transactionLogParser.TransactionLogParser,
+	lastObservedBlock *ethereum.EthereumBlock,
+	abi *abi.ABI,
 	config *EthereumChainPollerConfig,
 	logger *zap.Logger,
 ) *EthereumChainPoller {
 	return &EthereumChainPoller{
-		ethClient:  ethClient,
-		logger:     logger,
-		taskQueue:  taskQueue,
-		config:     config,
-		errorCount: 0,
+		ethClient:         ethClient,
+		taskQueue:         taskQueue,
+		logParser:         logParser,
+		lastObservedBlock: lastObservedBlock,
+		contractABI:       abi,
+		config:            config,
+		logger:            logger,
+		errorCount:        0,
 	}
 }
 
@@ -107,12 +117,6 @@ func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) bool {
 		return true
 	}
 
-	sugar.Infow("New Ethereum Block:",
-		"blockNum", block.Number.Value(),
-		"blockHash", block.Hash.Value(),
-		"logCount", len(logs),
-	)
-
 	return ecp.processLogs(ctx, block, logs)
 }
 
@@ -121,24 +125,40 @@ func (ecp *EthereumChainPoller) processLogs(
 	block *ethereum.EthereumBlock,
 	logs []*ethereum.EthereumEventLog,
 ) bool {
-	for range logs {
-		task := &types.Task{
-			ChainId:      ecp.config.ChainId,
-			BlockNumber:  block.Number.Value(),
-			BlockHash:    block.Hash.Value(),
-			CallbackAddr: ecp.config.InboxAddr,
+	sugar := ecp.logger.Sugar()
+
+	for _, log := range logs {
+		decodedLog, err := ecp.logParser.DecodeLog(ecp.contractABI, log)
+		if err != nil {
+			sugar.Errorw("Failed to parse transaction logs",
+				"txHash", log.TransactionHash.Value(),
+				"error", err,
+			)
+			continue
+		}
+
+		task, err := ecp.convertDecodedLogToTask(decodedLog, block)
+		if err != nil {
+			sugar.Errorw("Failed to convert decoded log to task",
+				"txHash", log.TransactionHash.Value(),
+				"eventName", decodedLog.EventName,
+				"error", err,
+			)
+			continue
 		}
 
 		select {
 		case ecp.taskQueue <- task:
-			ecp.logger.Sugar().Debugw("Enqueued task for processing",
+			sugar.Infow("Enqueued task for processing",
 				"blockNumber", task.BlockNumber,
 				"blockHash", task.BlockHash,
+				"taskId", task.TaskId,
 			)
 		case <-time.After(100 * time.Millisecond):
-			ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
+			sugar.Warnw("Failed to enqueue task (channel full or closed)",
 				"blockNumber", task.BlockNumber,
 				"blockHash", task.BlockHash,
+				"taskId", task.TaskId,
 			)
 		case <-ctx.Done():
 			return false
@@ -147,7 +167,20 @@ func (ecp *EthereumChainPoller) processLogs(
 	return true
 }
 
-func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
+func (ecp *EthereumChainPoller) convertDecodedLogToTask(
+	decodedLog *transactionLogParser.DecodedLog,
+	block *ethereum.EthereumBlock,
+) (*types.Task, error) {
+	if decodedLog.EventName != "TaskCreated" {
+		return nil, nil
+	}
+
+	return types.NewTask(decodedLog, block, ecp.config.InboxAddr, ecp.config.ChainId)
+}
+
+func (ecp *EthereumChainPoller) getNextBlockWithLogs(
+	ctx context.Context,
+) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
 	blockNum, err := ecp.ethClient.GetLatestBlock(ctx)
 	if err != nil {
 		return nil, nil, err

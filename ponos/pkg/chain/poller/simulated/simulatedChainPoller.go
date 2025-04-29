@@ -1,4 +1,4 @@
-package simulatedChainPoller
+package simulated
 
 import (
 	"context"

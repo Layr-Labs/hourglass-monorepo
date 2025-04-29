@@ -14,21 +14,19 @@ serverConfig:
 
 chains:
   - name: "ethereum"
-    network: "mainnet"
-    chainId: 1
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
-  - name: "ethereum"
-    network: "holesky"
-    chainId: 17000
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+    network: "local"
+    chainId: 31337
+    rpcUrl: "http://localhost:8545"
+    blockNumber: 0
+    mailboxAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
 avss:
-  - address: "0x1234567890abcdef1234567890abcdef12345678"
-    privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
-    privateSigningKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+  - address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    privateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    privateSigningKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
-    chainIds: [1]
+    chainIds: [31337]
     signingKeys:
       bls:
         keystore: |
@@ -55,3 +53,12 @@ avss:
             "curveType": "bn254"
           }
         password: ""
+
+loadGenConfig:
+  enabled: true
+  contractAddr: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  privateKey: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+  rpcUrl: "http://localhost:8545"
+  tps: 1
+  duration: 300s
+  taskData: "test payload"

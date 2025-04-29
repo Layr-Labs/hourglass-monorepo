@@ -3,35 +3,34 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/loadGenerator"
+	"strings"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/TaskMailbox"
+	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering/fetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
+	ethereumPoller "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chain/poller/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chain/writer/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulators/simulatedExecutor/service"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-)
-
-const (
-	inboxAddress = "ethereum-mainnet-inbox"
 )
 
 var runCmd = &cobra.Command{
@@ -73,8 +72,13 @@ var runCmd = &cobra.Command{
 			ChainPollers:     listeners,
 			ChainWriters:     writers,
 			ExecutionManager: execManager,
-			InboxAddress:     inboxAddress,
 		})
+
+		if Config.LoadGenConfig.Enabled {
+			go func() {
+				loadGenerator.NewLoadGenerator(&Config.LoadGenConfig, log).Run(cmd.Context())
+			}()
+		}
 
 		if err := agg.Start(cmd.Context()); err != nil {
 			return err
@@ -99,37 +103,52 @@ func initRunCmd(cmd *cobra.Command) {
 func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *types.Task, logger *zap.Logger) []runnable.IRunnable {
 	var listeners []runnable.IRunnable
 
-	for i, chain := range cfg.Chains {
+	for _, chain := range cfg.Chains {
 		if cfg.SimulationConfig.Enabled {
-			port := cfg.SimulationConfig.Port + i + 1
-
-			listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-				ChainId:      &chain.ChainID,
-				Port:         port,
-				TaskInterval: 250 * time.Millisecond,
-			}
-
-			listener := simulatedChainPoller.NewSimulatedChainPoller(
-				taskQueue,
-				listenerConfig,
-				logger,
-			)
-			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
-		} else {
+			//	port := cfg.SimulationConfig.Port + i + 1
+			//
+			//	listenerConfig := &simulated.SimulatedChainPollerConfig{
+			//		ChainId:      &chain.ChainID,
+			//		Port:         port,
+			//		TaskInterval: 250 * time.Millisecond,
+			//	}
+			//
+			//	listener := simulated.NewSimulatedChainPoller(
+			//		taskQueue,
+			//		listenerConfig,
+			//		logger,
+			//	)
+			//	listeners = append(listeners, listener)
+			//	logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
+			//} else {
 			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
 				BaseUrl:   chain.RpcURL,
 				BlockType: ethereum.BlockType_Latest,
 			}, logger)
 
-			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
+			listenerConfig := ethereumPoller.NewEthereumChainPollerDefaultConfig(
 				chain.ChainID,
-				"ethereum-mainnet-inbox",
+				chain.MailboxAddress,
 			)
+			parsedABI, err := abi.JSON(strings.NewReader(TaskMailbox.TaskMailboxMetaData.ABI))
+			if err != nil {
+				logger.Sugar().Errorw("Error parsing ABI.", err)
+				panic(err)
+			}
 
-			listener := ethereumChainPoller.NewEthereumChainPoller(
+			logParser := transactionLogParser.NewTransactionLogParser(&parsedABI, logger)
+			block, err := ethClient.GetBlockByNumber(context.Background(), chain.BlockNumber)
+			if err != nil {
+				logger.Sugar().Errorw("Error getting block by number", "error", err)
+				panic(err)
+			}
+
+			listener := ethereumPoller.NewEthereumChainPoller(
 				ethClient,
 				taskQueue,
+				logParser,
+				block,
+				&parsedABI,
 				listenerConfig,
 				logger,
 			)
