@@ -89,8 +89,8 @@ avsPerformers:
     "operatorPrivateKey": "...",
     "signingKeys": {
       "bls": {
-        keystore: "",
-        password: ""
+        "keystore": "",
+        "password": ""
       }
     }
   },
@@ -112,8 +112,8 @@ avsPerformers:
     "operatorPrivateKey": "...",
     "signingKeys": {
       "bls": {
-        keystore: "",
-        password: ""
+        "keystore": "",
+        "password": ""
       }
     }
   },

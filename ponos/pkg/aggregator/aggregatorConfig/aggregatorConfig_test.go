@@ -105,7 +105,13 @@ const (
 			"privateSigningKey": "some private signing key",
 			"privateSigningKeyType": "ecdsa",
 			"responseTimeout": 3000,
-			"chainIds": [1]
+			"chainIds": [1],
+			"signingKeys": {
+				"bls": {
+					"keystore": "",
+					"password": ""
+				}
+			}
 		}
 	]
 }`
@@ -137,7 +143,13 @@ const (
 			"privateSigningKey": "some private signing key",
 			"privateSigningKeyType": "ecdsa",
 			"responseTimeout": 3000,
-			"chainIds": [1]
+			"chainIds": [1],
+			"signingKeys": {
+				"bls": {
+					"keystore": "",
+					"password": ""
+				}
+			}
 		}
 	]
 }`
@@ -164,6 +176,10 @@ avss:
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
+    signingKeys:
+        bls:
+            keystore: ""
+            password: ""
 `
 	invalidYamlChainsOnly = `
 ---
@@ -188,5 +204,9 @@ avss:
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
+    signingKeys:
+        bls:
+            keystore: ""
+            password: ""
 `
 )
