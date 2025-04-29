@@ -75,6 +75,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
 
         // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
+        require(isExecutorOperatorSetRegistered[operatorSet.key()], ExecutorOperatorSetNotRegistered());
         require(config.certificateVerifier != address(0), InvalidAddressZero());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
