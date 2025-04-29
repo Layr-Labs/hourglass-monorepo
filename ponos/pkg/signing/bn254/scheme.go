@@ -59,6 +59,14 @@ func (s *Scheme) NewPublicKeyFromBytes(data []byte) (signing.PublicKey, error) {
 	return &publicKeyAdapter{pubKey}, nil
 }
 
+func (s *Scheme) NewPublicKeyFromHexString(hex string) (signing.PublicKey, error) {
+	pubKey, err := NewPublicKeyFromHexString(hex)
+	if err != nil {
+		return nil, err
+	}
+	return &publicKeyAdapter{pubKey}, nil
+}
+
 // NewSignatureFromBytes creates a signature from bytes
 func (s *Scheme) NewSignatureFromBytes(data []byte) (signing.Signature, error) {
 	sig, err := NewSignatureFromBytes(data)

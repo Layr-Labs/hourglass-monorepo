@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
@@ -26,6 +27,8 @@ type Executor struct {
 	signer      signer.Signer
 
 	inflightTasks *sync.Map
+
+	peeringFetcher peering.IPeeringDataFetcher
 }
 
 func NewExecutor(
@@ -33,14 +36,16 @@ func NewExecutor(
 	rpcServer *rpcServer.RpcServer,
 	logger *zap.Logger,
 	signer signer.Signer,
+	peeringFetcher peering.IPeeringDataFetcher,
 ) *Executor {
 	return &Executor{
-		logger:        logger,
-		config:        config,
-		avsPerformers: make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:     rpcServer,
-		signer:        signer,
-		inflightTasks: &sync.Map{},
+		logger:         logger,
+		config:         config,
+		avsPerformers:  make(map[string]avsPerformer.IAvsPerformer),
+		rpcServer:      rpcServer,
+		signer:         signer,
+		inflightTasks:  &sync.Map{},
+		peeringFetcher: peeringFetcher,
 	}
 }
 
@@ -58,13 +63,19 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := serverPerformer.NewAvsPerformerServer(&avsPerformer.AvsPerformerConfig{
-				AvsAddress:           avsAddress,
-				ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-				Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
-				WorkerCount:          avs.WorkerCount,
-				PerformerNetworkName: e.config.PerformerNetworkName,
-			}, e.receiveTaskResponse, e.logger)
+			performer, err := serverPerformer.NewAvsPerformerServer(
+				&avsPerformer.AvsPerformerConfig{
+					AvsAddress:           avsAddress,
+					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
+					Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
+					WorkerCount:          avs.WorkerCount,
+					PerformerNetworkName: e.config.PerformerNetworkName,
+					SigningCurve:         avs.SigningCurve,
+				},
+				e.peeringFetcher,
+				e.receiveTaskResponse,
+				e.logger,
+			)
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to create AVS performer server",
 					zap.String("avsAddress", avsAddress),
