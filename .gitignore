@@ -1,5 +1,6 @@
 .idea
 bin/
+!/contracts/bin
 node_modules
 /testKeys
 /demo/bin
