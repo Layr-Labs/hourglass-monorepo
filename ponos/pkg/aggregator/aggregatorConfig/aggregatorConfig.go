@@ -44,12 +44,25 @@ func (c *Chain) Validate() field.ErrorList {
 }
 
 type AggregatorAvs struct {
-	Address               string `json:"address" yaml:"address"`
-	PrivateKey            string `json:"privateKey" yaml:"privateKey"`
-	PrivateSigningKey     string `json:"privateSigningKey" yaml:"privateSigningKey"`
-	PrivateSigningKeyType string `json:"privateSigningKeyType" yaml:"privateSigningKeyType"`
-	ResponseTimeout       int    `json:"responseTimeout" yaml:"responseTimeout"`
-	ChainIds              []uint `json:"chainIds" yaml:"chainIds"`
+	Address         string             `json:"address" yaml:"address"`
+	PrivateKey      string             `json:"privateKey" yaml:"privateKey"`
+	ResponseTimeout int                `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds        []uint             `json:"chainIds" yaml:"chainIds"`
+	SigningKeys     config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+}
+
+func (aa *AggregatorAvs) Validate() error {
+	var allErrors field.ErrorList
+	if aa.Address == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
+	}
+	if err := aa.SigningKeys.Validate(); err != nil {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), aa.SigningKeys, err.Error()))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type ExecutorPeerConfig struct {
@@ -91,6 +104,12 @@ func (arc *AggregatorConfig) Validate() error {
 	}
 	if len(arc.Avss) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
+	} else {
+		for _, avs := range arc.Avss {
+			if err := avs.Validate(); err != nil {
+				allErrors = append(allErrors, field.Invalid(field.NewPath("avss"), avs, "invalid avs config"))
+			}
+		}
 	}
 	return allErrors.ToAggregate()
 }
