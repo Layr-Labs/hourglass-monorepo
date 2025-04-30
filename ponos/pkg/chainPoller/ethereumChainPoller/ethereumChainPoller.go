@@ -123,7 +123,7 @@ func (ecp *EthereumChainPoller) processLogs(
 	logs []*ethereum.EthereumEventLog,
 ) bool {
 	for _, log := range logs {
-		if strings.ToLower(log.Address.Value()) != strings.ToLower(ecp.config.InboxAddr) {
+		if strings.EqualFold(log.Address.Value(), ecp.config.InboxAddr) {
 			continue
 		}
 
