@@ -1,0 +1,250 @@
+package caller
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"fmt"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	config2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"go.uber.org/zap"
+)
+
+type ContractCallerConfig struct {
+	PrivateKey          string
+	AVSRegistrarAddress string
+	TaskMailboxAddress  string
+}
+
+type ContractCaller struct {
+	avsRegistrarCaller      *ITaskAVSRegistrar.ITaskAVSRegistrarCaller
+	taskMailboxCaller       *ITaskMailbox.ITaskMailboxCaller
+	taskMailboxTransactor   *ITaskMailbox.ITaskMailboxTransactor
+	allocationManagerCaller *IAllocationManager.IAllocationManagerCaller
+	ethclient               *ethclient.Client
+	config                  *ContractCallerConfig
+	logger                  *zap.Logger
+}
+
+func NewContractCallerFromEthereumClient(
+	config *ContractCallerConfig,
+	ethClient *ethereum.Client,
+	logger *zap.Logger,
+) (*ContractCaller, error) {
+	client, err := ethClient.GetEthereumContractCaller()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewContractCaller(config, client, logger)
+}
+
+func NewContractCaller(
+	config *ContractCallerConfig,
+	ethclient *ethclient.Client,
+	logger *zap.Logger,
+) (*ContractCaller, error) {
+	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(config.AVSRegistrarAddress), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
+	}
+
+	taskMailboxCaller, err := ITaskMailbox.NewITaskMailboxCaller(common.HexToAddress(config.TaskMailboxAddress), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TaskMailbox caller: %w", err)
+	}
+	taskMailboxTransactor, err := ITaskMailbox.NewITaskMailboxTransactor(common.HexToAddress(config.TaskMailboxAddress), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TaskMailbox transactor: %w", err)
+	}
+
+	chainId, err := ethclient.ChainID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
+	coreContracts, err := config2.GetCoreContractsForChainId(config2.ChainId(chainId.Uint64()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get core contracts: %w", err)
+	}
+
+	allocationManagerCaller, err := IAllocationManager.NewIAllocationManagerCaller(common.HexToAddress(coreContracts.AllocationManager), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AllocationManager caller: %w", err)
+	}
+
+	return &ContractCaller{
+		avsRegistrarCaller:      avsRegistrarCaller,
+		taskMailboxCaller:       taskMailboxCaller,
+		taskMailboxTransactor:   taskMailboxTransactor,
+		allocationManagerCaller: allocationManagerCaller,
+		ethclient:               ethclient,
+		config:                  config,
+		logger:                  logger,
+	}, nil
+}
+
+func (cc *ContractCaller) getECDSAPrivateKeyFromString(privateKey string) (*ecdsa.PrivateKey, error) {
+	pk, err := crypto.HexToECDSA(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+	return pk, nil
+}
+
+func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
+	chainId, err := cc.ethclient.ChainID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
+	opts, err := bind.NewKeyedTransactorWithChainID(pk, chainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transactor: %w", err)
+	}
+	opts.NoSend = true
+	return opts, nil
+}
+
+func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, task *types.TaskResult) error {
+	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
+	if err != nil {
+		return fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	var taskId [32]byte
+	copy(taskId[:], task.TaskId)
+
+	// TODO(seanmcgary): fill this in with the right info
+	cert := ITaskMailbox.IBN254CertificateVerifierBN254Certificate{}
+
+	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, task.Output)
+	if err != nil {
+		return fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskResult")
+	if err != nil {
+		return fmt.Errorf("failed to send transaction: %w", err)
+	}
+	cc.logger.Sugar().Infow("Successfully submitted task result",
+		zap.String("taskId", task.TaskId),
+		zap.String("transactionHash", receipt.TxHash.Hex()),
+	)
+	return nil
+}
+
+func (cc *ContractCaller) GetOperatorSets(avsAddress string) ([]uint32, error) {
+	avsAddr := common.HexToAddress(avsAddress)
+	opSets, err := cc.allocationManagerCaller.GetRegisteredSets(&bind.CallOpts{}, avsAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator sets: %w", err)
+	}
+	opsetIds := make([]uint32, len(opSets))
+	for i, opSet := range opSets {
+		opsetIds[i] = opSet.Id
+	}
+	return opsetIds, nil
+}
+
+func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error) {
+	avsAddr := common.HexToAddress(avsAddress)
+	operatorSet, err := cc.allocationManagerCaller.GetMembers(&bind.CallOpts{}, IAllocationManager.OperatorSet{
+		Avs: avsAddr,
+		Id:  operatorSetId,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set members: %w", err)
+	}
+	members := make([]string, len(operatorSet))
+	for i, member := range operatorSet {
+		members[i] = member.String()
+	}
+	return members, nil
+}
+
+func (cc *ContractCaller) GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error) {
+	_, err := cc.GetMembersForAllOperatorSets(avsAddress)
+	if err != nil {
+		return nil, err
+	}
+	panic("fill me in later")
+}
+
+func (cc *ContractCaller) GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error) {
+	operatorSets, err := cc.GetOperatorSets(avsAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	opsetMembers := make(map[uint32][]string)
+	for _, operatorSetId := range operatorSets {
+		members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
+		if err != nil {
+			return nil, err
+		}
+		opsetMembers[operatorSetId] = members
+	}
+	return opsetMembers, nil
+}
+
+func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
+	avsAddr := common.HexToAddress(avsAddress)
+	avsConfig, err := cc.taskMailboxCaller.GetAvsConfig(&bind.CallOpts{}, avsAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contractCaller.AVSConfig{
+		ResultSubmitter:         avsConfig.ResultSubmitter.String(),
+		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
+		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
+	}, nil
+}
+
+func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*contractCaller.ExecutorOperatorSetTaskConfig, error) {
+	avsAddr := common.HexToAddress(avsAddress)
+	taskCfg, err := cc.taskMailboxCaller.GetExecutorOperatorSetTaskConfig(&bind.CallOpts{}, ITaskMailbox.OperatorSet{
+		Avs: avsAddr,
+		Id:  operatorSetId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &contractCaller.ExecutorOperatorSetTaskConfig{
+		CertificateVerifier:      taskCfg.CertificateVerifier.String(),
+		TaskHook:                 taskCfg.TaskHook.String(),
+		FeeToken:                 taskCfg.FeeToken.String(),
+		FeeCollector:             taskCfg.FeeCollector.String(),
+		TaskSLA:                  taskCfg.TaskSLA,
+		StakeProportionThreshold: taskCfg.StakeProportionThreshold,
+		TaskMetadata:             taskCfg.TaskMetadata,
+	}, nil
+}
+
+func (cc *ContractCaller) GetOperatorPublicKey(operatorAddress string) (*bn254.PublicKey, error) {
+	operatorAddr := common.HexToAddress(operatorAddress)
+	_, g2Point, _, err := cc.avsRegistrarCaller.GetRegisteredPubkey(&bind.CallOpts{}, operatorAddr)
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to get operator public key: %v", err)
+		return nil, err
+	}
+
+	return bn254.NewPublicKeyFromSolidity(g2Point)
+}

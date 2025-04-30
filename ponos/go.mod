@@ -3,6 +3,8 @@ module github.com/Layr-Labs/hourglass-monorepo/ponos
 go 1.23.6
 
 require (
+	github.com/Layr-Labs/eigenlayer-contracts v1.3.0
+	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-00010101000000-000000000000
 	github.com/consensys/gnark-crypto v0.14.0
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0
@@ -83,3 +85,5 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/Layr-Labs/hourglass-monorepo/contracts => ../contracts

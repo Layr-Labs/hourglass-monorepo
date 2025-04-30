@@ -3,6 +3,8 @@ package config
 import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"slices"
+	"fmt"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 type ChainId uint
@@ -21,6 +23,32 @@ func IsL1Chain(chainId ChainId) bool {
 		ChainId_EthereumHoodi,
 		ChainId_EthereumAnvil,
 	}, chainId)
+}
+
+type CoreContractAddresses struct {
+	AllocationManager string
+}
+
+var (
+	CoreContracts = map[ChainId]CoreContractAddresses{
+		ChainId_EthereumMainnet: {
+			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+		},
+		ChainId_EthereumHolesky: {
+			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+		},
+		ChainId_EthereumHoodi: {
+			AllocationManager: "",
+		},
+	}
+)
+
+func GetCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error) {
+	contracts, ok := CoreContracts[chainId]
+	if !ok {
+		return nil, fmt.Errorf("unsupported chain ID: %d", chainId)
+	}
+	return &contracts, nil
 }
 
 var (
@@ -101,10 +129,9 @@ func (sk *SigningKeys) Validate() error {
 
 type SimulatedPeer struct {
 	NetworkAddress  string `json:"networkAddress" yaml:"networkAddress"`
-	Port            int    `json:"port" yaml:"port"`
 	PublicKey       string `json:"publicKey" yaml:"publicKey"`
 	OperatorAddress string `json:"operatorAddress" yaml:"operatorAddress"`
-	OperatorSetId   uint64 `json:"operatorSetId" yaml:"operatorSetId"`
+	OperatorSetId   uint32 `json:"operatorSetId" yaml:"operatorSetId"`
 }
 
 type SimulatedPeeringConfig struct {

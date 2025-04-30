@@ -70,9 +70,8 @@ func (aa *AggregatorAvs) Validate() error {
 }
 
 type ExecutorPeerConfig struct {
-	NetworkAddress string `json:"networkAddress" yaml:"networkAddress"`
-	Port           int    `json:"port" yaml:"port"`
-	PublicKey      string `json:"publicKey" yaml:"publicKey"`
+	Port      int    `json:"port" yaml:"port"`
+	PublicKey string `json:"publicKey" yaml:"publicKey"`
 }
 
 type SimulationConfig struct {

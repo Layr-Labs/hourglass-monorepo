@@ -56,10 +56,11 @@ func init() {
 
 	// Info command flags
 	infoCmd.PersistentFlags().String("key-file", "", "Path to the key file to display information about")
+	infoCmd.PersistentFlags().String("password", "", "Password to decrypt the key file")
 
 	// Test command flags
 	// testCmd.PersistentFlags().String("key-file", "", "Path to the keystore file to test")
-	testCmd.PersistentFlags().String("password", "", "Password to decrypt the keystore")
+	// testCmd.PersistentFlags().String("password", "", "Password to decrypt the keystore")
 
 	for _, cmd := range []*cobra.Command{rootCmd, generateCmd, infoCmd, testCmd} {
 		cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {

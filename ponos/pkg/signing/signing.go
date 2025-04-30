@@ -12,6 +12,10 @@ var (
 	ErrUnsupportedOperation = errors.New("operation not supported by this scheme")
 )
 
+type SolidityBN254PublicKey struct {
+	G1Point []byte
+}
+
 // PrivateKey is the interface that all private key implementations must satisfy
 type PrivateKey interface {
 	// Sign signs a message and returns a signature
