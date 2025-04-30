@@ -14,11 +14,10 @@ serverConfig:
 
 chains:
   - name: "ethereum"
-    network: "local"
+    environment: "local"
     chainId: 31337
     rpcUrl: "http://localhost:8545"
     blockNumber: 0
-    mailboxAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
 
 avss:
   - address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
@@ -56,7 +55,6 @@ avss:
 
 loadGenConfig:
   enabled: true
-  contractAddr: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
   privateKey: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
   rpcUrl: "http://localhost:8545"
   tps: 1

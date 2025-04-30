@@ -2,29 +2,34 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/loadGenerator"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/TaskMailbox"
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/peering/fetcher"
 	ethereumPoller "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chain/poller/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chain/writer/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/loadGenerator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulators/simulatedExecutor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/spf13/cobra"
@@ -126,11 +131,18 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 				BlockType: ethereum.BlockType_Latest,
 			}, logger)
 
+			parsedABI, mailboxAddr, err := loadABIAndAddress(
+				cfg.SimulationConfig.ReleaseId,
+				chain.Environment,
+				chain.ChainID,
+				"TaskMailbox")
+			if err != nil {
+				logger.Sugar().Fatalw("Failed to load contract ABI & mailbox address", "error", err)
+			}
 			listenerConfig := ethereumPoller.NewEthereumChainPollerDefaultConfig(
 				chain.ChainID,
-				chain.MailboxAddress,
+				mailboxAddr.String(),
 			)
-			parsedABI, err := abi.JSON(strings.NewReader(TaskMailbox.TaskMailboxMetaData.ABI))
 			if err != nil {
 				logger.Sugar().Errorw("Error parsing ABI.", err)
 				panic(err)
@@ -182,7 +194,7 @@ func buildExecutionManager(
 	resultQueue chan *types.TaskResult,
 	logger *zap.Logger,
 ) runnable.IRunnable {
-	peeringFetcher := fetcher.NewLocalPeeringDataFetcher[peering.ExecutorOperatorPeerInfo](
+	peeringFetcher := fetcher.NewLocalPeeringDataFetcher(
 		convertSimulationPeeringConfig(cfg.SimulationConfig.ExecutorPeerConfigs),
 		logger,
 	)
@@ -249,19 +261,60 @@ func loadAggregatorServer(cfg *aggregatorConfig.AggregatorConfig, logger *zap.Lo
 	}
 }
 
-func convertSimulationPeeringConfig(
-	configs []aggregatorConfig.ExecutorPeerConfig,
-) *fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo] {
-	var infos []*peering.ExecutorOperatorPeerInfo
-	for _, config := range configs {
-		info := &peering.ExecutorOperatorPeerInfo{
-			NetworkAddress: config.NetworkAddress,
-			Port:           config.Port,
-			PublicKey:      config.PublicKey,
-		}
-		infos = append(infos, info)
+func loadABIAndAddress(
+	releaseID string,
+	environment string,
+	chainID config.ChainId,
+	contractName string,
+) (abi.ABI, common.Address, error) {
+	basePath, err := os.Getwd()
+	if err != nil {
+		return abi.ABI{}, common.Address{}, err
 	}
-	return &fetcher.LocalPeeringDataFetcherConfig[peering.ExecutorOperatorPeerInfo]{
-		Peers: infos,
+	abiPath := filepath.Join(
+		basePath,
+		"contracts",
+		"abi",
+		environment,
+		releaseID,
+	)
+
+	abiBytes, err := os.ReadFile(filepath.Join(abiPath, fmt.Sprintf("%s.abi.json", contractName)))
+	if err != nil {
+		return abi.ABI{}, common.Address{}, fmt.Errorf("failed to read ABI: %w", err)
+	}
+	parsedABI, err := abi.JSON(strings.NewReader(string(abiBytes)))
+	if err != nil {
+		return abi.ABI{}, common.Address{}, fmt.Errorf("failed to parse ABI: %w", err)
+	}
+
+	chainMapPath := filepath.Join(abiPath, "chains.json")
+	mapBytes, err := os.ReadFile(chainMapPath)
+	if err != nil {
+		return parsedABI, common.Address{}, fmt.Errorf("failed to read chains.json: %w", err)
+	}
+
+	var chainMap map[config.ChainId]map[string]string
+	if err := json.Unmarshal(mapBytes, &chainMap); err != nil {
+		return parsedABI, common.Address{}, fmt.Errorf("failed to parse chains.json: %w", err)
+	}
+
+	addrStr := chainMap[chainID][contractName]
+	if addrStr == "" {
+		return parsedABI, common.Address{}, fmt.Errorf("no address found for contract %s on chain %d", contractName, chainID)
+	}
+
+	return parsedABI, common.HexToAddress(addrStr), nil
+}
+
+func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfig) *fetcher.LocalPeeringDataFetcherConfig {
+	return &fetcher.LocalPeeringDataFetcherConfig{
+		OperatorPeers: util.Map(configs, func(config aggregatorConfig.ExecutorPeerConfig, i uint64) *peering.OperatorPeerInfo {
+			return &peering.OperatorPeerInfo{
+				NetworkAddress: config.NetworkAddress,
+				Port:           config.Port,
+				PublicKey:      config.PublicKey,
+			}
+		}),
 	}
 }
