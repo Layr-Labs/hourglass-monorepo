@@ -170,6 +170,9 @@ func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Ta
 
 	aggregatorUrl := fmt.Sprintf("localhost:%d", em.rpcServer.RpcConfig.GrpcPort)
 	if em.config.AggregatorUrl != "" {
+		sugar.Infow("Using custom aggregator URL",
+			zap.String("aggregatorUrl", em.config.AggregatorUrl),
+		)
 		aggregatorUrl = em.config.AggregatorUrl
 	}
 

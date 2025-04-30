@@ -91,8 +91,9 @@ type SimulationConfig struct {
 }
 
 type ServerConfig struct {
-	Port             int  `json:"port" yaml:"port"`
-	SecureConnection bool `json:"secureConnection" yaml:"secureConnection"`
+	Port             int    `json:"port" yaml:"port"`
+	SecureConnection bool   `json:"secureConnection" yaml:"secureConnection"`
+	AggregatorUrl    string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
 }
 
 type AggregatorConfig struct {

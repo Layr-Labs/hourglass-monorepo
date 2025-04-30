@@ -118,6 +118,7 @@ var runCmd = &cobra.Command{
 				PeerRefreshInterval:       executionManager.DefaultRefreshInterval,
 				SecureConnection:          Config.ServerConfig.SecureConnection,
 				AggregatorOperatorAddress: Config.Operator.Address,
+				AggregatorUrl:             Config.ServerConfig.AggregatorUrl,
 			},
 			Config.ServerConfig.Port,
 			sig,
