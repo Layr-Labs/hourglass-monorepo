@@ -18,6 +18,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	DefaultRefreshInterval = 30 * time.Second
+)
+
 type PonosExecutionManagerConfig struct {
 	RefreshInterval  time.Duration
 	SecureConnection bool
@@ -25,13 +29,13 @@ type PonosExecutionManagerConfig struct {
 
 func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
 	return &PonosExecutionManagerConfig{
-		RefreshInterval:  30 * time.Second,
+		RefreshInterval:  DefaultRefreshInterval,
 		SecureConnection: false,
 	}
 }
 
 type PonosExecutionManager struct {
-	aggregatorServer   *rpcServer.RpcServer
+	rpcServer          *rpcServer.RpcServer
 	taskQueue          chan *types.Task
 	resultQueue        chan *types.TaskResult
 	execClients        map[string]executorClient.IExecutorClient
@@ -39,6 +43,31 @@ type PonosExecutionManager struct {
 	running            sync.Map
 	config             *PonosExecutionManagerConfig
 	logger             *zap.Logger
+}
+
+func NewPonosExecutionManagerWithRpcServer(
+	taskQueue chan *types.Task,
+	resultQueue chan *types.TaskResult,
+	peeringDataFetcher peering.IPeeringDataFetcher,
+	config *PonosExecutionManagerConfig,
+	rpcServerPort int,
+	logger *zap.Logger,
+) (*PonosExecutionManager, error) {
+	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: rpcServerPort,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC server: %w", err)
+	}
+
+	return NewPonosExecutionManager(
+		rpc,
+		taskQueue,
+		resultQueue,
+		peeringDataFetcher,
+		config,
+		logger,
+	), nil
 }
 
 func NewPonosExecutionManager(
@@ -50,7 +79,7 @@ func NewPonosExecutionManager(
 	logger *zap.Logger,
 ) *PonosExecutionManager {
 	manager := &PonosExecutionManager{
-		aggregatorServer:   server,
+		rpcServer:          server,
 		taskQueue:          taskQueue,
 		resultQueue:        resultQueue,
 		peeringDataFetcher: peeringDataFetcher,
@@ -68,7 +97,7 @@ func (em *PonosExecutionManager) Start(ctx context.Context) error {
 		"refreshInterval", em.config.RefreshInterval,
 	)
 
-	err := em.aggregatorServer.Start(ctx)
+	err := em.rpcServer.Start(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,6 +158,7 @@ func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Ta
 		clientCount++
 
 		go func(address string, client executorClient.IExecutorClient) {
+			fmt.Printf("TASK: %+v\n", task)
 			err := client.SubmitTask(ctx, task)
 			if err != nil {
 				sugar.Errorw("Failed to submit task to executor",

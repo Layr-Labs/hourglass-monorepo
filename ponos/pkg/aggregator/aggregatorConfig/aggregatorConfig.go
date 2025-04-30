@@ -72,11 +72,20 @@ type ExecutorPeerConfig struct {
 }
 
 type SimulationConfig struct {
-	Enabled             bool                 `json:"enabled" yaml:"enabled"`
-	Port                int                  `json:"port" yaml:"port"`
-	SecureConnection    bool                 `json:"secureConnection" yaml:"secureConnection"`
-	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executorPeerConfigs" yaml:"executorPeerConfigs"`
-	AutomaticPoller     bool                 `json:"automaticPoller" yaml:"automaticPoller"`
+	// Enabled indicates whether the simulation mode is enabled
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// PollerPort is the port on which the simulated poller will listen for incoming manual requests
+	PollerPort int `json:"pollerPort" yaml:"pollerPort"`
+
+	// SimulateExecutors generates a number of fake executors to simulate the behavior of real executors
+	SimulateExecutors bool `json:"simulateExecutors" yaml:"simulateExecutors"`
+
+	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
+	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
+
+	// AutomaticPoller indicates whether the simulated poller should generate events automatically
+	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
 }
 
 type ServerConfig struct {
@@ -135,9 +144,8 @@ func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
 		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
 		SimulationConfig: SimulationConfig{
-			Enabled:          viper.GetBool("enabled"),
-			Port:             viper.GetInt("port"),
-			SecureConnection: viper.GetBool("secureConnection"),
+			Enabled:    viper.GetBool("enabled"),
+			PollerPort: viper.GetInt("port"),
 		},
 	}
 }

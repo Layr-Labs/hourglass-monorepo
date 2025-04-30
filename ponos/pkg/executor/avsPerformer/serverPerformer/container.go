@@ -30,11 +30,11 @@ func (aps *AvsPerformerServer) waitForRunning(
 			}
 			portMap, ok := containerInfo.NetworkSettings.Ports[containerPort]
 			if !ok {
-				aps.logger.Sugar().Infow("Port map not yet available", zap.String("containerId", containerId))
+				aps.logger.Sugar().Infow("PollerPort map not yet available", zap.String("containerId", containerId))
 				continue
 			}
 			if len(portMap) == 0 {
-				aps.logger.Sugar().Infow("Port map is empty", zap.String("containerId", containerId))
+				aps.logger.Sugar().Infow("PollerPort map is empty", zap.String("containerId", containerId))
 				continue
 			}
 			aps.logger.Sugar().Infow("Container is running with port exposed",

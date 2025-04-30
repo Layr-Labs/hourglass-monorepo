@@ -27,7 +27,13 @@ func NewRpcServer(
 	rpcConfig *RpcServerConfig,
 	logger *zap.Logger,
 ) (*RpcServer, error) {
-	grpc_zap.ReplaceGrpcLoggerV2(logger)
+	grpc_zap.ReplaceGrpcLoggerV2(logger.WithOptions(zap.IncreaseLevel(zap.WarnLevel)))
+
+	opts := []grpc_zap.Option{
+		grpc_zap.WithDecider(func(fullMethodName string, err error) bool {
+			return true
+		}),
+	}
 
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%d", rpcConfig.GrpcPort))
 	if err != nil {
@@ -41,6 +47,7 @@ func NewRpcServer(
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			grpc_ctxtags.UnaryServerInterceptor(grpc_ctxtags.WithFieldExtractor(grpc_ctxtags.CodeGenRequestFieldExtractor)),
+			grpc_zap.UnaryServerInterceptor(logger, opts...),
 		),
 	)
 	reflection.Register(grpcServer)

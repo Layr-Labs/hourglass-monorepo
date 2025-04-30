@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
@@ -62,7 +61,7 @@ var runCmd = &cobra.Command{
 		var pdf *fetcher.LocalPeeringDataFetcher
 		if Config.Simulation.SimulatePeering.Enabled {
 			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
-				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p executorConfig.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
+				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
 						OperatorAddress: p.OperatorAddress,
 						Port:            p.Port,

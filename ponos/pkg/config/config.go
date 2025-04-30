@@ -37,3 +37,17 @@ func (sk *SigningKeys) Validate() error {
 	}
 	return nil
 }
+
+type SimulatedPeer struct {
+	NetworkAddress  string `json:"networkAddress" yaml:"networkAddress"`
+	Port            int    `json:"port" yaml:"port"`
+	PublicKey       string `json:"publicKey" yaml:"publicKey"`
+	OperatorAddress string `json:"operatorAddress" yaml:"operatorAddress"`
+	OperatorSetId   uint64 `json:"operatorSetId" yaml:"operatorSetId"`
+}
+
+type SimulatedPeeringConfig struct {
+	Enabled         bool            `json:"enabled" yaml:"enabled"`
+	AggregatorPeers []SimulatedPeer `json:"aggregatorPeers" yaml:"aggregatorPeers"`
+	OperatorPeers   []SimulatedPeer `json:"operatorPeers" yaml:"operatorPeers"`
+}

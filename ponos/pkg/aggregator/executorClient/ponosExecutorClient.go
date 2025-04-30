@@ -27,6 +27,17 @@ func NewPonosExecutorClient(
 	}
 }
 
+func NewPonosExecutorClientWithConn(
+	conn *grpc.ClientConn,
+	signer signer.Signer,
+) *PonosExecutorClient {
+	return &PonosExecutorClient{
+		client: executorpb.NewExecutorServiceClient(conn),
+		conn:   conn,
+		signer: signer,
+	}
+}
+
 func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task) error {
 	sig, err := pec.signer.SignMessage([]byte(task.TaskId))
 	if err != nil {
@@ -35,7 +46,8 @@ func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task
 
 	submission := &executorpb.TaskSubmission{
 		TaskId:            task.TaskId,
-		AggregatorAddress: task.CallbackAddr,
+		AvsAddress:        task.AVSAddress,
+		AggregatorAddress: "0xaggregatorOperatoraddress",
 		Payload:           task.Payload,
 		Signature:         sig,
 	}
