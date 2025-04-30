@@ -2,10 +2,12 @@ package ethereumChainPoller
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
@@ -21,15 +23,13 @@ type EthereumChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
 	taskQueue         chan *types.Task
+	logParser         *transactionLogParser.TransactionLogParser
 	config            *EthereumChainPollerConfig
 	logger            *zap.Logger
 	errorCount        int
 }
 
-func NewEthereumChainPollerDefaultConfig(
-	chainId config.ChainId,
-	inboxAddr string,
-) *EthereumChainPollerConfig {
+func NewEthereumChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EthereumChainPollerConfig {
 	return &EthereumChainPollerConfig{
 		ChainId:                  chainId,
 		InboxAddr:                inboxAddr,
@@ -41,6 +41,7 @@ func NewEthereumChainPollerDefaultConfig(
 func NewEthereumChainPoller(
 	ethClient *ethereum.Client,
 	taskQueue chan *types.Task,
+	logParser *transactionLogParser.TransactionLogParser,
 	config *EthereumChainPollerConfig,
 	logger *zap.Logger,
 ) *EthereumChainPoller {
@@ -48,6 +49,7 @@ func NewEthereumChainPoller(
 		ethClient:  ethClient,
 		logger:     logger,
 		taskQueue:  taskQueue,
+		logParser:  logParser,
 		config:     config,
 		errorCount: 0,
 	}
@@ -86,14 +88,13 @@ func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
 }
 
 func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) bool {
-	sugar := ecp.logger.Sugar()
 
 	block, logs, err := ecp.getNextBlockWithLogs(ctx)
 	if err != nil {
-		sugar.Errorw("Failed to get next block", "error", err)
+		ecp.logger.Sugar().Errorw("Failed to get next block", "error", err)
 		ecp.errorCount++
 		if ecp.errorCount > ecp.config.MaxConsecutiveErrorCount {
-			sugar.Errorw("Too many consecutive errors, stopping poll loop",
+			ecp.logger.Sugar().Errorw("Too many consecutive errors, stopping poll loop",
 				"errorCount", ecp.errorCount,
 				"maxErrorCount", ecp.config.MaxConsecutiveErrorCount,
 			)
@@ -107,7 +108,7 @@ func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) bool {
 		return true
 	}
 
-	sugar.Infow("New Ethereum Block:",
+	ecp.logger.Sugar().Infow("New Ethereum Block:",
 		"blockNum", block.Number.Value(),
 		"blockHash", block.Hash.Value(),
 		"logCount", len(logs),
@@ -121,17 +122,22 @@ func (ecp *EthereumChainPoller) processLogs(
 	block *ethereum.EthereumBlock,
 	logs []*ethereum.EthereumEventLog,
 ) bool {
-	for range logs {
-		task := &types.Task{
-			ChainId:      ecp.config.ChainId,
-			BlockNumber:  block.Number.Value(),
-			BlockHash:    block.Hash.Value(),
-			CallbackAddr: ecp.config.InboxAddr,
+	for _, log := range logs {
+		if strings.ToLower(log.Address.Value()) != strings.ToLower(ecp.config.InboxAddr) {
+			continue
+		}
+
+		task, err := ecp.logParser.ProcessLog(log, block, ecp.config.InboxAddr, ecp.config.ChainId)
+		if err != nil {
+			ecp.errorCount++
+			ecp.logger.Sugar().Errorw("Error decoding Ethereum log", err)
+			// TODO: emit metric
+			continue
 		}
 
 		select {
 		case ecp.taskQueue <- task:
-			ecp.logger.Sugar().Debugw("Enqueued task for processing",
+			ecp.logger.Sugar().Infow("Enqueued task for processing",
 				"blockNumber", task.BlockNumber,
 				"blockHash", task.BlockHash,
 			)

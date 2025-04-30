@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"time"
 
@@ -130,7 +131,7 @@ func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.
 		AVSAddress:    event.AVSAddress,
 		OperatorSetId: event.OperatorSetId,
 		Payload:       event.Payload,
-		Deadline:      time.Now().Unix() + parsedMeta.Deadline,
+		Deadline:      big.NewInt(time.Now().Unix() + parsedMeta.Deadline),
 		StakeRequired: parsedMeta.StakeWeightRequiredPct,
 		ChainId:       *chainId,
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
@@ -10,8 +11,14 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
@@ -37,7 +44,7 @@ import (
 )
 
 const (
-	inboxAddress = "ethereum-mainnet-inbox"
+	inboxContractName = "TaskMailbox"
 )
 
 var runCmd = &cobra.Command{
@@ -134,7 +141,6 @@ var runCmd = &cobra.Command{
 			ChainPollers:     listeners,
 			ChainWriters:     writers,
 			ExecutionManager: execManager,
-			InboxAddress:     inboxAddress,
 		})
 
 		if err := agg.Start(cmd.Context()); err != nil {
@@ -193,6 +199,11 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 			listeners = append(listeners, listener)
 			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
 		} else {
+			parsedABI, mailboxAddr, err := loadABIAndAddress(chain.ReleaseId, chain.Environment, chain.ChainID)
+			if err != nil {
+				logger.Sugar().Fatalw("Failed to load contract ABI/address", "error", err)
+			}
+			logParser := transactionLogParser.NewTransactionLogParser(parsedABI, logger)
 			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
 				BaseUrl:   chain.RpcURL,
 				BlockType: ethereum.BlockType_Latest,
@@ -200,12 +211,13 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 
 			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
 				chain.ChainID,
-				"ethereum-mainnet-inbox",
+				mailboxAddr.String(),
 			)
 
 			listener := ethereumChainPoller.NewEthereumChainPoller(
 				ethClient,
 				taskQueue,
+				logParser,
 				listenerConfig,
 				logger,
 			)
@@ -235,7 +247,7 @@ func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runn
 
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
-	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.SimulationConfig.PollerPort)
+	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)
 	allocatedPorts := []int{}
 
 	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
@@ -273,4 +285,46 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 	}
 
 	return executors, nil
+}
+
+func loadABIAndAddress(
+	releaseId string,
+	environment string,
+	chainID config.ChainId,
+) (*abi.ABI, common.Address, error) {
+	basePath, err := os.Getwd()
+	if err != nil {
+		return &abi.ABI{}, common.Address{}, fmt.Errorf("could not determine working directory: %w", err)
+	}
+
+	abiPath := filepath.Join(basePath, "contracts", "abi", environment, releaseId)
+
+	abiFile := filepath.Join(abiPath, fmt.Sprintf("%s.abi.json", inboxContractName))
+	abiBytes, err := os.ReadFile(abiFile)
+	if err != nil {
+		return &abi.ABI{}, common.Address{}, fmt.Errorf("failed to read ABI file %s: %w", abiFile, err)
+	}
+
+	parsedABI, err := abi.JSON(strings.NewReader(string(abiBytes)))
+	if err != nil {
+		return &abi.ABI{}, common.Address{}, fmt.Errorf("failed to parse ABI: %w", err)
+	}
+
+	chainMapPath := filepath.Join(abiPath, "chains.json")
+	mapBytes, err := os.ReadFile(chainMapPath)
+	if err != nil {
+		return &parsedABI, common.Address{}, fmt.Errorf("failed to read chains.json: %w", err)
+	}
+
+	var chainMap map[config.ChainId]map[string]string
+	if err := json.Unmarshal(mapBytes, &chainMap); err != nil {
+		return &parsedABI, common.Address{}, fmt.Errorf("failed to parse chains.json: %w", err)
+	}
+
+	addrStr := chainMap[chainID][inboxContractName]
+	if addrStr == "" {
+		return &parsedABI, common.Address{}, fmt.Errorf("no address found for contract %s on chain %d", inboxContractName, chainID)
+	}
+
+	return &parsedABI, common.HexToAddress(addrStr), nil
 }

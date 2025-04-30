@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
+	"math/big"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -84,7 +85,7 @@ func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
 				OperatorSetId: 123456,
 				CallbackAddr:  "0xPeriodicTaskCallback",
 				Payload:       []byte(`{"type":"periodic","timestamp":` + fmt.Sprintf("%d", time.Now().Unix()) + `}`),
-				Deadline:      time.Now().Add(1 * time.Hour).UnixMilli(),
+				Deadline:      big.NewInt(time.Now().Add(1 * time.Hour).UnixMilli()),
 				StakeRequired: 0.75,
 				ChainId:       *scl.config.ChainId,
 			}

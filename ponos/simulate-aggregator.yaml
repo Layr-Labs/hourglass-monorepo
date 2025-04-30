@@ -53,13 +53,9 @@ operator:
 
 chains:
   - name: "ethereum"
-    network: "mainnet"
-    chainId: 1
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
-  - name: "ethereum"
-    network: "holesky"
-    chainId: 17000
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+    environment: "local"
+    chainId: 31337
+    rpcUrl: "http://127.0.0.1:8545"
 
 avss:
   - address: "0xavs1..."

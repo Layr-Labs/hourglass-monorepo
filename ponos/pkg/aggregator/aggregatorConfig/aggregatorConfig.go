@@ -11,16 +11,15 @@ import (
 )
 
 const (
-	EnvPrefix = "AGGREGATOR_"
-
 	Debug = "debug"
 )
 
 type Chain struct {
-	Name    string         `json:"name" yaml:"name"`
-	Network string         `json:"network" yaml:"network"`
-	ChainID config.ChainId `json:"chainId" yaml:"chainId"`
-	RpcURL  string         `json:"rpcUrl" yaml:"rpcUrl"`
+	Name        string         `json:"name" yaml:"name"`
+	Environment string         `json:"environment" yaml:"environment"`
+	ReleaseId   string         `json:"releaseId" yaml:"releaseId"`
+	ChainID     config.ChainId `json:"chainId" yaml:"chainId"`
+	RpcURL      string         `json:"rpcUrl" yaml:"rpcUrl"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -28,8 +27,8 @@ func (c *Chain) Validate() field.ErrorList {
 	if c.Name == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("name"), "name is required"))
 	}
-	if c.Network == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("network"), "network is required"))
+	if c.Environment == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("environment"), "environment is required"))
 	}
 	if c.ChainID == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chainId"), "chainId is required"))
