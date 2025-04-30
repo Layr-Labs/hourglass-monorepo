@@ -19,6 +19,7 @@ simulationConfig:
 serverConfig:
   port: 9000
   secureConnection: false
+  aggregatorUrl: "localhost:9000"
 
 operator:
   address: "0xaggregator123..."

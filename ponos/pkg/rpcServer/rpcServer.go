@@ -18,7 +18,7 @@ type RpcServerConfig struct {
 
 type RpcServer struct {
 	logger       *zap.Logger
-	rpcConfig    *RpcServerConfig
+	RpcConfig    *RpcServerConfig
 	grpcListener *net.Listener
 	grpcServer   *grpc.Server
 }
@@ -54,7 +54,7 @@ func NewRpcServer(
 
 	return &RpcServer{
 		logger:       logger,
-		rpcConfig:    rpcConfig,
+		RpcConfig:    rpcConfig,
 		grpcListener: &grpcListener,
 		grpcServer:   grpcServer,
 	}, nil
@@ -62,7 +62,7 @@ func NewRpcServer(
 
 func (rpc *RpcServer) Start(ctx context.Context) error {
 	rpc.logger.Sugar().Infow("Starting gRPC server",
-		zap.Int("port", rpc.rpcConfig.GrpcPort),
+		zap.Int("port", rpc.RpcConfig.GrpcPort),
 	)
 
 	go func() {

@@ -25,6 +25,7 @@ type PonosExecutionManagerConfig struct {
 	PeerRefreshInterval       time.Duration
 	SecureConnection          bool
 	AggregatorOperatorAddress string
+	AggregatorUrl             string
 }
 
 func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
@@ -167,11 +168,17 @@ func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Ta
 		return
 	}
 
+	aggregatorUrl := fmt.Sprintf("localhost:%d", em.rpcServer.RpcConfig.GrpcPort)
+	if em.config.AggregatorUrl != "" {
+		aggregatorUrl = em.config.AggregatorUrl
+	}
+
 	taskSubmission := &executorV1.TaskSubmission{
 		TaskId:            task.TaskId,
 		AvsAddress:        task.AVSAddress,
 		AggregatorAddress: em.config.AggregatorOperatorAddress,
 		Payload:           task.Payload,
+		AggregatorUrl:     aggregatorUrl,
 		Signature:         sig,
 	}
 
