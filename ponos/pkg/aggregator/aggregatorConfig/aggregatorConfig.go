@@ -94,15 +94,34 @@ type ServerConfig struct {
 }
 
 type AggregatorConfig struct {
-	Debug            bool             `json:"debug" yaml:"debug"`
+	Debug bool `json:"debug" yaml:"debug"`
+
+	// Operator represents who is actually running the aggregator for the AVS
+	Operator *config.OperatorConfig `json:"operator" yaml:"operator"`
+
+	// ServerConfig contains the configuration for the ExecutionManager grpc server
+	ServerConfig ServerConfig `json:"serverConfig" yaml:"serverConfig"`
+
+	// Chains contains the list of chains that the aggregator supports
+	Chains []Chain `json:"chains" yaml:"chains"`
+
+	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
+	Avss []AggregatorAvs `json:"avss" yaml:"avss"`
+
+	// SimulationConfig contains the configuration for the simulation mode
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
-	ServerConfig     ServerConfig     `json:"serverConfig" yaml:"serverConfig"`
-	Chains           []Chain          `json:"chains" yaml:"chains"`
-	Avss             []AggregatorAvs  `json:"avss" yaml:"avss"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
 	var allErrors field.ErrorList
+	if arc.Operator == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("operator"), "operator is required"))
+	} else {
+		if err := arc.Operator.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("operator"), arc.Operator, err.Error()))
+		}
+	}
+
 	if len(arc.Chains) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chains"), "at least one chain is required"))
 	} else {

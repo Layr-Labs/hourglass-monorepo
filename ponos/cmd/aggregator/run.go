@@ -8,6 +8,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"slices"
 	"time"
@@ -50,6 +52,23 @@ var runCmd = &cobra.Command{
 			sugar.Errorw("Invalid configuration", "error", err)
 			return err
 		}
+
+		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
+		if err != nil {
+			return fmt.Errorf("failed to parse keystore JSON: %w", err)
+		}
+
+		keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
+		if err != nil {
+			return fmt.Errorf("failed to get signing scheme: %w", err)
+		}
+
+		privateSigningKey, err := storedKeys.GetPrivateKey(Config.Operator.SigningKeys.BLS.Password, keyScheme)
+		if err != nil {
+			return fmt.Errorf("failed to get private key: %w", err)
+		}
+
+		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
@@ -96,10 +115,12 @@ var runCmd = &cobra.Command{
 			resultQueue,
 			pdf,
 			&executionManager.PonosExecutionManagerConfig{
-				RefreshInterval:  executionManager.DefaultRefreshInterval,
-				SecureConnection: Config.ServerConfig.SecureConnection,
+				PeerRefreshInterval:       executionManager.DefaultRefreshInterval,
+				SecureConnection:          Config.ServerConfig.SecureConnection,
+				AggregatorOperatorAddress: Config.Operator.Address,
 			},
 			Config.ServerConfig.Port,
+			sig,
 			log,
 		)
 		if err != nil {

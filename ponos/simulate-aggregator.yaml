@@ -19,6 +19,36 @@ serverConfig:
   port: 9000
   secureConnection: false
 
+operator:
+  address: "0xaggregator123..."
+  operatorPrivateKey: "..."
+  signingKeys:
+    bls:
+      keystore: |
+        {
+          "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
+          "crypto": {
+            "cipher": "aes-128-ctr",
+            "ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
+            "cipherparams": {
+              "iv": "db170afaeb4ba040992820b10f3cb305"
+            },
+            "kdf": "scrypt",
+            "kdfparams": {
+              "dklen": 32,
+              "n": 262144,
+              "p": 1,
+              "r": 8,
+              "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
+            },
+            "mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
+          },
+          "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
+          "version": 4,
+          "curveType": "bn254"
+        }
+      password: ""
+
 chains:
   - name: "ethereum"
     network: "mainnet"
@@ -36,29 +66,3 @@ avss:
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
-    signingKeys:
-      bls:
-        keystore: |
-          {
-            "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
-            "crypto": {
-              "cipher": "aes-128-ctr",
-              "ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
-              "cipherparams": {
-                "iv": "db170afaeb4ba040992820b10f3cb305"
-              },
-              "kdf": "scrypt",
-              "kdfparams": {
-                "dklen": 32,
-                "n": 262144,
-                "p": 1,
-                "r": 8,
-                "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
-              },
-              "mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
-            },
-            "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
-            "version": 4,
-            "curveType": "bn254"
-          }
-        password: ""

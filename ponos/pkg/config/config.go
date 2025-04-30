@@ -18,6 +18,29 @@ var (
 	}
 )
 
+type OperatorConfig struct {
+	Address            string      `json:"address" yaml:"address"`
+	OperatorPrivateKey string      `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
+	SigningKeys        SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+}
+
+func (oc *OperatorConfig) Validate() error {
+	var allErrors field.ErrorList
+	if oc.Address == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
+	}
+	if oc.OperatorPrivateKey == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("operatorPrivateKey"), "operatorPrivateKey is required"))
+	}
+	if err := oc.SigningKeys.Validate(); err != nil {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), oc.SigningKeys, err.Error()))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
+}
+
 type SigningKey struct {
 	Keystore string `json:"keystore"`
 	Password string `json:"password"`

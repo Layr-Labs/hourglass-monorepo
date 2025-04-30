@@ -60,40 +60,17 @@ func (ap *AvsPerformerConfig) Validate() error {
 	return nil
 }
 
-type OperatorConfig struct {
-	Address            string             `json:"address" yaml:"address"`
-	OperatorPrivateKey string             `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
-	SigningKeys        config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
-}
-
-func (oc *OperatorConfig) Validate() error {
-	var allErrors field.ErrorList
-	if oc.Address == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
-	}
-	if oc.OperatorPrivateKey == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("operatorPrivateKey"), "operatorPrivateKey is required"))
-	}
-	if err := oc.SigningKeys.Validate(); err != nil {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), oc.SigningKeys, err.Error()))
-	}
-	if len(allErrors) > 0 {
-		return allErrors.ToAggregate()
-	}
-	return nil
-}
-
 type SimulationConfig struct {
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
 }
 
 type ExecutorConfig struct {
 	Debug                bool
-	GrpcPort             int                   `json:"grpcPort" yaml:"grpcPort"`
-	PerformerNetworkName string                `json:"performerNetworkName" yaml:"performerNetworkName"`
-	Operator             *OperatorConfig       `json:"operator" yaml:"operator"`
-	AvsPerformers        []*AvsPerformerConfig `json:"avsPerformers" yaml:"avsPerformers"`
-	Simulation           *SimulationConfig     `json:"simulation" yaml:"simulation"`
+	GrpcPort             int                    `json:"grpcPort" yaml:"grpcPort"`
+	PerformerNetworkName string                 `json:"performerNetworkName" yaml:"performerNetworkName"`
+	Operator             *config.OperatorConfig `json:"operator" yaml:"operator"`
+	AvsPerformers        []*AvsPerformerConfig  `json:"avsPerformers" yaml:"avsPerformers"`
+	Simulation           *SimulationConfig      `json:"simulation" yaml:"simulation"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
