@@ -9,6 +9,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
@@ -19,6 +21,30 @@ import (
 	"testing"
 	"time"
 )
+
+const (
+	aggregatorOperatorAddr = "0x1234aggregator"
+	aggregatorPublicKey    = "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29"
+)
+
+func signTaskPayload(payload []byte) ([]byte, error) {
+	ks, err := keystore.ParseKeystoreJSON(aggregatorKeystore)
+	if err != nil {
+		return nil, err
+	}
+	keyScheme, err := keystore.GetSigningSchemeForCurveType(ks.CurveType)
+	if err != nil {
+		return nil, err
+	}
+
+	pk, err := ks.GetPrivateKey("", keyScheme)
+	if err != nil {
+		return nil, err
+	}
+
+	sig := inMemorySigner.NewInMemorySigner(pk)
+	return sig.SignMessage(payload)
+}
 
 func Test_Executor(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second))
@@ -57,7 +83,19 @@ func Test_Executor(t *testing.T) {
 		l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 	}
 
-	exec := NewExecutor(execConfig, baseRpcServer, l, sig)
+	pdf := fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
+		AggregatorPeers: []*peering.OperatorPeerInfo{
+			{
+				OperatorAddress: aggregatorOperatorAddr,
+				Port:            9999,
+				PublicKey:       aggregatorPublicKey,
+				OperatorSetId:   0,
+				NetworkAddress:  "localhost",
+			},
+		},
+	}, l)
+
+	exec := NewExecutor(execConfig, baseRpcServer, l, sig, pdf)
 
 	if err := exec.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
@@ -142,14 +180,17 @@ func Test_Executor(t *testing.T) {
 
 	payload := []byte(`{"numberToBeSquared": 4}`)
 
-	// TODO(seanmcgary): sign this with an aggregators key
+	payloadSig, err := signTaskPayload(payload)
+	if err != nil {
+		t.Fatalf("Failed to sign task payload: %v", err)
+	}
 
 	ack, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
 		TaskId:            "0x1234taskId",
-		AggregatorAddress: "0x1234aggregator",
+		AggregatorAddress: aggregatorOperatorAddr,
 		AvsAddress:        simAggConfig.Avss[0].Address,
 		Payload:           payload,
-		Signature:         []byte("totally a signature"),
+		Signature:         payloadSig,
 		AggregatorUrl:     fmt.Sprintf("localhost:%d", simAggPort),
 	})
 	if err != nil {
@@ -213,6 +254,7 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   workerCount: 1
+  signingCurve: "bn254"
 `
 
 	aggregatorConfigYaml = `
@@ -222,6 +264,34 @@ chains:
     network: mainnet
     chainId: 1
     rpcUrl: https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID
+operator:
+  signingKeys:
+    bls:
+      password: ""
+      keystore: | 
+        {
+          "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
+          "crypto": {
+            "cipher": "aes-128-ctr",
+            "ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
+            "cipherparams": {
+              "iv": "db170afaeb4ba040992820b10f3cb305"
+            },
+            "kdf": "scrypt",
+            "kdfparams": {
+              "dklen": 32,
+              "n": 262144,
+              "p": 1,
+              "r": 8,
+              "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
+            },
+            "mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
+          },
+          "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
+          "version": 4,
+          "curveType": "bn254"
+        }
+
 avss:
   - address: "0xavs1..."
     privateKey: "some private key"
@@ -230,4 +300,26 @@ avss:
     responseTimeout: 3000
     chainIds: [1]
 `
+	aggregatorKeystore = `{
+		  "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
+		  "crypto": {
+			"cipher": "aes-128-ctr",
+			"ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
+			"cipherparams": {
+			  "iv": "db170afaeb4ba040992820b10f3cb305"
+			},
+			"kdf": "scrypt",
+			"kdfparams": {
+			  "dklen": 32,
+			  "n": 262144,
+			  "p": 1,
+			  "r": 8,
+			  "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
+			},
+			"mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
+		  },
+		  "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
+		  "version": 4,
+		  "curveType": "bn254"
+		}`
 )

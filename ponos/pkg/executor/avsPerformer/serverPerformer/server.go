@@ -8,7 +8,10 @@ import (
 	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
@@ -28,11 +31,16 @@ type AvsPerformerServer struct {
 	// TODO(seanmcgary) make this an actual chan with a type
 	taskBacklog chan *performerTask.PerformerTask
 
+	peeringFetcher peering.IPeeringDataFetcher
+
 	reportTaskResponse avsPerformer.ReceiveTaskResponse
+
+	aggregatorPeers []*peering.OperatorPeerInfo
 }
 
 func NewAvsPerformerServer(
 	config *avsPerformer.AvsPerformerConfig,
+	peeringFetcher peering.IPeeringDataFetcher,
 	reportTaskResponse avsPerformer.ReceiveTaskResponse,
 	logger *zap.Logger,
 ) (*AvsPerformerServer, error) {
@@ -41,6 +49,7 @@ func NewAvsPerformerServer(
 		logger:             logger,
 		taskBacklog:        make(chan *performerTask.PerformerTask, 50),
 		reportTaskResponse: reportTaskResponse,
+		peeringFetcher:     peeringFetcher,
 	}, nil
 }
 
@@ -56,8 +65,42 @@ func hashAvsAddress(avsAddress string) string {
 	return hex.EncodeToString(hashBytes)[0:6]
 }
 
+func (aps *AvsPerformerServer) fetchAggregatorPeerInfo() ([]*peering.OperatorPeerInfo, error) {
+	retries := []uint64{1, 3, 5, 10, 20}
+	for i, retry := range retries {
+		aggPeers, err := aps.peeringFetcher.ListAggregatorOperators()
+		if err != nil {
+			aps.logger.Sugar().Errorw("Failed to fetch aggregator peers",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.Error(err),
+			)
+			if i == len(retries)-1 {
+				aps.logger.Sugar().Infow("Giving up on fetching aggregator peers",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.Error(err),
+				)
+				return nil, err
+			}
+			time.Sleep(time.Duration(retry) * time.Second)
+			continue
+		}
+		return aggPeers, nil
+	}
+	return nil, fmt.Errorf("failed to fetch aggregator peers after retries")
+}
+
 func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	containerPortProto := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
+
+	aggregatorPeers, err := aps.fetchAggregatorPeerInfo()
+	if err != nil {
+		return err
+	}
+	aps.aggregatorPeers = aggregatorPeers
+	aps.logger.Sugar().Infow("Fetched aggregator peers",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.Any("aggregatorPeers", aps.aggregatorPeers),
+	)
 
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -260,6 +303,62 @@ func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performerT
 	}
 
 	return performerTask.NewTaskResultFromResultProto(res), nil
+}
+
+func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
+	scheme, err := keystore.GetSigningSchemeForCurveType(aps.config.SigningCurve)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to get signing scheme for curve type",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return err
+	}
+	sig, err := scheme.NewSignatureFromBytes(t.Signature)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to create signature from bytes",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return err
+	}
+	peer := util.Find(aps.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
+		return p.OperatorAddress == t.AggregatorAddress
+	})
+	if peer == nil {
+		aps.logger.Sugar().Errorw("Failed to find peer for task",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+		)
+		return fmt.Errorf("failed to find peer for task")
+	}
+
+	pubKey, err := scheme.NewPublicKeyFromHexString(peer.PublicKey)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to create public key from bytes",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return err
+	}
+	verfied, err := sig.Verify(pubKey, t.Payload)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to verify signature",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+			zap.Error(err),
+		)
+		return err
+	}
+	if !verfied {
+		aps.logger.Sugar().Errorw("Failed to verify signature",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to verify signature")
+	}
+
+	return nil
 }
 
 func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) error {

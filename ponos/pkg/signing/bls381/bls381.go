@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -215,6 +216,14 @@ func NewPublicKeyFromBytes(data []byte) (*PublicKey, error) {
 		point:      point,
 		PointBytes: data,
 	}, nil
+}
+
+func NewPublicKeyFromHexString(pubHex string) (*PublicKey, error) {
+	b, err := hex.DecodeString(pubHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hex string: %w", err)
+	}
+	return NewPublicKeyFromBytes(b)
 }
 
 // Bytes returns the signature as a byte slice

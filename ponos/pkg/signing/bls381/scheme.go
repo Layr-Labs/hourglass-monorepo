@@ -72,6 +72,14 @@ func (s *Scheme) NewSignatureFromBytes(data []byte) (signing.Signature, error) {
 	return &signatureAdapter{sig}, nil
 }
 
+func (s *Scheme) NewPublicKeyFromHexString(hex string) (signing.PublicKey, error) {
+	pubKey, err := NewPublicKeyFromHexString(hex)
+	if err != nil {
+		return nil, err
+	}
+	return &publicKeyAdapter{pubKey}, nil
+}
+
 // AggregateSignatures combines multiple signatures into a single signature
 func (s *Scheme) AggregateSignatures(signatures []signing.Signature) (signing.Signature, error) {
 	// Convert generic signatures to BLS381 specific signatures

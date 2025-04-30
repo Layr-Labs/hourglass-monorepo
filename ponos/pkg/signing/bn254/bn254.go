@@ -3,6 +3,7 @@ package bn254
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -158,6 +159,14 @@ func NewPublicKeyFromBytes(data []byte) (*PublicKey, error) {
 		point:      point,
 		PointBytes: data,
 	}, nil
+}
+
+func NewPublicKeyFromHexString(pubHex string) (*PublicKey, error) {
+	b, err := hex.DecodeString(pubHex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hex string: %w", err)
+	}
+	return NewPublicKeyFromBytes(b)
 }
 
 // Bytes returns the signature as a byte slice

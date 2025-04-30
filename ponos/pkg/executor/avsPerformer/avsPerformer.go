@@ -23,12 +23,14 @@ type AvsPerformerConfig struct {
 	Image                PerformerImage
 	WorkerCount          int
 	PerformerNetworkName string
+	SigningCurve         string // bn254, bls381, etc
 }
 
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	ProcessTasks(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) error
+	ValidateTaskSignature(task *performerTask.PerformerTask) error
 	Shutdown() error
 }
 

@@ -42,11 +42,15 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) error {
 		return fmt.Errorf("AVS avsPerformer not found for address %s", task.AvsAddress)
 	}
 
-	performerTask := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
+	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
+
+	if err := avsPerformer.ValidateTaskSignature(pt); err != nil {
+		return fmt.Errorf("failed to validate task signature: %w", err)
+	}
 
 	e.inflightTasks.Store(task.TaskId, task)
 
-	err := avsPerformer.RunTask(context.Background(), performerTask)
+	err := avsPerformer.RunTask(context.Background(), pt)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to run task",
 			"taskId", task.TaskId,
