@@ -85,7 +85,8 @@ func (e *Executor) receiveTaskResponse(originalTask *performerTask.PerformerTask
 	}
 	task := storedTask.(*executorV1.TaskSubmission)
 
-	aggClient, err := aggregatorClient.NewAggregatorClient(task.AggregatorUrl, false)
+	// TODO(seanmcgary): should probably assume secure unless localhost or something...
+	aggClient, err := aggregatorClient.NewAggregatorClient(task.AggregatorUrl, true)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to create aggregator client",
 			zap.String("taskId", task.TaskId),
