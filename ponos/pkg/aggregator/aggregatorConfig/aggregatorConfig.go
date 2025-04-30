@@ -76,6 +76,7 @@ type SimulationConfig struct {
 	Port                int                  `json:"port" yaml:"port"`
 	SecureConnection    bool                 `json:"secureConnection" yaml:"secureConnection"`
 	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executorPeerConfigs" yaml:"executorPeerConfigs"`
+	AutomaticPoller     bool                 `json:"automaticPoller" yaml:"automaticPoller"`
 }
 
 type ServerConfig struct {

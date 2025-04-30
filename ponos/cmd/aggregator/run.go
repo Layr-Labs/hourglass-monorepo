@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"time"
@@ -104,17 +105,32 @@ func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *type
 		if cfg.SimulationConfig.Enabled {
 			port := cfg.SimulationConfig.Port + i + 1
 
-			listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-				ChainId:      &chain.ChainID,
-				Port:         port,
-				TaskInterval: 250 * time.Millisecond,
+			var listener runnable.IRunnable
+			if cfg.SimulationConfig.AutomaticPoller {
+				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
+					ChainId:      &chain.ChainID,
+					Port:         port,
+					TaskInterval: 250 * time.Millisecond,
+				}
+
+				listener = simulatedChainPoller.NewSimulatedChainPoller(
+					taskQueue,
+					listenerConfig,
+					logger,
+				)
+			} else {
+				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
+					ChainId: &chain.ChainID,
+					Port:    port,
+				}
+
+				listener = manualPushChainPoller.NewManualPushChainPoller(
+					taskQueue,
+					listenerConfig,
+					logger,
+				)
 			}
 
-			listener := simulatedChainPoller.NewSimulatedChainPoller(
-				taskQueue,
-				listenerConfig,
-				logger,
-			)
 			listeners = append(listeners, listener)
 			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
 		} else {
@@ -224,11 +240,7 @@ func buildExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig,
 }
 
 func loadAggregatorServer(cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) (*rpcServer.RpcServer, error) {
-	if cfg.SimulationConfig.Enabled {
-		return rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: cfg.SimulationConfig.Port}, logger)
-	} else {
-		return rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: cfg.ServerConfig.Port}, logger)
-	}
+	return rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: cfg.ServerConfig.Port}, logger)
 }
 
 func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfig) *fetcher.LocalPeeringDataFetcherConfig {

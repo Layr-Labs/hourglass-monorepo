@@ -3,9 +3,10 @@ simulationConfig:
   enabled: true
   port: 8080
   secureConnection: false
+  automaticPoller: false
   executorPeerConfigs:
     - publicKey: "publicKey"
-      networkAddress: "executor"
+      networkAddress: "localhost"
       port: 9090
 
 serverConfig:

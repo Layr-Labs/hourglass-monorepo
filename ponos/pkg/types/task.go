@@ -26,16 +26,16 @@ type TaskEvent struct {
 }
 
 type Task struct {
-	TaskId        string
-	AVSAddress    string
-	OperatorSetId uint32
-	CallbackAddr  string
-	Deadline      int64
-	StakeRequired float64
-	Payload       []byte
-	ChainId       config.ChainId
-	BlockNumber   uint64
-	BlockHash     string
+	TaskId        string         `json:"taskId"`
+	AVSAddress    string         `json:"avsAddress"`
+	OperatorSetId uint32         `json:"operatorSetId"`
+	CallbackAddr  string         `json:"callbackAddr"`
+	Deadline      int64          `json:"deadline"`
+	StakeRequired float64        `json:"stakeRequired"`
+	Payload       []byte         `json:"payload"`
+	ChainId       config.ChainId `json:"chainId"`
+	BlockNumber   uint64         `json:"blockNumber"`
+	BlockHash     string         `json:"blockHash"`
 }
 
 type TaskResult struct {
