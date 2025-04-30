@@ -6,7 +6,7 @@ import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifie
 
 contract BN254CertificateVerifier is IBN254CertificateVerifier {
     function maxOperatorTableStaleness() external pure returns (uint32) {
-        return 86400;
+        return 86_400;
     }
 
     function verifyCertificate(
@@ -16,14 +16,14 @@ contract BN254CertificateVerifier is IBN254CertificateVerifier {
     }
 
     function verifyCertificateProportion(
-        BN254Certificate memory /*cert*/,
+        BN254Certificate memory, /*cert*/
         uint16[] memory /*totalStakeProportionThresholds*/
     ) external pure returns (bool) {
         return true;
     }
 
     function verifyCertificateNominal(
-        BN254Certificate memory /*cert*/,
+        BN254Certificate memory, /*cert*/
         uint96[] memory /*totalStakeNominalThresholds*/
     ) external pure returns (bool) {
         return true;

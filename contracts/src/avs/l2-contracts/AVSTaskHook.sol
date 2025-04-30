@@ -8,8 +8,8 @@ import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifie
 
 contract AVSTaskHook is IAVSTaskHook {
     function validatePreTaskCreation(
-        address /*caller*/,
-        OperatorSet memory /*operatorSet*/,
+        address, /*caller*/
+        OperatorSet memory, /*operatorSet*/
         bytes memory /*payload*/
     ) external view {
         //TODO: Implement
@@ -22,7 +22,7 @@ contract AVSTaskHook is IAVSTaskHook {
     }
 
     function validateTaskResultSubmission(
-        bytes32 /*taskHash*/,
+        bytes32, /*taskHash*/
         IBN254CertificateVerifier.BN254Certificate memory /*cert*/
     ) external {
         //TODO: Implement
