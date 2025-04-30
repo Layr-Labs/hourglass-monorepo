@@ -5,7 +5,12 @@ import {IAVSRegistrar} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src
 
 interface ITaskAVSRegistrarTypes {}
 
-interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {}
+interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {
+    /// @notice Thrown when the provided AVS address does not match the expected one.
+    error InvalidAVS();
+    /// @notice Thrown when the caller is not the AllocationManager
+    error OnlyAllocationManager();
+}
 
 interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {}
 
