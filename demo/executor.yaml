@@ -1,5 +1,6 @@
 ---
 grpcPort: 9090
+performerNetworkName: demo_hourglass-demo
 operator:
   address: "0xexecutor123..."
   operatorPrivateKey: "..."

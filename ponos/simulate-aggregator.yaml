@@ -1,3 +1,4 @@
+---
 debug: false
 simulationConfig:
   enabled: true
@@ -60,9 +61,8 @@ chains:
     rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
 
 avss:
-  - address: "0x1234567890abcdef1234567890abcdef12345678"
+  - address: "0xavs1..."
     privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
-    privateSigningKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
-    privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [1]
+    signingCurve: "bn254"

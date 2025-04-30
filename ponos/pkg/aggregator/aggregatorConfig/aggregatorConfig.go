@@ -44,11 +44,11 @@ func (c *Chain) Validate() field.ErrorList {
 }
 
 type AggregatorAvs struct {
-	Address         string             `json:"address" yaml:"address"`
-	PrivateKey      string             `json:"privateKey" yaml:"privateKey"`
-	ResponseTimeout int                `json:"responseTimeout" yaml:"responseTimeout"`
-	ChainIds        []uint             `json:"chainIds" yaml:"chainIds"`
-	SigningKeys     config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+	Address         string `json:"address" yaml:"address"`
+	PrivateKey      string `json:"privateKey" yaml:"privateKey"`
+	ResponseTimeout int    `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds        []uint `json:"chainIds" yaml:"chainIds"`
+	SigningCurve    string `json:"signingCurve" yaml:"signingCurve"`
 }
 
 func (aa *AggregatorAvs) Validate() error {
@@ -56,8 +56,10 @@ func (aa *AggregatorAvs) Validate() error {
 	if aa.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
 	}
-	if err := aa.SigningKeys.Validate(); err != nil {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), aa.SigningKeys, err.Error()))
+	if aa.SigningCurve == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
+	} else if !slices.Contains([]string{"bn254", "bls381"}, aa.SigningCurve) {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), aa.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
