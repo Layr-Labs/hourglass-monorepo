@@ -44,11 +44,11 @@ func (c *Chain) Validate() field.ErrorList {
 }
 
 type AggregatorAvs struct {
-	Address         string             `json:"address" yaml:"address"`
-	PrivateKey      string             `json:"privateKey" yaml:"privateKey"`
-	ResponseTimeout int                `json:"responseTimeout" yaml:"responseTimeout"`
-	ChainIds        []uint             `json:"chainIds" yaml:"chainIds"`
-	SigningKeys     config.SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+	Address         string `json:"address" yaml:"address"`
+	PrivateKey      string `json:"privateKey" yaml:"privateKey"`
+	ResponseTimeout int    `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds        []uint `json:"chainIds" yaml:"chainIds"`
+	SigningCurve    string `json:"signingCurve" yaml:"signingCurve"`
 }
 
 func (aa *AggregatorAvs) Validate() error {
@@ -56,8 +56,10 @@ func (aa *AggregatorAvs) Validate() error {
 	if aa.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
 	}
-	if err := aa.SigningKeys.Validate(); err != nil {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("signingKeys"), aa.SigningKeys, err.Error()))
+	if aa.SigningCurve == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
+	} else if !slices.Contains([]string{"bn254", "bls381"}, aa.SigningCurve) {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), aa.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
@@ -72,27 +74,57 @@ type ExecutorPeerConfig struct {
 }
 
 type SimulationConfig struct {
-	Enabled             bool                 `json:"enabled" yaml:"enabled"`
-	Port                int                  `json:"port" yaml:"port"`
-	SecureConnection    bool                 `json:"secureConnection" yaml:"secureConnection"`
-	ExecutorPeerConfigs []ExecutorPeerConfig `json:"executorPeerConfigs" yaml:"executorPeerConfigs"`
+	// Enabled indicates whether the simulation mode is enabled
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// PollerPort is the port on which the simulated poller will listen for incoming manual requests
+	PollerPort int `json:"pollerPort" yaml:"pollerPort"`
+
+	// SimulateExecutors generates a number of fake executors to simulate the behavior of real executors
+	SimulateExecutors bool `json:"simulateExecutors" yaml:"simulateExecutors"`
+
+	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
+	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
+
+	// AutomaticPoller indicates whether the simulated poller should generate events automatically
+	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
 }
 
 type ServerConfig struct {
-	Port             int  `json:"port" yaml:"port"`
-	SecureConnection bool `json:"secureConnection" yaml:"secureConnection"`
+	Port             int    `json:"port" yaml:"port"`
+	SecureConnection bool   `json:"secureConnection" yaml:"secureConnection"`
+	AggregatorUrl    string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
 }
 
 type AggregatorConfig struct {
-	Debug            bool             `json:"debug" yaml:"debug"`
+	Debug bool `json:"debug" yaml:"debug"`
+
+	// Operator represents who is actually running the aggregator for the AVS
+	Operator *config.OperatorConfig `json:"operator" yaml:"operator"`
+
+	// ServerConfig contains the configuration for the ExecutionManager grpc server
+	ServerConfig ServerConfig `json:"serverConfig" yaml:"serverConfig"`
+
+	// Chains contains the list of chains that the aggregator supports
+	Chains []Chain `json:"chains" yaml:"chains"`
+
+	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
+	Avss []AggregatorAvs `json:"avss" yaml:"avss"`
+
+	// SimulationConfig contains the configuration for the simulation mode
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
-	ServerConfig     ServerConfig     `json:"serverConfig" yaml:"serverConfig"`
-	Chains           []Chain          `json:"chains" yaml:"chains"`
-	Avss             []AggregatorAvs  `json:"avss" yaml:"avss"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
 	var allErrors field.ErrorList
+	if arc.Operator == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("operator"), "operator is required"))
+	} else {
+		if err := arc.Operator.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("operator"), arc.Operator, err.Error()))
+		}
+	}
+
 	if len(arc.Chains) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chains"), "at least one chain is required"))
 	} else {
@@ -134,9 +166,8 @@ func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
 		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
 		SimulationConfig: SimulationConfig{
-			Enabled:          viper.GetBool("enabled"),
-			Port:             viper.GetInt("port"),
-			SecureConnection: viper.GetBool("secureConnection"),
+			Enabled:    viper.GetBool("enabled"),
+			PollerPort: viper.GetInt("port"),
 		},
 	}
 }

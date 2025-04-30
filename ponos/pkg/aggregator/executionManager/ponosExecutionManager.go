@@ -3,42 +3,75 @@ package executionManager
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"sync"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executorClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
+	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/fauxSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
 
+const (
+	DefaultRefreshInterval = 30 * time.Second
+)
+
 type PonosExecutionManagerConfig struct {
-	RefreshInterval  time.Duration
-	SecureConnection bool
+	PeerRefreshInterval       time.Duration
+	SecureConnection          bool
+	AggregatorOperatorAddress string
+	AggregatorUrl             string
 }
 
 func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
 	return &PonosExecutionManagerConfig{
-		RefreshInterval:  30 * time.Second,
-		SecureConnection: false,
+		PeerRefreshInterval: DefaultRefreshInterval,
+		SecureConnection:    false,
 	}
 }
 
 type PonosExecutionManager struct {
-	aggregatorServer   *rpcServer.RpcServer
+	rpcServer          *rpcServer.RpcServer
 	taskQueue          chan *types.Task
 	resultQueue        chan *types.TaskResult
-	execClients        map[string]executorClient.IExecutorClient
+	execClients        map[string]executorV1.ExecutorServiceClient
 	peeringDataFetcher peering.IPeeringDataFetcher
 	running            sync.Map
 	config             *PonosExecutionManagerConfig
+	signer             signer.Signer
 	logger             *zap.Logger
+}
+
+func NewPonosExecutionManagerWithRpcServer(
+	taskQueue chan *types.Task,
+	resultQueue chan *types.TaskResult,
+	peeringDataFetcher peering.IPeeringDataFetcher,
+	config *PonosExecutionManagerConfig,
+	rpcServerPort int,
+	signer signer.Signer,
+	logger *zap.Logger,
+) (*PonosExecutionManager, error) {
+	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: rpcServerPort,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC server: %w", err)
+	}
+
+	return NewPonosExecutionManager(
+		rpc,
+		taskQueue,
+		resultQueue,
+		peeringDataFetcher,
+		config,
+		signer,
+		logger,
+	), nil
 }
 
 func NewPonosExecutionManager(
@@ -47,28 +80,30 @@ func NewPonosExecutionManager(
 	resultQueue chan *types.TaskResult,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	config *PonosExecutionManagerConfig,
+	signer signer.Signer,
 	logger *zap.Logger,
 ) *PonosExecutionManager {
 	manager := &PonosExecutionManager{
-		aggregatorServer:   server,
+		rpcServer:          server,
 		taskQueue:          taskQueue,
 		resultQueue:        resultQueue,
 		peeringDataFetcher: peeringDataFetcher,
-		execClients:        map[string]executorClient.IExecutorClient{},
+		execClients:        map[string]executorV1.ExecutorServiceClient{},
 		config:             config,
+		signer:             signer,
 		logger:             logger,
 	}
-	aggregatorpb.RegisterAggregatorServiceServer(server.GetGrpcServer(), manager)
+	aggregatorV1.RegisterAggregatorServiceServer(server.GetGrpcServer(), manager)
 	return manager
 }
 
 func (em *PonosExecutionManager) Start(ctx context.Context) error {
 	em.logger.Sugar().Infow("Starting PonosExecutionManager",
 		"secureConnection", em.config.SecureConnection,
-		"refreshInterval", em.config.RefreshInterval,
+		"refreshInterval", em.config.PeerRefreshInterval,
 	)
 
-	err := em.aggregatorServer.Start(ctx)
+	err := em.rpcServer.Start(ctx)
 	if err != nil {
 		return err
 	}
@@ -80,7 +115,7 @@ func (em *PonosExecutionManager) Start(ctx context.Context) error {
 }
 
 func (em *PonosExecutionManager) refreshExecutorClientsLoop(ctx context.Context) {
-	ticker := time.NewTicker(em.config.RefreshInterval)
+	ticker := time.NewTicker(em.config.PeerRefreshInterval)
 	defer ticker.Stop()
 
 	sugar := em.logger.Sugar()
@@ -122,33 +157,72 @@ func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
 func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Task) {
 	sugar := em.logger.Sugar()
 	sugar.Infow("Processing task", "taskId", task.TaskId)
-
 	em.running.Store(task.TaskId, task)
-	clientCount := 0
-	for addr, execClient := range em.execClients {
-		clientCount++
 
-		go func(address string, client executorClient.IExecutorClient) {
-			err := client.SubmitTask(ctx, task)
+	sig, err := em.signer.SignMessage(task.Payload)
+	if err != nil {
+		sugar.Errorw("Failed to sign task payload",
+			zap.String("taskId", task.TaskId),
+			zap.Error(err),
+		)
+		return
+	}
+
+	aggregatorUrl := fmt.Sprintf("localhost:%d", em.rpcServer.RpcConfig.GrpcPort)
+	if em.config.AggregatorUrl != "" {
+		sugar.Infow("Using custom aggregator URL",
+			zap.String("aggregatorUrl", em.config.AggregatorUrl),
+		)
+		aggregatorUrl = em.config.AggregatorUrl
+	}
+
+	taskSubmission := &executorV1.TaskSubmission{
+		TaskId:            task.TaskId,
+		AvsAddress:        task.AVSAddress,
+		AggregatorAddress: em.config.AggregatorOperatorAddress,
+		Payload:           task.Payload,
+		AggregatorUrl:     aggregatorUrl,
+		Signature:         sig,
+	}
+
+	var wg sync.WaitGroup
+	for addr, execClient := range em.execClients {
+		wg.Add(1)
+
+		go func(address string, client executorV1.ExecutorServiceClient, wg *sync.WaitGroup) {
+			defer wg.Done()
+			fmt.Printf("Submitting task: %+v\n", taskSubmission)
+			res, err := client.SubmitTask(ctx, taskSubmission)
 			if err != nil {
 				sugar.Errorw("Failed to submit task to executor",
-					"executor_address", address,
-					"task_id", task.TaskId,
-					"error", err,
+					zap.String("executorAddress", address),
+					zap.String("taskId", task.TaskId),
+					zap.Error(err),
 				)
-			} else {
-				sugar.Debugw("Successfully submitted task to executor",
-					"executor_address", address,
-					"task_id", task.TaskId,
-				)
+				return
 			}
-		}(addr, execClient)
+			if !res.Success {
+				sugar.Errorw("Task submission failed",
+					zap.String("executorAddress", address),
+					zap.String("taskId", task.TaskId),
+					zap.String("message", res.Message),
+				)
+				return
+			}
+			sugar.Debugw("Successfully submitted task to executor",
+				zap.String("executorAddress", address),
+				zap.String("taskId", task.TaskId),
+			)
+
+		}(addr, execClient, &wg)
 	}
+	wg.Wait()
+	sugar.Infow("Task submission completed", zap.String("taskId", task.TaskId))
 }
 
 func (em *PonosExecutionManager) SubmitTaskResult(
 	ctx context.Context,
-	result *aggregatorpb.TaskResult,
+	result *aggregatorV1.TaskResult,
 ) (*v1.SubmitAck, error) {
 	sugar := em.logger.Sugar()
 	taskID := result.TaskId
@@ -199,12 +273,16 @@ func (em *PonosExecutionManager) refreshExecutorClients() {
 
 	for _, peer := range peers {
 		if _, exists := em.execClients[peer.PublicKey]; !exists {
-			client, err := em.loadExecutorClient(peer, em.config.SecureConnection)
+			addr := fmt.Sprintf("%s:%d", peer.NetworkAddress, peer.Port)
+
+			// TODO - SecureConnection should always be used unless the address contains 'localhost' or '127.0.0.1'
+			client, err := executorClient.NewExecutorClient(addr, !em.config.SecureConnection)
 			if err != nil {
 				// TODO: emit metric
 				sugar.Errorw("Failed to create executor client",
-					"public_key", peer.PublicKey,
-					"error", err,
+					zap.String("address", addr),
+					zap.String("publicKey", peer.PublicKey),
+					zap.String("operatorAddress", peer.OperatorAddress),
 				)
 				continue
 			}
@@ -218,20 +296,4 @@ func (em *PonosExecutionManager) refreshExecutorClients() {
 	if newClientCount > 0 {
 		sugar.Infow("Refreshed executor clients", "newClients", newClientCount, "totalClients", len(em.execClients))
 	}
-}
-
-func (em *PonosExecutionManager) loadExecutorClient(
-	peer *peering.OperatorPeerInfo,
-	secureConnection bool,
-) (executorClient.IExecutorClient, error) {
-	conn, err := clients.NewGrpcClient(
-		fmt.Sprintf("%s:%d", peer.NetworkAddress, peer.Port),
-		secureConnection,
-	)
-	if err != nil {
-		return nil, err
-	}
-	client := executorpb.NewExecutorServiceClient(conn)
-	// TODO: replace with a real signer.
-	return executorClient.NewPonosExecutorClient(client, fauxSigner.NewFauxSigner()), nil
 }

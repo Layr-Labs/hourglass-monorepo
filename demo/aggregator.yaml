@@ -9,7 +9,7 @@ simulationConfig:
   simulatePeering:
     enabled: true
     operatorPeers:
-      - networkAddress: "localhost"
+      - networkAddress: "executor"
         port: 9090
         operatorAddress: "0xoperator123..."
         operatorSetId: 0
@@ -19,7 +19,7 @@ simulationConfig:
 serverConfig:
   port: 9000
   secureConnection: false
-  aggregatorUrl: "localhost:9000"
+  aggregatorUrl: "aggregator:9000"
 
 operator:
   address: "0xaggregator123..."

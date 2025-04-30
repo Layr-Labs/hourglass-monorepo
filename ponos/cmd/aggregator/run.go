@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"slices"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
@@ -48,15 +53,35 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
+		if err != nil {
+			return fmt.Errorf("failed to parse keystore JSON: %w", err)
+		}
+
+		keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
+		if err != nil {
+			return fmt.Errorf("failed to get signing scheme: %w", err)
+		}
+
+		privateSigningKey, err := storedKeys.GetPrivateKey(Config.Operator.SigningKeys.BLS.Password, keyScheme)
+		if err != nil {
+			return fmt.Errorf("failed to get private key: %w", err)
+		}
+
+		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
+
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
 		taskQueue := make(chan *types.Task, 100)
 		resultQueue := make(chan *types.TaskResult, 100)
 
-		if Config.SimulationConfig.Enabled {
+		if Config.SimulationConfig.SimulateExecutors {
 			sugar.Infow("Starting simulation executors...")
-			executors := buildExecutors(cmd.Context(), &Config, log)
+			executors, err := buildSimulatedExecutors(cmd.Context(), &Config, log)
+			if err != nil {
+				sugar.Fatalw("Failed to build simulated executors", "error", err)
+			}
 
 			for i, executor := range executors {
 				if err := executor.Start(cmd.Context()); err != nil {
@@ -65,9 +90,44 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		listeners := buildListeners(&Config, taskQueue, log)
+		var pdf *fetcher.LocalPeeringDataFetcher
+		if Config.SimulationConfig.SimulatePeering.Enabled {
+			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
+				OperatorPeers: util.Map(Config.SimulationConfig.SimulatePeering.OperatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
+					return &peering.OperatorPeerInfo{
+						OperatorAddress: p.OperatorAddress,
+						Port:            p.Port,
+						PublicKey:       p.PublicKey,
+						OperatorSetId:   p.OperatorSetId,
+						NetworkAddress:  p.NetworkAddress,
+					}
+				}),
+			}, log)
+		} else {
+			return fmt.Errorf("peering data fetcher not implemented")
+		}
+
+		listeners := buildChainListeners(&Config, taskQueue, log)
 		writers := buildWriters(resultQueue, log)
-		execManager := buildExecutionManager(&Config, taskQueue, resultQueue, log)
+
+		execManager, err := executionManager.NewPonosExecutionManagerWithRpcServer(
+			taskQueue,
+			resultQueue,
+			pdf,
+			&executionManager.PonosExecutionManagerConfig{
+				PeerRefreshInterval:       executionManager.DefaultRefreshInterval,
+				SecureConnection:          Config.ServerConfig.SecureConnection,
+				AggregatorOperatorAddress: Config.Operator.Address,
+				AggregatorUrl:             Config.ServerConfig.AggregatorUrl,
+			},
+			Config.ServerConfig.Port,
+			sig,
+			log,
+		)
+		if err != nil {
+			sugar.Errorw("Failed to create execution manager", "error", err)
+			return err
+		}
 
 		agg := aggregator.NewAggregator(&aggregator.AggregatorConfig{
 			Logger:           log,
@@ -97,24 +157,39 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-func buildListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *types.Task, logger *zap.Logger) []runnable.IRunnable {
+func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *types.Task, logger *zap.Logger) []runnable.IRunnable {
 	var listeners []runnable.IRunnable
 
 	for i, chain := range cfg.Chains {
 		if cfg.SimulationConfig.Enabled {
-			port := cfg.SimulationConfig.Port + i + 1
+			port := cfg.SimulationConfig.PollerPort + i + 1
 
-			listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-				ChainId:      &chain.ChainID,
-				Port:         port,
-				TaskInterval: 250 * time.Millisecond,
+			var listener runnable.IRunnable
+			if cfg.SimulationConfig.AutomaticPoller {
+				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
+					ChainId:      &chain.ChainID,
+					Port:         port,
+					TaskInterval: 250 * time.Millisecond,
+				}
+
+				listener = simulatedChainPoller.NewSimulatedChainPoller(
+					taskQueue,
+					listenerConfig,
+					logger,
+				)
+			} else {
+				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
+					ChainId: &chain.ChainID,
+					Port:    port,
+				}
+
+				listener = manualPushChainPoller.NewManualPushChainPoller(
+					taskQueue,
+					listenerConfig,
+					logger,
+				)
 			}
 
-			listener := simulatedChainPoller.NewSimulatedChainPoller(
-				taskQueue,
-				listenerConfig,
-				logger,
-			)
 			listeners = append(listeners, listener)
 			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
 		} else {
@@ -158,87 +233,44 @@ func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runn
 	return []runnable.IRunnable{writer}
 }
 
-func buildExecutionManager(
-	cfg *aggregatorConfig.AggregatorConfig,
-	taskQueue chan *types.Task,
-	resultQueue chan *types.TaskResult,
-	logger *zap.Logger,
-) runnable.IRunnable {
-	peeringFetcher := fetcher.NewLocalPeeringDataFetcher(
-		convertSimulationPeeringConfig(cfg.SimulationConfig.ExecutorPeerConfigs),
-		logger,
-	)
-
-	aggregatorServer, err := loadAggregatorServer(cfg, logger)
-	if err != nil {
-		logger.Sugar().Fatalw("Failed to create aggregator server", "error", err)
-	}
-
-	emConfig := executionManager.NewPonosExecutionManagerDefaultConfig()
-	emConfig.SecureConnection = cfg.ServerConfig.SecureConnection
-
-	manager := executionManager.NewPonosExecutionManager(
-		aggregatorServer,
-		taskQueue,
-		resultQueue,
-		peeringFetcher,
-		emConfig,
-		logger,
-	)
-
-	logger.Sugar().Infow("Created execution manager")
-	return manager
-}
-
-func buildExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) []runnable.IRunnable {
+func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
-	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.SimulationConfig.Port)
+	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.SimulationConfig.PollerPort)
+	allocatedPorts := []int{}
 
-	for _, config := range cfg.SimulationConfig.ExecutorPeerConfigs {
-		port := config.Port
-
-		rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: port}, logger)
-		if err != nil {
-			logger.Sugar().Fatalw("Failed to create rpcServer for executor", "error", err)
+	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
+		if slices.Contains(allocatedPorts, peer.Port) {
+			return nil, fmt.Errorf("port %d is already allocated", peer.Port)
 		}
 
-		clientConn, err := clients.NewGrpcClient(aggregatorUrl, cfg.SimulationConfig.SecureConnection)
+		rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: peer.Port}, logger)
+		if err != nil {
+			logger.Sugar().Fatalw("Failed to create rpcServer for executor", "error", err)
+			return nil, err
+		}
+
+		clientConn, err := clients.NewGrpcClient(aggregatorUrl, false)
 		if err != nil {
 			logger.Sugar().Fatalw("Failed to create aggregator client", "error", err)
+			return nil, err
 		}
 
 		aggregatorClient := aggregatorpb.NewAggregatorServiceClient(clientConn)
-		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, config.PublicKey)
+		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, peer.PublicKey)
 		executorpb.RegisterExecutorServiceServer(rpc.GetGrpcServer(), exe)
 		err = rpc.Start(ctx)
 		if err != nil {
-			logger.Sugar().Fatalw("Failed to start executor", "error", err)
-			panic(err)
+			return nil, fmt.Errorf("failed to start executor: %w", err)
 		}
 
 		executors = append(executors, exe)
-		logger.Sugar().Infow("Created simulated executor", "publicKey", config.PublicKey, "port", port)
+		allocatedPorts = append(allocatedPorts, peer.Port)
+
+		logger.Sugar().Infow("Created simulated executor",
+			zap.String("publicKey", peer.PublicKey),
+			zap.Int("port", peer.Port),
+		)
 	}
 
-	return executors
-}
-
-func loadAggregatorServer(cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) (*rpcServer.RpcServer, error) {
-	if cfg.SimulationConfig.Enabled {
-		return rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: cfg.SimulationConfig.Port}, logger)
-	} else {
-		return rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: cfg.ServerConfig.Port}, logger)
-	}
-}
-
-func convertSimulationPeeringConfig(configs []aggregatorConfig.ExecutorPeerConfig) *fetcher.LocalPeeringDataFetcherConfig {
-	return &fetcher.LocalPeeringDataFetcherConfig{
-		OperatorPeers: util.Map(configs, func(config aggregatorConfig.ExecutorPeerConfig, i uint64) *peering.OperatorPeerInfo {
-			return &peering.OperatorPeerInfo{
-				NetworkAddress: config.NetworkAddress,
-				Port:           config.Port,
-				PublicKey:      config.PublicKey,
-			}
-		}),
-	}
+	return executors, nil
 }

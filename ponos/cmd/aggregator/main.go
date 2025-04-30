@@ -42,8 +42,14 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		key := config.KebabToSnakeCase(f.Name)
-		viper.BindPFlag(key, f) //nolint:errcheck
-		viper.BindEnv(key)      //nolint:errcheck
+		if err := viper.BindPFlag(key, f); err != nil {
+			fmt.Printf("Failed to bind flag %s: %v\n", key, err)
+			panic(err)
+		}
+		if err := viper.BindEnv(key); err != nil {
+			fmt.Printf("Failed to bind env %s: %v\n", key, err)
+			panic(err)
+		}
 	})
 }
 
