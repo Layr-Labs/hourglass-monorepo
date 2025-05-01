@@ -17,10 +17,9 @@ import (
 )
 
 type EthereumChainPollerConfig struct {
-	ChainId                  config.ChainId
-	PollingInterval          time.Duration
-	InboxAddr                string
-	MaxConsecutiveErrorCount int
+	ChainId         config.ChainId
+	PollingInterval time.Duration
+	InboxAddr       string
 }
 
 type EthereumChainPoller struct {
@@ -30,15 +29,13 @@ type EthereumChainPoller struct {
 	logParser         *transactionLogParser.TransactionLogParser
 	config            *EthereumChainPollerConfig
 	logger            *zap.Logger
-	errorCount        int
 }
 
 func NewEthereumChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EthereumChainPollerConfig {
 	return &EthereumChainPollerConfig{
-		ChainId:                  chainId,
-		InboxAddr:                inboxAddr,
-		PollingInterval:          10 * time.Millisecond,
-		MaxConsecutiveErrorCount: 5,
+		ChainId:         chainId,
+		InboxAddr:       inboxAddr,
+		PollingInterval: 10 * time.Millisecond,
 	}
 }
 
@@ -50,12 +47,11 @@ func NewEthereumChainPoller(
 	logger *zap.Logger,
 ) *EthereumChainPoller {
 	return &EthereumChainPoller{
-		ethClient:  ethClient,
-		logger:     logger,
-		taskQueue:  taskQueue,
-		logParser:  logParser,
-		config:     config,
-		errorCount: 0,
+		ethClient: ethClient,
+		logger:    logger,
+		taskQueue: taskQueue,
+		logParser: logParser,
+		config:    config,
 	}
 }
 
@@ -82,15 +78,8 @@ func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
 		case <-ticker.C:
 			err := ecp.processNextBlock(ctx)
 			if err != nil {
-				ecp.logger.Sugar().Errorw("Failed to process the next block", "error", err)
-				ecp.errorCount++
-				if ecp.errorCount > ecp.config.MaxConsecutiveErrorCount {
-					ecp.logger.Sugar().Errorw("Too many consecutive errors, stopping poll loop",
-						"errorCount", ecp.errorCount,
-						"maxErrorCount", ecp.config.MaxConsecutiveErrorCount,
-					)
-					return
-				}
+				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
+				return
 			}
 		}
 	}
@@ -102,7 +91,6 @@ func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) error {
 		return err
 	}
 
-	ecp.errorCount = 0
 	if block == nil {
 		return nil
 	}
