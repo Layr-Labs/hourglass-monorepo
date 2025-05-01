@@ -23,10 +23,35 @@ jq -r '
   | add
 ' "$DEPLOYED_JSON" > deployed-addresses.json
 
-# Step 3: Create new format: [{"chainId": ..., "contracts": { "<version>": { ... }}}]
-jq --arg version "$VERSION" '{($version): .}' deployed-addresses.json \
-  | jq --argjson chainId "$CHAIN_ID" '{chainId: $chainId, contracts: .}' \
-  | jq -s '.' > chain-contracts.json
+# Step 3: Merge new version into existing chain-contracts.json if it exists
+ABI_OUT_DIR="./../ponos/contracts/abi/"
+CHAIN_CONTRACTS_PATH="${ABI_OUT_DIR}/chain-contracts.json"
+
+# Create new entry JSON
+NEW_ENTRY=$(jq --arg version "$VERSION" '{($version): .}' deployed-addresses.json \
+  | jq --argjson chainId "$CHAIN_ID" '{chainId: $chainId, contracts: .}')
+
+# Merge it into the existing file
+if [ -f "$CHAIN_CONTRACTS_PATH" ]; then
+  jq --argjson new "$NEW_ENTRY" '
+    . as $existing |
+    ($existing[] | select(.chainId == $new.chainId) // empty) as $match |
+    if $match == {} then
+      $existing + [$new]
+    else
+      $existing
+      | map(if .chainId == $new.chainId then
+              .contracts += ($new.contracts)
+              | {chainId: .chainId, contracts: .contracts}
+            else
+              .
+            end)
+    end
+  ' "$CHAIN_CONTRACTS_PATH" > chain-contracts.json
+else
+  echo "[$NEW_ENTRY]" > chain-contracts.json
+fi
+
 
 ABI_OUT_DIR="./../ponos/contracts/abi/"
 mkdir -p "${ABI_OUT_DIR}"
