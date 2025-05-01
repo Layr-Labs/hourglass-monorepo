@@ -11,15 +11,13 @@ import (
 )
 
 const (
-	EnvPrefix = "AGGREGATOR_"
-
 	Debug = "debug"
 )
 
 type Chain struct {
 	Name    string         `json:"name" yaml:"name"`
-	Network string         `json:"network" yaml:"network"`
-	ChainID config.ChainId `json:"chainId" yaml:"chainId"`
+	Version string         `json:"version" yaml:"version"`
+	ChainId config.ChainId `json:"chainId" yaml:"chainId"`
 	RpcURL  string         `json:"rpcUrl" yaml:"rpcUrl"`
 }
 
@@ -28,14 +26,11 @@ func (c *Chain) Validate() field.ErrorList {
 	if c.Name == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("name"), "name is required"))
 	}
-	if c.Network == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("network"), "network is required"))
-	}
-	if c.ChainID == 0 {
+	if c.ChainId == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("chainId"), "chainId is required"))
 	}
-	if !slices.Contains(config.SupportedChainIds, c.ChainID) {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainID, "unsupported chainId"))
+	if !slices.Contains(config.SupportedChainIds, c.ChainId) {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainId, "unsupported chainId"))
 	}
 	if c.RpcURL == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))

@@ -13,7 +13,6 @@ type Aggregator struct {
 	chainWriters     []runnable.IRunnable
 	executionManager runnable.IRunnable
 	logger           *zap.Logger
-	inboxAddress     string
 }
 
 type AggregatorConfig struct {
@@ -21,7 +20,6 @@ type AggregatorConfig struct {
 	ChainWriters     []runnable.IRunnable
 	ExecutionManager runnable.IRunnable
 	Logger           *zap.Logger
-	InboxAddress     string
 }
 
 func NewAggregator(params *AggregatorConfig) *Aggregator {
@@ -30,7 +28,6 @@ func NewAggregator(params *AggregatorConfig) *Aggregator {
 		chainWriters:     params.ChainWriters,
 		executionManager: params.ExecutionManager,
 		logger:           params.Logger,
-		inboxAddress:     params.InboxAddress,
 	}
 }
 

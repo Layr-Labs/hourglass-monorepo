@@ -2,54 +2,56 @@ package ethereumChainPoller
 
 import (
 	"context"
+	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
 type EthereumChainPollerConfig struct {
-	ChainId                  config.ChainId
-	PollingInterval          time.Duration
-	InboxAddr                string
-	MaxConsecutiveErrorCount int
+	ChainId         config.ChainId
+	PollingInterval time.Duration
+	InboxAddr       string
 }
 
 type EthereumChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
 	taskQueue         chan *types.Task
+	logParser         *transactionLogParser.TransactionLogParser
 	config            *EthereumChainPollerConfig
 	logger            *zap.Logger
-	errorCount        int
 }
 
-func NewEthereumChainPollerDefaultConfig(
-	chainId config.ChainId,
-	inboxAddr string,
-) *EthereumChainPollerConfig {
+func NewEthereumChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EthereumChainPollerConfig {
 	return &EthereumChainPollerConfig{
-		ChainId:                  chainId,
-		InboxAddr:                inboxAddr,
-		PollingInterval:          10 * time.Millisecond,
-		MaxConsecutiveErrorCount: 5,
+		ChainId:         chainId,
+		InboxAddr:       inboxAddr,
+		PollingInterval: 10 * time.Millisecond,
 	}
 }
 
 func NewEthereumChainPoller(
 	ethClient *ethereum.Client,
 	taskQueue chan *types.Task,
+	logParser *transactionLogParser.TransactionLogParser,
 	config *EthereumChainPollerConfig,
 	logger *zap.Logger,
 ) *EthereumChainPoller {
 	return &EthereumChainPoller{
-		ethClient:  ethClient,
-		logger:     logger,
-		taskQueue:  taskQueue,
-		config:     config,
-		errorCount: 0,
+		ethClient: ethClient,
+		logger:    logger,
+		taskQueue: taskQueue,
+		logParser: logParser,
+		config:    config,
 	}
 }
 
@@ -68,46 +70,33 @@ func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
 	ticker := time.NewTicker(ecp.config.PollingInterval)
 	defer ticker.Stop()
 
-	sugar := ecp.logger.Sugar()
-
 	for {
 		select {
 		case <-ctx.Done():
-			sugar.Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
+			ecp.logger.Sugar().Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
 			return
 		case <-ticker.C:
-			shouldContinue := ecp.processNextBlock(ctx)
-
-			if !shouldContinue {
+			err := ecp.processNextBlock(ctx)
+			if err != nil {
+				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
 				return
 			}
 		}
 	}
 }
 
-func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) bool {
-	sugar := ecp.logger.Sugar()
-
+func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) error {
 	block, logs, err := ecp.getNextBlockWithLogs(ctx)
 	if err != nil {
-		sugar.Errorw("Failed to get next block", "error", err)
-		ecp.errorCount++
-		if ecp.errorCount > ecp.config.MaxConsecutiveErrorCount {
-			sugar.Errorw("Too many consecutive errors, stopping poll loop",
-				"errorCount", ecp.errorCount,
-				"maxErrorCount", ecp.config.MaxConsecutiveErrorCount,
-			)
-			return false
-		}
-		return true
+		return err
 	}
 
-	ecp.errorCount = 0
 	if block == nil {
-		return true
+		return nil
 	}
+	block.ChainId = ecp.config.ChainId
 
-	sugar.Infow("New Ethereum Block:",
+	ecp.logger.Sugar().Infow("New Ethereum Block:",
 		"blockNum", block.Number.Value(),
 		"blockHash", block.Hash.Value(),
 		"logCount", len(logs),
@@ -120,18 +109,26 @@ func (ecp *EthereumChainPoller) processLogs(
 	ctx context.Context,
 	block *ethereum.EthereumBlock,
 	logs []*ethereum.EthereumEventLog,
-) bool {
-	for range logs {
-		task := &types.Task{
-			ChainId:      ecp.config.ChainId,
-			BlockNumber:  block.Number.Value(),
-			BlockHash:    block.Hash.Value(),
-			CallbackAddr: ecp.config.InboxAddr,
+) error {
+	for _, log := range logs {
+		if !strings.EqualFold(log.Address.Value(), ecp.config.InboxAddr) {
+			continue
+		}
+
+		parsedLog, err := ecp.logParser.ParseLog(log)
+		if err != nil {
+			// TODO: emit metric
+			return fmt.Errorf("failed to parse log: %w", err)
+		}
+		task, err := convertTask(parsedLog, block, ecp.config.InboxAddr)
+		if err != nil {
+			// TODO: emit metric
+			return fmt.Errorf("failed to convert task: %w", err)
 		}
 
 		select {
 		case ecp.taskQueue <- task:
-			ecp.logger.Sugar().Debugw("Enqueued task for processing",
+			ecp.logger.Sugar().Infow("Enqueued task for processing",
 				"blockNumber", task.BlockNumber,
 				"blockHash", task.BlockHash,
 			)
@@ -141,10 +138,10 @@ func (ecp *EthereumChainPoller) processLogs(
 				"blockHash", task.BlockHash,
 			)
 		case <-ctx.Done():
-			return false
+			return nil
 		}
 	}
-	return true
+	return nil
 }
 
 func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
@@ -168,4 +165,46 @@ func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethe
 		return nil, nil, err
 	}
 	return block, logs, nil
+}
+
+func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
+	var avsAddress common.Address
+	var operatorSetId uint32
+	var parsedTaskDeadline *big.Int
+	var taskId string
+	var payload []byte
+
+	taskId, ok := log.Arguments[1].Value.(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task id")
+	}
+	avsAddress, ok = log.Arguments[2].Value.(common.Address)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task event address")
+	}
+	operatorSetId, ok = log.OutputData["executorOperatorSetId"].(uint32)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse operator set id")
+	}
+	parsedTaskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task event deadline")
+	}
+	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
+	payload, ok = log.OutputData["payload"].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task payload")
+	}
+
+	return &types.Task{
+		TaskId:              taskId,
+		AVSAddress:          avsAddress.String(),
+		OperatorSetId:       operatorSetId,
+		CallbackAddr:        inboxAddress,
+		DeadlineUnixSeconds: &taskDeadlineTime,
+		Payload:             payload,
+		ChainId:             block.ChainId,
+		BlockNumber:         block.Number.Value(),
+		BlockHash:           block.Hash.Value(),
+	}, nil
 }

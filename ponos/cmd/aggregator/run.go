@@ -3,32 +3,33 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/contracts"
+	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"slices"
-	"time"
-
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -37,7 +38,7 @@ import (
 )
 
 const (
-	inboxAddress = "ethereum-mainnet-inbox"
+	inboxContractName = "TaskMailbox"
 )
 
 var runCmd = &cobra.Command{
@@ -107,7 +108,10 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("peering data fetcher not implemented")
 		}
 
-		listeners := buildChainListeners(&Config, taskQueue, log)
+		listeners, err := buildChainListeners(&Config, taskQueue, log)
+		if err != nil {
+			return fmt.Errorf("failed to build chain listeners: %w", err)
+		}
 		writers := buildWriters(resultQueue, log)
 
 		execManager, err := executionManager.NewPonosExecutionManagerWithRpcServer(
@@ -134,7 +138,6 @@ var runCmd = &cobra.Command{
 			ChainPollers:     listeners,
 			ChainWriters:     writers,
 			ExecutionManager: execManager,
-			InboxAddress:     inboxAddress,
 		})
 
 		if err := agg.Start(cmd.Context()); err != nil {
@@ -157,7 +160,11 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *types.Task, logger *zap.Logger) []runnable.IRunnable {
+func buildChainListeners(
+	cfg *aggregatorConfig.AggregatorConfig,
+	taskQueue chan *types.Task,
+	logger *zap.Logger,
+) ([]runnable.IRunnable, error) {
 	var listeners []runnable.IRunnable
 
 	for i, chain := range cfg.Chains {
@@ -167,7 +174,7 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 			var listener runnable.IRunnable
 			if cfg.SimulationConfig.AutomaticPoller {
 				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-					ChainId:      &chain.ChainID,
+					ChainId:      &chain.ChainId,
 					Port:         port,
 					TaskInterval: 250 * time.Millisecond,
 				}
@@ -179,7 +186,7 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 				)
 			} else {
 				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
-					ChainId: &chain.ChainID,
+					ChainId: &chain.ChainId,
 					Port:    port,
 				}
 
@@ -191,30 +198,39 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 			}
 
 			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
+			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainId, "port", port)
 		} else {
-			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
-				BaseUrl:   chain.RpcURL,
-				BlockType: ethereum.BlockType_Latest,
-			}, logger)
+			abiEntries, err := contracts.GetChainAbis(chain.ChainId, inboxContractName)
+			if err != nil {
+				logger.Sugar().Fatalw("Failed to load contract address", "error", err)
+				return nil, err
+			}
+			for _, entry := range abiEntries {
+				logParser := transactionLogParser.NewTransactionLogParser(entry.Abi, logger)
+				ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
+					BaseUrl:   chain.RpcURL,
+					BlockType: ethereum.BlockType_Latest,
+				}, logger)
 
-			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
-				chain.ChainID,
-				"ethereum-mainnet-inbox",
-			)
+				listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
+					chain.ChainId,
+					entry.Address.String(),
+				)
 
-			listener := ethereumChainPoller.NewEthereumChainPoller(
-				ethClient,
-				taskQueue,
-				listenerConfig,
-				logger,
-			)
-			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainID, "url", chain.RpcURL)
+				listener := ethereumChainPoller.NewEthereumChainPoller(
+					ethClient,
+					taskQueue,
+					logParser,
+					listenerConfig,
+					logger,
+				)
+				listeners = append(listeners, listener)
+				logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
+			}
 		}
 	}
 
-	return listeners
+	return listeners, nil
 }
 
 func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runnable.IRunnable {
@@ -235,8 +251,8 @@ func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runn
 
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
-	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.SimulationConfig.PollerPort)
-	allocatedPorts := []int{}
+	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)
+	var allocatedPorts []int
 
 	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
 		if slices.Contains(allocatedPorts, peer.Port) {

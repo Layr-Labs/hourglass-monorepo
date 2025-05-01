@@ -78,15 +78,16 @@ func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
 			sugar.Infow("Stopping periodic task generation")
 			return
 		case <-ticker.C:
+			deadline := time.Now().Add(1 * time.Hour)
 			task := &types.Task{
-				TaskId:        fmt.Sprintf("periodic-task-%d", time.Now().UnixNano()),
-				AVSAddress:    "0xPeriodicTaskAVS",
-				OperatorSetId: 123456,
-				CallbackAddr:  "0xPeriodicTaskCallback",
-				Payload:       []byte(`{"type":"periodic","timestamp":` + fmt.Sprintf("%d", time.Now().Unix()) + `}`),
-				Deadline:      time.Now().Add(1 * time.Hour).UnixMilli(),
-				StakeRequired: 0.75,
-				ChainId:       *scl.config.ChainId,
+				TaskId:              fmt.Sprintf("periodic-task-%d", time.Now().UnixNano()),
+				AVSAddress:          "0xPeriodicTaskAVS",
+				OperatorSetId:       123456,
+				CallbackAddr:        "0xPeriodicTaskCallback",
+				Payload:             []byte(`{"type":"periodic","timestamp":` + fmt.Sprintf("%d", time.Now().Unix()) + `}`),
+				DeadlineUnixSeconds: &deadline,
+				StakeRequired:       0.75,
+				ChainId:             *scl.config.ChainId,
 			}
 
 			select {

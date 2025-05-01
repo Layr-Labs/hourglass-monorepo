@@ -8,6 +8,7 @@ const (
 	ChainId_EthereumMainnet ChainId = 1
 	ChainId_EthereumHolesky ChainId = 17000
 	ChainId_EthereumHoodi   ChainId = 560048
+	ChainId_EthereumAnvil   ChainId = 31337
 )
 
 var (
@@ -15,6 +16,7 @@ var (
 		ChainId_EthereumMainnet,
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
+		ChainId_EthereumAnvil,
 	}
 )
 
