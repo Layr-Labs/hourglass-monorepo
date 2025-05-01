@@ -21,16 +21,19 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
         bytes calldata data
     ) external onlyAllocationManager {
         require(supportsAVS(avs), InvalidAVS());
+
+        OperatorRegistrationParams memory operatorRegistrationParams = abi.decode(data, (OperatorRegistrationParams));
+        // TODO: Consider if we want to checkpoint registration params at specific block heights/timestamps.
         // TODO: Implement
     }
 
     function deregisterOperator(
-        address operator,
+        address, /* operator */
         address avs,
-        uint32[] calldata operatorSetIds
+        uint32[] calldata /* operatorSetIds */
     ) external onlyAllocationManager {
         require(supportsAVS(avs), InvalidAVS());
-        // TODO: Implement
+        // TODO: Implement any additional logic for deregistering an operator.
     }
 
     function supportsAVS(

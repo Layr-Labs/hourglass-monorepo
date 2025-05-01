@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {ITaskAVSRegistrar} from "src/interfaces/ITaskAVSRegistrar.sol";
 import {IAllocationManager} from
     "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
 abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
@@ -11,8 +12,16 @@ abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     /// This value should only be set once.
     address public immutable AVS;
 
+    /// @dev Returns the hash of the zero pubkey aka BN254.G1Point(0,0)
+    bytes32 internal constant ZERO_PK_HASH = hex"ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5";
+
     /// @notice The AllocationManager that tracks OperatorSets and Slashing in EigenLayer
     IAllocationManager public immutable ALLOCATION_MANAGER;
+
+    mapping(address operator => bytes32 operatorId) public operatorToPubkeyHash;
+    mapping(bytes32 pubkeyHash => address operator) public pubkeyHashToOperator;
+    mapping(address operator => BN254.G1Point pubkeyG1) public operatorToPubkey;
+    mapping(address operator => BN254.G2Point) internal operatorToPubkeyG2;
 
     constructor(address avs, IAllocationManager allocationManager) {
         AVS = avs;
