@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"slices"
 	"time"
 
@@ -108,7 +109,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("peering data fetcher not implemented")
 		}
 
-		listeners, err := buildChainListeners(&Config, taskQueue, log)
+		listeners, err := buildChainPollers(&Config, taskQueue, log)
 		if err != nil {
 			return fmt.Errorf("failed to build chain listeners: %w", err)
 		}
@@ -160,18 +161,18 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-func buildChainListeners(
+func buildChainPollers(
 	cfg *aggregatorConfig.AggregatorConfig,
 	taskQueue chan *types.Task,
 	logger *zap.Logger,
-) ([]runnable.IRunnable, error) {
-	var listeners []runnable.IRunnable
+) ([]chainPoller.IChainPoller, error) {
+	var listeners []chainPoller.IChainPoller
 
 	for i, chain := range cfg.Chains {
 		if cfg.SimulationConfig.Enabled {
 			port := cfg.SimulationConfig.PollerPort + i + 1
 
-			var listener runnable.IRunnable
+			var listener chainPoller.IChainPoller
 			if cfg.SimulationConfig.AutomaticPoller {
 				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
 					ChainId:      &chain.ChainId,
