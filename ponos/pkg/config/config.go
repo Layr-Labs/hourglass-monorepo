@@ -20,6 +20,27 @@ var (
 	}
 )
 
+type ContractAddresses struct {
+	AllocationManager string
+}
+
+func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
+	switch chainId {
+	case ChainId_EthereumHolesky:
+		return &ContractAddresses{
+			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+		}
+	case ChainId_EthereumHoodi:
+		// TODO(seanmcgary): Add hoodi contracts
+		return nil
+	case ChainId_EthereumMainnet:
+		return &ContractAddresses{
+			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+		}
+	}
+	return nil
+}
+
 type OperatorConfig struct {
 	Address            string      `json:"address" yaml:"address"`
 	OperatorPrivateKey string      `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
