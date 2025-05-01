@@ -15,13 +15,21 @@ abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     /// @dev Returns the hash of the zero pubkey aka BN254.G1Point(0,0)
     bytes32 internal constant ZERO_PK_HASH = hex"ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5";
 
+    /// @notice The EIP-712 typehash used for registering BLS public keys
+    bytes32 public constant PUBKEY_REGISTRATION_TYPEHASH = keccak256("BN254PubkeyRegistration(address operator)");
+
     /// @notice The AllocationManager that tracks OperatorSets and Slashing in EigenLayer
     IAllocationManager public immutable ALLOCATION_MANAGER;
 
+    // BLS pubkey registration
     mapping(address operator => bytes32 operatorId) public operatorToPubkeyHash;
     mapping(bytes32 pubkeyHash => address operator) public pubkeyHashToOperator;
     mapping(address operator => BN254.G1Point pubkeyG1) public operatorToPubkey;
     mapping(address operator => BN254.G2Point) internal operatorToPubkeyG2;
+
+    // Operator socket registration
+    mapping(bytes32 operatorId => string socket) public operatorIdToSocket;
+    mapping(address operator => string socket) public operatorToSocket;
 
     constructor(address avs, IAllocationManager allocationManager) {
         AVS = avs;

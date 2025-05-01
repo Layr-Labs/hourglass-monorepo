@@ -3,11 +3,12 @@ pragma solidity ^0.8.27;
 
 import {IAllocationManager} from
     "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {EIP712} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
 import {TaskAVSRegistrarStorage} from "src/avs/l1-contracts/TaskAVSRegistrarStorage.sol";
 
-contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
+contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     using BN254 for BN254.G1Point;
 
     /// @notice Modifier to ensure the caller is the AllocationManager
@@ -16,7 +17,10 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
         _;
     }
 
-    constructor(address avs, IAllocationManager allocationManager) TaskAVSRegistrarStorage(avs, allocationManager) {}
+    constructor(
+        address avs,
+        IAllocationManager allocationManager
+    ) EIP712("TaskAVSRegistrar", "1") TaskAVSRegistrarStorage(avs, allocationManager) {}
 
     /**
      *
@@ -29,18 +33,30 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
         uint32[] calldata operatorSetIds,
         bytes calldata data
     ) external onlyAllocationManager {
+        // TODO: Consider if we want to checkpoint registration params at specific block heights/timestamps and do the quorum apk update within this function.
         require(supportsAVS(avs), InvalidAVS());
 
         OperatorRegistrationParams memory operatorRegistrationParams = abi.decode(data, (OperatorRegistrationParams));
-        // TODO: Consider if we want to checkpoint registration params at specific block heights/timestamps.
-        // TODO: Implement
+
+        /**
+         * If the operator has NEVER registered a pubkey before, use `params` to register
+         * their pubkey
+         *
+         * If the operator HAS registered a pubkey, `params` is ignored and the pubkey hash
+         * (operatorId) is fetched instead
+         */
+        bytes32 operatorId = _getOrRegisterOperatorId(
+            operator, operatorRegistrationParams.pubkeyRegistrationParams, pubkeyRegistrationMessageHash(operator)
+        );
+
+        _setOperatorSocket(operator, operatorId, operatorRegistrationParams.socket);
     }
 
     function deregisterOperator(
         address, /* operator */
         address avs,
         uint32[] calldata /* operatorSetIds */
-    ) external onlyAllocationManager {
+    ) external view onlyAllocationManager {
         require(supportsAVS(avs), InvalidAVS());
         // TODO: Implement any additional logic for deregistering an operator.
     }
@@ -56,10 +72,22 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
+    function _getOrRegisterOperatorId(
+        address operator,
+        PubkeyRegistrationParams memory params,
+        BN254.G1Point memory _pubkeyRegistrationMessageHash
+    ) internal returns (bytes32 operatorId) {
+        operatorId = getOperatorId(operator);
+        if (operatorId == 0) {
+            operatorId = _registerBLSPublicKey(operator, params, _pubkeyRegistrationMessageHash);
+        }
+        return operatorId;
+    }
+
     function _registerBLSPublicKey(
         address operator,
-        PubkeyRegistrationParams calldata params,
-        BN254.G1Point calldata pubkeyRegistrationMessageHash
+        PubkeyRegistrationParams memory params,
+        BN254.G1Point memory _pubkeyRegistrationMessageHash
     ) internal returns (bytes32 operatorId) {
         bytes32 pubkeyHash = BN254.hashG1Point(params.pubkeyG1);
         require(pubkeyHash != ZERO_PK_HASH, ZeroPubKey());
@@ -76,8 +104,8 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
                     params.pubkeyG1.Y,
                     params.pubkeyG2.X,
                     params.pubkeyG2.Y,
-                    pubkeyRegistrationMessageHash.X,
-                    pubkeyRegistrationMessageHash.Y
+                    _pubkeyRegistrationMessageHash.X,
+                    _pubkeyRegistrationMessageHash.Y
                 )
             )
         ) % BN254.FR_MODULUS;
@@ -87,7 +115,7 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
             BN254.pairing(
                 params.pubkeyRegistrationSignature.plus(params.pubkeyG1.scalar_mul(gamma)),
                 BN254.negGeneratorG2(),
-                pubkeyRegistrationMessageHash.plus(BN254.generatorG1().scalar_mul(gamma)),
+                _pubkeyRegistrationMessageHash.plus(BN254.generatorG1().scalar_mul(gamma)),
                 params.pubkeyG2
             ),
             InvalidBLSSignatureOrPrivateKey()
@@ -98,8 +126,21 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
         operatorToPubkeyHash[operator] = pubkeyHash;
         pubkeyHashToOperator[pubkeyHash] = operator;
 
-        emit NewPubkeyRegistration(operator, params.pubkeyG1, params.pubkeyG2);
+        emit NewPubkeyRegistration(operator, pubkeyHash, params.pubkeyG1, params.pubkeyG2);
         return pubkeyHash;
+    }
+
+    /**
+     * @notice Updates an operator's socket address in the SocketRegistry
+     * @param operator The address of the operator
+     * @param operatorId The unique identifier of the operator
+     * @param socket The new socket address to set for the operator
+     * @dev Emits an OperatorSocketUpdate event after updating
+     */
+    function _setOperatorSocket(address operator, bytes32 operatorId, string memory socket) internal {
+        operatorIdToSocket[operatorId] = socket;
+        operatorToSocket[operator] = socket;
+        emit OperatorSocketUpdated(operator, operatorId, socket);
     }
 
     /**
@@ -107,8 +148,7 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
      *                         VIEW FUNCTIONS
      *
      */
-
-     function getRegisteredPubkey(
+    function getRegisteredPubkey(
         address operator
     ) public view returns (BN254.G1Point memory, bytes32) {
         BN254.G1Point memory pubkey = operatorToPubkey[operator];
@@ -135,5 +175,37 @@ contract TaskAVSRegistrar is TaskAVSRegistrarStorage {
         address operator
     ) public view returns (BN254.G2Point memory) {
         return operatorToPubkeyG2[operator];
+    }
+
+    /**
+     * @notice Returns the message hash that an operator must sign to register their BLS public key.
+     * @param operator is the address of the operator registering their BLS public key
+     */
+    function pubkeyRegistrationMessageHash(
+        address operator
+    ) public view returns (BN254.G1Point memory) {
+        return BN254.hashToG1(calculatePubkeyRegistrationMessageHash(operator));
+    }
+
+    /**
+     * @notice Returns the message hash that an operator must sign to register their BLS public key.
+     * @param operator is the address of the operator registering their BLS public key
+     */
+    function calculatePubkeyRegistrationMessageHash(
+        address operator
+    ) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator)));
+    }
+
+    function getOperatorSocketByOperatorId(
+        bytes32 operatorId
+    ) external view returns (string memory) {
+        return operatorIdToSocket[operatorId];
+    }
+
+    function getOperatorSocketByOperatorAddress(
+        address operator
+    ) external view returns (string memory) {
+        return operatorToSocket[operator];
     }
 }
