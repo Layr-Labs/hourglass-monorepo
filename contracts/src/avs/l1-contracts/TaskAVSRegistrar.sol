@@ -30,10 +30,10 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     function registerOperator(
         address operator,
         address avs,
-        uint32[] calldata /* operatorSetIds */,
+        uint32[] calldata, /* operatorSetIds */
         bytes calldata data
     ) external onlyAllocationManager {
-        // TODO: Consider if we want to checkpoint registration params at specific block heights/timestamps and do the quorum apk update within this function.
+        // TODO: Do we need to handle quorums and quorum apk updates within this function?
         require(supportsAVS(avs), InvalidAVS());
 
         OperatorRegistrationParams memory operatorRegistrationParams = abi.decode(data, (OperatorRegistrationParams));
@@ -61,10 +61,12 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         // TODO: Implement any additional logic for deregistering an operator.
     }
 
-    function supportsAVS(
-        address avs
-    ) public view returns (bool) {
-        return avs == AVS;
+    function updateOperatorSocket(
+        string memory socket
+    ) external onlyAllocationManager {
+        // TODO: Should we check for UAM permissions here?
+        require(ALLOCATION_MANAGER.getRegisteredSets(msg.sender).length > 0, OperatorNotRegistered());
+        _setOperatorSocket(msg.sender, getOperatorPubkeyHash(msg.sender), socket);
     }
 
     /**
@@ -148,15 +150,22 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
      *                         VIEW FUNCTIONS
      *
      */
+    function supportsAVS(
+        address avs
+    ) public view returns (bool) {
+        return avs == AVS;
+    }
+
     function getRegisteredPubkey(
         address operator
-    ) public view returns (BN254.G1Point memory, bytes32) {
+    ) public view returns (BN254.G1Point memory, BN254.G2Point memory, bytes32) {
         BN254.G1Point memory pubkey = operatorToPubkey[operator];
-        bytes32 pubkeyHash = getOperatorPubkeyHash(operator);
+        BN254.G2Point memory pubkeyG2 = operatorToPubkeyG2[operator];
 
+        bytes32 pubkeyHash = getOperatorPubkeyHash(operator);
         require(pubkeyHash != bytes32(0), OperatorNotRegistered());
 
-        return (pubkey, pubkeyHash);
+        return (pubkey, pubkeyG2, pubkeyHash);
     }
 
     function getOperatorFromPubkeyHash(
@@ -169,12 +178,6 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         address operator
     ) public view returns (bytes32) {
         return operatorToPubkeyHash[operator];
-    }
-
-    function getOperatorPubkeyG2(
-        address operator
-    ) public view returns (BN254.G2Point memory) {
-        return operatorToPubkeyG2[operator];
     }
 
     /**

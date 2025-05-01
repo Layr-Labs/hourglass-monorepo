@@ -45,9 +45,53 @@ interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {
 
 interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {
     /// @notice Emitted when a new BLS public key is registered.
-    event NewPubkeyRegistration(address indexed operator, bytes32 indexed pubkeyHash, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2);
+    event NewPubkeyRegistration(
+        address indexed operator, bytes32 indexed pubkeyHash, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2
+    );
     /// @notice Emitted when an operator's socket address is updated.
     event OperatorSocketUpdated(address indexed operator, bytes32 indexed pubkeyHash, string socket);
 }
 
-interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {}
+interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {
+    /**
+     *
+     *                         EXTERNAL FUNCTIONS
+     *
+     */
+    function updateOperatorSocket(
+        string memory socket
+    ) external;
+
+    /**
+     *
+     *                         VIEW FUNCTIONS
+     *
+     */
+    function getRegisteredPubkey(
+        address operator
+    ) external view returns (BN254.G1Point memory, BN254.G2Point memory, bytes32);
+
+    function getOperatorFromPubkeyHash(
+        bytes32 pubkeyHash
+    ) external view returns (address);
+
+    function getOperatorPubkeyHash(
+        address operator
+    ) external view returns (bytes32);
+
+    function pubkeyRegistrationMessageHash(
+        address operator
+    ) external view returns (BN254.G1Point memory);
+
+    function calculatePubkeyRegistrationMessageHash(
+        address operator
+    ) external view returns (bytes32);
+
+    function getOperatorSocketByPubkeyHash(
+        bytes32 pubkeyHash
+    ) external view returns (string memory);
+
+    function getOperatorSocketByOperator(
+        address operator
+    ) external view returns (string memory);
+}
