@@ -31,8 +31,21 @@ interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {
     error InvalidAVS();
     /// @notice Thrown when the caller is not the AllocationManager
     error OnlyAllocationManager();
+    /// @notice Thrown when the operator is already registered.
+    error OperatorAlreadyRegistered();
+    /// @notice Thrown when the BLS public key is already registered.
+    error BLSPubkeyAlreadyRegistered();
+    /// @notice Thrown when the provided BLS signature is invalid.
+    error InvalidBLSSignatureOrPrivateKey();
+    /// @notice Thrown when the operator is not registered.
+    error OperatorNotRegistered();
+    /// @notice Thrown when the provided pubkey hash is zero.
+    error ZeroPubKey();
 }
 
-interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {}
+interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {
+    /// @notice Emitted when a new BLS public key is registered.
+    event NewPubkeyRegistration(address indexed operator, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2);
+}
 
 interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {}
