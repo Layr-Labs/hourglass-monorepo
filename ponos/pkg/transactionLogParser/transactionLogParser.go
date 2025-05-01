@@ -4,10 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/convert"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -37,18 +34,13 @@ func NewTransactionLogParser(abi *abi.ABI, logger *zap.Logger) *TransactionLogPa
 	}
 }
 
-func (tlp *TransactionLogParser) ProcessLog(
-	log *ethereum.EthereumEventLog,
-	block *ethereum.EthereumBlock,
-	inboxAddress string,
-	chainId config.ChainId,
-) (*types.Task, error) {
+func (tlp *TransactionLogParser) ParseLog(log *ethereum.EthereumEventLog) (*log.DecodedLog, error) {
 	decoded, err := tlp.decodeLog(log)
 	if err != nil {
 		return nil, err
 	}
 
-	return convert.ConvertTask(decoded, block, inboxAddress, chainId)
+	return decoded, nil
 }
 
 // DecodeLog decodes a log using the provided ABI.

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"math/big"
 	"strings"
 
@@ -25,6 +26,7 @@ type (
 		Timestamp    EthereumQuantity       `json:"timestamp" validate:"required_with=Number"`
 		Transactions []*EthereumTransaction `json:"transactions"`
 		Nonce        EthereumHexString      `json:"nonce"`
+		ChainId      config.ChainId
 	}
 
 	EthereumTransactionAccess struct {

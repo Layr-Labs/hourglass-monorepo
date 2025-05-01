@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-RELEASE_ID=${1:-local}
+VERSION=${1:-local}
 CHAIN_ID=${2:-31337}
 RPC_URL=${3:-http://localhost:8545}
 BROADCAST_DIR="./broadcast/DeployTaskMailbox.s.sol/${CHAIN_ID}"
@@ -23,9 +23,31 @@ jq -r '
   | add
 ' "$DEPLOYED_JSON" > deployed-addresses.json
 
-# Step 3: Convert to chainId => contract map
-jq --arg chain "$CHAIN_ID" '{ ($chain): . }' deployed-addresses.json > full-chains.json
+# Step 3: Create new format: [{"chainId": ..., "contracts": { ... }}]
+jq --argjson chainId "$CHAIN_ID" '{chainId: $chainId, contracts: .}' deployed-addresses.json | jq -s '.' > chain-contracts.json
 
-# Step 4: Call compile-bindings.sh and overwrite chains.json
-./bin/compile-bindings.sh "$RELEASE_ID" "$CHAIN_ID"
-cp full-chains.json ./../ponos/contracts/abi/"${RELEASE_ID}"/chains.json
+ABI_OUT_DIR="./../ponos/contracts/abi/${VERSION}"
+mkdir -p "${ABI_OUT_DIR}"
+
+# Move full-chains.json into final location and rename
+mv chain-contracts.json "${ABI_OUT_DIR}/chain-contracts.json"
+
+# Remove the temporary deployed-addresses file
+rm -f deployed-addresses.json
+
+# Step 4: Compile bindings and copy the updated chains.json
+./bin/compile-bindings.sh "$VERSION" "$CHAIN_ID"
+
+# Get known .sol contract names (no extension)
+contracts=$(find src -type f -name "*.sol" -exec basename {} .sol \;)
+IFS=$'\n'
+
+for contract_json in ./out/*.sol/*.json; do
+  contract_file=$(basename "$contract_json")
+  contract_name="${contract_file%.json}"
+
+  # Only copy if contract_name is in our src/ list
+  if echo "$contracts" | grep -qx "$contract_name"; then
+    jq '.abi' "$contract_json" > "${ABI_OUT_DIR}/${contract_name}.abi.json"
+  fi
+done

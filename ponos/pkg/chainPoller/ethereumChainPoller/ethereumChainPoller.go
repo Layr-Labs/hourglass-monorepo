@@ -2,6 +2,10 @@ package ethereumChainPoller
 
 import (
 	"context"
+	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
+	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 	"strings"
 	"time"
 
@@ -70,43 +74,39 @@ func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
 	ticker := time.NewTicker(ecp.config.PollingInterval)
 	defer ticker.Stop()
 
-	sugar := ecp.logger.Sugar()
-
 	for {
 		select {
 		case <-ctx.Done():
-			sugar.Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
+			ecp.logger.Sugar().Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
 			return
 		case <-ticker.C:
-			shouldContinue := ecp.processNextBlock(ctx)
-
-			if !shouldContinue {
-				return
+			err := ecp.processNextBlock(ctx)
+			if err != nil {
+				ecp.logger.Sugar().Errorw("Failed to process the next block", "error", err)
+				ecp.errorCount++
+				if ecp.errorCount > ecp.config.MaxConsecutiveErrorCount {
+					ecp.logger.Sugar().Errorw("Too many consecutive errors, stopping poll loop",
+						"errorCount", ecp.errorCount,
+						"maxErrorCount", ecp.config.MaxConsecutiveErrorCount,
+					)
+					return
+				}
 			}
 		}
 	}
 }
 
-func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) bool {
-
+func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) error {
 	block, logs, err := ecp.getNextBlockWithLogs(ctx)
 	if err != nil {
-		ecp.logger.Sugar().Errorw("Failed to get next block", "error", err)
-		ecp.errorCount++
-		if ecp.errorCount > ecp.config.MaxConsecutiveErrorCount {
-			ecp.logger.Sugar().Errorw("Too many consecutive errors, stopping poll loop",
-				"errorCount", ecp.errorCount,
-				"maxErrorCount", ecp.config.MaxConsecutiveErrorCount,
-			)
-			return false
-		}
-		return true
+		return err
 	}
 
 	ecp.errorCount = 0
 	if block == nil {
-		return true
+		return nil
 	}
+	block.ChainId = ecp.config.ChainId
 
 	ecp.logger.Sugar().Infow("New Ethereum Block:",
 		"blockNum", block.Number.Value(),
@@ -121,18 +121,21 @@ func (ecp *EthereumChainPoller) processLogs(
 	ctx context.Context,
 	block *ethereum.EthereumBlock,
 	logs []*ethereum.EthereumEventLog,
-) bool {
+) error {
 	for _, log := range logs {
-		if strings.EqualFold(log.Address.Value(), ecp.config.InboxAddr) {
+		if !strings.EqualFold(log.Address.Value(), ecp.config.InboxAddr) {
 			continue
 		}
 
-		task, err := ecp.logParser.ProcessLog(log, block, ecp.config.InboxAddr, ecp.config.ChainId)
+		parsedLog, err := ecp.logParser.ParseLog(log)
 		if err != nil {
-			ecp.errorCount++
-			ecp.logger.Sugar().Errorw("Error decoding Ethereum log", err)
 			// TODO: emit metric
-			continue
+			return fmt.Errorf("failed to parse log: %w", err)
+		}
+		task, err := convertTask(parsedLog, block, ecp.config.InboxAddr)
+		if err != nil {
+			// TODO: emit metric
+			return fmt.Errorf("failed to convert task: %w", err)
 		}
 
 		select {
@@ -147,10 +150,10 @@ func (ecp *EthereumChainPoller) processLogs(
 				"blockHash", task.BlockHash,
 			)
 		case <-ctx.Done():
-			return false
+			return nil
 		}
 	}
-	return true
+	return nil
 }
 
 func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
@@ -174,4 +177,45 @@ func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethe
 		return nil, nil, err
 	}
 	return block, logs, nil
+}
+
+func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
+	var avsAddress common.Address
+	var operatorSetId uint32
+	var taskDeadline *big.Int
+	var taskId string
+	var payload []byte
+
+	taskId, ok := log.Arguments[1].Value.(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task id")
+	}
+	avsAddress, ok = log.Arguments[2].Value.(common.Address)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task event address")
+	}
+	operatorSetId, ok = log.OutputData["executorOperatorSetId"].(uint32)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse operator set id")
+	}
+	taskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task event deadline")
+	}
+	payload, ok = log.OutputData["payload"].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task payload")
+	}
+
+	return &types.Task{
+		TaskId:        taskId,
+		AVSAddress:    avsAddress.String(),
+		OperatorSetId: operatorSetId,
+		CallbackAddr:  inboxAddress,
+		Deadline:      taskDeadline,
+		Payload:       payload,
+		ChainId:       block.ChainId,
+		BlockNumber:   block.Number.Value(),
+		BlockHash:     block.Hash.Value(),
+	}, nil
 }

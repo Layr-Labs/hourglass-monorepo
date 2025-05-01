@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
@@ -13,12 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
@@ -114,7 +109,10 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("peering data fetcher not implemented")
 		}
 
-		listeners := buildChainListeners(&Config, taskQueue, log)
+		listeners, err := buildChainListeners(&Config, taskQueue, log)
+		if err != nil {
+			return fmt.Errorf("failed to build chain listeners: %w", err)
+		}
 		writers := buildWriters(resultQueue, log)
 
 		execManager, err := executionManager.NewPonosExecutionManagerWithRpcServer(
@@ -163,7 +161,11 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan *types.Task, logger *zap.Logger) []runnable.IRunnable {
+func buildChainListeners(
+	cfg *aggregatorConfig.AggregatorConfig,
+	taskQueue chan *types.Task,
+	logger *zap.Logger,
+) ([]runnable.IRunnable, error) {
 	var listeners []runnable.IRunnable
 
 	for i, chain := range cfg.Chains {
@@ -173,7 +175,7 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 			var listener runnable.IRunnable
 			if cfg.SimulationConfig.AutomaticPoller {
 				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-					ChainId:      &chain.ChainID,
+					ChainId:      &chain.ChainId,
 					Port:         port,
 					TaskInterval: 250 * time.Millisecond,
 				}
@@ -185,7 +187,7 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 				)
 			} else {
 				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
-					ChainId: &chain.ChainID,
+					ChainId: &chain.ChainId,
 					Port:    port,
 				}
 
@@ -197,21 +199,27 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 			}
 
 			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainID, "port", port)
+			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainId, "port", port)
 		} else {
-			parsedABI, mailboxAddr, err := loadABIAndAddress(chain.ReleaseId, chain.Environment, chain.ChainID)
+			parsedAbi, err := contracts.GetContractAbi(inboxContractName, chain.Version)
 			if err != nil {
-				logger.Sugar().Fatalw("Failed to load contract ABI/address", "error", err)
+				logger.Sugar().Errorw("Failed to build simulated chain listener", "error", err)
+				return nil, err
 			}
-			logParser := transactionLogParser.NewTransactionLogParser(parsedABI, logger)
+			contractAddress, err := contracts.GetContractAddress(inboxContractName, chain.Version, chain.ChainId)
+			if err != nil {
+				logger.Sugar().Fatalw("Failed to load contract address", "error", err)
+				return nil, err
+			}
+			logParser := transactionLogParser.NewTransactionLogParser(parsedAbi, logger)
 			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
 				BaseUrl:   chain.RpcURL,
 				BlockType: ethereum.BlockType_Latest,
 			}, logger)
 
 			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
-				chain.ChainID,
-				mailboxAddr.String(),
+				chain.ChainId,
+				contractAddress.String(),
 			)
 
 			listener := ethereumChainPoller.NewEthereumChainPoller(
@@ -222,11 +230,11 @@ func buildChainListeners(cfg *aggregatorConfig.AggregatorConfig, taskQueue chan 
 				logger,
 			)
 			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainID, "url", chain.RpcURL)
+			logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
 		}
 	}
 
-	return listeners
+	return listeners, nil
 }
 
 func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runnable.IRunnable {
@@ -248,7 +256,7 @@ func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runn
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
 	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)
-	allocatedPorts := []int{}
+	var allocatedPorts []int
 
 	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
 		if slices.Contains(allocatedPorts, peer.Port) {
@@ -285,46 +293,4 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 	}
 
 	return executors, nil
-}
-
-func loadABIAndAddress(
-	releaseId string,
-	environment string,
-	chainID config.ChainId,
-) (*abi.ABI, common.Address, error) {
-	basePath, err := os.Getwd()
-	if err != nil {
-		return &abi.ABI{}, common.Address{}, fmt.Errorf("could not determine working directory: %w", err)
-	}
-
-	abiPath := filepath.Join(basePath, "contracts", "abi", environment, releaseId)
-
-	abiFile := filepath.Join(abiPath, fmt.Sprintf("%s.abi.json", inboxContractName))
-	abiBytes, err := os.ReadFile(abiFile)
-	if err != nil {
-		return &abi.ABI{}, common.Address{}, fmt.Errorf("failed to read ABI file %s: %w", abiFile, err)
-	}
-
-	parsedABI, err := abi.JSON(strings.NewReader(string(abiBytes)))
-	if err != nil {
-		return &abi.ABI{}, common.Address{}, fmt.Errorf("failed to parse ABI: %w", err)
-	}
-
-	chainMapPath := filepath.Join(abiPath, "chains.json")
-	mapBytes, err := os.ReadFile(chainMapPath)
-	if err != nil {
-		return &parsedABI, common.Address{}, fmt.Errorf("failed to read chains.json: %w", err)
-	}
-
-	var chainMap map[config.ChainId]map[string]string
-	if err := json.Unmarshal(mapBytes, &chainMap); err != nil {
-		return &parsedABI, common.Address{}, fmt.Errorf("failed to parse chains.json: %w", err)
-	}
-
-	addrStr := chainMap[chainID][inboxContractName]
-	if addrStr == "" {
-		return &parsedABI, common.Address{}, fmt.Errorf("no address found for contract %s on chain %d", inboxContractName, chainID)
-	}
-
-	return &parsedABI, common.HexToAddress(addrStr), nil
 }
