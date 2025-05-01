@@ -45,9 +45,9 @@ interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {
 
 interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {
     /// @notice Emitted when a new BLS public key is registered.
-    event NewPubkeyRegistration(address indexed operator, bytes32 indexed operatorId, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2);
+    event NewPubkeyRegistration(address indexed operator, bytes32 indexed pubkeyHash, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2);
     /// @notice Emitted when an operator's socket address is updated.
-    event OperatorSocketUpdated(address indexed operator, bytes32 indexed operatorId, string socket);
+    event OperatorSocketUpdated(address indexed operator, bytes32 indexed pubkeyHash, string socket);
 }
 
 interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {}

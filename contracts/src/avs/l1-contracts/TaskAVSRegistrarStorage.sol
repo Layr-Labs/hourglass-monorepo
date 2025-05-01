@@ -22,13 +22,13 @@ abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     IAllocationManager public immutable ALLOCATION_MANAGER;
 
     // BLS pubkey registration
-    mapping(address operator => bytes32 operatorId) public operatorToPubkeyHash;
+    mapping(address operator => bytes32 pubkeyHash) public operatorToPubkeyHash;
     mapping(bytes32 pubkeyHash => address operator) public pubkeyHashToOperator;
     mapping(address operator => BN254.G1Point pubkeyG1) public operatorToPubkey;
     mapping(address operator => BN254.G2Point) internal operatorToPubkeyG2;
 
     // Operator socket registration
-    mapping(bytes32 operatorId => string socket) public operatorIdToSocket;
+    mapping(bytes32 pubkeyHash => string socket) public pubkeyHashToSocket;
     mapping(address operator => string socket) public operatorToSocket;
 
     constructor(address avs, IAllocationManager allocationManager) {
