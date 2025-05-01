@@ -63,7 +63,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
 
     function updateOperatorSocket(
         string memory socket
-    ) external onlyAllocationManager {
+    ) external {
         // TODO: Should we check for UAM permissions here?
         require(ALLOCATION_MANAGER.getRegisteredSets(msg.sender).length > 0, OperatorNotRegistered());
         _setOperatorSocket(msg.sender, getOperatorPubkeyHash(msg.sender), socket);
