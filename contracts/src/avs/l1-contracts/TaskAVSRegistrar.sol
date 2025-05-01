@@ -13,6 +13,8 @@ import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {TaskAVSRegistrarStorage} from "src/avs/l1-contracts/TaskAVSRegistrarStorage.sol";
 
 contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
+    // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
+
     using BN254 for BN254.G1Point;
 
     /// @notice Modifier to ensure the caller is the AllocationManager
@@ -34,10 +36,10 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     function registerOperator(
         address operator,
         address avs,
-        uint32[] calldata, /* operatorSetIds */
+        uint32[] calldata operatorSetIds,
         bytes calldata data
     ) external onlyAllocationManager {
-        // TODO: Do we need to handle quorums and quorum apk updates within this function?
+        // TODO: Cleanup call structure within all internal calls.
         require(supportsAVS(avs), InvalidAVS());
 
         OperatorRegistrationParams memory operatorRegistrationParams = abi.decode(data, (OperatorRegistrationParams));
@@ -53,16 +55,22 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
             operator, operatorRegistrationParams.pubkeyRegistrationParams, pubkeyRegistrationMessageHash(operator)
         );
 
+        // Set the operator's socket
         _setOperatorSocket(operator, pubkeyHash, operatorRegistrationParams.socket);
+
+        // Update current APK for each operatorSetId
+        _processOperatorSetApkUpdate(operatorSetIds, operatorRegistrationParams.pubkeyRegistrationParams.pubkeyG1);
     }
 
     function deregisterOperator(
-        address, /* operator */
+        address operator,
         address avs,
-        uint32[] calldata /* operatorSetIds */
-    ) external view onlyAllocationManager {
+        uint32[] calldata operatorSetIds
+    ) external onlyAllocationManager {
         require(supportsAVS(avs), InvalidAVS());
-        // TODO: Implement any additional logic for deregistering an operator.
+
+        // Update current APK for each operatorSetId
+        _processOperatorSetApkUpdate(operatorSetIds, operatorToPubkey[operator].negate());
     }
 
     function updateOperatorSocket(
@@ -155,6 +163,16 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         pubkeyHashToSocket[pubkeyHash] = socket;
         operatorToSocket[operator] = socket;
         emit OperatorSocketUpdated(operator, pubkeyHash, socket);
+    }
+
+    function _processOperatorSetApkUpdate(uint32[] memory operatorSetIds, BN254.G1Point memory point) internal {
+        BN254.G1Point memory newApk;
+
+        for (uint256 i = 0; i < operatorSetIds.length; i++) {
+            // Update aggregate public key for this operatorSet
+            newApk = currentApk[uint8(operatorSetIds[i])].plus(point);
+            currentApk[uint8(operatorSetIds[i])] = newApk;
+        }
     }
 
     /**

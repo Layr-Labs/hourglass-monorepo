@@ -15,7 +15,7 @@ import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifie
 import {TaskMailboxStorage} from "src/core/TaskMailboxStorage.sol";
 
 contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
-    // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable.
+    // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
 
     using SafeERC20 for IERC20;
     using SafeCast for *;
@@ -174,7 +174,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         bytes memory result
     ) external nonReentrant {
         // TODO: Do we need a gasless version of this function?
-        // TODO: Do we need reentrancy protection?
         // TODO: require checks - Figure out what checks are needed
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
