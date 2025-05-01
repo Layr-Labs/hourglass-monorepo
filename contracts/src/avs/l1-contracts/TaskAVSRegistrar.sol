@@ -170,8 +170,8 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
 
         for (uint256 i = 0; i < operatorSetIds.length; i++) {
             // Update aggregate public key for this operatorSet
-            newApk = currentApk[uint8(operatorSetIds[i])].plus(point);
-            currentApk[uint8(operatorSetIds[i])] = newApk;
+            newApk = currentApk[operatorSetIds[i]].plus(point);
+            currentApk[operatorSetIds[i]] = newApk;
         }
     }
 
@@ -184,6 +184,13 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         address avs
     ) public view returns (bool) {
         return avs == AVS;
+    }
+
+    // TODO: Update operatorSetId to uint32
+    function getApk(
+        uint8 operatorSetId
+    ) public view returns (BN254.G1Point memory) {
+        return currentApk[operatorSetId];
     }
 
     function getRegisteredPubkeyInfo(

@@ -85,6 +85,12 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
      *                         VIEW FUNCTIONS
      *
      */
+
+    // TODO: Update operatorSetId to uint32
+    function getApk(
+        uint8 operatorSetId
+    ) external view returns (BN254.G1Point memory);
+
     function getRegisteredPubkeyInfo(
         address operator
     ) external view returns (PubkeyInfo memory);

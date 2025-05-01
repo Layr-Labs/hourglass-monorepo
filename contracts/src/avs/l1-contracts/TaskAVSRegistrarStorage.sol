@@ -32,8 +32,7 @@ abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     mapping(address operator => string socket) public operatorToSocket;
 
     /// @notice Current Aggregate Public Key (APK) of the OperatorSet
-    // TODO: Update operatorSetId to uint32
-    mapping(uint8 operatorSetId => BN254.G1Point apk) public currentApk;
+    mapping(uint32 operatorSetId => BN254.G1Point apk) public currentApk;
 
     constructor(address avs, IAllocationManager allocationManager) {
         AVS = avs;
