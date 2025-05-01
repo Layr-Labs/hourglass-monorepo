@@ -245,7 +245,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
 
     function getBatchOperatorPubkeyInfoAndSocket(
         address[] calldata operators
-    ) external view returns (PubkeyInfoAndSocket[] memory) {
+    ) public view returns (PubkeyInfoAndSocket[] memory) {
         PubkeyInfoAndSocket[] memory pubkeyInfosAndSockets = new PubkeyInfoAndSocket[](operators.length);
         for (uint256 i = 0; i < operators.length; i++) {
             pubkeyInfosAndSockets[i] = PubkeyInfoAndSocket({
