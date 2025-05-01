@@ -24,7 +24,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     constructor(
         address avs,
         IAllocationManager allocationManager
-    ) EIP712("TaskAVSRegistrar", "1") TaskAVSRegistrarStorage(avs, allocationManager) {}
+    ) EIP712("TaskAVSRegistrar", "v0.1.0") TaskAVSRegistrarStorage(avs, allocationManager) {}
 
     /**
      *
