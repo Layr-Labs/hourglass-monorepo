@@ -23,10 +23,12 @@ jq -r '
   | add
 ' "$DEPLOYED_JSON" > deployed-addresses.json
 
-# Step 3: Create new format: [{"chainId": ..., "contracts": { ... }}]
-jq --argjson chainId "$CHAIN_ID" '{chainId: $chainId, contracts: .}' deployed-addresses.json | jq -s '.' > chain-contracts.json
+# Step 3: Create new format: [{"chainId": ..., "contracts": { "<version>": { ... }}}]
+jq --arg version "$VERSION" '{($version): .}' deployed-addresses.json \
+  | jq --argjson chainId "$CHAIN_ID" '{chainId: $chainId, contracts: .}' \
+  | jq -s '.' > chain-contracts.json
 
-ABI_OUT_DIR="./../ponos/contracts/abi/${VERSION}"
+ABI_OUT_DIR="./../ponos/contracts/abi/"
 mkdir -p "${ABI_OUT_DIR}"
 
 # Move full-chains.json into final location and rename
@@ -36,7 +38,7 @@ mv chain-contracts.json "${ABI_OUT_DIR}/chain-contracts.json"
 rm -f deployed-addresses.json
 
 # Step 4: Compile bindings and copy the updated chains.json
-./bin/compile-bindings.sh "$VERSION" "$CHAIN_ID"
+./bin/compile-bindings.sh
 
 # Get known .sol contract names (no extension)
 contracts=$(find src -type f -name "*.sol" -exec basename {} .sol \;)
@@ -46,8 +48,9 @@ for contract_json in ./out/*.sol/*.json; do
   contract_file=$(basename "$contract_json")
   contract_name="${contract_file%.json}"
 
+  mkdir -p "${ABI_OUT_DIR}/${VERSION}/"
   # Only copy if contract_name is in our src/ list
   if echo "$contracts" | grep -qx "$contract_name"; then
-    jq '.abi' "$contract_json" > "${ABI_OUT_DIR}/${contract_name}.abi.json"
+    jq '.abi' "$contract_json" > "${ABI_OUT_DIR}/${VERSION}/${contract_name}.abi.json"
   fi
 done

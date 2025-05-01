@@ -3,34 +3,33 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/contracts"
+	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"slices"
-	"time"
-
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -201,36 +200,33 @@ func buildChainListeners(
 			listeners = append(listeners, listener)
 			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainId, "port", port)
 		} else {
-			parsedAbi, err := contracts.GetContractAbi(inboxContractName, chain.Version)
-			if err != nil {
-				logger.Sugar().Errorw("Failed to build simulated chain listener", "error", err)
-				return nil, err
-			}
-			contractAddress, err := contracts.GetContractAddress(inboxContractName, chain.Version, chain.ChainId)
+			abiEntries, err := contracts.GetChainAbis(chain.ChainId, inboxContractName)
 			if err != nil {
 				logger.Sugar().Fatalw("Failed to load contract address", "error", err)
 				return nil, err
 			}
-			logParser := transactionLogParser.NewTransactionLogParser(parsedAbi, logger)
-			ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
-				BaseUrl:   chain.RpcURL,
-				BlockType: ethereum.BlockType_Latest,
-			}, logger)
+			for _, entry := range abiEntries {
+				logParser := transactionLogParser.NewTransactionLogParser(entry.Abi, logger)
+				ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
+					BaseUrl:   chain.RpcURL,
+					BlockType: ethereum.BlockType_Latest,
+				}, logger)
 
-			listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
-				chain.ChainId,
-				contractAddress.String(),
-			)
+				listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
+					chain.ChainId,
+					entry.Address.String(),
+				)
 
-			listener := ethereumChainPoller.NewEthereumChainPoller(
-				ethClient,
-				taskQueue,
-				logParser,
-				listenerConfig,
-				logger,
-			)
-			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
+				listener := ethereumChainPoller.NewEthereumChainPoller(
+					ethClient,
+					taskQueue,
+					logParser,
+					listenerConfig,
+					logger,
+				)
+				listeners = append(listeners, listener)
+				logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
+			}
 		}
 	}
 

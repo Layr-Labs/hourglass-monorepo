@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net/http"
 	"time"
 
@@ -125,14 +124,14 @@ func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.
 		StakeWeightRequiredPct float64 `json:"stakeWeightRequiredPct"`
 	}
 	_ = json.Unmarshal(event.Metadata, &parsedMeta)
-
+	deadline := time.Now().Add(time.Duration(parsedMeta.Deadline) * time.Second)
 	return &types.Task{
-		TaskId:        event.TaskId,
-		AVSAddress:    event.AVSAddress,
-		OperatorSetId: event.OperatorSetId,
-		Payload:       event.Payload,
-		Deadline:      big.NewInt(time.Now().Unix() + parsedMeta.Deadline),
-		StakeRequired: parsedMeta.StakeWeightRequiredPct,
-		ChainId:       *chainId,
+		TaskId:              event.TaskId,
+		AVSAddress:          event.AVSAddress,
+		OperatorSetId:       event.OperatorSetId,
+		Payload:             event.Payload,
+		DeadlineUnixSeconds: &deadline,
+		StakeRequired:       parsedMeta.StakeWeightRequiredPct,
+		ChainId:             *chainId,
 	}
 }

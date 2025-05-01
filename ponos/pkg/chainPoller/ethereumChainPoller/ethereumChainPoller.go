@@ -3,8 +3,6 @@ package ethereumChainPoller
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strings"
 	"time"
@@ -12,7 +10,9 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -182,7 +182,7 @@ func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethe
 func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
 	var avsAddress common.Address
 	var operatorSetId uint32
-	var taskDeadline *big.Int
+	var parsedTaskDeadline *big.Int
 	var taskId string
 	var payload []byte
 
@@ -198,24 +198,25 @@ func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddres
 	if !ok {
 		return nil, fmt.Errorf("failed to parse operator set id")
 	}
-	taskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
+	parsedTaskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task event deadline")
 	}
+	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
 	payload, ok = log.OutputData["payload"].([]byte)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task payload")
 	}
 
 	return &types.Task{
-		TaskId:        taskId,
-		AVSAddress:    avsAddress.String(),
-		OperatorSetId: operatorSetId,
-		CallbackAddr:  inboxAddress,
-		Deadline:      taskDeadline,
-		Payload:       payload,
-		ChainId:       block.ChainId,
-		BlockNumber:   block.Number.Value(),
-		BlockHash:     block.Hash.Value(),
+		TaskId:              taskId,
+		AVSAddress:          avsAddress.String(),
+		OperatorSetId:       operatorSetId,
+		CallbackAddr:        inboxAddress,
+		DeadlineUnixSeconds: &taskDeadlineTime,
+		Payload:             payload,
+		ChainId:             block.ChainId,
+		BlockNumber:         block.Number.Value(),
+		BlockHash:           block.Hash.Value(),
 	}, nil
 }
