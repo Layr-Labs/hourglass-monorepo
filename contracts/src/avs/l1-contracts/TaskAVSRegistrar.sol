@@ -168,16 +168,35 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         return avs == AVS;
     }
 
-    function getRegisteredPubkey(
+    function getRegisteredPubkeyInfo(
         address operator
-    ) public view returns (BN254.G1Point memory, BN254.G2Point memory, bytes32) {
+    ) public view returns (PubkeyInfo memory) {
         BN254.G1Point memory pubkey = operatorToPubkey[operator];
         BN254.G2Point memory pubkeyG2 = operatorToPubkeyG2[operator];
 
         bytes32 pubkeyHash = getOperatorPubkeyHash(operator);
         require(pubkeyHash != bytes32(0), OperatorNotRegistered());
 
-        return (pubkey, pubkeyG2, pubkeyHash);
+        return PubkeyInfo({pubkeyG1: pubkey, pubkeyG2: pubkeyG2, pubkeyHash: pubkeyHash});
+    }
+
+    function getRegisteredPubkey(
+        address operator
+    ) public view returns (BN254.G1Point memory, bytes32) {
+        // TODO: Deprecate this function. Only added for backwards compatibility with BLSApkRegistry.
+        BN254.G1Point memory pubkey = operatorToPubkey[operator];
+
+        bytes32 pubkeyHash = getOperatorPubkeyHash(operator);
+        require(pubkeyHash != bytes32(0), OperatorNotRegistered());
+
+        return (pubkey, pubkeyHash);
+    }
+
+    function getOperatorPubkeyG2(
+        address operator
+    ) public view override returns (BN254.G2Point memory) {
+        // TODO: Deprecate this function. Only added for backwards compatibility with BLSApkRegistry.
+        return operatorToPubkeyG2[operator];
     }
 
     function getOperatorFromPubkeyHash(
@@ -214,13 +233,26 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
 
     function getOperatorSocketByPubkeyHash(
         bytes32 pubkeyHash
-    ) external view returns (string memory) {
+    ) public view returns (string memory) {
         return pubkeyHashToSocket[pubkeyHash];
     }
 
     function getOperatorSocketByOperator(
         address operator
-    ) external view returns (string memory) {
+    ) public view returns (string memory) {
         return operatorToSocket[operator];
+    }
+
+    function getBatchOperatorPubkeyInfoAndSocket(
+        address[] calldata operators
+    ) public view returns (PubkeyInfoAndSocket[] memory) {
+        PubkeyInfoAndSocket[] memory pubkeyInfosAndSockets = new PubkeyInfoAndSocket[](operators.length);
+        for (uint256 i = 0; i < operators.length; i++) {
+            pubkeyInfosAndSockets[i] = PubkeyInfoAndSocket({
+                pubkeyInfo: getRegisteredPubkeyInfo(operators[i]),
+                socket: getOperatorSocketByOperator(operators[i])
+            });
+        }
+        return pubkeyInfosAndSockets;
     }
 }

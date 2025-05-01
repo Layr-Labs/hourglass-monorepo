@@ -24,6 +24,24 @@ interface ITaskAVSRegistrarTypes {
         string socket;
         PubkeyRegistrationParams pubkeyRegistrationParams;
     }
+
+    /// @notice Information about a BLS public key.
+    /// @param pubkeyG1 The operator's public key in G1 group format.
+    /// @param pubkeyG2 The operator's public key in G2 group format, must correspond to the same private key as pubkeyG1.
+    /// @param pubkeyHash The unique identifier of the operator's BLS public key.
+    struct PubkeyInfo {
+        BN254.G1Point pubkeyG1;
+        BN254.G2Point pubkeyG2;
+        bytes32 pubkeyHash;
+    }
+
+    /// @notice Information about a BLS public key and its corresponding socket.
+    /// @param pubkeyInfo The information about the BLS public key.
+    /// @param socket The socket address of the operator.
+    struct PubkeyInfoAndSocket {
+        PubkeyInfo pubkeyInfo;
+        string socket;
+    }
 }
 
 interface ITaskAVSRegistrarErrors is ITaskAVSRegistrarTypes {
@@ -67,9 +85,17 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
      *                         VIEW FUNCTIONS
      *
      */
+    function getRegisteredPubkeyInfo(
+        address operator
+    ) external view returns (PubkeyInfo memory);
+
     function getRegisteredPubkey(
         address operator
-    ) external view returns (BN254.G1Point memory, BN254.G2Point memory, bytes32);
+    ) external view returns (BN254.G1Point memory, bytes32);
+
+    function getOperatorPubkeyG2(
+        address operator
+    ) external view returns (BN254.G2Point memory);
 
     function getOperatorFromPubkeyHash(
         bytes32 pubkeyHash
@@ -94,4 +120,8 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
     function getOperatorSocketByOperator(
         address operator
     ) external view returns (string memory);
+
+    function getBatchOperatorPubkeyInfoAndSocket(
+        address[] calldata operators
+    ) external view returns (PubkeyInfoAndSocket[] memory);
 }
