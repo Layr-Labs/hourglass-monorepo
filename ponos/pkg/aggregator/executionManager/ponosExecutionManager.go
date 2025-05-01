@@ -3,17 +3,17 @@ package executionManager
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"sync"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"go.uber.org/zap"
 )
 
@@ -37,8 +37,8 @@ func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
 
 type PonosExecutionManager struct {
 	rpcServer          *rpcServer.RpcServer
-	taskQueue          chan *types.Task
-	resultQueue        chan *types.TaskResult
+	taskQueue          chan *tasks.Task
+	resultQueue        chan *tasks.TaskResult
 	execClients        map[string]executorV1.ExecutorServiceClient
 	peeringDataFetcher peering.IPeeringDataFetcher
 	running            sync.Map
@@ -48,8 +48,8 @@ type PonosExecutionManager struct {
 }
 
 func NewPonosExecutionManagerWithRpcServer(
-	taskQueue chan *types.Task,
-	resultQueue chan *types.TaskResult,
+	taskQueue chan *tasks.Task,
+	resultQueue chan *tasks.TaskResult,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	config *PonosExecutionManagerConfig,
 	rpcServerPort int,
@@ -76,8 +76,8 @@ func NewPonosExecutionManagerWithRpcServer(
 
 func NewPonosExecutionManager(
 	server *rpcServer.RpcServer,
-	taskQueue chan *types.Task,
-	resultQueue chan *types.TaskResult,
+	taskQueue chan *tasks.Task,
+	resultQueue chan *tasks.TaskResult,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	config *PonosExecutionManagerConfig,
 	signer signer.Signer,
@@ -154,7 +154,7 @@ func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
 	}
 }
 
-func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Task) {
+func (em *PonosExecutionManager) processTask(ctx context.Context, task *tasks.Task) {
 	sugar := em.logger.Sugar()
 	sugar.Infow("Processing task", "taskId", task.TaskId)
 	em.running.Store(task.TaskId, task)
@@ -224,19 +224,18 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 	ctx context.Context,
 	result *aggregatorV1.TaskResult,
 ) (*v1.SubmitAck, error) {
-	sugar := em.logger.Sugar()
 	taskID := result.TaskId
 
 	value, ok := em.running.Load(taskID)
 	if !ok {
-		sugar.Warnw("Received result for unknown task", "task_id", taskID)
+		em.logger.Sugar().Warnw("Received result for unknown task", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "unknown task"}, nil
 	}
 
 	em.running.Delete(taskID)
-	task := value.(*types.Task)
+	task := value.(*tasks.Task)
 
-	taskResult := &types.TaskResult{
+	taskResult := &tasks.TaskResult{
 		TaskId:        task.TaskId,
 		AvsAddress:    task.AVSAddress,
 		CallbackAddr:  task.CallbackAddr,
@@ -249,13 +248,13 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 
 	select {
 	case em.resultQueue <- taskResult:
-		sugar.Infow("Task result accepted", "task_id", taskID)
+		em.logger.Sugar().Infow("Task result accepted", "task_id", taskID)
 		return &v1.SubmitAck{Success: true, Message: "ok"}, nil
 	case <-time.After(1 * time.Second):
-		sugar.Errorw("Failed to enqueue task result (channel full or closed)", "task_id", taskID)
+		em.logger.Sugar().Errorw("Failed to enqueue task result (channel full or closed)", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "enqueue error"}, nil
 	case <-ctx.Done():
-		sugar.Warnw("Context cancelled while enqueueing result", "task_id", taskID)
+		em.logger.Sugar().Warnw("Context cancelled while enqueueing result", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "context cancelled"}, nil
 	}
 }

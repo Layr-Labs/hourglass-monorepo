@@ -27,8 +27,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 	"github.com/spf13/cobra"
@@ -74,8 +74,8 @@ var runCmd = &cobra.Command{
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
-		taskQueue := make(chan *types.Task, 100)
-		resultQueue := make(chan *types.TaskResult, 100)
+		taskQueue := make(chan *tasks.Task, 100)
+		resultQueue := make(chan *tasks.TaskResult, 100)
 
 		if Config.SimulationConfig.SimulateExecutors {
 			sugar.Infow("Starting simulation executors...")
@@ -162,7 +162,7 @@ func initRunCmd(cmd *cobra.Command) {
 
 func buildChainListeners(
 	cfg *aggregatorConfig.AggregatorConfig,
-	taskQueue chan *types.Task,
+	taskQueue chan *tasks.Task,
 	logger *zap.Logger,
 ) ([]runnable.IRunnable, error) {
 	var listeners []runnable.IRunnable
@@ -233,7 +233,7 @@ func buildChainListeners(
 	return listeners, nil
 }
 
-func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runnable.IRunnable {
+func buildWriters(resultQueue chan *tasks.TaskResult, logger *zap.Logger) []runnable.IRunnable {
 	// TODO: implement ponosChainWriter and use when appropriate
 	writerConfig := &simulatedChainWriter.SimulatedChainWriterConfig{
 		Interval: 1 * time.Millisecond,

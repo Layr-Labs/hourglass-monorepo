@@ -7,7 +7,7 @@ import (
 	"time"
 
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"google.golang.org/grpc/status"
 )
 
@@ -34,7 +34,7 @@ func NewSimulatedExecutorClient(cfg *SimulatedExecutorClientConfig, validKeys []
 	}
 }
 
-func (sec *SimulatedExecutorClient) SubmitTask(task *types.Task) error {
+func (sec *SimulatedExecutorClient) SubmitTask(task *tasks.Task) error {
 	if rand.Float64() < sec.config.TimeoutRate {
 		time.Sleep(sec.config.TimeoutDuration)
 		return errors.New("simulated timeout")

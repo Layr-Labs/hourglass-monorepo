@@ -5,8 +5,7 @@ import (
 	"fmt"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"google.golang.org/grpc"
 )
 
@@ -38,7 +37,7 @@ func NewPonosExecutorClientWithConn(
 	}
 }
 
-func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *types.Task) error {
+func (pec *PonosExecutorClient) SubmitTask(ctx context.Context, task *tasks.Task) error {
 	sig, err := pec.signer.SignMessage([]byte(task.TaskId))
 	if err != nil {
 		return fmt.Errorf("failed to sign task: %w", err)

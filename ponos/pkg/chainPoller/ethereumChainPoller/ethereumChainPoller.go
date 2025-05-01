@@ -9,9 +9,9 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -25,7 +25,7 @@ type EthereumChainPollerConfig struct {
 type EthereumChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
-	taskQueue         chan *types.Task
+	taskQueue         chan *tasks.Task
 	logParser         *transactionLogParser.TransactionLogParser
 	config            *EthereumChainPollerConfig
 	logger            *zap.Logger
@@ -41,7 +41,7 @@ func NewEthereumChainPollerDefaultConfig(chainId config.ChainId, inboxAddr strin
 
 func NewEthereumChainPoller(
 	ethClient *ethereum.Client,
-	taskQueue chan *types.Task,
+	taskQueue chan *tasks.Task,
 	logParser *transactionLogParser.TransactionLogParser,
 	config *EthereumChainPollerConfig,
 	logger *zap.Logger,
@@ -167,7 +167,7 @@ func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethe
 	return block, logs, nil
 }
 
-func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
+func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*tasks.Task, error) {
 	var avsAddress common.Address
 	var operatorSetId uint32
 	var parsedTaskDeadline *big.Int
@@ -196,7 +196,7 @@ func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddres
 		return nil, fmt.Errorf("failed to parse task payload")
 	}
 
-	return &types.Task{
+	return &tasks.Task{
 		TaskId:              taskId,
 		AVSAddress:          avsAddress.String(),
 		OperatorSetId:       operatorSetId,

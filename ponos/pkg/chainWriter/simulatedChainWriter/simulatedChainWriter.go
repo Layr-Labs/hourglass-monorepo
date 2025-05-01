@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
+
 	"go.uber.org/zap"
 )
 
@@ -16,14 +17,14 @@ type SimulatedChainWriterConfig struct {
 type SimulatedChainWriter struct {
 	config          *SimulatedChainWriterConfig
 	logger          *zap.Logger
-	workOutputQueue chan *types.TaskResult
+	workOutputQueue chan *tasks.TaskResult
 	ctx             context.Context
 	cancel          context.CancelFunc
 }
 
 func NewSimulatedChainWriter(
 	config *SimulatedChainWriterConfig,
-	workOutputQueue chan *types.TaskResult,
+	workOutputQueue chan *tasks.TaskResult,
 	logger *zap.Logger,
 ) *SimulatedChainWriter {
 	return &SimulatedChainWriter{
@@ -85,7 +86,7 @@ func (scw *SimulatedChainWriter) processBatch() {
 	}
 }
 
-func (scw *SimulatedChainWriter) submitResult(result *types.TaskResult) error {
+func (scw *SimulatedChainWriter) submitResult(result *tasks.TaskResult) error {
 	sugar := scw.logger.Sugar()
 	sugar.Infow("Simulating submitResult", "task_id", result.TaskId)
 

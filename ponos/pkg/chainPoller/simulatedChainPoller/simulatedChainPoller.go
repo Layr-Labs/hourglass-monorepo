@@ -3,12 +3,13 @@ package simulatedChainPoller
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
+	
 	"go.uber.org/zap"
 )
 
@@ -19,7 +20,7 @@ type SimulatedChainPollerConfig struct {
 }
 
 type SimulatedChainPoller struct {
-	taskQueue chan *types.Task
+	taskQueue chan *tasks.Task
 	config    *SimulatedChainPollerConfig
 	logger    *zap.Logger
 
@@ -27,7 +28,7 @@ type SimulatedChainPoller struct {
 }
 
 func NewSimulatedChainPoller(
-	taskQueue chan *types.Task,
+	taskQueue chan *tasks.Task,
 	config *SimulatedChainPollerConfig,
 	logger *zap.Logger,
 ) *SimulatedChainPoller {
@@ -79,7 +80,7 @@ func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
 			return
 		case <-ticker.C:
 			deadline := time.Now().Add(1 * time.Hour)
-			task := &types.Task{
+			task := &tasks.Task{
 				TaskId:              fmt.Sprintf("periodic-task-%d", time.Now().UnixNano()),
 				AVSAddress:          "0xPeriodicTaskAVS",
 				OperatorSetId:       123456,

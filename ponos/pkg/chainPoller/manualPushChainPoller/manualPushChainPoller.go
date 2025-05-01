@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/tasks"
 	"go.uber.org/zap"
 )
 
@@ -20,14 +20,14 @@ type ManualPushChainPollerConfig struct {
 }
 
 type ManualPushChainPoller struct {
-	taskQueue  chan *types.Task
+	taskQueue  chan *tasks.Task
 	httpServer *http.Server
 	config     *ManualPushChainPollerConfig
 	logger     *zap.Logger
 }
 
 func NewManualPushChainPoller(
-	taskQueue chan *types.Task,
+	taskQueue chan *tasks.Task,
 	config *ManualPushChainPollerConfig,
 	logger *zap.Logger,
 ) *ManualPushChainPoller {
@@ -95,7 +95,7 @@ func (scl *ManualPushChainPoller) handleSubmitTaskRoute(ctx context.Context) fun
 		}
 		defer r.Body.Close()
 
-		var taskEvent types.TaskEvent
+		var taskEvent tasks.TaskEvent
 		if err := json.Unmarshal(body, &taskEvent); err != nil {
 			scl.logger.Sugar().Errorw("Failed to unmarshal task event", "error", err)
 			http.Error(w, "Failed to unmarshal task event", http.StatusBadRequest)
@@ -118,14 +118,14 @@ func (scl *ManualPushChainPoller) handleSubmitTaskRoute(ctx context.Context) fun
 	}
 }
 
-func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.Task {
+func convertEventToTask(event *tasks.TaskEvent, chainId *config.ChainId) *tasks.Task {
 	var parsedMeta struct {
 		Deadline               int64   `json:"deadline"`
 		StakeWeightRequiredPct float64 `json:"stakeWeightRequiredPct"`
 	}
 	_ = json.Unmarshal(event.Metadata, &parsedMeta)
 	deadline := time.Now().Add(time.Duration(parsedMeta.Deadline) * time.Second)
-	return &types.Task{
+	return &tasks.Task{
 		TaskId:              event.TaskId,
 		AVSAddress:          event.AVSAddress,
 		OperatorSetId:       event.OperatorSetId,
