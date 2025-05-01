@@ -39,27 +39,26 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         uint32[] calldata operatorSetIds,
         bytes calldata data
     ) external onlyAllocationManager {
-        // TODO: Cleanup call structure within all internal calls.
         require(supportsAVS(avs), InvalidAVS());
 
         OperatorRegistrationParams memory operatorRegistrationParams = abi.decode(data, (OperatorRegistrationParams));
 
-        /**
-         * If the operator has NEVER registered a pubkey before, use `params` to register
-         * their pubkey
-         *
-         * If the operator HAS registered a pubkey, `params` is ignored and the pubkey hash
-         * (pubkeyHash) is fetched instead
-         */
-        bytes32 pubkeyHash = _getOrRegisterOperatorPubkeyHash(
-            operator, operatorRegistrationParams.pubkeyRegistrationParams, pubkeyRegistrationMessageHash(operator)
-        );
+        // Pubkey can only be registered once, so we check if the operator has already registered a pubkey
+        // TODO: Support updating pubkey
+        bytes32 pubkeyHash = operatorToPubkeyHash[operator];
+        if (pubkeyHash == bytes32(0)) {
+            _registerBLSPublicKey(
+                operator, operatorRegistrationParams.pubkeyRegistrationParams, pubkeyRegistrationMessageHash(operator)
+            );
+        }
 
         // Set the operator's socket
-        _setOperatorSocket(operator, pubkeyHash, operatorRegistrationParams.socket);
+        _setOperatorSocket(operator, operatorRegistrationParams.socket);
 
         // Update current APK for each operatorSetId
-        _processOperatorSetApkUpdate(operatorSetIds, operatorRegistrationParams.pubkeyRegistrationParams.pubkeyG1);
+        _processOperatorSetApkUpdate(
+            operator, operatorSetIds, operatorRegistrationParams.pubkeyRegistrationParams.pubkeyG1
+        );
     }
 
     function deregisterOperator(
@@ -70,7 +69,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         require(supportsAVS(avs), InvalidAVS());
 
         // Update current APK for each operatorSetId
-        _processOperatorSetApkUpdate(operatorSetIds, operatorToPubkey[operator].negate());
+        _processOperatorSetApkUpdate(operator, operatorSetIds, operatorToPubkey[operator].negate());
     }
 
     function updateOperatorSocket(
@@ -86,7 +85,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
             }
         }
         require(isRegisteredToAVS, OperatorNotRegistered());
-        _setOperatorSocket(msg.sender, getOperatorPubkeyHash(msg.sender), socket);
+        _setOperatorSocket(msg.sender, socket);
     }
 
     /**
@@ -94,24 +93,12 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
-    function _getOrRegisterOperatorPubkeyHash(
-        address operator,
-        PubkeyRegistrationParams memory params,
-        BN254.G1Point memory _pubkeyRegistrationMessageHash
-    ) internal returns (bytes32 pubkeyHash) {
-        pubkeyHash = getOperatorPubkeyHash(operator);
-        if (pubkeyHash == bytes32(0)) {
-            pubkeyHash = _registerBLSPublicKey(operator, params, _pubkeyRegistrationMessageHash);
-        }
-        return pubkeyHash;
-    }
-
     function _registerBLSPublicKey(
         address operator,
         PubkeyRegistrationParams memory params,
         BN254.G1Point memory _pubkeyRegistrationMessageHash
-    ) internal returns (bytes32 pubkeyHash) {
-        pubkeyHash = BN254.hashG1Point(params.pubkeyG1);
+    ) internal {
+        bytes32 pubkeyHash = BN254.hashG1Point(params.pubkeyG1);
         require(pubkeyHash != ZERO_PK_HASH, ZeroPubKey());
         require(getOperatorPubkeyHash(operator) == bytes32(0), OperatorAlreadyRegistered());
         require(pubkeyHashToOperator[pubkeyHash] == address(0), BLSPubkeyAlreadyRegistered());
@@ -149,29 +136,35 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         pubkeyHashToOperator[pubkeyHash] = operator;
 
         emit NewPubkeyRegistration(operator, pubkeyHash, params.pubkeyG1, params.pubkeyG2);
-        return pubkeyHash;
     }
 
     /**
-     * @notice Updates an operator's socket address in the SocketRegistry
+     * @notice Updates an operator's socket address
      * @param operator The address of the operator
-     * @param pubkeyHash The unique identifier of the operator
      * @param socket The new socket address to set for the operator
      * @dev Emits an OperatorSocketUpdate event after updating
      */
-    function _setOperatorSocket(address operator, bytes32 pubkeyHash, string memory socket) internal {
+    function _setOperatorSocket(address operator, string memory socket) internal {
+        bytes32 pubkeyHash = operatorToPubkeyHash[operator];
+        // TODO: Do we need pubkeyHashToSocket storage mapping?
         pubkeyHashToSocket[pubkeyHash] = socket;
         operatorToSocket[operator] = socket;
         emit OperatorSocketUpdated(operator, pubkeyHash, socket);
     }
 
-    function _processOperatorSetApkUpdate(uint32[] memory operatorSetIds, BN254.G1Point memory point) internal {
-        BN254.G1Point memory newApk;
+    function _processOperatorSetApkUpdate(
+        address operator,
+        uint32[] memory operatorSetIds,
+        BN254.G1Point memory point
+    ) internal {
+        bytes32 pubkeyHash = operatorToPubkeyHash[operator];
 
+        BN254.G1Point memory newApk;
         for (uint256 i = 0; i < operatorSetIds.length; i++) {
             // Update aggregate public key for this operatorSet
             newApk = currentApk[operatorSetIds[i]].plus(point);
             currentApk[operatorSetIds[i]] = newApk;
+            emit OperatorSetApkUpdated(operator, pubkeyHash, operatorSetIds[i], newApk);
         }
     }
 
