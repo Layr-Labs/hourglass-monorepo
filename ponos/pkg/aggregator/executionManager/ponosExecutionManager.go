@@ -3,8 +3,10 @@ package executionManager
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"sync"
 	"time"
 
@@ -296,4 +298,12 @@ func (em *PonosExecutionManager) refreshExecutorClients() {
 	if newClientCount > 0 {
 		sugar.Infow("Refreshed executor clients", "newClients", newClientCount, "totalClients", len(em.execClients))
 	}
+}
+
+func (em *PonosExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock, log log.DecodedLog) error {
+	if log.EventName == "TaskCreated" && log.Address == "" {
+
+	}
+
+	return nil
 }

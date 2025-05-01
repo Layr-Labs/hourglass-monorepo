@@ -1,6 +1,9 @@
 package util
 
-import "encoding/base64"
+import (
+	"encoding/base64"
+	"strings"
+)
 
 func DecodeBase64String(s string) ([]byte, error) {
 	decoded, err := base64.StdEncoding.DecodeString(s)
@@ -128,4 +131,8 @@ func Flatten[A any](coll [][]A) []A {
 //   - string: The shortened string (e.g., "0x1234..abcd")
 func ShortenHex(publicKey string) string {
 	return publicKey[0:6] + ".." + publicKey[len(publicKey)-4:]
+}
+
+func AreAddressesEqual(a, b string) bool {
+	return strings.EqualFold(a, b)
 }

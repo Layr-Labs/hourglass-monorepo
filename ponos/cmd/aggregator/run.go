@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logSequencer"
+	log2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"slices"
 	"time"
 
@@ -14,7 +18,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
@@ -55,6 +59,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		// Load up the keystore
 		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
 		if err != nil {
 			return fmt.Errorf("failed to parse keystore JSON: %w", err)
@@ -72,11 +77,50 @@ var runCmd = &cobra.Command{
 
 		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
-		sugar.Infof("Aggregator config: %+v\n", Config)
-		sugar.Infow("Building aggregator components...")
+		// load the contracts and create the store
+		// TODO: configure which L1 chain to use
+		coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(config.ChainId_EthereumHolesky)
+		if err != nil {
+			return fmt.Errorf("failed to load core contracts: %w", err)
+		}
+
+		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, log)
+
+		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, log)
+
+		sequencer := logSequencer.NewLogSequencer(tlp, func(*chainPoller.LogWithBlock, *log2.DecodedLog) error {
+			// TODO: do stuff with the logs
+			return nil
+		}, log)
 
 		taskQueue := make(chan *types.Task, 100)
 		resultQueue := make(chan *types.TaskResult, 100)
+
+		pollers := map[config.ChainId]chainPoller.IChainPoller{}
+		for _, chain := range Config.Chains {
+			if _, ok := pollers[chain.ChainId]; !ok {
+				sugar.Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
+				continue
+			}
+			ec := ethereum.NewClient(&ethereum.EthereumClientConfig{
+				BaseUrl: chain.RpcURL,
+			}, log)
+
+			pCfg := &EVMChainPoller.EVNChainPollerConfig{
+				ChainId:              chain.ChainId,
+				InboxAddr:            "",
+				PollingInterval:      10 * time.Millisecond,
+				InterestingContracts: []string{},
+			}
+			if config.IsL1Chain(chain.ChainId) {
+				pCfg.EigenLayerCoreContracts = imContractStore.ListContractAddresses()
+			}
+
+			pollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, sequencer.GetChannel(), tlp, pCfg, log)
+		}
+
+		sugar.Infof("Aggregator config: %+v\n", Config)
+		sugar.Infow("Building aggregator components...")
 
 		if Config.SimulationConfig.SimulateExecutors {
 			sugar.Infow("Starting simulation executors...")
@@ -207,18 +251,18 @@ func buildChainPollers(
 				return nil, err
 			}
 			for _, entry := range abiEntries {
-				logParser := transactionLogParser.NewTransactionLogParser(entry.Abi, logger)
+				logParser := transactionLogParser.NewTransactionLogParser(logger, nil)
 				ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
 					BaseUrl:   chain.RpcURL,
 					BlockType: ethereum.BlockType_Latest,
 				}, logger)
 
-				listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
+				listenerConfig := EVMChainPoller.NewEVMChainPollerDefaultConfig(
 					chain.ChainId,
 					entry.Address.String(),
 				)
 
-				listener := ethereumChainPoller.NewEthereumChainPoller(
+				listener := EVMChainPoller.NewEVMChainPoller(
 					ethClient,
 					taskQueue,
 					logParser,

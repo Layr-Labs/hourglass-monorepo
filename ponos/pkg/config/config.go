@@ -1,6 +1,9 @@
 package config
 
-import "k8s.io/apimachinery/pkg/util/validation/field"
+import (
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"slices"
+)
 
 type ChainId uint
 
@@ -10,6 +13,15 @@ const (
 	ChainId_EthereumHoodi   ChainId = 560048
 	ChainId_EthereumAnvil   ChainId = 31337
 )
+
+func IsL1Chain(chainId ChainId) bool {
+	return slices.Contains([]ChainId{
+		ChainId_EthereumMainnet,
+		ChainId_EthereumHolesky,
+		ChainId_EthereumHoodi,
+		ChainId_EthereumAnvil,
+	}, chainId)
+}
 
 var (
 	SupportedChainIds = []ChainId{

@@ -1,9 +1,11 @@
-package ethereumChainPoller
+package EVMChainPoller
 
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"math/big"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,46 +18,48 @@ import (
 	"go.uber.org/zap"
 )
 
-type EthereumChainPollerConfig struct {
-	ChainId         config.ChainId
-	PollingInterval time.Duration
-	InboxAddr       string
+type EVNChainPollerConfig struct {
+	ChainId                 config.ChainId
+	PollingInterval         time.Duration
+	InboxAddr               string
+	EigenLayerCoreContracts []string
+	InterestingContracts    []string
 }
 
-type EthereumChainPoller struct {
+type EVMChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
-	taskQueue         chan *types.Task
+	logSequencer      chan *chainPoller.LogWithBlock
 	logParser         *transactionLogParser.TransactionLogParser
-	config            *EthereumChainPollerConfig
+	config            *EVNChainPollerConfig
 	logger            *zap.Logger
 }
 
-func NewEthereumChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EthereumChainPollerConfig {
-	return &EthereumChainPollerConfig{
+func NewEVMChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EVNChainPollerConfig {
+	return &EVNChainPollerConfig{
 		ChainId:         chainId,
 		InboxAddr:       inboxAddr,
 		PollingInterval: 10 * time.Millisecond,
 	}
 }
 
-func NewEthereumChainPoller(
+func NewEVMChainPoller(
 	ethClient *ethereum.Client,
-	taskQueue chan *types.Task,
+	sequencer chan *chainPoller.LogWithBlock,
 	logParser *transactionLogParser.TransactionLogParser,
-	config *EthereumChainPollerConfig,
+	config *EVNChainPollerConfig,
 	logger *zap.Logger,
-) *EthereumChainPoller {
-	return &EthereumChainPoller{
-		ethClient: ethClient,
-		logger:    logger,
-		taskQueue: taskQueue,
-		logParser: logParser,
-		config:    config,
+) *EVMChainPoller {
+	return &EVMChainPoller{
+		ethClient:    ethClient,
+		logger:       logger,
+		logSequencer: sequencer,
+		logParser:    logParser,
+		config:       config,
 	}
 }
 
-func (ecp *EthereumChainPoller) Start(ctx context.Context) error {
+func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	sugar := ecp.logger.Sugar()
 	sugar.Infow("Starting Ethereum Chain Listener",
 		"chainId", ecp.config.ChainId,
@@ -66,7 +70,7 @@ func (ecp *EthereumChainPoller) Start(ctx context.Context) error {
 	return nil
 }
 
-func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
+func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 	ticker := time.NewTicker(ecp.config.PollingInterval)
 	defer ticker.Stop()
 
@@ -85,7 +89,18 @@ func (ecp *EthereumChainPoller) pollForBlocks(ctx context.Context) {
 	}
 }
 
-func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) error {
+func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {
+	logAddr := strings.ToLower(log.Address.Value())
+	if slices.Contains(ecp.config.InterestingContracts, logAddr) {
+		return true
+	}
+	if config.IsL1Chain(ecp.config.ChainId) && slices.Contains(ecp.config.EigenLayerCoreContracts, logAddr) {
+		return true
+	}
+	return false
+}
+
+func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	block, logs, err := ecp.getNextBlockWithLogs(ctx)
 	if err != nil {
 		return err
@@ -102,57 +117,60 @@ func (ecp *EthereumChainPoller) processNextBlock(ctx context.Context) error {
 		"logCount", len(logs),
 	)
 
-	return ecp.processLogs(ctx, block, logs)
-}
-
-func (ecp *EthereumChainPoller) processLogs(
-	ctx context.Context,
-	block *ethereum.EthereumBlock,
-	logs []*ethereum.EthereumEventLog,
-) error {
 	for _, log := range logs {
-		if !strings.EqualFold(log.Address.Value(), ecp.config.InboxAddr) {
+		if !ecp.isInterestingLog(log) {
 			continue
 		}
 
-		parsedLog, err := ecp.logParser.ParseLog(log)
-		if err != nil {
-			// TODO: emit metric
-			return fmt.Errorf("failed to parse log: %w", err)
+		lwb := &chainPoller.LogWithBlock{
+			Block: block,
+			Log:   log,
 		}
-		task, err := convertTask(parsedLog, block, ecp.config.InboxAddr)
-		if err != nil {
-			// TODO: emit metric
-			return fmt.Errorf("failed to convert task: %w", err)
-		}
-
 		select {
-		case ecp.taskQueue <- task:
-			ecp.logger.Sugar().Infow("Enqueued task for processing",
-				"blockNumber", task.BlockNumber,
-				"blockHash", task.BlockHash,
+		case ecp.logSequencer <- lwb:
+			ecp.logger.Sugar().Infow("Enqueued log for processing",
+				zap.Uint64("blockNumber", block.Number.Value()),
+				zap.String("transactionHash", log.TransactionHash.Value()),
+				zap.String("logAddress", log.Address.Value()),
+				zap.Uint64("logIndex", log.LogIndex.Value()),
 			)
 		case <-time.After(100 * time.Millisecond):
-			ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
-				"blockNumber", task.BlockNumber,
-				"blockHash", task.BlockHash,
+			ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
+				zap.Uint64("blockNumber", block.Number.Value()),
+				zap.String("transactionHash", log.TransactionHash.Value()),
+				zap.String("logAddress", log.Address.Value()),
+				zap.Uint64("logIndex", log.LogIndex.Value()),
 			)
-		case <-ctx.Done():
-			return nil
 		}
 	}
 	return nil
 }
 
-func (ecp *EthereumChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
+func (ecp *EVMChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
 	blockNum, err := ecp.ethClient.GetLatestBlock(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// if the latest observed block is the same as the latest block, skip processing
 	if ecp.lastObservedBlock != nil && ecp.lastObservedBlock.Number.Value() == blockNum {
+		ecp.logger.Sugar().Infow("Skipping block processing as the last observed block is the same as the latest block",
+			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
+			zap.Uint64("latestBlock", blockNum),
+		)
 		return nil, nil, nil
 	}
+
+	// if the latest observed block is greater than the latest block, skip processing since the chain is lagging behind
+	if ecp.lastObservedBlock != nil && ecp.lastObservedBlock.Number.Value() > blockNum {
+		ecp.logger.Sugar().Infow("Skipping block processing as the last observed block is greater than the latest block",
+			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
+			zap.Uint64("latestBlock", blockNum),
+		)
+		return nil, nil, nil
+	}
+
+	// TODO: if blockNum > latestBlock + 1, we need to handle filling in the gap.
 
 	block, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
 	if err != nil {

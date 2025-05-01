@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"go.uber.org/zap"
 )
 
 type Aggregator struct {
-	chainPollers     []runnable.IRunnable
+	chainPollers     []chainPoller.IChainPoller
 	chainWriters     []runnable.IRunnable
 	executionManager runnable.IRunnable
 	logger           *zap.Logger
 }
 
 type AggregatorConfig struct {
-	ChainPollers     []runnable.IRunnable
+	ChainPollers     []chainPoller.IChainPoller
 	ChainWriters     []runnable.IRunnable
 	ExecutionManager runnable.IRunnable
 	Logger           *zap.Logger

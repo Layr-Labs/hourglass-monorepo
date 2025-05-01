@@ -5,36 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"strings"
 )
 
 //go:embed coreContracts
 var CoreContracts embed.FS
-
-type CoreContract struct {
-	Address     string
-	AbiVersions []string
-}
-
-func (c *CoreContract) GetCombinedAbis() (string, error) {
-	return combineAbis(c.AbiVersions)
-}
-
-func (c *CoreContract) GetAbi() (*abi.ABI, error) {
-	combinedAbi, err := c.GetCombinedAbis()
-	if err != nil {
-		return nil, fmt.Errorf("failed to combine ABIs: %w", err)
-	}
-
-	parsedAbi, err := abi.JSON(strings.NewReader(combinedAbi))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ABI: %w", err)
-	}
-
-	return &parsedAbi, nil
-}
 
 type CoreContractData struct {
 	ContractAddress string `json:"contract_address"`
@@ -53,19 +29,7 @@ type CoreContractsData struct {
 	ProxyContracts []*CoreProxyContractData `json:"proxy_contracts"`
 }
 
-func combineAbis(abis []string) (string, error) {
-	abisToCombine := make([]string, 0)
-
-	for _, contractAbi := range abis {
-		strippedContractAbi := contractAbi[1 : len(contractAbi)-1]
-		abisToCombine = append(abisToCombine, strippedContractAbi)
-	}
-
-	combinedAbi := fmt.Sprintf("[%s]", strings.Join(abisToCombine, ","))
-	return combinedAbi, nil
-}
-
-func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*CoreContract, error) {
+func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*contracts.Contract, error) {
 	var data []byte
 	var err error
 	switch chainId {
@@ -87,8 +51,8 @@ func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*CoreContra
 		return nil, fmt.Errorf("failed to unmarshal core contracts data: %w", err)
 	}
 
-	// address --> CoreContract
-	mappedContracts := make(map[string]*CoreContract)
+	// address --> Contract
+	mappedContracts := make(map[string]*contracts.Contract)
 
 	for _, contract := range coreContractsData.ProxyContracts {
 		// front-facing proxy contract
@@ -96,7 +60,7 @@ func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*CoreContra
 
 		c, ok := mappedContracts[proxyContractAddr]
 		if !ok {
-			c = &CoreContract{
+			c = &contracts.Contract{
 				Address:     proxyContractAddr,
 				AbiVersions: make([]string, 0),
 			}
