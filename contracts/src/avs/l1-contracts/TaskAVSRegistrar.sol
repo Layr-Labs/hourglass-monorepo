@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {
+    OperatorSet,
+    OperatorSetLib
+} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IAllocationManager} from
     "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {EIP712} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
@@ -65,7 +69,15 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
         string memory socket
     ) external {
         // TODO: Should we check for UAM permissions here?
-        require(ALLOCATION_MANAGER.getRegisteredSets(msg.sender).length > 0, OperatorNotRegistered());
+        OperatorSet[] memory operatorSets = ALLOCATION_MANAGER.getRegisteredSets(msg.sender);
+        bool isRegisteredToAVS = false;
+        for (uint256 i = 0; i < operatorSets.length; i++) {
+            if (supportsAVS(operatorSets[i].avs)) {
+                isRegisteredToAVS = true;
+                break;
+            }
+        }
+        require(isRegisteredToAVS, OperatorNotRegistered());
         _setOperatorSocket(msg.sender, getOperatorPubkeyHash(msg.sender), socket);
     }
 
