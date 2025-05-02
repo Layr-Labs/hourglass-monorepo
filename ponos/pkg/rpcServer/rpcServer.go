@@ -76,9 +76,9 @@ func (rpc *RpcServer) Start(ctx context.Context) error {
 		rpc.logger.Sugar().Info("received context.Done()")
 		switch {
 		case errors.Is(err, context.Canceled):
-			rpc.logger.Sugar().Info("Context canceled, shutting down")
+			rpc.logger.Sugar().Info("context canceled, shutting down")
 		case errors.Is(err, context.DeadlineExceeded):
-			rpc.logger.Sugar().Info("Context deadline exceeded, shutting down")
+			rpc.logger.Sugar().Info("context deadline exceeded, shutting down")
 		default:
 			rpc.logger.Sugar().Info("Unknown error, shutting down")
 		}

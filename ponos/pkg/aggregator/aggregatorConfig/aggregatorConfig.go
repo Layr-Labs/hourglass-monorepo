@@ -104,7 +104,7 @@ type AggregatorConfig struct {
 	Chains []Chain `json:"chains" yaml:"chains"`
 
 	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
-	Avss []AggregatorAvs `json:"avss" yaml:"avss"`
+	Avss []*AggregatorAvs `json:"avss" yaml:"avss"`
 
 	// SimulationConfig contains the configuration for the simulation mode
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`

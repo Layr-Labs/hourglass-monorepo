@@ -34,6 +34,7 @@ var (
 
 type ContractAddresses struct {
 	AllocationManager string
+	TaskMailbox       string
 }
 
 func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
@@ -41,6 +42,7 @@ func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
 	case ChainId_EthereumHolesky:
 		return &ContractAddresses{
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+			TaskMailbox:       "",
 		}
 	case ChainId_EthereumHoodi:
 		// TODO(seanmcgary): Add hoodi contracts
@@ -48,6 +50,7 @@ func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
 	case ChainId_EthereumMainnet:
 		return &ContractAddresses{
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			TaskMailbox:       "",
 		}
 	}
 	return nil

@@ -4,24 +4,20 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
-	"math/big"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
 type EVNChainPollerConfig struct {
 	ChainId                 config.ChainId
 	PollingInterval         time.Duration
-	InboxAddr               string
 	EigenLayerCoreContracts []string
 	InterestingContracts    []string
 }
@@ -38,7 +34,6 @@ type EVMChainPoller struct {
 func NewEVMChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EVNChainPollerConfig {
 	return &EVNChainPollerConfig{
 		ChainId:         chainId,
-		InboxAddr:       inboxAddr,
 		PollingInterval: 10 * time.Millisecond,
 	}
 }
@@ -62,15 +57,15 @@ func NewEVMChainPoller(
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	sugar := ecp.logger.Sugar()
 	sugar.Infow("Starting Ethereum Chain Listener",
-		"chainId", ecp.config.ChainId,
-		"inboxAddr", ecp.config.InboxAddr,
-		"pollingInterval", ecp.config.PollingInterval,
+		zap.Any("chainId", ecp.config.ChainId),
+		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
 	go ecp.pollForBlocks(ctx)
 	return nil
 }
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
+	ctx, cancel := context.WithCancel(ctx)
 	ticker := time.NewTicker(ecp.config.PollingInterval)
 	defer ticker.Stop()
 
@@ -78,11 +73,13 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			ecp.logger.Sugar().Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
+			cancel()
 			return
 		case <-ticker.C:
 			err := ecp.processNextBlock(ctx)
 			if err != nil {
 				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
+				cancel()
 				return
 			}
 		}
@@ -117,29 +114,29 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 		"logCount", len(logs),
 	)
 
-	for _, log := range logs {
-		if !ecp.isInterestingLog(log) {
+	for _, l := range logs {
+		if !ecp.isInterestingLog(l) {
 			continue
 		}
 
 		lwb := &chainPoller.LogWithBlock{
 			Block: block,
-			Log:   log,
+			Log:   l,
 		}
 		select {
 		case ecp.logSequencer <- lwb:
-			ecp.logger.Sugar().Infow("Enqueued log for processing",
+			ecp.logger.Sugar().Infow("Enqueued l for processing",
 				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
+				zap.String("transactionHash", l.TransactionHash.Value()),
+				zap.String("logAddress", l.Address.Value()),
+				zap.Uint64("logIndex", l.LogIndex.Value()),
 			)
 		case <-time.After(100 * time.Millisecond):
-			ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
+			ecp.logger.Sugar().Warnw("Failed to enqueue l (channel full or closed)",
 				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
+				zap.String("transactionHash", l.TransactionHash.Value()),
+				zap.String("logAddress", l.Address.Value()),
+				zap.Uint64("logIndex", l.LogIndex.Value()),
 			)
 		}
 	}
@@ -171,58 +168,84 @@ func (ecp *EVMChainPoller) getNextBlockWithLogs(ctx context.Context) (*ethereum.
 	}
 
 	// TODO: if blockNum > latestBlock + 1, we need to handle filling in the gap.
-
 	block, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
 	if err != nil {
 		return nil, nil, err
 	}
 	ecp.lastObservedBlock = block
 
-	logs, err := ecp.ethClient.GetLogs(ctx, ecp.config.InboxAddr, block.Number.Value(), block.Number.Value())
+	logs, err := ecp.fetchLogsForInterestingContractsForBlock(block.Number.Value())
 	if err != nil {
 		return nil, nil, err
 	}
 	return block, logs, nil
 }
 
-func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
-	var avsAddress common.Address
-	var operatorSetId uint32
-	var parsedTaskDeadline *big.Int
-	var taskId string
-	var payload []byte
+func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
+	contracts := make([]string, 0)
+	for _, contract := range ecp.config.InterestingContracts {
+		contracts = append(contracts, strings.ToLower(contract))
+	}
+	for _, contract := range ecp.config.EigenLayerCoreContracts {
+		contracts = append(contracts, strings.ToLower(contract))
+	}
+	return contracts
+}
 
-	taskId, ok := log.Arguments[1].Value.(string)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task id")
+func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber uint64) ([]*ethereum.EthereumEventLog, error) {
+	var wg sync.WaitGroup
+
+	allContracts := ecp.listAllInterestingContracts()
+	logResultsChan := make(chan []*ethereum.EthereumEventLog, len(allContracts))
+	errorsChan := make(chan error, len(allContracts))
+
+	for _, contract := range allContracts {
+		wg.Add(1)
+		go func(contract string, wg *sync.WaitGroup) {
+			defer wg.Done()
+
+			logs, err := ecp.ethClient.GetLogs(context.Background(), contract, blockNumber, blockNumber)
+			if err != nil {
+				ecp.logger.Sugar().Errorw("Failed to fetch logs for contract",
+					zap.String("contract", contract),
+					zap.Uint64("blockNumber", blockNumber),
+					zap.Error(err),
+				)
+				errorsChan <- fmt.Errorf("failed to fetch logs for contract %s: %w", contract, err)
+				return
+			}
+			if len(logs) == 0 {
+				ecp.logger.Sugar().Infow("No logs found for contract",
+					zap.String("contract", contract),
+					zap.Uint64("blockNumber", blockNumber),
+				)
+				logResultsChan <- []*ethereum.EthereumEventLog{}
+				return
+			}
+			ecp.logger.Sugar().Infow("Fetched logs for contract",
+				zap.String("contract", contract),
+				zap.Uint64("blockNumber", blockNumber),
+				zap.Int("logCount", len(logs)),
+			)
+			logResultsChan <- logs
+		}(contract, &wg)
 	}
-	avsAddress, ok = log.Arguments[2].Value.(common.Address)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task event address")
+	wg.Wait()
+	close(logResultsChan)
+	close(errorsChan)
+
+	allErrors := make([]error, 0)
+	for err := range errorsChan {
+		allErrors = append(allErrors, err)
 	}
-	operatorSetId, ok = log.OutputData["executorOperatorSetId"].(uint32)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse operator set id")
-	}
-	parsedTaskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task event deadline")
-	}
-	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
-	payload, ok = log.OutputData["payload"].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task payload")
+	if len(allErrors) > 0 {
+		return nil, fmt.Errorf("failed to fetch logs for contracts: %v", allErrors)
 	}
 
-	return &types.Task{
-		TaskId:              taskId,
-		AVSAddress:          avsAddress.String(),
-		OperatorSetId:       operatorSetId,
-		CallbackAddr:        inboxAddress,
-		DeadlineUnixSeconds: &taskDeadlineTime,
-		Payload:             payload,
-		ChainId:             block.ChainId,
-		BlockNumber:         block.Number.Value(),
-		BlockHash:           block.Hash.Value(),
-	}, nil
+	allLogs := make([]*ethereum.EthereumEventLog, 0)
+	for contractLogs := range logResultsChan {
+		allLogs = append(allLogs, contractLogs...)
+	}
+
+	return allLogs, nil
 }

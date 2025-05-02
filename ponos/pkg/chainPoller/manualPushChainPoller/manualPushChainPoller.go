@@ -108,7 +108,7 @@ func (scl *ManualPushChainPoller) handleSubmitTaskRoute(ctx context.Context) fun
 		select {
 		case scl.taskQueue <- task:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("Task event enqueued"))
+			_, _ = w.Write([]byte("task event enqueued"))
 		case <-time.After(1 * time.Second):
 			scl.logger.Sugar().Errorw("Failed to enqueue task (channel full or closed)", "taskID", task.TaskId)
 			http.Error(w, "Failed to enqueue task", http.StatusInternalServerError)

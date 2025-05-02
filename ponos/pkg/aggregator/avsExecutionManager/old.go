@@ -1,106 +1,8 @@
-package executionManager
+package avsExecutionManager
 
-import (
-	"context"
-	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"sync"
-	"time"
-
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"go.uber.org/zap"
-)
-
-const (
-	DefaultRefreshInterval = 30 * time.Second
-)
-
-type PonosExecutionManagerConfig struct {
-	PeerRefreshInterval       time.Duration
-	SecureConnection          bool
-	AggregatorOperatorAddress string
-	AggregatorUrl             string
-}
-
-func NewPonosExecutionManagerDefaultConfig() *PonosExecutionManagerConfig {
-	return &PonosExecutionManagerConfig{
-		PeerRefreshInterval: DefaultRefreshInterval,
-		SecureConnection:    false,
-	}
-}
-
-type PonosExecutionManager struct {
-	rpcServer          *rpcServer.RpcServer
-	taskQueue          chan *types.Task
-	resultQueue        chan *types.TaskResult
-	execClients        map[string]executorV1.ExecutorServiceClient
-	peeringDataFetcher peering.IPeeringDataFetcher
-	running            sync.Map
-	config             *PonosExecutionManagerConfig
-	signer             signer.Signer
-	logger             *zap.Logger
-}
-
-func NewPonosExecutionManagerWithRpcServer(
-	taskQueue chan *types.Task,
-	resultQueue chan *types.TaskResult,
-	peeringDataFetcher peering.IPeeringDataFetcher,
-	config *PonosExecutionManagerConfig,
-	rpcServerPort int,
-	signer signer.Signer,
-	logger *zap.Logger,
-) (*PonosExecutionManager, error) {
-	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: rpcServerPort,
-	}, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create RPC server: %w", err)
-	}
-
-	return NewPonosExecutionManager(
-		rpc,
-		taskQueue,
-		resultQueue,
-		peeringDataFetcher,
-		config,
-		signer,
-		logger,
-	), nil
-}
-
-func NewPonosExecutionManager(
-	server *rpcServer.RpcServer,
-	taskQueue chan *types.Task,
-	resultQueue chan *types.TaskResult,
-	peeringDataFetcher peering.IPeeringDataFetcher,
-	config *PonosExecutionManagerConfig,
-	signer signer.Signer,
-	logger *zap.Logger,
-) *PonosExecutionManager {
-	manager := &PonosExecutionManager{
-		rpcServer:          server,
-		taskQueue:          taskQueue,
-		resultQueue:        resultQueue,
-		peeringDataFetcher: peeringDataFetcher,
-		execClients:        map[string]executorV1.ExecutorServiceClient{},
-		config:             config,
-		signer:             signer,
-		logger:             logger,
-	}
-	aggregatorV1.RegisterAggregatorServiceServer(server.GetGrpcServer(), manager)
-	return manager
-}
-
-func (em *PonosExecutionManager) Start(ctx context.Context) error {
-	em.logger.Sugar().Infow("Starting PonosExecutionManager",
+/*
+func (em *AvsExecutionManager) Start(ctx context.context) error {
+	em.logger.Sugar().Infow("Starting AvsExecutionManager",
 		"secureConnection", em.config.SecureConnection,
 		"refreshInterval", em.config.PeerRefreshInterval,
 	)
@@ -116,7 +18,7 @@ func (em *PonosExecutionManager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (em *PonosExecutionManager) refreshExecutorClientsLoop(ctx context.Context) {
+func (em *AvsExecutionManager) refreshExecutorClientsLoop(ctx context.context) {
 	ticker := time.NewTicker(em.config.PeerRefreshInterval)
 	defer ticker.Stop()
 
@@ -136,7 +38,7 @@ func (em *PonosExecutionManager) refreshExecutorClientsLoop(ctx context.Context)
 	}
 }
 
-func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
+func (em *AvsExecutionManager) processTaskQueue(ctx context.context) {
 	sugar := em.logger.Sugar()
 	sugar.Info("Starting task processing loop")
 
@@ -147,7 +49,7 @@ func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
 			return
 		case task, ok := <-em.taskQueue:
 			if !ok {
-				sugar.Warn("Task queue channel closed, exiting")
+				sugar.Warn("task queue channel closed, exiting")
 				return
 			}
 
@@ -156,7 +58,7 @@ func (em *PonosExecutionManager) processTaskQueue(ctx context.Context) {
 	}
 }
 
-func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Task) {
+func (em *AvsExecutionManager) processTask(ctx context.context, task *types.task) {
 	sugar := em.logger.Sugar()
 	sugar.Infow("Processing task", "taskId", task.TaskId)
 	em.running.Store(task.TaskId, task)
@@ -204,7 +106,7 @@ func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Ta
 				return
 			}
 			if !res.Success {
-				sugar.Errorw("Task submission failed",
+				sugar.Errorw("task submission failed",
 					zap.String("executorAddress", address),
 					zap.String("taskId", task.TaskId),
 					zap.String("message", res.Message),
@@ -219,11 +121,11 @@ func (em *PonosExecutionManager) processTask(ctx context.Context, task *types.Ta
 		}(addr, execClient, &wg)
 	}
 	wg.Wait()
-	sugar.Infow("Task submission completed", zap.String("taskId", task.TaskId))
+	sugar.Infow("task submission completed", zap.String("taskId", task.TaskId))
 }
 
-func (em *PonosExecutionManager) SubmitTaskResult(
-	ctx context.Context,
+func (em *AvsExecutionManager) SubmitTaskResult(
+	ctx context.context,
 	result *aggregatorV1.TaskResult,
 ) (*v1.SubmitAck, error) {
 	sugar := em.logger.Sugar()
@@ -236,7 +138,7 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 	}
 
 	em.running.Delete(taskID)
-	task := value.(*types.Task)
+	task := value.(*types.task)
 
 	taskResult := &types.TaskResult{
 		TaskId:        task.TaskId,
@@ -251,18 +153,18 @@ func (em *PonosExecutionManager) SubmitTaskResult(
 
 	select {
 	case em.resultQueue <- taskResult:
-		sugar.Infow("Task result accepted", "task_id", taskID)
+		sugar.Infow("task result accepted", "task_id", taskID)
 		return &v1.SubmitAck{Success: true, Message: "ok"}, nil
 	case <-time.After(1 * time.Second):
 		sugar.Errorw("Failed to enqueue task result (channel full or closed)", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "enqueue error"}, nil
 	case <-ctx.Done():
-		sugar.Warnw("Context cancelled while enqueueing result", "task_id", taskID)
+		sugar.Warnw("context cancelled while enqueueing result", "task_id", taskID)
 		return &v1.SubmitAck{Success: false, Message: "context cancelled"}, nil
 	}
 }
 
-func (em *PonosExecutionManager) refreshExecutorClients() {
+func (em *AvsExecutionManager) refreshExecutorClients() {
 	sugar := em.logger.Sugar()
 
 	peers, err := em.peeringDataFetcher.ListExecutorOperators()
@@ -298,12 +200,4 @@ func (em *PonosExecutionManager) refreshExecutorClients() {
 	if newClientCount > 0 {
 		sugar.Infow("Refreshed executor clients", "newClients", newClientCount, "totalClients", len(em.execClients))
 	}
-}
-
-func (em *PonosExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock, log log.DecodedLog) error {
-	if log.EventName == "TaskCreated" && log.Address == "" {
-
-	}
-
-	return nil
-}
+}*/

@@ -11,11 +11,11 @@ import (
 func (pp *PonosPerformer) ExecuteTask(ctx context.Context, task *performerV1.Task) (*performerV1.TaskResult, error) {
 
 	if err := pp.taskWorker.ValidateTask(task); err != nil {
-		pp.logger.Sugar().Errorw("Task is invalid",
+		pp.logger.Sugar().Errorw("task is invalid",
 			zap.String("taskId", task.TaskId),
 			zap.Error(err),
 		)
-		return nil, status.Errorf(codes.Internal, "Task is invalid: %s", err.Error())
+		return nil, status.Errorf(codes.Internal, "task is invalid: %s", err.Error())
 	}
 
 	res, err := pp.taskWorker.HandleTask(task)
