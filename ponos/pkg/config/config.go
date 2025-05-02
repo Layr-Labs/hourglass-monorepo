@@ -1,10 +1,9 @@
 package config
 
 import (
-	"k8s.io/apimachinery/pkg/util/validation/field"
-	"slices"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"slices"
 )
 
 type ChainId uint
