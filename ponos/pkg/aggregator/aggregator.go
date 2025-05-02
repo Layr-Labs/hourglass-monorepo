@@ -223,7 +223,6 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	}
 	a.logger.Sugar().Infow("Execution managers started")
 
-	fmt.Printf("ChainPollers: %+v\n", a.chainPollers)
 	// start polling for blocks
 	for _, poller := range a.chainPollers {
 		a.logger.Sugar().Infow("Starting chain poller", "poller", poller)
