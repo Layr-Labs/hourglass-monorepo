@@ -27,22 +27,24 @@ contract DeployAndRegisterAVS is Script {
     function setUp() public {}
 
     function run(
-        string memory metadataURI
     ) public {
         // Load the private key from the environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOYER");
+        address deployer = vm.addr(deployerPrivateKey);
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
         address avs = vm.addr(avsPrivateKey);
 
         // 1. Deploy the TaskAVSRegistrar middleware contract
         vm.startBroadcast(deployerPrivateKey);
+        console.log("Deployer address:", deployer);
         TaskAVSRegistrar taskAVSRegistrar = new TaskAVSRegistrar(avs, ALLOCATION_MANAGER);
         console.log("TaskAVSRegistrar deployed to:", address(taskAVSRegistrar));
         vm.stopBroadcast();
 
         // 2. Register the AVS
         vm.startBroadcast(avsPrivateKey);
-        ALLOCATION_MANAGER.updateAVSMetadataURI(avs, metadataURI);
+        console.log("AVS address:", avs);
+        ALLOCATION_MANAGER.updateAVSMetadataURI(avs, "Test AVS");
         ALLOCATION_MANAGER.setAVSRegistrar(avs, IAVSRegistrar(taskAVSRegistrar));
 
         // 3. Create the operator sets
