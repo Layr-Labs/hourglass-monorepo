@@ -120,6 +120,7 @@ func (e *Executor) receiveTaskResponse(originalTask *performerTask.PerformerTask
 		OperatorAddress: e.config.Operator.Address,
 		Output:          response.Result,
 		Signature:       sig,
+		AvsAddress:      task.AvsAddress,
 	})
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to submit task result",
