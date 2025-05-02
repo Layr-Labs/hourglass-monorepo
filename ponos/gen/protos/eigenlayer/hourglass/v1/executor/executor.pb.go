@@ -21,6 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// TaskSubmission is the message used to submit a task to the executor from the aggregator
 type TaskSubmission struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

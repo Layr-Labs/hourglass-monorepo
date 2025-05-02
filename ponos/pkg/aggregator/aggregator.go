@@ -21,6 +21,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
+	"strings"
 	"time"
 )
 
@@ -277,11 +278,15 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 	return nil
 }
 
-// TODO: aggregatorV1.TaskResult needs an avs address
 func (a *Aggregator) SubmitTaskResult(ctx context.Context, result *aggregatorV1.TaskResult) (*v1.SubmitAck, error) {
 	tr := types.TaskResultFromTaskResultProto(result)
 
-	for _, avs := range a.avsExecutionManagers {
+	for avsAddress, avs := range a.avsExecutionManagers {
+		// check if the AVS address matches the execution manager
+		if strings.ToLower(avsAddress) != strings.ToLower(tr.AvsAddress) {
+			continue
+		}
+
 		if err := avs.HandleTaskResultFromExecutor(tr); err != nil {
 			a.logger.Error("Error submitting task result", zap.Error(err))
 			return &v1.SubmitAck{Success: false, Message: "error"}, err

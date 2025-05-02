@@ -26,6 +26,8 @@ const (
 // AggregatorServiceClient is the client API for AggregatorService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// This server is implemented by the aggregator and is used to submit task results to the aggregator from the executor
 type AggregatorServiceClient interface {
 	SubmitTaskResult(ctx context.Context, in *TaskResult, opts ...grpc.CallOption) (*v1.SubmitAck, error)
 }
@@ -51,6 +53,8 @@ func (c *aggregatorServiceClient) SubmitTaskResult(ctx context.Context, in *Task
 // AggregatorServiceServer is the server API for AggregatorService service.
 // All implementations should embed UnimplementedAggregatorServiceServer
 // for forward compatibility.
+//
+// This server is implemented by the aggregator and is used to submit task results to the aggregator from the executor
 type AggregatorServiceServer interface {
 	SubmitTaskResult(context.Context, *TaskResult) (*v1.SubmitAck, error)
 }

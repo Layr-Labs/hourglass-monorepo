@@ -26,6 +26,8 @@ const (
 // ExecutorServiceClient is the client API for ExecutorService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 type ExecutorServiceClient interface {
 	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error)
@@ -52,6 +54,8 @@ func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmissi
 // ExecutorServiceServer is the server API for ExecutorService service.
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
+//
+// This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 type ExecutorServiceServer interface {
 	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error)

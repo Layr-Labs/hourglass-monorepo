@@ -123,7 +123,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use task.ProtoReflect.Descriptor instead.
+// Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
 	return file_eigenlayer_hourglass_v1_wire_wire_proto_rawDescGZIP(), []int{1}
 }
@@ -417,7 +417,7 @@ func file_eigenlayer_hourglass_v1_wire_wire_proto_rawDescGZIP() []byte {
 var file_eigenlayer_hourglass_v1_wire_wire_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_eigenlayer_hourglass_v1_wire_wire_proto_goTypes = []any{
 	(*AuthenticateSocket)(nil), // 0: eigenlayer.hourglass.v1.wire.AuthenticateSocket
-	(*Task)(nil),               // 1: eigenlayer.hourglass.v1.wire.task
+	(*Task)(nil),               // 1: eigenlayer.hourglass.v1.wire.Task
 	(*TaskResult)(nil),         // 2: eigenlayer.hourglass.v1.wire.TaskResult
 	(*HeartbeatPing)(nil),      // 3: eigenlayer.hourglass.v1.wire.HeartbeatPing
 	(*HeartbeatPong)(nil),      // 4: eigenlayer.hourglass.v1.wire.HeartbeatPong
