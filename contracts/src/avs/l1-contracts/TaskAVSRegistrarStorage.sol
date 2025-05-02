@@ -31,6 +31,9 @@ abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
     mapping(bytes32 pubkeyHash => string socket) public pubkeyHashToSocket;
     mapping(address operator => string socket) public operatorToSocket;
 
+    /// @notice Current Aggregate Public Key (APK) of the OperatorSet
+    mapping(uint32 operatorSetId => BN254.G1Point apk) public currentApk;
+
     constructor(address avs, IAllocationManager allocationManager) {
         AVS = avs;
         ALLOCATION_MANAGER = allocationManager;

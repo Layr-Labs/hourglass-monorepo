@@ -66,8 +66,14 @@ interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {
     event NewPubkeyRegistration(
         address indexed operator, bytes32 indexed pubkeyHash, BN254.G1Point pubkeyG1, BN254.G2Point pubkeyG2
     );
+
     /// @notice Emitted when an operator's socket address is updated.
     event OperatorSocketUpdated(address indexed operator, bytes32 indexed pubkeyHash, string socket);
+
+    /// @notice Emitted when the APK for an operatorSet is updated.
+    event OperatorSetApkUpdated(
+        address indexed operator, bytes32 indexed pubkeyHash, uint32 indexed operatorSetId, BN254.G1Point apk
+    );
 }
 
 interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {
@@ -85,6 +91,12 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
      *                         VIEW FUNCTIONS
      *
      */
+
+    // TODO: Update operatorSetId to uint32
+    function getApk(
+        uint8 operatorSetId
+    ) external view returns (BN254.G1Point memory);
+
     function getRegisteredPubkeyInfo(
         address operator
     ) external view returns (PubkeyInfo memory);
