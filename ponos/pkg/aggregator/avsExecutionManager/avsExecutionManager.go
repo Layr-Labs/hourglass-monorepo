@@ -83,7 +83,7 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
 		zap.String("avsAddress", em.config.AvsAddress),
 	)
-	peers, err := em.peeringDataFetcher.ListExecutorOperators()
+	peers, err := em.peeringDataFetcher.ListExecutorOperators(ctx, em.config.AvsAddress)
 	if err != nil {
 		return fmt.Errorf("failed to fetch executor peers: %w", err)
 	}

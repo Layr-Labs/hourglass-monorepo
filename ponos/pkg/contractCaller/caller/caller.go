@@ -3,6 +3,7 @@ package caller
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
@@ -188,23 +189,27 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, op
 	peerMembers, err := cc.avsRegistrarCaller.GetBatchOperatorPubkeyInfoAndSocket(&bind.CallOpts{}, util.Map(members, func(mem string, i uint64) common.Address {
 		return common.HexToAddress(mem)
 	}))
-
-	return util.Map(peerMembers, func(pm ITaskAVSRegistrar.ITaskAVSRegistrarTypesPubkeyInfoAndSocket, i uint64) *peering.OperatorPeerInfo {
-		return &peering.OperatorPeerInfo{
-			NetworkAddress:  pm.Socket,
-			PublicKey:       "", // TODO(seanmcgary) convert this to a public string
-			OperatorAddress: members[i],
-			OperatorSetIds:  []uint32{operatorSetId},
-		}
-	}), nil
-}
-
-func (cc *ContractCaller) GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	_, err := cc.GetMembersForAllOperatorSets(avsAddress)
 	if err != nil {
+		cc.logger.Sugar().Errorf("failed to get operator set members with peering: %v", err)
 		return nil, err
 	}
-	panic("fill me in later")
+
+	allMembers := make([]*peering.OperatorPeerInfo, len(peerMembers))
+	for i, pm := range peerMembers {
+		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG2)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
+			return nil, err
+		}
+
+		allMembers = append(allMembers, &peering.OperatorPeerInfo{
+			NetworkAddress:  pm.Socket,
+			PublicKey:       hex.EncodeToString(pubKey.Bytes()),
+			OperatorAddress: members[i],
+			OperatorSetIds:  []uint32{operatorSetId},
+		})
+	}
+	return allMembers, nil
 }
 
 func (cc *ContractCaller) GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error) {
@@ -257,15 +262,4 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 		StakeProportionThreshold: taskCfg.StakeProportionThreshold,
 		TaskMetadata:             taskCfg.TaskMetadata,
 	}, nil
-}
-
-func (cc *ContractCaller) GetOperatorPublicKey(operatorAddress string) (*bn254.PublicKey, error) {
-	operatorAddr := common.HexToAddress(operatorAddress)
-	blsPoint, _, err := cc.avsRegistrarCaller.GetRegisteredPubkey(&bind.CallOpts{}, operatorAddr)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator public key: %v", err)
-		return nil, err
-	}
-
-	return bn254.NewPublicKeyFromSolidity(blsPoint)
 }
