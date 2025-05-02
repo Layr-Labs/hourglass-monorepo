@@ -13,8 +13,8 @@ import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifie
 interface ITaskMailboxTypes {
     // TODO: Pack Storage efficiently.
     struct AvsConfig {
-        address resultSubmitter;
-        uint32 aggregatorOperatorSetId;
+        address resultSubmitter; // TODO: Do we need result submitter if there is certificate verifier?
+        uint32 aggregatorOperatorSetId; // TODO: Add avs address too: Any AVS can be an aggregator.
         uint32[] executorOperatorSetIds;
     }
 
