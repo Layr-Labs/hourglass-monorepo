@@ -8,19 +8,11 @@ contract DeployTaskMailbox is Script {
     function setUp() public {}
 
     function run() public {
-        // Get the private key from the environment variable
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOYER");
 
-        // Start broadcasting transactions
         vm.startBroadcast(deployerPrivateKey);
-
-        // Deploy the TaskMailbox contract
         TaskMailbox taskMailbox = new TaskMailbox();
-
-        // Log the contract address
         console.log("TaskMailbox deployed to:", address(taskMailbox));
-
-        // Stop broadcasting transactions
         vm.stopBroadcast();
     }
 }
