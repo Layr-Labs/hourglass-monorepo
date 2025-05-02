@@ -1,6 +1,7 @@
-package fetcher
+package localPeeringDataFetcher
 
 import (
+	"context"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"go.uber.org/zap"
 )
@@ -27,10 +28,10 @@ func NewLocalPeeringDataFetcher(
 	}
 }
 
-func (lpdf *LocalPeeringDataFetcher) ListExecutorOperators() ([]*peering.OperatorPeerInfo, error) {
+func (lpdf *LocalPeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
 	return lpdf.operatorPeers, nil
 }
 
-func (lpdf *LocalPeeringDataFetcher) ListAggregatorOperators() ([]*peering.OperatorPeerInfo, error) {
+func (lpdf *LocalPeeringDataFetcher) ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
 	return lpdf.aggregatorPeers, nil
 }

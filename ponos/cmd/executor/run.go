@@ -7,7 +7,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
@@ -58,9 +58,9 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		var pdf *fetcher.LocalPeeringDataFetcher
+		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
 		if Config.Simulation.SimulatePeering.Enabled {
-			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
+			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
 						OperatorAddress: p.OperatorAddress,

@@ -41,9 +41,22 @@ type BN254G2Point struct {
 	Y [2]*big.Int
 }
 
+// ITaskAVSRegistrarTypesPubkeyInfo is an auto generated low-level Go binding around an user-defined struct.
+type ITaskAVSRegistrarTypesPubkeyInfo struct {
+	PubkeyG1   BN254G1Point
+	PubkeyG2   BN254G2Point
+	PubkeyHash [32]byte
+}
+
+// ITaskAVSRegistrarTypesPubkeyInfoAndSocket is an auto generated low-level Go binding around an user-defined struct.
+type ITaskAVSRegistrarTypesPubkeyInfoAndSocket struct {
+	PubkeyInfo ITaskAVSRegistrarTypesPubkeyInfo
+	Socket     string
+}
+
 // TaskAVSRegistrarStorageMetaData contains all meta data concerning the TaskAVSRegistrarStorage contract.
 var TaskAVSRegistrarStorageMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"ALLOCATION_MANAGER\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIAllocationManager\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"AVS\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"PUBKEY_REGISTRATION_TYPEHASH\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"calculatePubkeyRegistrationMessageHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"deregisterOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"getOperatorFromPubkeyHash\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorPubkeyHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSocketByOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSocketByPubkeyHash\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getRegisteredPubkey\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToPubkey\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToPubkeyHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyHashToOperator\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyHashToSocket\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyRegistrationMessageHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"},{\"name\":\"data\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"supportsAVS\",\"inputs\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"updateOperatorSocket\",\"inputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"NewPubkeyRegistration\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"pubkeyG1\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"pubkeyG2\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorSocketUpdated\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"socket\",\"type\":\"string\",\"indexed\":false,\"internalType\":\"string\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"BLSPubkeyAlreadyRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidAVS\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidBLSSignatureOrPrivateKey\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OnlyAllocationManager\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OperatorAlreadyRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OperatorNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZeroPubKey\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"ALLOCATION_MANAGER\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIAllocationManager\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"AVS\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"PUBKEY_REGISTRATION_TYPEHASH\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"calculatePubkeyRegistrationMessageHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"currentApk\",\"inputs\":[{\"name\":\"operatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"outputs\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"deregisterOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"getApk\",\"inputs\":[{\"name\":\"operatorSetId\",\"type\":\"uint8\",\"internalType\":\"uint8\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getBatchOperatorPubkeyInfoAndSocket\",\"inputs\":[{\"name\":\"operators\",\"type\":\"address[]\",\"internalType\":\"address[]\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple[]\",\"internalType\":\"structITaskAVSRegistrarTypes.PubkeyInfoAndSocket[]\",\"components\":[{\"name\":\"pubkeyInfo\",\"type\":\"tuple\",\"internalType\":\"structITaskAVSRegistrarTypes.PubkeyInfo\",\"components\":[{\"name\":\"pubkeyG1\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"pubkeyG2\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}]},{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorFromPubkeyHash\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorPubkeyG2\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorPubkeyHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSocketByOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSocketByPubkeyHash\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getRegisteredPubkey\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getRegisteredPubkeyInfo\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskAVSRegistrarTypes.PubkeyInfo\",\"components\":[{\"name\":\"pubkeyG1\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"pubkeyG2\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToPubkey\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToPubkeyHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"operatorToSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyHashToOperator\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyHashToSocket\",\"inputs\":[{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"pubkeyRegistrationMessageHash\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"},{\"name\":\"data\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"supportsAVS\",\"inputs\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"updateOperatorSocket\",\"inputs\":[{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"NewPubkeyRegistration\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"pubkeyG1\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"pubkeyG2\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorSetApkUpdated\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"operatorSetId\",\"type\":\"uint32\",\"indexed\":true,\"internalType\":\"uint32\"},{\"name\":\"apk\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorSocketUpdated\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"pubkeyHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"socket\",\"type\":\"string\",\"indexed\":false,\"internalType\":\"string\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"BLSPubkeyAlreadyRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidAVS\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidBLSSignatureOrPrivateKey\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OnlyAllocationManager\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OperatorAlreadyRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"OperatorNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ZeroPubKey\",\"inputs\":[]}]",
 }
 
 // TaskAVSRegistrarStorageABI is the input ABI used to generate the binding from.
@@ -316,6 +329,113 @@ func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) CalculateP
 	return _TaskAVSRegistrarStorage.Contract.CalculatePubkeyRegistrationMessageHash(&_TaskAVSRegistrarStorage.CallOpts, operator)
 }
 
+// CurrentApk is a free data retrieval call binding the contract method 0x7d04529a.
+//
+// Solidity: function currentApk(uint32 operatorSetId) view returns(uint256 X, uint256 Y)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) CurrentApk(opts *bind.CallOpts, operatorSetId uint32) (struct {
+	X *big.Int
+	Y *big.Int
+}, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "currentApk", operatorSetId)
+
+	outstruct := new(struct {
+		X *big.Int
+		Y *big.Int
+	})
+	if err != nil {
+		return *outstruct, err
+	}
+
+	outstruct.X = *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+	outstruct.Y = *abi.ConvertType(out[1], new(*big.Int)).(**big.Int)
+
+	return *outstruct, err
+
+}
+
+// CurrentApk is a free data retrieval call binding the contract method 0x7d04529a.
+//
+// Solidity: function currentApk(uint32 operatorSetId) view returns(uint256 X, uint256 Y)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) CurrentApk(operatorSetId uint32) (struct {
+	X *big.Int
+	Y *big.Int
+}, error) {
+	return _TaskAVSRegistrarStorage.Contract.CurrentApk(&_TaskAVSRegistrarStorage.CallOpts, operatorSetId)
+}
+
+// CurrentApk is a free data retrieval call binding the contract method 0x7d04529a.
+//
+// Solidity: function currentApk(uint32 operatorSetId) view returns(uint256 X, uint256 Y)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) CurrentApk(operatorSetId uint32) (struct {
+	X *big.Int
+	Y *big.Int
+}, error) {
+	return _TaskAVSRegistrarStorage.Contract.CurrentApk(&_TaskAVSRegistrarStorage.CallOpts, operatorSetId)
+}
+
+// GetApk is a free data retrieval call binding the contract method 0x5f61a884.
+//
+// Solidity: function getApk(uint8 operatorSetId) view returns((uint256,uint256))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetApk(opts *bind.CallOpts, operatorSetId uint8) (BN254G1Point, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "getApk", operatorSetId)
+
+	if err != nil {
+		return *new(BN254G1Point), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(BN254G1Point)).(*BN254G1Point)
+
+	return out0, err
+
+}
+
+// GetApk is a free data retrieval call binding the contract method 0x5f61a884.
+//
+// Solidity: function getApk(uint8 operatorSetId) view returns((uint256,uint256))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetApk(operatorSetId uint8) (BN254G1Point, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetApk(&_TaskAVSRegistrarStorage.CallOpts, operatorSetId)
+}
+
+// GetApk is a free data retrieval call binding the contract method 0x5f61a884.
+//
+// Solidity: function getApk(uint8 operatorSetId) view returns((uint256,uint256))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetApk(operatorSetId uint8) (BN254G1Point, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetApk(&_TaskAVSRegistrarStorage.CallOpts, operatorSetId)
+}
+
+// GetBatchOperatorPubkeyInfoAndSocket is a free data retrieval call binding the contract method 0x3da35ac8.
+//
+// Solidity: function getBatchOperatorPubkeyInfoAndSocket(address[] operators) view returns((((uint256,uint256),(uint256[2],uint256[2]),bytes32),string)[])
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetBatchOperatorPubkeyInfoAndSocket(opts *bind.CallOpts, operators []common.Address) ([]ITaskAVSRegistrarTypesPubkeyInfoAndSocket, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "getBatchOperatorPubkeyInfoAndSocket", operators)
+
+	if err != nil {
+		return *new([]ITaskAVSRegistrarTypesPubkeyInfoAndSocket), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]ITaskAVSRegistrarTypesPubkeyInfoAndSocket)).(*[]ITaskAVSRegistrarTypesPubkeyInfoAndSocket)
+
+	return out0, err
+
+}
+
+// GetBatchOperatorPubkeyInfoAndSocket is a free data retrieval call binding the contract method 0x3da35ac8.
+//
+// Solidity: function getBatchOperatorPubkeyInfoAndSocket(address[] operators) view returns((((uint256,uint256),(uint256[2],uint256[2]),bytes32),string)[])
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetBatchOperatorPubkeyInfoAndSocket(operators []common.Address) ([]ITaskAVSRegistrarTypesPubkeyInfoAndSocket, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetBatchOperatorPubkeyInfoAndSocket(&_TaskAVSRegistrarStorage.CallOpts, operators)
+}
+
+// GetBatchOperatorPubkeyInfoAndSocket is a free data retrieval call binding the contract method 0x3da35ac8.
+//
+// Solidity: function getBatchOperatorPubkeyInfoAndSocket(address[] operators) view returns((((uint256,uint256),(uint256[2],uint256[2]),bytes32),string)[])
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetBatchOperatorPubkeyInfoAndSocket(operators []common.Address) ([]ITaskAVSRegistrarTypesPubkeyInfoAndSocket, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetBatchOperatorPubkeyInfoAndSocket(&_TaskAVSRegistrarStorage.CallOpts, operators)
+}
+
 // GetOperatorFromPubkeyHash is a free data retrieval call binding the contract method 0x47b314e8.
 //
 // Solidity: function getOperatorFromPubkeyHash(bytes32 pubkeyHash) view returns(address)
@@ -345,6 +465,37 @@ func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetOperatorFromP
 // Solidity: function getOperatorFromPubkeyHash(bytes32 pubkeyHash) view returns(address)
 func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetOperatorFromPubkeyHash(pubkeyHash [32]byte) (common.Address, error) {
 	return _TaskAVSRegistrarStorage.Contract.GetOperatorFromPubkeyHash(&_TaskAVSRegistrarStorage.CallOpts, pubkeyHash)
+}
+
+// GetOperatorPubkeyG2 is a free data retrieval call binding the contract method 0x67169911.
+//
+// Solidity: function getOperatorPubkeyG2(address operator) view returns((uint256[2],uint256[2]))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetOperatorPubkeyG2(opts *bind.CallOpts, operator common.Address) (BN254G2Point, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "getOperatorPubkeyG2", operator)
+
+	if err != nil {
+		return *new(BN254G2Point), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(BN254G2Point)).(*BN254G2Point)
+
+	return out0, err
+
+}
+
+// GetOperatorPubkeyG2 is a free data retrieval call binding the contract method 0x67169911.
+//
+// Solidity: function getOperatorPubkeyG2(address operator) view returns((uint256[2],uint256[2]))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetOperatorPubkeyG2(operator common.Address) (BN254G2Point, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetOperatorPubkeyG2(&_TaskAVSRegistrarStorage.CallOpts, operator)
+}
+
+// GetOperatorPubkeyG2 is a free data retrieval call binding the contract method 0x67169911.
+//
+// Solidity: function getOperatorPubkeyG2(address operator) view returns((uint256[2],uint256[2]))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetOperatorPubkeyG2(operator common.Address) (BN254G2Point, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetOperatorPubkeyG2(&_TaskAVSRegistrarStorage.CallOpts, operator)
 }
 
 // GetOperatorPubkeyHash is a free data retrieval call binding the contract method 0xfd0d930a.
@@ -442,35 +593,65 @@ func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetOperato
 
 // GetRegisteredPubkey is a free data retrieval call binding the contract method 0x7ff81a87.
 //
-// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), (uint256[2],uint256[2]), bytes32)
-func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetRegisteredPubkey(opts *bind.CallOpts, operator common.Address) (BN254G1Point, BN254G2Point, [32]byte, error) {
+// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), bytes32)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetRegisteredPubkey(opts *bind.CallOpts, operator common.Address) (BN254G1Point, [32]byte, error) {
 	var out []interface{}
 	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "getRegisteredPubkey", operator)
 
 	if err != nil {
-		return *new(BN254G1Point), *new(BN254G2Point), *new([32]byte), err
+		return *new(BN254G1Point), *new([32]byte), err
 	}
 
 	out0 := *abi.ConvertType(out[0], new(BN254G1Point)).(*BN254G1Point)
-	out1 := *abi.ConvertType(out[1], new(BN254G2Point)).(*BN254G2Point)
-	out2 := *abi.ConvertType(out[2], new([32]byte)).(*[32]byte)
+	out1 := *abi.ConvertType(out[1], new([32]byte)).(*[32]byte)
 
-	return out0, out1, out2, err
+	return out0, out1, err
 
 }
 
 // GetRegisteredPubkey is a free data retrieval call binding the contract method 0x7ff81a87.
 //
-// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), (uint256[2],uint256[2]), bytes32)
-func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetRegisteredPubkey(operator common.Address) (BN254G1Point, BN254G2Point, [32]byte, error) {
+// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), bytes32)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetRegisteredPubkey(operator common.Address) (BN254G1Point, [32]byte, error) {
 	return _TaskAVSRegistrarStorage.Contract.GetRegisteredPubkey(&_TaskAVSRegistrarStorage.CallOpts, operator)
 }
 
 // GetRegisteredPubkey is a free data retrieval call binding the contract method 0x7ff81a87.
 //
-// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), (uint256[2],uint256[2]), bytes32)
-func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetRegisteredPubkey(operator common.Address) (BN254G1Point, BN254G2Point, [32]byte, error) {
+// Solidity: function getRegisteredPubkey(address operator) view returns((uint256,uint256), bytes32)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetRegisteredPubkey(operator common.Address) (BN254G1Point, [32]byte, error) {
 	return _TaskAVSRegistrarStorage.Contract.GetRegisteredPubkey(&_TaskAVSRegistrarStorage.CallOpts, operator)
+}
+
+// GetRegisteredPubkeyInfo is a free data retrieval call binding the contract method 0xc7e66dc4.
+//
+// Solidity: function getRegisteredPubkeyInfo(address operator) view returns(((uint256,uint256),(uint256[2],uint256[2]),bytes32))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCaller) GetRegisteredPubkeyInfo(opts *bind.CallOpts, operator common.Address) (ITaskAVSRegistrarTypesPubkeyInfo, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarStorage.contract.Call(opts, &out, "getRegisteredPubkeyInfo", operator)
+
+	if err != nil {
+		return *new(ITaskAVSRegistrarTypesPubkeyInfo), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(ITaskAVSRegistrarTypesPubkeyInfo)).(*ITaskAVSRegistrarTypesPubkeyInfo)
+
+	return out0, err
+
+}
+
+// GetRegisteredPubkeyInfo is a free data retrieval call binding the contract method 0xc7e66dc4.
+//
+// Solidity: function getRegisteredPubkeyInfo(address operator) view returns(((uint256,uint256),(uint256[2],uint256[2]),bytes32))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageSession) GetRegisteredPubkeyInfo(operator common.Address) (ITaskAVSRegistrarTypesPubkeyInfo, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetRegisteredPubkeyInfo(&_TaskAVSRegistrarStorage.CallOpts, operator)
+}
+
+// GetRegisteredPubkeyInfo is a free data retrieval call binding the contract method 0xc7e66dc4.
+//
+// Solidity: function getRegisteredPubkeyInfo(address operator) view returns(((uint256,uint256),(uint256[2],uint256[2]),bytes32))
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageCallerSession) GetRegisteredPubkeyInfo(operator common.Address) (ITaskAVSRegistrarTypesPubkeyInfo, error) {
+	return _TaskAVSRegistrarStorage.Contract.GetRegisteredPubkeyInfo(&_TaskAVSRegistrarStorage.CallOpts, operator)
 }
 
 // OperatorToPubkey is a free data retrieval call binding the contract method 0x00a1f4cb.
@@ -916,6 +1097,169 @@ func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageFilterer) WatchNewPubkeyR
 func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageFilterer) ParseNewPubkeyRegistration(log types.Log) (*TaskAVSRegistrarStorageNewPubkeyRegistration, error) {
 	event := new(TaskAVSRegistrarStorageNewPubkeyRegistration)
 	if err := _TaskAVSRegistrarStorage.contract.UnpackLog(event, "NewPubkeyRegistration", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
+}
+
+// TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator is returned from FilterOperatorSetApkUpdated and is used to iterate over the raw logs and unpacked data for OperatorSetApkUpdated events raised by the TaskAVSRegistrarStorage contract.
+type TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator struct {
+	Event *TaskAVSRegistrarStorageOperatorSetApkUpdated // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(TaskAVSRegistrarStorageOperatorSetApkUpdated)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(TaskAVSRegistrarStorageOperatorSetApkUpdated)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// TaskAVSRegistrarStorageOperatorSetApkUpdated represents a OperatorSetApkUpdated event raised by the TaskAVSRegistrarStorage contract.
+type TaskAVSRegistrarStorageOperatorSetApkUpdated struct {
+	Operator      common.Address
+	PubkeyHash    [32]byte
+	OperatorSetId uint32
+	Apk           BN254G1Point
+	Raw           types.Log // Blockchain specific contextual infos
+}
+
+// FilterOperatorSetApkUpdated is a free log retrieval operation binding the contract event 0x4578729147fad323579cca24cee225babfdedb43e063c28e1505b179fc8a2fe1.
+//
+// Solidity: event OperatorSetApkUpdated(address indexed operator, bytes32 indexed pubkeyHash, uint32 indexed operatorSetId, (uint256,uint256) apk)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageFilterer) FilterOperatorSetApkUpdated(opts *bind.FilterOpts, operator []common.Address, pubkeyHash [][32]byte, operatorSetId []uint32) (*TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator, error) {
+
+	var operatorRule []interface{}
+	for _, operatorItem := range operator {
+		operatorRule = append(operatorRule, operatorItem)
+	}
+	var pubkeyHashRule []interface{}
+	for _, pubkeyHashItem := range pubkeyHash {
+		pubkeyHashRule = append(pubkeyHashRule, pubkeyHashItem)
+	}
+	var operatorSetIdRule []interface{}
+	for _, operatorSetIdItem := range operatorSetId {
+		operatorSetIdRule = append(operatorSetIdRule, operatorSetIdItem)
+	}
+
+	logs, sub, err := _TaskAVSRegistrarStorage.contract.FilterLogs(opts, "OperatorSetApkUpdated", operatorRule, pubkeyHashRule, operatorSetIdRule)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskAVSRegistrarStorageOperatorSetApkUpdatedIterator{contract: _TaskAVSRegistrarStorage.contract, event: "OperatorSetApkUpdated", logs: logs, sub: sub}, nil
+}
+
+// WatchOperatorSetApkUpdated is a free log subscription operation binding the contract event 0x4578729147fad323579cca24cee225babfdedb43e063c28e1505b179fc8a2fe1.
+//
+// Solidity: event OperatorSetApkUpdated(address indexed operator, bytes32 indexed pubkeyHash, uint32 indexed operatorSetId, (uint256,uint256) apk)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageFilterer) WatchOperatorSetApkUpdated(opts *bind.WatchOpts, sink chan<- *TaskAVSRegistrarStorageOperatorSetApkUpdated, operator []common.Address, pubkeyHash [][32]byte, operatorSetId []uint32) (event.Subscription, error) {
+
+	var operatorRule []interface{}
+	for _, operatorItem := range operator {
+		operatorRule = append(operatorRule, operatorItem)
+	}
+	var pubkeyHashRule []interface{}
+	for _, pubkeyHashItem := range pubkeyHash {
+		pubkeyHashRule = append(pubkeyHashRule, pubkeyHashItem)
+	}
+	var operatorSetIdRule []interface{}
+	for _, operatorSetIdItem := range operatorSetId {
+		operatorSetIdRule = append(operatorSetIdRule, operatorSetIdItem)
+	}
+
+	logs, sub, err := _TaskAVSRegistrarStorage.contract.WatchLogs(opts, "OperatorSetApkUpdated", operatorRule, pubkeyHashRule, operatorSetIdRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(TaskAVSRegistrarStorageOperatorSetApkUpdated)
+				if err := _TaskAVSRegistrarStorage.contract.UnpackLog(event, "OperatorSetApkUpdated", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseOperatorSetApkUpdated is a log parse operation binding the contract event 0x4578729147fad323579cca24cee225babfdedb43e063c28e1505b179fc8a2fe1.
+//
+// Solidity: event OperatorSetApkUpdated(address indexed operator, bytes32 indexed pubkeyHash, uint32 indexed operatorSetId, (uint256,uint256) apk)
+func (_TaskAVSRegistrarStorage *TaskAVSRegistrarStorageFilterer) ParseOperatorSetApkUpdated(log types.Log) (*TaskAVSRegistrarStorageOperatorSetApkUpdated, error) {
+	event := new(TaskAVSRegistrarStorageOperatorSetApkUpdated)
+	if err := _TaskAVSRegistrarStorage.contract.UnpackLog(event, "OperatorSetApkUpdated", log); err != nil {
 		return nil, err
 	}
 	event.Raw = log

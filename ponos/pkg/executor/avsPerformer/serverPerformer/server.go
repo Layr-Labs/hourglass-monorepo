@@ -65,10 +65,10 @@ func hashAvsAddress(avsAddress string) string {
 	return hex.EncodeToString(hashBytes)[0:6]
 }
 
-func (aps *AvsPerformerServer) fetchAggregatorPeerInfo() ([]*peering.OperatorPeerInfo, error) {
+func (aps *AvsPerformerServer) fetchAggregatorPeerInfo(ctx context.Context) ([]*peering.OperatorPeerInfo, error) {
 	retries := []uint64{1, 3, 5, 10, 20}
 	for i, retry := range retries {
-		aggPeers, err := aps.peeringFetcher.ListAggregatorOperators()
+		aggPeers, err := aps.peeringFetcher.ListAggregatorOperators(ctx, aps.config.AvsAddress)
 		if err != nil {
 			aps.logger.Sugar().Errorw("Failed to fetch aggregator peers",
 				zap.String("avsAddress", aps.config.AvsAddress),
@@ -92,7 +92,7 @@ func (aps *AvsPerformerServer) fetchAggregatorPeerInfo() ([]*peering.OperatorPee
 func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	containerPortProto := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
 
-	aggregatorPeers, err := aps.fetchAggregatorPeerInfo()
+	aggregatorPeers, err := aps.fetchAggregatorPeerInfo(ctx)
 	if err != nil {
 		return err
 	}

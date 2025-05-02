@@ -3,6 +3,7 @@ package caller
 import (
 	"context"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
@@ -13,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -178,12 +180,36 @@ func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId
 	return members, nil
 }
 
-func (cc *ContractCaller) GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	_, err := cc.GetMembersForAllOperatorSets(avsAddress)
+func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error) {
+	members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
 	if err != nil {
 		return nil, err
 	}
-	panic("fill me in later")
+
+	peerMembers, err := cc.avsRegistrarCaller.GetBatchOperatorPubkeyInfoAndSocket(&bind.CallOpts{}, util.Map(members, func(mem string, i uint64) common.Address {
+		return common.HexToAddress(mem)
+	}))
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to get operator set members with peering: %v", err)
+		return nil, err
+	}
+
+	allMembers := make([]*peering.OperatorPeerInfo, len(peerMembers))
+	for i, pm := range peerMembers {
+		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG2)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
+			return nil, err
+		}
+
+		allMembers = append(allMembers, &peering.OperatorPeerInfo{
+			NetworkAddress:  pm.Socket,
+			PublicKey:       hex.EncodeToString(pubKey.Bytes()),
+			OperatorAddress: members[i],
+			OperatorSetIds:  []uint32{operatorSetId},
+		})
+	}
+	return allMembers, nil
 }
 
 func (cc *ContractCaller) GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error) {
@@ -236,15 +262,4 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 		StakeProportionThreshold: taskCfg.StakeProportionThreshold,
 		TaskMetadata:             taskCfg.TaskMetadata,
 	}, nil
-}
-
-func (cc *ContractCaller) GetOperatorPublicKey(operatorAddress string) (*bn254.PublicKey, error) {
-	operatorAddr := common.HexToAddress(operatorAddress)
-	_, g2Point, _, err := cc.avsRegistrarCaller.GetRegisteredPubkey(&bind.CallOpts{}, operatorAddr)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator public key: %v", err)
-		return nil, err
-	}
-
-	return bn254.NewPublicKeyFromSolidity(g2Point)
 }
