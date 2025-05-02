@@ -1,4 +1,4 @@
-package fetcher
+package localPeeringDataFetcher
 
 import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"

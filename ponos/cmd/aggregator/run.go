@@ -20,7 +20,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/fetcher"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
@@ -79,9 +79,9 @@ var runCmd = &cobra.Command{
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
-		var pdf *fetcher.LocalPeeringDataFetcher
+		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
 		if Config.SimulationConfig.SimulatePeering.Enabled {
-			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{
+			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 				OperatorPeers: util.Map(Config.SimulationConfig.SimulatePeering.OperatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
 						OperatorAddress: p.OperatorAddress,
