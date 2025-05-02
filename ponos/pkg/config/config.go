@@ -1,6 +1,9 @@
 package config
 
-import "k8s.io/apimachinery/pkg/util/validation/field"
+import (
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"slices"
+)
 
 type ChainId uint
 
@@ -11,6 +14,15 @@ const (
 	ChainId_EthereumAnvil   ChainId = 31337
 )
 
+func IsL1Chain(chainId ChainId) bool {
+	return slices.Contains([]ChainId{
+		ChainId_EthereumMainnet,
+		ChainId_EthereumHolesky,
+		ChainId_EthereumHoodi,
+		ChainId_EthereumAnvil,
+	}, chainId)
+}
+
 var (
 	SupportedChainIds = []ChainId{
 		ChainId_EthereumMainnet,
@@ -19,6 +31,30 @@ var (
 		ChainId_EthereumAnvil,
 	}
 )
+
+type ContractAddresses struct {
+	AllocationManager string
+	TaskMailbox       string
+}
+
+func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
+	switch chainId {
+	case ChainId_EthereumHolesky:
+		return &ContractAddresses{
+			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+			TaskMailbox:       "0xTaskMailbox",
+		}
+	case ChainId_EthereumHoodi:
+		// TODO(seanmcgary): Add hoodi contracts
+		return nil
+	case ChainId_EthereumMainnet:
+		return &ContractAddresses{
+			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			TaskMailbox:       "0xTaskMailbox",
+		}
+	}
+	return nil
+}
 
 type OperatorConfig struct {
 	Address            string      `json:"address" yaml:"address"`

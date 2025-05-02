@@ -13,12 +13,12 @@ import (
 type PonosExecutorClient struct {
 	client executorpb.ExecutorServiceClient
 	conn   *grpc.ClientConn
-	signer signer.Signer
+	signer signer.ISigner
 }
 
 func NewPonosExecutorClient(
 	executorClient executorpb.ExecutorServiceClient,
-	signer signer.Signer,
+	signer signer.ISigner,
 ) *PonosExecutorClient {
 
 	return &PonosExecutorClient{
@@ -29,7 +29,7 @@ func NewPonosExecutorClient(
 
 func NewPonosExecutorClientWithConn(
 	conn *grpc.ClientConn,
-	signer signer.Signer,
+	signer signer.ISigner,
 ) *PonosExecutorClient {
 	return &PonosExecutorClient{
 		client: executorpb.NewExecutorServiceClient(conn),

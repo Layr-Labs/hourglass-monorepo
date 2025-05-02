@@ -24,7 +24,7 @@ type Executor struct {
 	rpcServer     *rpcServer.RpcServer
 	//nolint:unused
 	aggregators map[string]*connectedAggregator.ConnectedAggregator
-	signer      signer.Signer
+	signer      signer.ISigner
 
 	inflightTasks *sync.Map
 
@@ -35,7 +35,7 @@ func NewExecutor(
 	config *executorConfig.ExecutorConfig,
 	rpcServer *rpcServer.RpcServer,
 	logger *zap.Logger,
-	signer signer.Signer,
+	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
 ) *Executor {
 	return &Executor{

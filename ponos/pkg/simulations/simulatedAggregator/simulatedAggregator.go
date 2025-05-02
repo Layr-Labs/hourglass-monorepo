@@ -52,7 +52,7 @@ func (sa *SimulatedAggregator) SubmitTaskResult(ctx context.Context, result *agg
 	}
 
 	return &v1.SubmitAck{
-		Message: "Task result received",
+		Message: "task result received",
 		Success: true,
 	}, nil
 }

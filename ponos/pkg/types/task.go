@@ -1,6 +1,7 @@
 package types
 
 import (
+	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"time"
 )
@@ -40,12 +41,23 @@ type Task struct {
 }
 
 type TaskResult struct {
-	TaskId        string
-	AvsAddress    string
-	CallbackAddr  string
-	OperatorSetId uint32
-	Output        []byte
-	ChainId       config.ChainId
-	BlockNumber   uint64
-	BlockHash     string
+	TaskId          string
+	AvsAddress      string
+	CallbackAddr    string
+	OperatorSetId   uint32
+	Output          []byte
+	ChainId         config.ChainId
+	BlockNumber     uint64
+	BlockHash       string
+	OperatorAddress string
+	Signature       []byte
+}
+
+func TaskResultFromTaskResultProto(tr *aggregatorV1.TaskResult) *TaskResult {
+	return &TaskResult{
+		TaskId:          tr.TaskId,
+		Output:          tr.Output,
+		OperatorAddress: tr.OperatorAddress,
+		Signature:       tr.Signature,
+	}
 }

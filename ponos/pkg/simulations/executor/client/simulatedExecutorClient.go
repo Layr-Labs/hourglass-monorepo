@@ -53,6 +53,6 @@ func (sec *SimulatedExecutorClient) SubmitTask(task *types.Task) error {
 		Signature:         []byte("signature"),
 	}
 
-	fmt.Printf("[SIMULATED EXECUTOR] Task submitted: %s\n", submission.TaskId)
+	fmt.Printf("[SIMULATED EXECUTOR] task submitted: %s\n", submission.TaskId)
 	return nil
 }

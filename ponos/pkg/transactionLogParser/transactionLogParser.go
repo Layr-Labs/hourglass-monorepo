@@ -4,7 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -15,32 +17,80 @@ import (
 // TransactionLogParser handles the parsing and decoding of Ethereum transaction logs.
 // It uses contract ABIs to decode event data into structured format.
 type TransactionLogParser struct {
-	abi    *abi.ABI
-	logger *zap.Logger
+	logger        *zap.Logger
+	contractStore contractStore.IContractStore
 }
 
 // NewTransactionLogParser creates a new TransactionLogParser with the provided dependencies.
 //
 // Parameters:
 //   - logger: Logger for recording operations
+//   - contractManager: Manager for contract ABIs and metadata
 //   - interestingLogQualifier: Qualifier to determine which logs to process
 //
 // Returns:
 //   - *TransactionLogParser: A configured transaction log parser
-func NewTransactionLogParser(abi *abi.ABI, logger *zap.Logger) *TransactionLogParser {
+func NewTransactionLogParser(
+	contractStore contractStore.IContractStore,
+	logger *zap.Logger,
+) *TransactionLogParser {
 	return &TransactionLogParser{
-		abi:    abi,
-		logger: logger,
+		logger:        logger,
+		contractStore: contractStore,
 	}
 }
 
-func (tlp *TransactionLogParser) ParseLog(log *ethereum.EthereumEventLog) (*log.DecodedLog, error) {
-	decoded, err := tlp.decodeLog(log)
-	if err != nil {
-		return nil, err
-	}
+// DecodeLogWithAbi decodes a log using the appropriate ABI.
+// If the log address doesn't match the transaction's target address, it attempts to find
+// the correct contract ABI using the contract manager.
+//
+// Parameters:
+//   - a: Optional ABI to use for decoding (can be nil)
+//   - txReceipt: The transaction receipt containing context information
+//   - lg: The specific log to decode
+//
+// Returns:
+//   - *parser.DecodedLog: The decoded log with structured data
+//   - error: Any error encountered during decoding
+func (tlp *TransactionLogParser) DecodeLogWithAbi(
+	a *abi.ABI,
+	txReceipt *ethereum.EthereumTransactionReceipt,
+	lg *ethereum.EthereumEventLog,
+) (*log.DecodedLog, error) {
+	logAddress := common.HexToAddress(lg.Address.Value())
 
-	return decoded, nil
+	// If the address of the log is not the same as the contract address, we need to load the ABI for the log
+	//
+	// The typical case is when a contract interacts with another contract that emits an event
+	if util.AreAddressesEqual(logAddress.String(), txReceipt.GetTargetAddress().Value()) && a != nil {
+		return tlp.DecodeLog(a, lg)
+	} else {
+		tlp.logger.Sugar().Debugw("Log address does not match contract address",
+			zap.String("logAddress", logAddress.String()),
+			zap.String("contractAddress", txReceipt.GetTargetAddress().Value()),
+		)
+
+		foundContract, err := tlp.contractStore.GetContractByAddress(logAddress.String())
+		if err != nil {
+			tlp.logger.Sugar().Errorw("Failed to get contract for address",
+				zap.Error(err),
+				zap.String("address", logAddress.String()),
+			)
+			return nil, fmt.Errorf("failed to get contract for address %s: %w", logAddress.String(), err)
+		}
+
+		// newAbi, err := abi.JSON(strings.NewReader(combinedAbis))
+		newAbi, err := foundContract.GetAbi()
+		if err != nil {
+			tlp.logger.Sugar().Errorw("Failed to parse ABI",
+				zap.Error(err),
+				zap.String("contractAddress", logAddress.String()),
+			)
+			return tlp.DecodeLog(nil, lg)
+		}
+
+		return tlp.DecodeLog(newAbi, lg)
+	}
 }
 
 // DecodeLog decodes a log using the provided ABI.
@@ -55,8 +105,28 @@ func (tlp *TransactionLogParser) ParseLog(log *ethereum.EthereumEventLog) (*log.
 // Returns:
 //   - *parser.DecodedLog: The decoded log with structured data
 //   - error: Any error encountered during decoding
-func (tlp *TransactionLogParser) decodeLog(lg *ethereum.EthereumEventLog) (*log.DecodedLog, error) {
-	tlp.logger.Sugar().Infow(fmt.Sprintf("Decoding log with txHash: '%s' address: '%s'", lg.TransactionHash.Value(), lg.Address.Value()))
+func (tlp *TransactionLogParser) DecodeLog(a *abi.ABI, lg *ethereum.EthereumEventLog) (*log.DecodedLog, error) {
+	if a == nil {
+		contract, err := tlp.contractStore.GetContractByAddress(lg.Address.Value())
+		if err != nil {
+			tlp.logger.Sugar().Errorw("Failed to get contract for address",
+				zap.Error(err),
+				zap.String("address", lg.Address.Value()),
+			)
+			return nil, fmt.Errorf("failed to get contract for address %s: %w", lg.Address.Value(), err)
+		}
+		newAbi, err := contract.GetAbi()
+		if err != nil {
+			tlp.logger.Sugar().Errorw("Failed to parse ABI",
+				zap.Error(err),
+				zap.String("contractAddress", lg.Address.Value()),
+			)
+			return nil, fmt.Errorf("failed to parse ABI for address %s: %w", lg.Address.Value(), err)
+		}
+		a = newAbi
+	}
+
+	tlp.logger.Sugar().Debugw(fmt.Sprintf("Decoding log with txHash: '%s' address: '%s'", lg.TransactionHash.Value(), lg.Address.Value()))
 	logAddress := common.HexToAddress(lg.Address.Value())
 
 	topicHash := common.Hash{}
@@ -71,14 +141,14 @@ func (tlp *TransactionLogParser) decodeLog(lg *ethereum.EthereumEventLog) (*log.
 		LogIndex: lg.LogIndex.Value(),
 	}
 
-	if tlp.abi == nil {
+	if a == nil {
 		tlp.logger.Sugar().Errorw("No ABI provided for decoding log",
 			zap.String("address", logAddress.String()),
 		)
 		return nil, errors.New("no ABI provided for decoding log")
 	}
 
-	event, err := tlp.abi.EventByID(topicHash)
+	event, err := a.EventByID(topicHash)
 	if err != nil {
 		tlp.logger.Sugar().Debugw(fmt.Sprintf("Failed to find event by ID '%s'", topicHash))
 		return decodedLog, err
@@ -97,7 +167,7 @@ func (tlp *TransactionLogParser) decodeLog(lg *ethereum.EthereumEventLog) (*log.
 
 	if len(lg.Topics) > 1 {
 		for i, param := range lg.Topics[1:] {
-			d, err := parseLogValueForType(event.Inputs[i], param.Value())
+			d, err := ParseLogValueForType(event.Inputs[i], param.Value())
 			if err != nil {
 				tlp.logger.Sugar().Errorw("Failed to parse log value for type", zap.Error(err))
 			} else {
@@ -115,7 +185,7 @@ func (tlp *TransactionLogParser) decodeLog(lg *ethereum.EthereumEventLog) (*log.
 		}
 
 		outputDataMap := make(map[string]interface{})
-		err = tlp.abi.UnpackIntoMap(outputDataMap, event.Name, byteData)
+		err = a.UnpackIntoMap(outputDataMap, event.Name, byteData)
 		if err != nil {
 			tlp.logger.Sugar().Errorw("Failed to unpack data",
 				zap.Error(err),
@@ -143,7 +213,7 @@ func (tlp *TransactionLogParser) decodeLog(lg *ethereum.EthereumEventLog) (*log.
 // Returns:
 //   - interface{}: The converted value
 //   - error: Any error encountered during conversion
-func parseLogValueForType(argument abi.Argument, value string) (interface{}, error) {
+func ParseLogValueForType(argument abi.Argument, value string) (interface{}, error) {
 	valueBytes, _ := hexutil.Decode(value)
 	switch argument.Type.T {
 	case abi.IntTy, abi.UintTy:

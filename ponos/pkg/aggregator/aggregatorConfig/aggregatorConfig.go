@@ -14,11 +14,18 @@ const (
 	Debug = "debug"
 )
 
+type ChainSimulation struct {
+	Enabled         bool `json:"enabled" yaml:"enabled"`
+	Port            int  `json:"port" yaml:"port"`
+	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
+}
+
 type Chain struct {
-	Name    string         `json:"name" yaml:"name"`
-	Version string         `json:"version" yaml:"version"`
-	ChainId config.ChainId `json:"chainId" yaml:"chainId"`
-	RpcURL  string         `json:"rpcUrl" yaml:"rpcUrl"`
+	Name       string           `json:"name" yaml:"name"`
+	Version    string           `json:"version" yaml:"version"`
+	ChainId    config.ChainId   `json:"chainId" yaml:"chainId"`
+	RpcURL     string           `json:"rpcUrl" yaml:"rpcUrl"`
+	Simulation *ChainSimulation `json:"simulation" yaml:"simulation"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -72,17 +79,11 @@ type SimulationConfig struct {
 	// Enabled indicates whether the simulation mode is enabled
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// PollerPort is the port on which the simulated poller will listen for incoming manual requests
-	PollerPort int `json:"pollerPort" yaml:"pollerPort"`
-
 	// SimulateExecutors generates a number of fake executors to simulate the behavior of real executors
 	SimulateExecutors bool `json:"simulateExecutors" yaml:"simulateExecutors"`
 
 	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
-
-	// AutomaticPoller indicates whether the simulated poller should generate events automatically
-	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
 }
 
 type ServerConfig struct {
@@ -101,10 +102,10 @@ type AggregatorConfig struct {
 	ServerConfig ServerConfig `json:"serverConfig" yaml:"serverConfig"`
 
 	// Chains contains the list of chains that the aggregator supports
-	Chains []Chain `json:"chains" yaml:"chains"`
+	Chains []*Chain `json:"chains" yaml:"chains"`
 
 	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
-	Avss []AggregatorAvs `json:"avss" yaml:"avss"`
+	Avss []*AggregatorAvs `json:"avss" yaml:"avss"`
 
 	// SimulationConfig contains the configuration for the simulation mode
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
@@ -161,8 +162,7 @@ func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
 		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
 		SimulationConfig: SimulationConfig{
-			Enabled:    viper.GetBool("enabled"),
-			PollerPort: viper.GetInt("port"),
+			Enabled: viper.GetBool("enabled"),
 		},
 	}
 }

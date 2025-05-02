@@ -12,7 +12,7 @@ type ConnectedAggregator struct {
 	avsAddress          string
 	aggregatorAddress   string
 	logger              *zap.Logger
-	signer              signer.Signer
+	signer              signer.ISigner
 	authenticationToken uuid.UUID
 	aggregatorPublicKey []byte
 }
@@ -21,7 +21,7 @@ func NewConnectedAggregator(
 	avsAddress string,
 	aggregatorAddress string,
 	logger *zap.Logger,
-	signer signer.Signer,
+	signer signer.ISigner,
 ) *ConnectedAggregator {
 	return &ConnectedAggregator{
 		avsAddress:        avsAddress,

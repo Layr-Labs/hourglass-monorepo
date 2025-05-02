@@ -57,7 +57,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Task.ProtoReflect.Descriptor instead.
+// Deprecated: Use task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
 	return file_eigenlayer_hourglass_v1_performer_performer_proto_rawDescGZIP(), []int{0}
 }
@@ -296,13 +296,13 @@ func file_eigenlayer_hourglass_v1_performer_performer_proto_rawDescGZIP() []byte
 
 var file_eigenlayer_hourglass_v1_performer_performer_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_eigenlayer_hourglass_v1_performer_performer_proto_goTypes = []any{
-	(*Task)(nil),           // 0: eigenlayer.hourglass.v1.performer.Task
+	(*Task)(nil),           // 0: eigenlayer.hourglass.v1.performer.task
 	(*TaskResult)(nil),     // 1: eigenlayer.hourglass.v1.performer.TaskResult
 	(*HealthRequest)(nil),  // 2: eigenlayer.hourglass.v1.performer.HealthRequest
 	(*HealthResponse)(nil), // 3: eigenlayer.hourglass.v1.performer.HealthResponse
 }
 var file_eigenlayer_hourglass_v1_performer_performer_proto_depIdxs = []int32{
-	0, // 0: eigenlayer.hourglass.v1.performer.PerformerService.ExecuteTask:input_type -> eigenlayer.hourglass.v1.performer.Task
+	0, // 0: eigenlayer.hourglass.v1.performer.PerformerService.ExecuteTask:input_type -> eigenlayer.hourglass.v1.performer.task
 	2, // 1: eigenlayer.hourglass.v1.performer.PerformerService.Health:input_type -> eigenlayer.hourglass.v1.performer.HealthRequest
 	1, // 2: eigenlayer.hourglass.v1.performer.PerformerService.ExecuteTask:output_type -> eigenlayer.hourglass.v1.performer.TaskResult
 	3, // 3: eigenlayer.hourglass.v1.performer.PerformerService.Health:output_type -> eigenlayer.hourglass.v1.performer.HealthResponse

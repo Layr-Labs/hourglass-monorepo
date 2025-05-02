@@ -3,22 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"slices"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/contracts"
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/executionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/ethereumChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -28,17 +24,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-)
-
-const (
-	inboxContractName = "TaskMailbox"
 )
 
 var runCmd = &cobra.Command{
@@ -54,6 +45,7 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		// Load up the keystore
 		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
 		if err != nil {
 			return fmt.Errorf("failed to parse keystore JSON: %w", err)
@@ -71,25 +63,19 @@ var runCmd = &cobra.Command{
 
 		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
+		// load the contracts and create the store
+		// TODO: configure which L1 chain to use
+		coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(config.ChainId_EthereumHolesky)
+		if err != nil {
+			return fmt.Errorf("failed to load core contracts: %w", err)
+		}
+
+		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, log)
+
+		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, log)
+
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
-
-		taskQueue := make(chan *types.Task, 100)
-		resultQueue := make(chan *types.TaskResult, 100)
-
-		if Config.SimulationConfig.SimulateExecutors {
-			sugar.Infow("Starting simulation executors...")
-			executors, err := buildSimulatedExecutors(cmd.Context(), &Config, log)
-			if err != nil {
-				sugar.Fatalw("Failed to build simulated executors", "error", err)
-			}
-
-			for i, executor := range executors {
-				if err := executor.Start(cmd.Context()); err != nil {
-					sugar.Errorw("Failed to start executor", "index", i, "error", err)
-				}
-			}
-		}
 
 		var pdf *fetcher.LocalPeeringDataFetcher
 		if Config.SimulationConfig.SimulatePeering.Enabled {
@@ -108,43 +94,43 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("peering data fetcher not implemented")
 		}
 
-		listeners, err := buildChainListeners(&Config, taskQueue, log)
-		if err != nil {
-			return fmt.Errorf("failed to build chain listeners: %w", err)
-		}
-		writers := buildWriters(resultQueue, log)
-
-		execManager, err := executionManager.NewPonosExecutionManagerWithRpcServer(
-			taskQueue,
-			resultQueue,
-			pdf,
-			&executionManager.PonosExecutionManagerConfig{
-				PeerRefreshInterval:       executionManager.DefaultRefreshInterval,
-				SecureConnection:          Config.ServerConfig.SecureConnection,
-				AggregatorOperatorAddress: Config.Operator.Address,
-				AggregatorUrl:             Config.ServerConfig.AggregatorUrl,
-			},
+		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
+			&aggregator.AggregatorConfig{
+				AVSs:          Config.Avss,
+				Chains:        Config.Chains,
+				Address:       Config.Operator.Address,
+				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
+			},
+			imContractStore,
+			tlp,
+			nil,
+			pdf,
 			sig,
 			log,
 		)
 		if err != nil {
-			sugar.Errorw("Failed to create execution manager", "error", err)
-			return err
+			return fmt.Errorf("failed to create aggregator: %w", err)
 		}
 
-		agg := aggregator.NewAggregator(&aggregator.AggregatorConfig{
-			Logger:           log,
-			ChainPollers:     listeners,
-			ChainWriters:     writers,
-			ExecutionManager: execManager,
-		})
-
-		if err := agg.Start(cmd.Context()); err != nil {
-			return err
+		if err := agg.Initialize(); err != nil {
+			return fmt.Errorf("failed to initialize aggregator: %w", err)
 		}
 
-		sugar.Infow("Context cancelled, shutting down aggregator")
+		ctx, cancel := context.WithCancel(cmd.Context())
+
+		go func() {
+			if err := agg.Start(ctx); err != nil {
+				cancel()
+			}
+		}()
+
+		gracefulShutdownNotifier := shutdown.CreateGracefulShutdownChannel()
+		done := make(chan bool)
+		shutdown.ListenForShutdown(gracefulShutdownNotifier, done, func() {
+			log.Sugar().Info("Shutting down...")
+			cancel()
+		}, time.Second*5, log)
 		return nil
 	},
 }
@@ -160,95 +146,7 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-func buildChainListeners(
-	cfg *aggregatorConfig.AggregatorConfig,
-	taskQueue chan *types.Task,
-	logger *zap.Logger,
-) ([]runnable.IRunnable, error) {
-	var listeners []runnable.IRunnable
-
-	for i, chain := range cfg.Chains {
-		if cfg.SimulationConfig.Enabled {
-			port := cfg.SimulationConfig.PollerPort + i + 1
-
-			var listener runnable.IRunnable
-			if cfg.SimulationConfig.AutomaticPoller {
-				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-					ChainId:      &chain.ChainId,
-					Port:         port,
-					TaskInterval: 250 * time.Millisecond,
-				}
-
-				listener = simulatedChainPoller.NewSimulatedChainPoller(
-					taskQueue,
-					listenerConfig,
-					logger,
-				)
-			} else {
-				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
-					ChainId: &chain.ChainId,
-					Port:    port,
-				}
-
-				listener = manualPushChainPoller.NewManualPushChainPoller(
-					taskQueue,
-					listenerConfig,
-					logger,
-				)
-			}
-
-			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainId, "port", port)
-		} else {
-			abiEntries, err := contracts.GetChainAbis(chain.ChainId, inboxContractName)
-			if err != nil {
-				logger.Sugar().Fatalw("Failed to load contract address", "error", err)
-				return nil, err
-			}
-			for _, entry := range abiEntries {
-				logParser := transactionLogParser.NewTransactionLogParser(entry.Abi, logger)
-				ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
-					BaseUrl:   chain.RpcURL,
-					BlockType: ethereum.BlockType_Latest,
-				}, logger)
-
-				listenerConfig := ethereumChainPoller.NewEthereumChainPollerDefaultConfig(
-					chain.ChainId,
-					entry.Address.String(),
-				)
-
-				listener := ethereumChainPoller.NewEthereumChainPoller(
-					ethClient,
-					taskQueue,
-					logParser,
-					listenerConfig,
-					logger,
-				)
-				listeners = append(listeners, listener)
-				logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
-			}
-		}
-	}
-
-	return listeners, nil
-}
-
-func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runnable.IRunnable {
-	// TODO: implement ponosChainWriter and use when appropriate
-	writerConfig := &simulatedChainWriter.SimulatedChainWriterConfig{
-		Interval: 1 * time.Millisecond,
-	}
-
-	writer := simulatedChainWriter.NewSimulatedChainWriter(
-		writerConfig,
-		resultQueue,
-		logger,
-	)
-
-	logger.Sugar().Infow("Created simulated chain writer")
-	return []runnable.IRunnable{writer}
-}
-
+//nolint:unused
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
 	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)

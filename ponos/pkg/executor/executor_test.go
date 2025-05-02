@@ -211,7 +211,7 @@ func Test_Executor(t *testing.T) {
 
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
-	assert.True(t, success.Load(), "Task completed successfully")
+	assert.True(t, success.Load(), "task completed successfully")
 }
 
 const (
