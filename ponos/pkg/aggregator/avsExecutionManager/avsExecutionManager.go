@@ -145,6 +145,14 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 			zap.Any("task", task),
 		)
 
+		if task.AVSAddress != strings.ToLower(em.config.AvsAddress) {
+			em.logger.Sugar().Infow("Ignoring task for different AVS address",
+				zap.String("taskAvsAddress", task.AVSAddress),
+				zap.String("currentAvsAddress", em.config.AvsAddress),
+			)
+			return nil
+		}
+
 		em.taskQueue <- task
 		em.logger.Sugar().Infow("Added task to queue")
 	} else {

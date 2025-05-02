@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   executor:
-    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_a14a58e
-    # build:
-    #   context: ..
-    #   dockerfile: ponos/Dockerfile
+    # image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_a14a58e
+    build:
+      context: ..
+      dockerfile: ponos/Dockerfile
     networks:
       - hourglass-demo
     ports:
@@ -21,10 +21,10 @@ services:
       - .:/ponos-config
       - /var/run/docker.sock:/var/run/docker.sock # required for DinD
   aggregator:
-    image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_a14a58e
-    # build:
-    #   context: ..
-    #   dockerfile: ponos/Dockerfile
+    # image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_a14a58e
+    build:
+      context: ..
+      dockerfile: ponos/Dockerfile
     networks:
       - hourglass-demo
     ports:
