@@ -283,7 +283,7 @@ func (a *Aggregator) SubmitTaskResult(ctx context.Context, result *aggregatorV1.
 
 	for avsAddress, avs := range a.avsExecutionManagers {
 		// check if the AVS address matches the execution manager
-		if strings.ToLower(avsAddress) != strings.ToLower(tr.AvsAddress) {
+		if !strings.EqualFold(avsAddress, tr.AvsAddress) {
 			continue
 		}
 
