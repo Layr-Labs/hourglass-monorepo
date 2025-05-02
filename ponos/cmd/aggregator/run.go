@@ -79,20 +79,6 @@ var runCmd = &cobra.Command{
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
-		// if Config.SimulationConfig.SimulateExecutors {
-		// 	sugar.Infow("Starting simulation executors...")
-		// 	executors, err := buildSimulatedExecutors(cmd.Context(), &Config, log)
-		// 	if err != nil {
-		// 		sugar.Fatalw("Failed to build simulated executors", "error", err)
-		// 	}
-		//
-		// 	for i, executor := range executors {
-		// 		if err := executor.Start(cmd.Context()); err != nil {
-		// 			sugar.Errorw("Failed to start executor", "index", i, "error", err)
-		// 		}
-		// 	}
-		// }
-
 		var pdf *fetcher.LocalPeeringDataFetcher
 		if Config.SimulationConfig.SimulatePeering.Enabled {
 			pdf = fetcher.NewLocalPeeringDataFetcher(&fetcher.LocalPeeringDataFetcherConfig{

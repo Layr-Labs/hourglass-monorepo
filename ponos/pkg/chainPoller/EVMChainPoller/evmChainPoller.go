@@ -25,7 +25,7 @@ type EVNChainPollerConfig struct {
 type EVMChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
-	logSequencer      chan *chainPoller.LogWithBlock
+	chainEventsChan   chan *chainPoller.LogWithBlock
 	logParser         *transactionLogParser.TransactionLogParser
 	config            *EVNChainPollerConfig
 	logger            *zap.Logger
@@ -40,17 +40,17 @@ func NewEVMChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *E
 
 func NewEVMChainPoller(
 	ethClient *ethereum.Client,
-	sequencer chan *chainPoller.LogWithBlock,
+	chainEventsChan chan *chainPoller.LogWithBlock,
 	logParser *transactionLogParser.TransactionLogParser,
 	config *EVNChainPollerConfig,
 	logger *zap.Logger,
 ) *EVMChainPoller {
 	return &EVMChainPoller{
-		ethClient:    ethClient,
-		logger:       logger,
-		logSequencer: sequencer,
-		logParser:    logParser,
-		config:       config,
+		ethClient:       ethClient,
+		logger:          logger,
+		chainEventsChan: chainEventsChan,
+		logParser:       logParser,
+		config:          config,
 	}
 }
 
@@ -124,7 +124,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			Log:   l,
 		}
 		select {
-		case ecp.logSequencer <- lwb:
+		case ecp.chainEventsChan <- lwb:
 			ecp.logger.Sugar().Infow("Enqueued l for processing",
 				zap.Uint64("blockNumber", block.Number.Value()),
 				zap.String("transactionHash", l.TransactionHash.Value()),

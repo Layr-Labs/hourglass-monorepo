@@ -9,6 +9,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -96,29 +98,8 @@ func NewAggregator(
 
 // Initialize sets up chain pollers and AVSExecutionManagers
 func (a *Aggregator) Initialize() error {
-	for _, chain := range a.config.Chains {
-		if _, ok := a.chainPollers[chain.ChainId]; !ok {
-			a.logger.Sugar().Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
-			continue
-		}
-		ec := ethereum.NewClient(&ethereum.EthereumClientConfig{
-			BaseUrl: chain.RpcURL,
-		}, a.logger)
-
-		contracts := config.GetContractsMapForChain(chain.ChainId)
-
-		pCfg := &EVMChainPoller.EVNChainPollerConfig{
-			ChainId:         chain.ChainId,
-			PollingInterval: 10 * time.Millisecond,
-			InterestingContracts: []string{
-				contracts.TaskMailbox,
-			},
-		}
-		if config.IsL1Chain(chain.ChainId) {
-			pCfg.EigenLayerCoreContracts = a.contractStore.ListContractAddresses()
-		}
-
-		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
+	if err := a.initializePollers(); err != nil {
+		return fmt.Errorf("failed to initialize pollers: %w", err)
 	}
 
 	for _, avs := range a.config.AVSs {
@@ -131,6 +112,63 @@ func (a *Aggregator) Initialize() error {
 		}, a.chainContractCallers, a.signer, a.peeringDataFetcher, a.logger)
 
 		a.avsExecutionManagers[avs.Address] = aem
+	}
+	return nil
+}
+
+func (a *Aggregator) initializePollers() error {
+	for _, chain := range a.config.Chains {
+		if _, ok := a.chainPollers[chain.ChainId]; !ok {
+			a.logger.Sugar().Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
+			continue
+		}
+		ec := ethereum.NewClient(&ethereum.EthereumClientConfig{
+			BaseUrl: chain.RpcURL,
+		}, a.logger)
+
+		contracts := config.GetContractsMapForChain(chain.ChainId)
+
+		var poller chainPoller.IChainPoller
+		if chain.Simulation != nil && chain.Simulation.Enabled {
+			if chain.Simulation.AutomaticPoller {
+				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
+					ChainId:      &chain.ChainId,
+					Port:         chain.Simulation.Port,
+					TaskInterval: 250 * time.Millisecond,
+				}
+
+				poller = simulatedChainPoller.NewSimulatedChainPoller(
+					a.chainEventsChan,
+					listenerConfig,
+					a.logger,
+				)
+			} else {
+				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
+					ChainId: &chain.ChainId,
+					Port:    chain.Simulation.Port,
+				}
+
+				poller = manualPushChainPoller.NewManualPushChainPoller(
+					a.chainEventsChan,
+					listenerConfig,
+					a.logger,
+				)
+			}
+		} else {
+			pCfg := &EVMChainPoller.EVNChainPollerConfig{
+				ChainId:         chain.ChainId,
+				PollingInterval: 10 * time.Millisecond,
+				InterestingContracts: []string{
+					contracts.TaskMailbox,
+				},
+			}
+			if config.IsL1Chain(chain.ChainId) {
+				pCfg.EigenLayerCoreContracts = a.contractStore.ListContractAddresses()
+			}
+			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
+		}
+
+		a.chainPollers[chain.ChainId] = poller
 	}
 	return nil
 }

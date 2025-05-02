@@ -3,8 +3,6 @@ debug: false
 simulationConfig:
   enabled: true
   secureConnection: false
-  automaticPoller: false
-  pollerPort: 8080
   simulateExecutors: false
   simulatePeering:
     enabled: true
@@ -56,10 +54,10 @@ chains:
     network: "mainnet"
     chainId: 1
     rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
-  - name: "ethereum"
-    network: "holesky"
-    chainId: 17000
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+    simulation:
+      enabled: true
+      port: 8080
+      automaticPoller: false
 
 avss:
   - address: "0xavs1..."

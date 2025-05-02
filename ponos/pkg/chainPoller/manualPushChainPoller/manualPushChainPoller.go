@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"io"
 	"net/http"
 	"time"
@@ -20,21 +21,21 @@ type ManualPushChainPollerConfig struct {
 }
 
 type ManualPushChainPoller struct {
-	taskQueue  chan *types.Task
-	httpServer *http.Server
-	config     *ManualPushChainPollerConfig
-	logger     *zap.Logger
+	chainEventsChan chan *chainPoller.LogWithBlock
+	httpServer      *http.Server
+	config          *ManualPushChainPollerConfig
+	logger          *zap.Logger
 }
 
 func NewManualPushChainPoller(
-	taskQueue chan *types.Task,
+	chainEventsChan chan *chainPoller.LogWithBlock,
 	config *ManualPushChainPollerConfig,
 	logger *zap.Logger,
 ) *ManualPushChainPoller {
 	return &ManualPushChainPoller{
-		taskQueue: taskQueue,
-		config:    config,
-		logger:    logger,
+		chainEventsChan: chainEventsChan,
+		config:          config,
+		logger:          logger,
 	}
 }
 
@@ -106,7 +107,7 @@ func (scl *ManualPushChainPoller) handleSubmitTaskRoute(ctx context.Context) fun
 		scl.logger.Sugar().Infow("Received simulated task event", "taskID", task.TaskId)
 
 		select {
-		case scl.taskQueue <- task:
+		case scl.chainEventsChan <- nil:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("task event enqueued"))
 		case <-time.After(1 * time.Second):

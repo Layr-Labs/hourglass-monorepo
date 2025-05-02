@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
 	"time"
 
@@ -19,28 +20,28 @@ type SimulatedChainPollerConfig struct {
 }
 
 type SimulatedChainPoller struct {
-	taskQueue chan *types.Task
-	config    *SimulatedChainPollerConfig
-	logger    *zap.Logger
+	chainEventsChan chan *chainPoller.LogWithBlock
+	config          *SimulatedChainPollerConfig
+	logger          *zap.Logger
 
 	manualPoller runnable.IRunnable
 }
 
 func NewSimulatedChainPoller(
-	taskQueue chan *types.Task,
+	chainEventsChan chan *chainPoller.LogWithBlock,
 	config *SimulatedChainPollerConfig,
 	logger *zap.Logger,
 ) *SimulatedChainPoller {
-	manualPoller := manualPushChainPoller.NewManualPushChainPoller(taskQueue, &manualPushChainPoller.ManualPushChainPollerConfig{
+	manualPoller := manualPushChainPoller.NewManualPushChainPoller(chainEventsChan, &manualPushChainPoller.ManualPushChainPollerConfig{
 		ChainId: config.ChainId,
 		Port:    config.Port,
 	}, logger)
 
 	return &SimulatedChainPoller{
-		taskQueue:    taskQueue,
-		config:       config,
-		logger:       logger,
-		manualPoller: manualPoller,
+		chainEventsChan: chainEventsChan,
+		config:          config,
+		logger:          logger,
+		manualPoller:    manualPoller,
 	}
 }
 
@@ -91,7 +92,7 @@ func (scl *SimulatedChainPoller) generatePeriodicTasks(ctx context.Context) {
 			}
 
 			select {
-			case scl.taskQueue <- task:
+			case scl.chainEventsChan <- nil:
 				sugar.Infow("Generated periodic task", "taskID", task.TaskId)
 			case <-time.After(1 * time.Second):
 				sugar.Warnw("Failed to enqueue periodic task (channel full or closed)", "taskID", task.TaskId)
