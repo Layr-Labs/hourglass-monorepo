@@ -1,5 +1,7 @@
 package peering
 
+import "context"
+
 type OperatorPeerInfo struct {
 	NetworkAddress  string
 	PublicKey       string
@@ -8,8 +10,8 @@ type OperatorPeerInfo struct {
 }
 
 type IPeeringDataFetcher interface {
-	ListExecutorOperators() ([]*OperatorPeerInfo, error)
-	ListAggregatorOperators() ([]*OperatorPeerInfo, error)
+	ListExecutorOperators(ctx context.Context, avsAddress string) ([]*OperatorPeerInfo, error)
+	ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*OperatorPeerInfo, error)
 }
 
 type IPeeringDataFetcherFactory interface {

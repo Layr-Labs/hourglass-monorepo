@@ -38,6 +38,8 @@ type IContractCaller interface {
 
 	GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error)
 
+	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
+
 	GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error)
 
 	GetOperatorPublicKey(operatorAddress string) (*signingBn254.PublicKey, error)

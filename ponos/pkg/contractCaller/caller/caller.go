@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -178,6 +179,26 @@ func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId
 	return members, nil
 }
 
+func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error) {
+	members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
+	if err != nil {
+		return nil, err
+	}
+
+	peerMembers, err := cc.avsRegistrarCaller.GetBatchOperatorPubkeyInfoAndSocket(&bind.CallOpts{}, util.Map(members, func(mem string, i uint64) common.Address {
+		return common.HexToAddress(mem)
+	}))
+
+	return util.Map(peerMembers, func(pm ITaskAVSRegistrar.ITaskAVSRegistrarTypesPubkeyInfoAndSocket, i uint64) *peering.OperatorPeerInfo {
+		return &peering.OperatorPeerInfo{
+			NetworkAddress:  pm.Socket,
+			PublicKey:       "", // TODO(seanmcgary) convert this to a public string
+			OperatorAddress: members[i],
+			OperatorSetIds:  []uint32{operatorSetId},
+		}
+	}), nil
+}
+
 func (cc *ContractCaller) GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error) {
 	_, err := cc.GetMembersForAllOperatorSets(avsAddress)
 	if err != nil {
@@ -240,11 +261,11 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 
 func (cc *ContractCaller) GetOperatorPublicKey(operatorAddress string) (*bn254.PublicKey, error) {
 	operatorAddr := common.HexToAddress(operatorAddress)
-	_, g2Point, _, err := cc.avsRegistrarCaller.GetRegisteredPubkey(&bind.CallOpts{}, operatorAddr)
+	blsPoint, _, err := cc.avsRegistrarCaller.GetRegisteredPubkey(&bind.CallOpts{}, operatorAddr)
 	if err != nil {
 		cc.logger.Sugar().Errorf("failed to get operator public key: %v", err)
 		return nil, err
 	}
 
-	return bn254.NewPublicKeyFromSolidity(g2Point)
+	return bn254.NewPublicKeyFromSolidity(blsPoint)
 }
