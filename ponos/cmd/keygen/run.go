@@ -187,7 +187,6 @@ var infoCmd = &cobra.Command{
 				return fmt.Errorf("failed to get signing scheme: %w", err)
 			}
 
-			fmt.Printf("Key password: %s\n", Config.Password)
 			privateSigningKey, err := storedKeys.GetPrivateKey(Config.Password, keyScheme)
 			if err != nil {
 				return fmt.Errorf("failed to get private key: %w", err)
