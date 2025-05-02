@@ -90,6 +90,7 @@ func NewAggregator(
 		peeringDataFetcher:   peeringDataFetcher,
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
+		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
 	}
 
 	aggregatorV1.RegisterAggregatorServiceServer(rpcServer.GetGrpcServer(), agg)
@@ -117,8 +118,12 @@ func (a *Aggregator) Initialize() error {
 }
 
 func (a *Aggregator) initializePollers() error {
+	a.logger.Sugar().Infow("Initializing chain pollers...",
+		zap.Any("chains", a.config.Chains),
+	)
+
 	for _, chain := range a.config.Chains {
-		if _, ok := a.chainPollers[chain.ChainId]; !ok {
+		if _, ok := a.chainPollers[chain.ChainId]; ok {
 			a.logger.Sugar().Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
 			continue
 		}
@@ -206,9 +211,12 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			}
 		}(avsExec)
 	}
+	a.logger.Sugar().Infow("Execution managers started")
 
+	fmt.Printf("ChainPollers: %+v\n", a.chainPollers)
 	// start polling for blocks
 	for _, poller := range a.chainPollers {
+		a.logger.Sugar().Infow("Starting chain poller", "poller", poller)
 		if err := poller.Start(ctx); err != nil {
 			a.logger.Sugar().Errorw("Chain poller failed to start", "error", err)
 			cancel()
@@ -221,17 +229,15 @@ func (a *Aggregator) Start(ctx context.Context) error {
 }
 
 func (a *Aggregator) processEventsChan(ctx context.Context) error {
-	sugar := a.logger.Sugar()
-	sugar.Infow("Starting aggregator events channel processing...")
-
+	a.logger.Sugar().Infow("Starting to process events channel...")
 	for {
 		select {
 		case <-ctx.Done():
-			sugar.Info("Aggregator context done, stopping event processing")
+			a.logger.Sugar().Info("Aggregator context done, stopping event processing")
 			return nil
 		case logWithBlock := <-a.chainEventsChan:
 			if err := a.processLog(logWithBlock); err != nil {
-				sugar.Errorw("Error processing log", "error", err)
+				a.logger.Sugar().Errorw("Error processing log", "error", err)
 				return err
 			}
 		}

@@ -99,7 +99,8 @@ var runCmd = &cobra.Command{
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
-				AVSs: Config.Avss,
+				AVSs:   Config.Avss,
+				Chains: Config.Chains,
 			},
 			imContractStore,
 			tlp,
@@ -110,6 +111,10 @@ var runCmd = &cobra.Command{
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create aggregator: %w", err)
+		}
+
+		if err := agg.Initialize(); err != nil {
+			return fmt.Errorf("failed to initialize aggregator: %w", err)
 		}
 
 		ctx, cancel := context.WithCancel(cmd.Context())

@@ -76,17 +76,28 @@ func (em *AvsExecutionManager) getListOfContractAddresses() []string {
 
 // Init initializes the AvsExecutionManager before starting
 func (em *AvsExecutionManager) Init(ctx context.Context) error {
+	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
+		zap.String("avsAddress", em.config.AvsAddress),
+	)
 	peers, err := em.peeringDataFetcher.ListExecutorOperators()
 	if err != nil {
 		return fmt.Errorf("failed to fetch executor peers: %w", err)
 	}
 
 	em.peers = peers
+	em.logger.Sugar().Infow("Fetched executor peers",
+		zap.Int("numPeers", len(peers)),
+	)
 	return nil
 }
 
 // Start starts the AvsExecutionManager
 func (em *AvsExecutionManager) Start(ctx context.Context) error {
+	em.logger.Sugar().Infow("Starting AvsExecutionManager",
+		zap.String("contractAddress", em.config.AvsAddress),
+		zap.Any("supportedChainIds", em.config.SupportedChainIds),
+		zap.String("avsAddress", em.config.AvsAddress),
+	)
 	for {
 		select {
 		case task := <-em.taskQueue:
@@ -103,6 +114,7 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			)
 		case <-ctx.Done():
 			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
+			return ctx.Err()
 		}
 	}
 }
