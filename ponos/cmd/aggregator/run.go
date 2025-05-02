@@ -14,7 +14,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainWriter/simulatedChainWriter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -25,7 +24,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 
 	"github.com/spf13/cobra"
@@ -146,97 +144,6 @@ func initRunCmd(cmd *cobra.Command) {
 			fmt.Printf("Failed to bind env '%s': %+v\n", f.Name, err)
 		}
 	})
-}
-
-/*
-func buildChainPollers(
-	cfg *aggregatorConfig.AggregatorConfig,
-	taskQueue chan *types.Task,
-	logger *zap.Logger,
-) ([]chainPoller.IChainPoller, error) {
-	var listeners []chainPoller.IChainPoller
-
-	for i, chain := range cfg.Chains {
-		if cfg.SimulationConfig.Enabled {
-			port := cfg.SimulationConfig.PollerPort + i + 1
-
-			var listener chainPoller.IChainPoller
-			if cfg.SimulationConfig.AutomaticPoller {
-				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-					ChainId:      &chain.ChainId,
-					Port:         port,
-					TaskInterval: 250 * time.Millisecond,
-				}
-
-				listener = simulatedChainPoller.NewSimulatedChainPoller(
-					taskQueue,
-					listenerConfig,
-					logger,
-				)
-			} else {
-				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
-					ChainId: &chain.ChainId,
-					Port:    port,
-				}
-
-				listener = manualPushChainPoller.NewManualPushChainPoller(
-					taskQueue,
-					listenerConfig,
-					logger,
-				)
-			}
-
-			listeners = append(listeners, listener)
-			logger.Sugar().Infow("Created simulated chain listener", "chainId", chain.ChainId, "port", port)
-		} else {
-			abiEntries, err := contracts.GetChainAbis(chain.ChainId, inboxContractName)
-			if err != nil {
-				logger.Sugar().Fatalw("Failed to load contract address", "error", err)
-				return nil, err
-			}
-			for _, entry := range abiEntries {
-				logParser := transactionLogParser.NewTransactionLogParser(logger, nil)
-				ethClient := ethereum.NewClient(&ethereum.EthereumClientConfig{
-					BaseUrl:   chain.RpcURL,
-					BlockType: ethereum.BlockType_Latest,
-				}, logger)
-
-				listenerConfig := EVMChainPoller.NewEVMChainPollerDefaultConfig(
-					chain.ChainId,
-					entry.Address.String(),
-				)
-
-				listener := EVMChainPoller.NewEVMChainPoller(
-					ethClient,
-					taskQueue,
-					logParser,
-					listenerConfig,
-					logger,
-				)
-				listeners = append(listeners, listener)
-				logger.Sugar().Infow("Created Ethereum chain listener", "chainId", chain.ChainId, "url", chain.RpcURL)
-			}
-		}
-	}
-
-	return listeners, nil
-}*/
-
-//nolint:unused
-func buildWriters(resultQueue chan *types.TaskResult, logger *zap.Logger) []runnable.IRunnable {
-	// TODO: implement ponosChainWriter and use when appropriate
-	writerConfig := &simulatedChainWriter.SimulatedChainWriterConfig{
-		Interval: 1 * time.Millisecond,
-	}
-
-	writer := simulatedChainWriter.NewSimulatedChainWriter(
-		writerConfig,
-		resultQueue,
-		logger,
-	)
-
-	logger.Sugar().Infow("Created simulated chain writer")
-	return []runnable.IRunnable{writer}
 }
 
 //nolint:unused
