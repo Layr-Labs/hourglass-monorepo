@@ -99,8 +99,10 @@ var runCmd = &cobra.Command{
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
-				AVSs:   Config.Avss,
-				Chains: Config.Chains,
+				AVSs:          Config.Avss,
+				Chains:        Config.Chains,
+				Address:       Config.Operator.Address,
+				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
 			},
 			imContractStore,
 			tlp,

@@ -60,7 +60,7 @@ chains:
       automaticPoller: false
 
 avss:
-  - address: "0xavs1..."
+  - address: "0xavs1"
     privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
     responseTimeout: 3000
     chainIds: [1]

@@ -2,6 +2,7 @@ package avsExecutionManager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -13,7 +14,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"math/big"
 	"slices"
@@ -26,6 +26,8 @@ type AvsExecutionManagerConfig struct {
 	AvsAddress               string
 	SupportedChainIds        []config.ChainId
 	MailboxContractAddresses map[config.ChainId]string
+	AggregatorAddress        string
+	AggregatorUrl            string
 }
 
 type AvsExecutionManager struct {
@@ -62,6 +64,8 @@ func NewAvsExecutionManager(
 		signer:               signer,
 		peeringDataFetcher:   peeringDataFetcher,
 		inflightTasks:        sync.Map{},
+		taskQueue:            make(chan *types.Task, 10000),
+		resultsQueue:         make(chan *taskSession.TaskSession, 10000),
 	}
 	return manager
 }
@@ -101,6 +105,9 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 	for {
 		select {
 		case task := <-em.taskQueue:
+			em.logger.Sugar().Infow("Received task from queue",
+				zap.String("taskId", task.TaskId),
+			)
 			if err := em.HandleTask(ctx, task); err != nil {
 				em.logger.Sugar().Errorw("Failed to handle task",
 					"taskId", task.TaskId,
@@ -120,19 +127,42 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 }
 
 // HandleLog processes logs from the chain poller
-func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock, log *log.DecodedLog) error {
-	if log.EventName == "TaskCreated" && slices.Contains(em.getListOfContractAddresses(), strings.ToLower(log.Address)) {
-		task, err := convertTask(log, lwb.Block, log.Address)
+func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
+	em.logger.Sugar().Infow("Received log from chain poller",
+		zap.Any("log", lwb),
+	)
+	lg := lwb.Log
+	if lg.EventName == "TaskCreated" && slices.Contains(em.getListOfContractAddresses(), strings.ToLower(lg.Address)) {
+		em.logger.Sugar().Infow("Received TaskCreated event",
+			zap.String("eventName", lg.EventName),
+			zap.String("contractAddress", lg.Address),
+		)
+		task, err := convertTask(lg, lwb.Block, lg.Address)
 		if err != nil {
 			return fmt.Errorf("failed to convert task: %w", err)
 		}
+		em.logger.Sugar().Infow("Converted task",
+			zap.Any("task", task),
+		)
+
 		em.taskQueue <- task
+		em.logger.Sugar().Infow("Added task to queue")
+	} else {
+
+		em.logger.Sugar().Infow("Ignoring log",
+			zap.String("eventName", lg.EventName),
+			zap.String("contractAddress", lg.Address),
+			zap.Strings("addresses", em.getListOfContractAddresses()),
+		)
 	}
 
 	return nil
 }
 
 func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task) error {
+	em.logger.Sugar().Infow("Handling task",
+		zap.String("taskId", task.TaskId),
+	)
 	if _, ok := em.inflightTasks.Load(task.TaskId); ok {
 		return fmt.Errorf("task %s is already being processed", task.TaskId)
 	}
@@ -145,13 +175,37 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		}
 	}
 
-	ts := taskSession.NewTaskSession(ctx, cancel, task, nil, peers, func() error {
-		return nil
-	}, em.logger)
+	sig, err := em.signer.SignMessage(task.Payload)
+	if err != nil {
+		cancel()
+		return fmt.Errorf("failed to sign task payload: %w", err)
+	}
+
+	ts := taskSession.NewTaskSession(
+		ctx,
+		cancel,
+		task,
+		em.config.AggregatorAddress,
+		em.config.AggregatorUrl,
+		sig,
+		peers,
+		em.resultsQueue,
+		em.logger,
+	)
+
+	em.logger.Sugar().Infow("Created task session",
+		zap.Any("taskSession", ts),
+	)
 
 	em.inflightTasks.Store(task.TaskId, ts)
 
 	go func() {
+		if err := ts.Process(); err != nil {
+			em.logger.Sugar().Errorw("Failed to process task",
+				zap.String("taskId", task.TaskId),
+				zap.Error(err),
+			)
+		}
 		<-ctx.Done()
 		// check if deadline was reached
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -165,13 +219,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 			zap.String("taskId", task.TaskId),
 			zap.Error(ctx.Err()),
 		)
-
-		if err := ts.Process(); err != nil {
-			em.logger.Sugar().Errorw("Failed to process task",
-				zap.String("taskId", task.TaskId),
-				zap.Error(err),
-			)
-		}
 	}()
 	return nil
 }
@@ -189,41 +236,45 @@ func (em *AvsExecutionManager) HandleTaskResultFromExecutor(taskResult *types.Ta
 }
 
 func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
-	var avsAddress common.Address
-	var operatorSetId uint32
-	var parsedTaskDeadline *big.Int
+	var avsAddress string
 	var taskId string
-	var payload []byte
 
 	taskId, ok := log.Arguments[1].Value.(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task id")
 	}
-	avsAddress, ok = log.Arguments[2].Value.(common.Address)
+	avsAddress, ok = log.Arguments[2].Value.(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task event address")
 	}
-	operatorSetId, ok = log.OutputData["executorOperatorSetId"].(uint32)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse operator set id")
+
+	// it aint stupid if it works...
+	// take the output data, turn it into a json string, then Unmarshal it into a typed struct
+	// rather than trying to coerce data types
+	outputBytes, err := json.Marshal(log.OutputData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal output data: %w", err)
 	}
-	parsedTaskDeadline, ok = log.OutputData["taskDeadline"].(*big.Int)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task event deadline")
+
+	type outputDataType struct {
+		ExecutorOperatorSetId uint32
+		TaskDeadline          uint64
+		Payload               []byte
 	}
+	var od *outputDataType
+	if err := json.Unmarshal(outputBytes, &od); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal output data: %w", err)
+	}
+	parsedTaskDeadline := new(big.Int).SetUint64(od.TaskDeadline)
 	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
-	payload, ok = log.OutputData["payload"].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task payload")
-	}
 
 	return &types.Task{
 		TaskId:              taskId,
-		AVSAddress:          avsAddress.String(),
-		OperatorSetId:       operatorSetId,
+		AVSAddress:          strings.ToLower(avsAddress),
+		OperatorSetId:       od.ExecutorOperatorSetId,
 		CallbackAddr:        inboxAddress,
 		DeadlineUnixSeconds: &taskDeadlineTime,
-		Payload:             payload,
+		Payload:             []byte(od.Payload),
 		ChainId:             block.ChainId,
 		BlockNumber:         block.Number.Value(),
 		BlockHash:           block.Hash.Value(),

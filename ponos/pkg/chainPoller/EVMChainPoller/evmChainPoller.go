@@ -119,9 +119,20 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			continue
 		}
 
+		decodedLog, err := ecp.logParser.DecodeLog(nil, l)
+		if err != nil {
+			ecp.logger.Sugar().Errorw("Failed to decode log",
+				zap.String("transactionHash", l.TransactionHash.Value()),
+				zap.String("logAddress", l.Address.Value()),
+				zap.Uint64("logIndex", l.LogIndex.Value()),
+				zap.Error(err),
+			)
+			return err
+		}
+
 		lwb := &chainPoller.LogWithBlock{
 			Block: block,
-			Log:   l,
+			Log:   decodedLog,
 		}
 		select {
 		case ecp.chainEventsChan <- lwb:

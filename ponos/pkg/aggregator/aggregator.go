@@ -25,8 +25,10 @@ import (
 )
 
 type AggregatorConfig struct {
-	AVSs   []*aggregatorConfig.AggregatorAvs
-	Chains []*aggregatorConfig.Chain
+	Address       string
+	AggregatorUrl string
+	AVSs          []*aggregatorConfig.AggregatorAvs
+	Chains        []*aggregatorConfig.Chain
 }
 
 type Aggregator struct {
@@ -109,7 +111,15 @@ func (a *Aggregator) Initialize() error {
 			SupportedChainIds: util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
 				return config.ChainId(id)
 			}),
-			MailboxContractAddresses: nil,
+			MailboxContractAddresses: util.Reduce(avs.ChainIds, func(acc map[config.ChainId]string, chainId uint) map[config.ChainId]string {
+				cId := config.ChainId(chainId)
+				contracts := config.GetContractsMapForChain(cId)
+
+				acc[cId] = contracts.TaskMailbox
+				return acc
+			}, make(map[config.ChainId]string)),
+			AggregatorAddress: a.config.Address,
+			AggregatorUrl:     a.config.AggregatorUrl,
 		}, a.chainContractCallers, a.signer, a.peeringDataFetcher, a.logger)
 
 		a.avsExecutionManagers[avs.Address] = aem
@@ -245,14 +255,8 @@ func (a *Aggregator) processEventsChan(ctx context.Context) error {
 }
 
 func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
-	decodedLog, err := a.transactionLogParser.DecodeLog(nil, lwb.Log)
-	if err != nil {
-		a.logger.Error("Error decoding log", zap.Error(err))
-		return err
-	}
-
 	for _, avs := range a.avsExecutionManagers {
-		if err := avs.HandleLog(lwb, decodedLog); err != nil {
+		if err := avs.HandleLog(lwb); err != nil {
 			a.logger.Error("Error processing log in AVS Execution Manager", zap.Error(err))
 			return err
 		}

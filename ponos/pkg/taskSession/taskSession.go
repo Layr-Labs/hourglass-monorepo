@@ -21,34 +21,43 @@ type TaskSession struct {
 	logger              *zap.Logger
 	results             sync.Map
 	resultsCount        atomic.Uint32
+	aggregatorAddress   string
+	aggregatorUrl       string
 
-	onCompleteFunc func() error
+	resultsQueue chan *TaskSession
 }
 
 func NewTaskSession(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	task *types.Task,
+	aggregatorAddress string,
+	aggregatorUrl string,
 	aggregatorSignature []byte,
 	recipientOperators []*peering.OperatorPeerInfo,
-	complete func() error,
+	resultsQueue chan *TaskSession,
 	logger *zap.Logger,
 ) *TaskSession {
 	ts := &TaskSession{
 		task:                task,
+		aggregatorAddress:   aggregatorAddress,
+		aggregatorUrl:       aggregatorUrl,
 		aggregatorSignature: aggregatorSignature,
 		recipientOperators:  recipientOperators,
 		results:             sync.Map{},
 		context:             ctx,
 		contextCancel:       cancel,
 		logger:              logger,
-		onCompleteFunc:      complete,
+		resultsQueue:        resultsQueue,
 	}
 	ts.resultsCount.Store(0)
 	return ts
 }
 
 func (ts *TaskSession) Process() error {
+	ts.logger.Sugar().Infow("task session started",
+		zap.String("taskId", ts.task.TaskId),
+	)
 	go ts.Broadcast()
 
 	<-ts.context.Done()
@@ -59,14 +68,21 @@ func (ts *TaskSession) Process() error {
 }
 
 func (ts *TaskSession) Broadcast() {
+	ts.logger.Sugar().Infow("task session broadcast started",
+		zap.String("taskId", ts.task.TaskId),
+		zap.Any("recipientOperators", ts.recipientOperators),
+	)
 	taskSubmission := &executorV1.TaskSubmission{
 		TaskId:            ts.task.TaskId,
 		AvsAddress:        ts.task.AVSAddress,
-		AggregatorAddress: "",
+		AggregatorAddress: ts.aggregatorAddress,
 		Payload:           ts.task.Payload,
-		AggregatorUrl:     "",
+		AggregatorUrl:     ts.aggregatorUrl,
 		Signature:         ts.aggregatorSignature,
 	}
+	ts.logger.Sugar().Infow("task session broadcast to operators",
+		zap.Any("taskSubmission", taskSubmission),
+	)
 
 	var wg sync.WaitGroup
 	for _, peer := range ts.recipientOperators {
@@ -74,6 +90,11 @@ func (ts *TaskSession) Broadcast() {
 
 		go func(wg *sync.WaitGroup, peer *peering.OperatorPeerInfo) {
 			defer wg.Done()
+			ts.logger.Sugar().Infow("task session broadcast to operator",
+				zap.String("taskId", ts.task.TaskId),
+				zap.String("operatorAddress", peer.OperatorAddress),
+				zap.String("networkAddress", peer.NetworkAddress),
+			)
 			c, err := executorClient.NewExecutorClient(peer.NetworkAddress, true)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
@@ -143,15 +164,9 @@ func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
 	ts.resultsCount.Add(1)
 
 	if ts.resultsCount.Load() == uint32(len(ts.recipientOperators)) {
-		if err := ts.onCompleteFunc(); err != nil {
-			ts.logger.Sugar().Errorw("Failed to complete task session",
-				"taskId", ts.task.TaskId,
-				"error", err,
-			)
-		} else {
-			ts.logger.Sugar().Infow("Task session completed successfully",
-				"taskId", ts.task.TaskId,
-			)
-		}
+		ts.resultsQueue <- ts
+		ts.logger.Sugar().Infow("Task result published to channel",
+			"taskId", ts.task.TaskId,
+		)
 	}
 }

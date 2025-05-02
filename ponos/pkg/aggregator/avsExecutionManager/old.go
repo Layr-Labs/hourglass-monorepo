@@ -65,7 +65,7 @@ func (em *AvsExecutionManager) processTask(ctx context.context, task *types.task
 
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
-		sugar.Errorw("Failed to sign task payload",
+		sugar.Errorw("Failed to sign task Payload",
 			zap.String("taskId", task.TaskId),
 			zap.Error(err),
 		)

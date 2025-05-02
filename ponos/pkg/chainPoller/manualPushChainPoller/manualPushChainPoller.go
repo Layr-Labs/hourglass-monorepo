@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -96,43 +95,29 @@ func (scl *ManualPushChainPoller) handleSubmitTaskRoute(ctx context.Context) fun
 		}
 		defer r.Body.Close()
 
-		var taskEvent types.TaskEvent
-		if err := json.Unmarshal(body, &taskEvent); err != nil {
+		var lwb *chainPoller.LogWithBlock
+		if err := json.Unmarshal(body, &lwb); err != nil {
 			scl.logger.Sugar().Errorw("Failed to unmarshal task event", "error", err)
 			http.Error(w, "Failed to unmarshal task event", http.StatusBadRequest)
 			return
 		}
 
-		task := convertEventToTask(&taskEvent, scl.config.ChainId)
-		scl.logger.Sugar().Infow("Received simulated task event", "taskID", task.TaskId)
+		scl.logger.Sugar().Infow("Received task event",
+			zap.Any("event", lwb),
+		)
 
 		select {
-		case scl.chainEventsChan <- nil:
+		case scl.chainEventsChan <- lwb:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("task event enqueued"))
 		case <-time.After(1 * time.Second):
-			scl.logger.Sugar().Errorw("Failed to enqueue task (channel full or closed)", "taskID", task.TaskId)
+			scl.logger.Sugar().Errorw("Failed to enqueue task (channel full or closed)",
+				zap.Any("lwb", lwb),
+				zap.Error(err),
+			)
 			http.Error(w, "Failed to enqueue task", http.StatusInternalServerError)
 		case <-ctx.Done():
 			http.Error(w, "Server is shutting down", http.StatusServiceUnavailable)
 		}
-	}
-}
-
-func convertEventToTask(event *types.TaskEvent, chainId *config.ChainId) *types.Task {
-	var parsedMeta struct {
-		Deadline               int64   `json:"deadline"`
-		StakeWeightRequiredPct float64 `json:"stakeWeightRequiredPct"`
-	}
-	_ = json.Unmarshal(event.Metadata, &parsedMeta)
-	deadline := time.Now().Add(time.Duration(parsedMeta.Deadline) * time.Second)
-	return &types.Task{
-		TaskId:              event.TaskId,
-		AVSAddress:          event.AVSAddress,
-		OperatorSetId:       event.OperatorSetId,
-		Payload:             event.Payload,
-		DeadlineUnixSeconds: &deadline,
-		StakeRequired:       parsedMeta.StakeWeightRequiredPct,
-		ChainId:             *chainId,
 	}
 }
