@@ -87,9 +87,8 @@ func Test_Executor(t *testing.T) {
 		AggregatorPeers: []*peering.OperatorPeerInfo{
 			{
 				OperatorAddress: aggregatorOperatorAddr,
-				Port:            9999,
 				PublicKey:       aggregatorPublicKey,
-				OperatorSetId:   0,
+				OperatorSetIds:  []uint32{0},
 				NetworkAddress:  "localhost",
 			},
 		},

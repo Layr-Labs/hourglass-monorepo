@@ -64,10 +64,8 @@ var runCmd = &cobra.Command{
 				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
 						OperatorAddress: p.OperatorAddress,
-						Port:            p.Port,
 						PublicKey:       p.PublicKey,
-						OperatorSetId:   p.OperatorSetId,
-						NetworkAddress:  p.NetworkAddress,
+						OperatorSetIds:  []uint32{p.OperatorSetId},
 					}
 				}),
 			}, l)

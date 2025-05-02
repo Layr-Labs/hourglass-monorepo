@@ -1,0 +1,44 @@
+package contractCaller
+
+import (
+	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	signingBn254 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"math/big"
+)
+
+type AVSConfig struct {
+	ResultSubmitter         string
+	AggregatorOperatorSetId uint32
+	ExecutorOperatorSetIds  []uint32
+}
+
+type ExecutorOperatorSetTaskConfig struct {
+	CertificateVerifier      string
+	TaskHook                 string
+	FeeToken                 string
+	FeeCollector             string
+	TaskSLA                  *big.Int
+	StakeProportionThreshold uint16
+	TaskMetadata             []byte
+}
+
+type IContractCaller interface {
+	// TODO: task will need a certificate
+	SubmitTaskResult(ctx context.Context, task *types.TaskResult) error
+
+	GetAVSConfig(ctx context.Context, avsAddress string) (*AVSConfig, error)
+
+	GetTaskConfigForExecutorOperatorSet(ctx context.Context, avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
+
+	GetOperatorSets(avsAddress string) ([]uint32, error)
+
+	GetOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error)
+
+	GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error)
+
+	GetAllMembersForAllOperatorSetsWithPeering(avsAddress string) ([]*peering.OperatorPeerInfo, error)
+
+	GetOperatorPublicKey(operatorAddress string) (*signingBn254.PublicKey, error)
+}

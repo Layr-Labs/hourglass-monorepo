@@ -163,24 +163,43 @@ var infoCmd = &cobra.Command{
 		// Check if the file might be a keystore
 		if strings.HasSuffix(keyFile, ".json") {
 			// Try to parse as a keystore (without decrypting)
-			keystoreData, err := keystore.LoadKeystoreFile(keyFile)
-			if err == nil {
-				// Get curve type from keystore if available, otherwise use the one from config
-				curveType := Config.CurveType
-				if keystoreData.CurveType != "" {
-					curveType = keystoreData.CurveType
-				}
-
-				// This appears to be a valid keystore
-				l.Sugar().Infow("Key Information",
-					"type", "keystore",
-					"curve", curveType,
-					"publicKey", keystoreData.PublicKey,
-					"uuid", keystoreData.UUID,
-					"version", keystoreData.Version,
-				)
-				return nil
+			storedKeys, err := keystore.LoadKeystoreFile(keyFile)
+			if err != nil {
+				return fmt.Errorf("failed to parse keystore JSON: %w", err)
 			}
+			// Get curve type from keystore if available, otherwise use the one from config
+			curveType := Config.CurveType
+			if storedKeys.CurveType != "" {
+				curveType = storedKeys.CurveType
+			}
+
+			// This appears to be a valid keystore
+			l.Sugar().Infow("Key Information",
+				"type", "keystore",
+				"curve", curveType,
+				"publicKey", storedKeys.PublicKey,
+				"uuid", storedKeys.UUID,
+				"version", storedKeys.Version,
+			)
+
+			keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
+			if err != nil {
+				return fmt.Errorf("failed to get signing scheme: %w", err)
+			}
+
+			privateSigningKey, err := storedKeys.GetPrivateKey(Config.Password, keyScheme)
+			if err != nil {
+				return fmt.Errorf("failed to get private key: %w", err)
+			}
+
+			pubKey := privateSigningKey.Public()
+
+			if hex.EncodeToString(pubKey.Bytes()) == storedKeys.PublicKey {
+				l.Sugar().Infow("Public key matches keystore public key")
+			} else {
+				l.Sugar().Infow("Public key does not match keystore public key")
+			}
+			return nil
 		}
 
 		// If not a keystore (or couldn't parse as one), try as raw key
@@ -215,7 +234,7 @@ var infoCmd = &cobra.Command{
 
 		// Try to load as private key
 		privateKey, err := scheme.NewPrivateKeyFromBytes(keyData)
-		if err == nil {
+		if err != nil {
 			publicKey := privateKey.Public()
 			l.Sugar().Infow("Key Information",
 				"type", "private key",

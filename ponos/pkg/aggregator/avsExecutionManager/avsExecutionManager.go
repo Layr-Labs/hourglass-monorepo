@@ -178,7 +178,7 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 
 	peers := []*peering.OperatorPeerInfo{}
 	for _, peer := range em.peers {
-		if uint32(peer.OperatorSetId) == task.OperatorSetId {
+		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
 			peers = append(peers, peer)
 		}
 	}

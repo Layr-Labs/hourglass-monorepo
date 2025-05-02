@@ -2,10 +2,9 @@ package peering
 
 type OperatorPeerInfo struct {
 	NetworkAddress  string
-	Port            int
 	PublicKey       string
 	OperatorAddress string
-	OperatorSetId   uint64
+	OperatorSetIds  []uint32
 }
 
 type IPeeringDataFetcher interface {

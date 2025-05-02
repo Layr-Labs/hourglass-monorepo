@@ -31,6 +31,8 @@ function create_binding {
     rm $binding_out_dir/tmp.bin
 }
 
+forge b
+
 contracts=$(find src -type f -name "*.sol" )
 IFS=$'\n'
 

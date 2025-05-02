@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"math/big"
 
 	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
@@ -146,6 +147,30 @@ func (pk *PrivateKey) Bytes() []byte {
 // Bytes returns the public key as a byte slice
 func (pk *PublicKey) Bytes() []byte {
 	return pk.PointBytes
+}
+
+func NewPublicKeyFromSolidity(g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
+	// Create a new PublicKey struct
+	pubKey := &PublicKey{}
+
+	// Create a new G2Affine point
+	pubKey.point = new(bn254.G2Affine)
+
+	// Set the X coordinate
+	// For G2 points: X = X[0] + X[1]*i
+	pubKey.point.X.A0.SetBigInt(g2.X[0])
+	pubKey.point.X.A1.SetBigInt(g2.X[1])
+
+	// Set the Y coordinate
+	// For G2 points: Y = Y[0] + Y[1]*i
+	pubKey.point.Y.A0.SetBigInt(g2.Y[0])
+	pubKey.point.Y.A1.SetBigInt(g2.Y[1])
+
+	// Marshal the point to bytes to fill the PointBytes field
+	pointBytes := pubKey.point.Marshal()
+	pubKey.PointBytes = pointBytes
+
+	return pubKey, nil
 }
 
 // NewPublicKeyFromBytes creates a public key from bytes

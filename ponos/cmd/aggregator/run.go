@@ -7,6 +7,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
@@ -83,10 +85,8 @@ var runCmd = &cobra.Command{
 				OperatorPeers: util.Map(Config.SimulationConfig.SimulatePeering.OperatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
 						OperatorAddress: p.OperatorAddress,
-						Port:            p.Port,
 						PublicKey:       p.PublicKey,
-						OperatorSetId:   p.OperatorSetId,
-						NetworkAddress:  p.NetworkAddress,
+						OperatorSetIds:  []uint32{p.OperatorSetId},
 					}
 				}),
 			}, log)
@@ -153,11 +153,19 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 	var allocatedPorts []int
 
 	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
-		if slices.Contains(allocatedPorts, peer.Port) {
-			return nil, fmt.Errorf("port %d is already allocated", peer.Port)
+		addrParts := strings.Split(peer.NetworkAddress, ":")
+		if len(addrParts) < 2 {
+			return nil, fmt.Errorf("invalid network address format: %s", peer.NetworkAddress)
+		}
+		port, err := strconv.Atoi(addrParts[len(addrParts)-1])
+		if err != nil {
+			return nil, fmt.Errorf("invalid port number: %s", addrParts[len(addrParts)-1])
+		}
+		if slices.Contains(allocatedPorts, port) {
+			return nil, fmt.Errorf("port %d is already allocated", port)
 		}
 
-		rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: peer.Port}, logger)
+		rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: port}, logger)
 		if err != nil {
 			logger.Sugar().Fatalw("Failed to create rpcServer for executor", "error", err)
 			return nil, err
@@ -178,11 +186,11 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 		}
 
 		executors = append(executors, exe)
-		allocatedPorts = append(allocatedPorts, peer.Port)
+		allocatedPorts = append(allocatedPorts, port)
 
 		logger.Sugar().Infow("Created simulated executor",
 			zap.String("publicKey", peer.PublicKey),
-			zap.Int("port", peer.Port),
+			zap.Int("port", port),
 		)
 	}
 
