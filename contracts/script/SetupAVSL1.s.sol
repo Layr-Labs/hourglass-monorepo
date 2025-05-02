@@ -10,7 +10,7 @@ import {
 import {IAVSRegistrar} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
 import {IStrategy} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 
-contract SetupAVS is Script {
+contract SetupAVSL1 is Script {
     // Eigenlayer Core Contracts
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
 
