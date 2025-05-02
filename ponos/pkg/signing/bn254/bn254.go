@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 	"math/big"
+
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 
 	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -38,7 +40,11 @@ type PublicKey struct {
 // Signature represents a BLS signature
 type Signature struct {
 	SigBytes []byte
-	sig      *bn254.G1Affine
+	Sig      *bn254.G1Affine
+}
+
+func (s *Signature) G1Point() *bn254.G1Jac {
+	return new(bn254.G1Jac).FromAffine(s.Sig)
 }
 
 // GenerateKeyPair creates a new random private key and the corresponding public key
@@ -124,7 +130,7 @@ func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
 
 	// Create and return the signature
 	return &Signature{
-		sig:      sigPoint,
+		Sig:      sigPoint,
 		SigBytes: sigPoint.Marshal(),
 	}, nil
 }
@@ -207,7 +213,7 @@ func NewSignatureFromBytes(data []byte) (*Signature, error) {
 	}
 
 	return &Signature{
-		sig:      sig,
+		Sig:      sig,
 		SigBytes: data,
 	}, nil
 }
@@ -219,7 +225,7 @@ func (s *Signature) Verify(publicKey *PublicKey, message []byte) (bool, error) {
 
 	// e(S, G2) = e(H(m), PK)
 	// Left-hand side: e(S, G2)
-	lhs, err := bn254.Pair([]bn254.G1Affine{*s.sig}, []bn254.G2Affine{g2Gen})
+	lhs, err := bn254.Pair([]bn254.G1Affine{*s.Sig}, []bn254.G2Affine{g2Gen})
 	if err != nil {
 		return false, err
 	}
@@ -242,12 +248,12 @@ func AggregateSignatures(signatures []*Signature) (*Signature, error) {
 
 	// Convert first signature to Jacobian coordinates
 	aggSig := new(bn254.G1Jac)
-	aggSig.FromAffine(signatures[0].sig)
+	aggSig.FromAffine(signatures[0].Sig)
 
 	// Add all other signatures
 	for i := 1; i < len(signatures); i++ {
 		var temp bn254.G1Jac
-		temp.FromAffine(signatures[i].sig)
+		temp.FromAffine(signatures[i].Sig)
 		aggSig.AddAssign(&temp)
 	}
 
@@ -256,7 +262,7 @@ func AggregateSignatures(signatures []*Signature) (*Signature, error) {
 	result.FromJacobian(aggSig)
 
 	return &Signature{
-		sig:      result,
+		Sig:      result,
 		SigBytes: result.Marshal(),
 	}, nil
 }
@@ -295,7 +301,7 @@ func BatchVerify(publicKeys []*PublicKey, message []byte, signatures []*Signatur
 	aggPkAffine.FromJacobian(aggPk)
 
 	// Compute pairings
-	lhs, err := bn254.Pair([]bn254.G1Affine{*aggSig.sig}, []bn254.G2Affine{g2Gen})
+	lhs, err := bn254.Pair([]bn254.G1Affine{*aggSig.Sig}, []bn254.G2Affine{g2Gen})
 	if err != nil {
 		return false, err
 	}
@@ -319,7 +325,7 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 	// e(S, G2) = ∏ e(H(m_i), PK_i)
 
 	// Left-hand side: e(S, G2)
-	lhs, err := bn254.Pair([]bn254.G1Affine{*aggSignature.sig}, []bn254.G2Affine{g2Gen})
+	lhs, err := bn254.Pair([]bn254.G1Affine{*aggSignature.Sig}, []bn254.G2Affine{g2Gen})
 	if err != nil {
 		return false, err
 	}
@@ -358,4 +364,66 @@ func hashToG1(message []byte) *bn254.G1Affine {
 	}
 
 	return &hashPoint
+}
+
+// AggregatePublicKeys combines multiple public keys into a single aggregated public key.
+func AggregatePublicKeys(pubKeys []*PublicKey) (*PublicKey, error) {
+	if len(pubKeys) == 0 {
+		return nil, fmt.Errorf("cannot aggregate empty set of public keys")
+	}
+
+	// Start with the first public key in Jacobian coordinates
+	aggPk := new(bn254.G2Jac)
+	aggPk.FromAffine(pubKeys[0].point)
+
+	// Add all other public keys
+	for i := 1; i < len(pubKeys); i++ {
+		var temp bn254.G2Jac
+		temp.FromAffine(pubKeys[i].point)
+		aggPk.AddAssign(&temp)
+	}
+
+	// Convert back to affine coordinates
+	result := new(bn254.G2Affine)
+	result.FromJacobian(aggPk)
+
+	return &PublicKey{
+		point:      result,
+		PointBytes: result.Marshal(),
+	}, nil
+}
+
+func newFpElement(x *big.Int) fp.Element {
+	var p fp.Element
+	p.SetBigInt(x)
+	return p
+}
+
+type G1Point struct {
+	*bn254.G1Affine
+}
+
+func NewG1Point(x, y *big.Int) *G1Point {
+	return &G1Point{
+		&bn254.G1Affine{
+			X: newFpElement(x),
+			Y: newFpElement(y),
+		},
+	}
+}
+
+func NewZeroG1Point() *G1Point {
+	return NewG1Point(big.NewInt(0), big.NewInt(0))
+}
+
+// Add another G1 point to this one
+func (p *G1Point) Add(p2 *G1Point) *G1Point {
+	p.G1Affine.Add(p.G1Affine, p2.G1Affine)
+	return p
+}
+
+// Sub another G1 point from this one
+func (p *G1Point) Sub(p2 *G1Point) *G1Point {
+	p.G1Affine.Sub(p.G1Affine, p2.G1Affine)
+	return p
 }
