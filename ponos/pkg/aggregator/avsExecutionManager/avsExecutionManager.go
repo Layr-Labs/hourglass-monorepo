@@ -152,7 +152,7 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	case "OperatorAddedToOperatorSet":
 		return em.processOperatorAdded(lwb)
 	case "OperatorRemovedFromOperatorSet":
-		return em.handleOperatorRemoved(lwb)
+		return em.processOperatorRemoved(lwb)
 	}
 
 	em.logger.Sugar().Infow("Ignoring log",
@@ -337,7 +337,7 @@ func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBloc
 	return nil
 }
 
-func (em *AvsExecutionManager) handleOperatorRemoved(lwb *chainPoller.LogWithBlock) error {
+func (em *AvsExecutionManager) processOperatorRemoved(lwb *chainPoller.LogWithBlock) error {
 	deregistration, err := em.parseOperatorSetData(lwb)
 	if err != nil {
 		return err
