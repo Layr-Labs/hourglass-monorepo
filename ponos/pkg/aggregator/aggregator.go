@@ -32,22 +32,36 @@ type AggregatorConfig struct {
 }
 
 type Aggregator struct {
+	logger    *zap.Logger
+	rpcServer *rpcServer.RpcServer
+	config    *AggregatorConfig
+
+	// chainPollers is a map of chainId to its chain poller
 	chainPollers map[config.ChainId]chainPoller.IChainPoller
-	logger       *zap.Logger
-	rpcServer    *rpcServer.RpcServer
-	config       *AggregatorConfig
 
+	// transactionLogParser is used to decode logs from the chain
 	transactionLogParser *transactionLogParser.TransactionLogParser
-	contractStore        contractStore.IContractStore
 
+	// contractStore is used to fetch contract addresses and ABIs
+	contractStore contractStore.IContractStore
+
+	// chainContractCallers is a future-proof placeholder for the ContractCaller in another PR
 	chainContractCallers map[config.ChainId]interface{}
 
+	// avsExecutionManagers map of avsAddress to its AvsExecutionManager
 	avsExecutionManagers map[string]*avsExecutionManager.AvsExecutionManager
 
+	// peeringDataFetcher is used to fetch peering data (typically from the L1)
 	peeringDataFetcher peering.IPeeringDataFetcher
 
+	// signer is used to sign transactions and communicate securely with executors
+	// Since we're only using bn254 at the moment, we only need one signer.
+	// In the future, this should be passed to the executionManager based on which
+	// curve it requires.
 	signer signer.ISigner
 
+	// chainEventsChan is a channel for receiving events from the chain pollers and
+	// sequentially processing them
 	chainEventsChan chan *chainPoller.LogWithBlock
 }
 
