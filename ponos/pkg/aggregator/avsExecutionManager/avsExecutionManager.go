@@ -268,7 +268,7 @@ func (em *AvsExecutionManager) parseOperatorSetData(
 	lwb *chainPoller.LogWithBlock,
 ) (operatorSetRegistrationData, error) {
 	lg := lwb.Log
-	em.logger.Sugar().Infow("Received OperatorAddedToOperatorSet event",
+	em.logger.Sugar().Infow("Received operator registration event",
 		zap.String("eventName", lg.EventName),
 		zap.String("contractAddress", lg.Address),
 	)
