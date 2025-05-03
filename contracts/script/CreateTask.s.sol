@@ -2,9 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {
-    OperatorSet
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {OperatorSet} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {ITaskMailbox, ITaskMailboxTypes} from "src/interfaces/ITaskMailbox.sol";
 
 contract CreateTask is Script {
@@ -19,10 +17,7 @@ contract CreateTask is Script {
         console.log("App address:", app);
 
         // Call createTask
-        OperatorSet memory executorOperatorSet = OperatorSet({
-            avs: avs,
-            id: 1
-        });
+        OperatorSet memory executorOperatorSet = OperatorSet({avs: avs, id: 1});
         ITaskMailboxTypes.TaskParams memory taskParams = ITaskMailboxTypes.TaskParams({
             refundCollector: address(0),
             avsFee: 0,
@@ -38,4 +33,4 @@ contract CreateTask is Script {
 
         vm.stopBroadcast();
     }
-} 
+}
