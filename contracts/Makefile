@@ -1,4 +1,4 @@
-.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config
+.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config create-task
 
 # Deploy Task Mailbox
 deploy-task-mailbox:
@@ -20,6 +20,10 @@ deploy-avs-l2-contracts:
 setup-avs-task-mailbox-config:
 	forge script script/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --verify --sig "run(address, address, address)" $(TASK_MAILBOX_ADDRESS) $(CERTIFICATE_VERIFIER_ADDRESS) $(TASK_HOOK_ADDRESS)
 
+# Create Task
+create-task:
+	forge script script/CreateTask.s.sol --rpc-url $(RPC_URL) --broadcast --verify --sig "run(address, address)" $(TASK_MAILBOX_ADDRESS) $(AVS_ADDRESS)
+
 # Helper message
 help:
 	@echo "Available commands:"
@@ -28,5 +32,6 @@ help:
 	@echo "  make setup-avs-l1 TASK_AVS_REGISTRAR_ADDRESS=0x... - Setup AVS on L1"
 	@echo "  make deploy-avs-l2-contracts - Deploy AVS L2 Contracts"
 	@echo "  make setup-avs-task-mailbox-config TASK_MAILBOX_ADDRESS=0x... CERTIFICATE_VERIFIER_ADDRESS=0x... TASK_HOOK_ADDRESS=0x... - Setup AVS Task Mailbox Config"
+	@echo "  make create-task TASK_MAILBOX_ADDRESS=0x... AVS_ADDRESS=0x... - Create Task"
 	@echo ""
 	@echo "Note: Make sure to set RPC_URL and PRIVATE_KEY in your environment or .env file" 

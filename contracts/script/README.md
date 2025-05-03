@@ -65,6 +65,17 @@ make setup-avs-task-mailbox-config \
   RPC_URL="127.0.0.1:8545"
 ```
 
+### 7. Create Task
+
+Create a Task on L2 Mailbox
+
+```sh
+make create-task \
+  TASK_MAILBOX_ADDRESS='0x7306a649B451AE08781108445425Bd4E8AcF1E00' \
+  AVS_ADDRESS='0x70997970C51812dc3A010C7d01b50e0d17dc79C8' \
+  RPC_URL="127.0.0.1:8545"
+```
+
 ## Environment Variables
 
 Some scripts require environment variables, such as `PRIVATE_KEY_AVS`, to be set. Refer to the `.env.example` file in the parent directory for required variables and copy it as `.env`. Get the private keys from the Anvil bootup message.
