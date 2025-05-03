@@ -315,23 +315,24 @@ func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBloc
 		return nil
 	}
 	operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]
-	if !ok {
-		observedPeers, err := em.chainContractCallers[lwb.Block.ChainId].GetOperatorSetMembersWithPeering(
-			registration.AvsId,
-			registration.OperatorSetId,
-		)
-		if err != nil {
-			// TODO: emit metric
-			return err
-		}
-		for _, observedPeer := range observedPeers {
-			if observedPeer.OperatorAddress == registration.OperatorAddress {
-				operatorPeering = observedPeer
-				return nil
-			}
+	if ok {
+		operatorPeering.OperatorSetIds = append(operatorPeering.OperatorSetIds, registration.OperatorSetId)
+		return nil
+	}
+	observedPeers, err := em.chainContractCallers[lwb.Block.ChainId].GetOperatorSetMembersWithPeering(
+		registration.AvsId,
+		registration.OperatorSetId,
+	)
+	if err != nil {
+		// TODO: emit metric
+		return err
+	}
+	for _, observedPeer := range observedPeers {
+		if observedPeer.OperatorAddress == registration.OperatorAddress {
+			em.operatorPeers[registration.OperatorAddress] = observedPeer
+			break
 		}
 	}
-	operatorPeering.OperatorSetIds = append(operatorPeering.OperatorSetIds, registration.OperatorSetId)
 	return nil
 }
 
