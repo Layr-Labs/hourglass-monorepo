@@ -3,10 +3,10 @@ package peering
 import "context"
 
 type OperatorPeerInfo struct {
-	NetworkAddress  string
-	PublicKey       string
-	OperatorAddress string
-	OperatorSetIds  []uint32
+	NetworkAddress  string   `json:"networkAddress"`
+	PublicKey       string   `json:"publicKey"`
+	OperatorAddress string   `json:"operatorAddress"`
+	OperatorSetIds  []uint32 `json:"operatorSetIds"`
 }
 
 func (opi *OperatorPeerInfo) Copy() *OperatorPeerInfo {

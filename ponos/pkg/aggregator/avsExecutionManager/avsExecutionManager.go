@@ -172,13 +172,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 	}
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 
-	var peers []*peering.OperatorPeerInfo
-	for _, peer := range em.operatorPeers {
-		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
-			peers = append(peers, peer.Copy())
-		}
-	}
-
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
 		cancel()
@@ -192,7 +185,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		em.config.AggregatorAddress,
 		em.config.AggregatorUrl,
 		sig,
-		peers,
 		em.resultsQueue,
 		em.logger,
 	)
@@ -260,7 +252,13 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 		)
 		return nil
 	}
-
+	var peers []*peering.OperatorPeerInfo
+	for _, peer := range em.operatorPeers {
+		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
+			peers = append(peers, peer.Copy())
+		}
+	}
+	task.RecipientOperators = peers
 	em.taskQueue <- task
 	em.logger.Sugar().Infow("Added task to queue")
 	return nil
