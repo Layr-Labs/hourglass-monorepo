@@ -13,7 +13,7 @@ This README provides step-by-step instructions for setting up and deploying the 
 
 ### 1. Start a Forked Mainnet Node
 
-Start a local Anvil node forked from Ethereum mainnet at a specific block:
+Start a local Anvil node forked from Ethereum mainnet at a specific block (This includes the Eigenlayer Protocol already deployed):
 
 ```sh
 anvil --fork-url <MAINNET_RPC_URL> --fork-block-number 22396947
