@@ -314,8 +314,7 @@ func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBloc
 	if registration.AvsId != em.config.AvsAddress {
 		return nil
 	}
-	operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]
-	if ok {
+	if operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]; ok {
 		operatorPeering.OperatorSetIds = append(operatorPeering.OperatorSetIds, registration.OperatorSetId)
 		return nil
 	}
