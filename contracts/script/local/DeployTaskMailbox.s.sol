@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {TaskMailbox} from "../src/core/TaskMailbox.sol";
+import {TaskMailbox} from "../../src/core/TaskMailbox.sol";
 
 contract DeployTaskMailbox is Script {
     function setUp() public {}

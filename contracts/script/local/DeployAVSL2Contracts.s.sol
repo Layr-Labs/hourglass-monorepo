@@ -5,8 +5,8 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
-import {MockAVSTaskHook} from "../test/mocks/MockAVSTaskHook.sol";
-import {MockBN254CertificateVerifier} from "../test/mocks/MockBN254CertificateVerifier.sol";
+import {MockAVSTaskHook} from "../../test/mocks/MockAVSTaskHook.sol";
+import {MockBN254CertificateVerifier} from "../../test/mocks/MockBN254CertificateVerifier.sol";
 
 contract DeployAVSL2Contracts is Script {
     function setUp() public {}
