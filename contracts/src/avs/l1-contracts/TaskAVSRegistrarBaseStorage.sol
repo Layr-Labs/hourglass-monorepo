@@ -6,7 +6,7 @@ import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
 import {ITaskAVSRegistrar} from "../../interfaces/ITaskAVSRegistrar.sol";
 
-abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
+abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
     /// @dev NOTE: Updating this value will break existing OperatorSets and UAM integration.
     /// This value should only be set once.

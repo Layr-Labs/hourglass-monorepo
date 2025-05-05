@@ -6,9 +6,9 @@ import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-import {TaskAVSRegistrarStorage} from "./TaskAVSRegistrarStorage.sol";
+import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
 
-contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
+abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
 
     using BN254 for BN254.G1Point;
@@ -22,7 +22,7 @@ contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     constructor(
         address avs,
         IAllocationManager allocationManager
-    ) EIP712("TaskAVSRegistrar", "v0.1.0") TaskAVSRegistrarStorage(avs, allocationManager) {}
+    ) EIP712("TaskAVSRegistrar", "v0.1.0") TaskAVSRegistrarBaseStorage(avs, allocationManager) {}
 
     /**
      *
