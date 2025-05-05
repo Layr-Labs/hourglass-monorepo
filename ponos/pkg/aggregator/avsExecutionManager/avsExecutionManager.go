@@ -14,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"math/big"
 	"slices"
@@ -365,10 +366,12 @@ func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddres
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task id")
 	}
-	avsAddress, ok = log.Arguments[2].Value.(string)
+
+	avsAddr, ok := log.Arguments[2].Value.(common.Address)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task event address")
 	}
+	avsAddress = avsAddr.String()
 
 	// it aint stupid if it works...
 	// take the output data, turn it into a json string, then Unmarshal it into a typed struct

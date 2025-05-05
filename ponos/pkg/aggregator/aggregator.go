@@ -153,8 +153,9 @@ func (a *Aggregator) initializePollers() error {
 			a.logger.Sugar().Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
 			continue
 		}
-		ec := ethereum.NewClient(&ethereum.EthereumClientConfig{
-			BaseUrl: chain.RpcURL,
+		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+			BaseUrl:   chain.RpcURL,
+			BlockType: ethereum.BlockType_Latest,
 		}, a.logger)
 
 		contracts := config.GetContractsMapForChain(chain.ChainId)
@@ -186,9 +187,9 @@ func (a *Aggregator) initializePollers() error {
 				)
 			}
 		} else {
-			pCfg := &EVMChainPoller.EVNChainPollerConfig{
+			pCfg := &EVMChainPoller.EVMChainPollerConfig{
 				ChainId:         chain.ChainId,
-				PollingInterval: 10 * time.Millisecond,
+				PollingInterval: time.Duration(chain.PollIntervalSeconds) * time.Second,
 				InterestingContracts: []string{
 					contracts.TaskMailbox,
 				},

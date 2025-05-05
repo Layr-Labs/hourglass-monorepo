@@ -14,8 +14,9 @@ func Test_EthereumClient(t *testing.T) {
 	})
 	assert.Nil(t, err)
 
-	client := NewClient(&EthereumClientConfig{
-		BaseUrl: "http://72.46.85.253:8545",
+	client := NewEthereumClient(&EthereumClientConfig{
+		BaseUrl:   "http://72.46.85.253:8545",
+		BlockType: BlockType_Latest,
 	}, l)
 
 	t.Run("eth_getBlockReceipts", func(t *testing.T) {

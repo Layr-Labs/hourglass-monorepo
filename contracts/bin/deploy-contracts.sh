@@ -5,6 +5,12 @@ VERSION=${1:-local}
 CHAIN_ID=${2:-31337}
 RPC_URL=${3:-http://localhost:8545}
 BROADCAST_DIR="./broadcast/DeployTaskMailbox.s.sol/${CHAIN_ID}"
+PRIVATE_KEY=${4:-$PRIVATE_KEY}
+
+if [[ -z "$PRIVATE_KEY" ]]; then
+  echo "Error: PRIVATE_KEY environment variable is not set."
+  exit 1
+fi
 
 # Step 1: Deploy
 forge script ./script/DeployTaskMailbox.s.sol \

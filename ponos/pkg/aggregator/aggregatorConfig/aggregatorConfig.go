@@ -21,11 +21,12 @@ type ChainSimulation struct {
 }
 
 type Chain struct {
-	Name       string           `json:"name" yaml:"name"`
-	Version    string           `json:"version" yaml:"version"`
-	ChainId    config.ChainId   `json:"chainId" yaml:"chainId"`
-	RpcURL     string           `json:"rpcUrl" yaml:"rpcUrl"`
-	Simulation *ChainSimulation `json:"simulation" yaml:"simulation"`
+	Name                string           `json:"name" yaml:"name"`
+	Version             string           `json:"version" yaml:"version"`
+	ChainId             config.ChainId   `json:"chainId" yaml:"chainId"`
+	RpcURL              string           `json:"rpcUrl" yaml:"rpcUrl"`
+	PollIntervalSeconds int              `json:"pollIntervalSeconds" yaml:"pollIntervalSeconds"`
+	Simulation          *ChainSimulation `json:"simulation" yaml:"simulation"`
 }
 
 func (c *Chain) Validate() field.ErrorList {

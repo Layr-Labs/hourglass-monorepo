@@ -20,6 +20,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
+	"math/big"
+	"strings"
 )
 
 type ContractCallerConfig struct {
@@ -97,6 +99,8 @@ func NewContractCaller(
 }
 
 func (cc *ContractCaller) getECDSAPrivateKeyFromString(privateKey string) (*ecdsa.PrivateKey, error) {
+	privateKey = strings.TrimPrefix(privateKey, "0x")
+
 	pk, err := crypto.HexToECDSA(privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
@@ -262,4 +266,46 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 		StakeProportionThreshold: taskCfg.StakeProportionThreshold,
 		TaskMetadata:             taskCfg.TaskMetadata,
 	}, nil
+}
+
+func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error) {
+	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("failed to get public key ECDSA")
+	}
+
+	address := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := cc.taskMailboxTransactor.CreateTask(noSendTxOpts, ITaskMailbox.ITaskMailboxTypesTaskParams{
+		RefundCollector: address,
+		AvsFee:          new(big.Int).SetUint64(0),
+		ExecutorOperatorSet: ITaskMailbox.OperatorSet{
+			Avs: common.HexToAddress(avsAddress),
+			Id:  operatorSetId,
+		},
+		Payload: payload,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "PublishMessageToInbox")
+	if err != nil {
+		return nil, fmt.Errorf("failed to send transaction: %w", err)
+	}
+	cc.logger.Sugar().Infow("Successfully published message to inbox",
+		zap.String("transactionHash", receipt.TxHash.Hex()),
+	)
+	return receipt, nil
 }

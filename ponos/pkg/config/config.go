@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"os"
 	"slices"
 )
 
@@ -13,6 +14,10 @@ const (
 	ChainId_EthereumHolesky ChainId = 17000
 	ChainId_EthereumHoodi   ChainId = 560048
 	ChainId_EthereumAnvil   ChainId = 31337
+)
+
+const (
+	MAILBOX_CONTRACT_ADDRESS_OVERRIDE = "MAILBOX_CONTRACT_ADDRESS_OVERRIDE"
 )
 
 func IsL1Chain(chainId ChainId) bool {
@@ -42,6 +47,18 @@ var (
 	}
 )
 
+func GetMailboxContractAddressOverride() string {
+	return os.Getenv(MAILBOX_CONTRACT_ADDRESS_OVERRIDE)
+}
+
+func OverrideMailboxContractAddress(providedAddress string) string {
+	override := GetMailboxContractAddressOverride()
+	if override != "" {
+		return override
+	}
+	return providedAddress
+}
+
 func GetCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error) {
 	contracts, ok := CoreContracts[chainId]
 	if !ok {
@@ -69,15 +86,18 @@ func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
 	case ChainId_EthereumHolesky:
 		return &ContractAddresses{
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
-			TaskMailbox:       "0xTaskMailbox",
+			TaskMailbox:       OverrideMailboxContractAddress(""),
 		}
 	case ChainId_EthereumHoodi:
 		// TODO(seanmcgary): Add hoodi contracts
-		return nil
+		return &ContractAddresses{
+			AllocationManager: "0x...",
+			TaskMailbox:       OverrideMailboxContractAddress(""),
+		}
 	case ChainId_EthereumMainnet:
 		return &ContractAddresses{
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
-			TaskMailbox:       "0xTaskMailbox",
+			TaskMailbox:       OverrideMailboxContractAddress(""),
 		}
 	}
 	return nil

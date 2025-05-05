@@ -38,4 +38,6 @@ type IContractCaller interface {
 	GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error)
 
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
+
+	PublishMessageToInbox(ctx context.Context) (interface{}, error)
 }
