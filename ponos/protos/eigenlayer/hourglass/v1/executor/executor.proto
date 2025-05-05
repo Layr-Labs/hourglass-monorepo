@@ -6,11 +6,13 @@ option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/ei
 
 import "eigenlayer/common/v1/types.proto";
 
+// This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 service ExecutorService {
   // SubmitTask submits a task to the executor from the aggregator
   rpc SubmitTask(TaskSubmission) returns (eigenlayer.common.v1.SubmitAck) {}
 }
 
+// TaskSubmission is the message used to submit a task to the executor from the aggregator
 message TaskSubmission {
   string task_id = 1;
   string aggregator_address = 2;

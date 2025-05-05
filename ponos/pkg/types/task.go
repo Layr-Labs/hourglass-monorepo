@@ -59,5 +59,6 @@ func TaskResultFromTaskResultProto(tr *aggregatorV1.TaskResult) *TaskResult {
 		Output:          tr.Output,
 		OperatorAddress: tr.OperatorAddress,
 		Signature:       tr.Signature,
+		AvsAddress:      tr.AvsAddress,
 	}
 }
