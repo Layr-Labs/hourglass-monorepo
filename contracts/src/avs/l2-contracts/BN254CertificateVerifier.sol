@@ -2,7 +2,7 @@ pragma solidity ^0.8.27;
 
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
-import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifier.sol";
+import {IBN254CertificateVerifier} from "../../interfaces/IBN254CertificateVerifier.sol";
 
 contract BN254CertificateVerifier is IBN254CertificateVerifier {
     function maxOperatorTableStaleness() external pure returns (uint32) {

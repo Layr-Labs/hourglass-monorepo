@@ -4,13 +4,12 @@ pragma solidity ^0.8.27;
 import {
     OperatorSet,
     OperatorSetLib
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {IAllocationManager} from
-    "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
-import {EIP712} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
+} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-import {TaskAVSRegistrarStorage} from "src/avs/l1-contracts/TaskAVSRegistrarStorage.sol";
+import {TaskAVSRegistrarStorage} from "./TaskAVSRegistrarStorage.sol";
 
 contract TaskAVSRegistrar is EIP712, TaskAVSRegistrarStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.

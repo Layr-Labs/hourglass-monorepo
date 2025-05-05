@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {OperatorSet} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
-import {IAVSTaskHook} from "src/interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifier.sol";
+import {IAVSTaskHook} from "../../interfaces/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../../interfaces/IBN254CertificateVerifier.sol";
 
 contract AVSTaskHook is IAVSTaskHook {
     function validatePreTaskCreation(
