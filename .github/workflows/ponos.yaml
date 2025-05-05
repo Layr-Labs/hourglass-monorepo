@@ -43,8 +43,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Run Forge build
+        run: |
+          forge build --sizes
+        working-directory: ./contracts
+        id: build
       - name: Run tests
         run: |
+          which anvil
           cd ponos
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
@@ -83,7 +93,7 @@ jobs:
           if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
             docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
           else
-            docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION --push -f ./ponos/Dockerfile .
+            docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:$VERSION --push -f ./ponos/Dockerfile .
           fi
   build-binaries:
     runs-on: ubuntu-24.04

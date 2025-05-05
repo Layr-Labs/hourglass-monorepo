@@ -85,7 +85,7 @@ func DefaultChunkedCallEthereumClientConfig() *EthereumClientConfig {
 	}
 }
 
-func NewClient(cfg *EthereumClientConfig, l *zap.Logger) *Client {
+func NewEthereumClient(cfg *EthereumClientConfig, l *zap.Logger) *Client {
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}

@@ -1,0 +1,12 @@
+{
+  "deployAccountAddress": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "deployAccountPk": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+  "avsAccountAddress": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+  "avsAccountPk": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  "appAccountAddress": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+  "appAccountPk": "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
+  "mailboxContractAddress": "0x7306a649b451ae08781108445425bd4e8acf1e00",
+  "avsTaskRegistrarAddress": "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
+  "taskHookAddress": "0x934a389cabfb84cdb3f0260b2a4fd575b8b345a3",
+  "certificateVerifierAddress": "0xc91b651f770ed996a223a16da9ccd6f7df56c987"
+}

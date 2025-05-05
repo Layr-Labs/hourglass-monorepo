@@ -4,3 +4,5 @@ bin/
 node_modules
 /testKeys
 /demo/bin
+/contracts/broadcast/*
+/ponos/anvil*.json
