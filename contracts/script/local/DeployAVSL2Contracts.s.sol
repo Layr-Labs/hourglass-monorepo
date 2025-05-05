@@ -3,11 +3,10 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {IAllocationManager} from
-    "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
-import {AVSTaskHook} from "src/avs/l2-contracts/AVSTaskHook.sol";
-import {BN254CertificateVerifier} from "src/avs/l2-contracts/BN254CertificateVerifier.sol";
+import {MockAVSTaskHook} from "../../test/mocks/MockAVSTaskHook.sol";
+import {MockBN254CertificateVerifier} from "../../test/mocks/MockBN254CertificateVerifier.sol";
 
 contract DeployAVSL2Contracts is Script {
     function setUp() public {}
@@ -21,10 +20,10 @@ contract DeployAVSL2Contracts is Script {
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        AVSTaskHook avsTaskHook = new AVSTaskHook();
+        MockAVSTaskHook avsTaskHook = new MockAVSTaskHook();
         console.log("AVSTaskHook deployed to:", address(avsTaskHook));
 
-        BN254CertificateVerifier bn254CertificateVerifier = new BN254CertificateVerifier();
+        MockBN254CertificateVerifier bn254CertificateVerifier = new MockBN254CertificateVerifier();
         console.log("BN254CertificateVerifier deployed to:", address(bn254CertificateVerifier));
 
         vm.stopBroadcast();

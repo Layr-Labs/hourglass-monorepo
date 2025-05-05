@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {ITaskAVSRegistrar} from "src/interfaces/ITaskAVSRegistrar.sol";
-import {IAllocationManager} from
-    "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
-abstract contract TaskAVSRegistrarStorage is ITaskAVSRegistrar {
+import {ITaskAVSRegistrar} from "../interfaces/avs/l1/ITaskAVSRegistrar.sol";
+
+abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
     /// @dev NOTE: Updating this value will break existing OperatorSets and UAM integration.
     /// This value should only be set once.

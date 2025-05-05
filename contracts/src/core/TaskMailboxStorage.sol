@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {ITaskMailbox} from "src/interfaces/ITaskMailbox.sol";
+import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 
 abstract contract TaskMailboxStorage is ITaskMailbox {
     uint256 internal globalTaskCount;

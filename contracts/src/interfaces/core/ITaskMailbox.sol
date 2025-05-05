@@ -1,14 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {
-    OperatorSet,
-    OperatorSetLib
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {IERC20} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IAVSTaskHook} from "src/interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifier.sol";
+import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol";
 
 interface ITaskMailboxTypes {
     // TODO: Pack Storage efficiently.

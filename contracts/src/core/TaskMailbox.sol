@@ -1,18 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {
-    OperatorSet,
-    OperatorSetLib
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {ReentrancyGuard} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/security/ReentrancyGuard.sol";
-import {IERC20} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {IAVSTaskHook} from "src/interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifier.sol";
-import {TaskMailboxStorage} from "src/core/TaskMailboxStorage.sol";
+import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../interfaces/avs/l2/IBN254CertificateVerifier.sol";
+import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
 
 contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
