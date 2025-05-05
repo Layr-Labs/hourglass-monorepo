@@ -4,8 +4,8 @@ pragma solidity ^0.8.27;
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IAVSTaskHook} from "../interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../interfaces/IBN254CertificateVerifier.sol";
+import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol";
 
 interface ITaskMailboxTypes {
     // TODO: Pack Storage efficiently.

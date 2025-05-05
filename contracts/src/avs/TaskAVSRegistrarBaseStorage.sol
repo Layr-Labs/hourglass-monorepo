@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
-import {ITaskAVSRegistrar} from "../../interfaces/ITaskAVSRegistrar.sol";
+import {ITaskAVSRegistrar} from "../interfaces/avs/l1/ITaskAVSRegistrar.sol";
 
 abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
     /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)

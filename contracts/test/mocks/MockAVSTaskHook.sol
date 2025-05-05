@@ -3,10 +3,10 @@ pragma solidity ^0.8.27;
 
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
-import {IAVSTaskHook} from "../../interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../../interfaces/IBN254CertificateVerifier.sol";
+import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 
-contract AVSTaskHook is IAVSTaskHook {
+contract MockAVSTaskHook is IAVSTaskHook {
     function validatePreTaskCreation(
         address, /*caller*/
         OperatorSet memory, /*operatorSet*/
