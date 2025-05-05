@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {
-    OperatorSet,
-    OperatorSetLib
-} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";

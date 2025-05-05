@@ -3,10 +3,7 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {
-    OperatorSet,
-    OperatorSetLib
-} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITaskMailbox, ITaskMailboxTypes} from "../src/interfaces/ITaskMailbox.sol";
