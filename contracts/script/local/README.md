@@ -20,6 +20,7 @@ anvil --fork-url <MAINNET_RPC_URL> --fork-block-number 22396947
 ```
 
 This will run a local node at `127.0.0.1:8545`.
+Update the `.env` with the correct private keys from the anvil bootup message.
 
 ### 2. Deploy TaskMailbox Contract
 
