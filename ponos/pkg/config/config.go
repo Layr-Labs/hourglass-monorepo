@@ -31,18 +31,36 @@ func IsL1Chain(chainId ChainId) bool {
 
 type CoreContractAddresses struct {
 	AllocationManager string
+	TaskMailbox       string
 }
 
 var (
-	CoreContracts = map[ChainId]CoreContractAddresses{
+	canonicalCoreContracts = map[ChainId]*CoreContractAddresses{
 		ChainId_EthereumMainnet: {
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumHoodi: {
 			AllocationManager: "",
+			TaskMailbox:       "0xtaskMailbox",
+		},
+	}
+	CoreContracts = map[ChainId]*CoreContractAddresses{
+		ChainId_EthereumMainnet: {
+			AllocationManager: canonicalCoreContracts[ChainId_EthereumMainnet].AllocationManager,
+			TaskMailbox:       OverrideMailboxContractAddress(canonicalCoreContracts[ChainId_EthereumMainnet].TaskMailbox),
+		},
+		ChainId_EthereumHolesky: {
+			AllocationManager: canonicalCoreContracts[ChainId_EthereumHolesky].AllocationManager,
+			TaskMailbox:       OverrideMailboxContractAddress(canonicalCoreContracts[ChainId_EthereumHolesky].TaskMailbox),
+		},
+		ChainId_EthereumHoodi: {
+			AllocationManager: canonicalCoreContracts[ChainId_EthereumHoodi].AllocationManager,
+			TaskMailbox:       OverrideMailboxContractAddress(canonicalCoreContracts[ChainId_EthereumHoodi].TaskMailbox),
 		},
 	}
 )
@@ -64,7 +82,15 @@ func GetCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error)
 	if !ok {
 		return nil, fmt.Errorf("unsupported chain ID: %d", chainId)
 	}
-	return &contracts, nil
+	return contracts, nil
+}
+
+func GetCanonicalCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error) {
+	contracts, ok := canonicalCoreContracts[chainId]
+	if !ok {
+		return nil, fmt.Errorf("unsupported chain ID: %d", chainId)
+	}
+	return contracts, nil
 }
 
 var (
@@ -81,26 +107,12 @@ type ContractAddresses struct {
 	TaskMailbox       string
 }
 
-func GetContractsMapForChain(chainId ChainId) *ContractAddresses {
-	switch chainId {
-	case ChainId_EthereumHolesky:
-		return &ContractAddresses{
-			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
-			TaskMailbox:       OverrideMailboxContractAddress(""),
-		}
-	case ChainId_EthereumHoodi:
-		// TODO(seanmcgary): Add hoodi contracts
-		return &ContractAddresses{
-			AllocationManager: "0x...",
-			TaskMailbox:       OverrideMailboxContractAddress(""),
-		}
-	case ChainId_EthereumMainnet:
-		return &ContractAddresses{
-			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
-			TaskMailbox:       OverrideMailboxContractAddress(""),
-		}
+func GetContractsMapForChain(chainId ChainId) *CoreContractAddresses {
+	contracts, ok := CoreContracts[chainId]
+	if !ok {
+		return nil
 	}
-	return nil
+	return contracts
 }
 
 type OperatorConfig struct {

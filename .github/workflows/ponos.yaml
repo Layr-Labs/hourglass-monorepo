@@ -54,6 +54,7 @@ jobs:
         id: build
       - name: Run tests
         run: |
+          which anvil
           cd ponos
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin

@@ -84,5 +84,18 @@ func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*contracts.
 		c.AbiVersions = append(c.AbiVersions, foundAbi.ContractAbi)
 	}
 
+	canonicalCoreContracts, err := config.GetCanonicalCoreContractsForChainId(chainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get canonical core contracts: %w", err)
+	}
+	overlayCoreContracts, err := config.GetCoreContractsForChainId(chainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get overlay core contracts: %w", err)
+	}
+
+	if canonicalCoreContracts.TaskMailbox != overlayCoreContracts.TaskMailbox {
+		mappedContracts[overlayCoreContracts.TaskMailbox] = mappedContracts[canonicalCoreContracts.TaskMailbox]
+	}
+
 	return mappedContracts, nil
 }

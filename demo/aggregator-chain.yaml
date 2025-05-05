@@ -53,6 +53,7 @@ chains:
     network: "mainnet"
     chainId: 1
     rpcUrl: "http://host.docker.internal:8545"
+    pollIntervalSeconds: 10
     simulation:
       enabled: false
       port: 8081
