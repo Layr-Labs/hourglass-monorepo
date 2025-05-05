@@ -8,10 +8,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
-
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
@@ -30,18 +30,24 @@ type AvsExecutionManagerConfig struct {
 	AggregatorUrl            string
 }
 
+type operatorSetRegistrationData struct {
+	AvsId           string
+	OperatorAddress string
+	OperatorSetId   uint32
+}
+
 type AvsExecutionManager struct {
 	logger *zap.Logger
 	config *AvsExecutionManagerConfig
 
 	// will be a proper type when another PR is merged
-	chainContractCallers map[config.ChainId]interface{}
+	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
 
 	signer signer.ISigner
 
 	peeringDataFetcher peering.IPeeringDataFetcher
 
-	peers []*peering.OperatorPeerInfo
+	operatorPeers map[string]*peering.OperatorPeerInfo
 
 	taskQueue chan *types.Task
 
@@ -52,7 +58,7 @@ type AvsExecutionManager struct {
 
 func NewAvsExecutionManager(
 	config *AvsExecutionManagerConfig,
-	chainContractCallers map[config.ChainId]interface{},
+	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
 	signer signer.ISigner,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	logger *zap.Logger,
@@ -87,8 +93,12 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to fetch executor peers: %w", err)
 	}
+	operatorPeers := map[string]*peering.OperatorPeerInfo{}
+	for _, peer := range peers {
+		operatorPeers[peer.OperatorAddress] = peer
+	}
 
-	em.peers = peers
+	em.operatorPeers = operatorPeers
 	em.logger.Sugar().Infow("Fetched executor peers",
 		zap.Int("numPeers", len(peers)),
 	)
@@ -132,38 +142,24 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 		zap.Any("log", lwb),
 	)
 	lg := lwb.Log
-	if lg.EventName == "TaskCreated" && slices.Contains(em.getListOfContractAddresses(), strings.ToLower(lg.Address)) {
-		em.logger.Sugar().Infow("Received TaskCreated event",
-			zap.String("eventName", lg.EventName),
-			zap.String("contractAddress", lg.Address),
-		)
-		task, err := convertTask(lg, lwb.Block, lg.Address)
-		if err != nil {
-			return fmt.Errorf("failed to convert task: %w", err)
-		}
-		em.logger.Sugar().Infow("Converted task",
-			zap.Any("task", task),
-		)
-
-		if task.AVSAddress != strings.ToLower(em.config.AvsAddress) {
-			em.logger.Sugar().Infow("Ignoring task for different AVS address",
-				zap.String("taskAvsAddress", task.AVSAddress),
-				zap.String("currentAvsAddress", em.config.AvsAddress),
-			)
-			return nil
-		}
-
-		em.taskQueue <- task
-		em.logger.Sugar().Infow("Added task to queue")
-	} else {
-
-		em.logger.Sugar().Infow("Ignoring log",
-			zap.String("eventName", lg.EventName),
-			zap.String("contractAddress", lg.Address),
-			zap.Strings("addresses", em.getListOfContractAddresses()),
-		)
+	if !slices.Contains(em.getListOfContractAddresses(), strings.ToLower(lg.Address)) {
+		return nil
 	}
 
+	switch lg.EventName {
+	case "TaskCreated":
+		return em.processTask(lwb)
+	case "OperatorAddedToOperatorSet":
+		return em.processOperatorAdded(lwb)
+	case "OperatorRemovedFromOperatorSet":
+		return em.processOperatorRemoved(lwb)
+	}
+
+	em.logger.Sugar().Infow("Ignoring log",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+		zap.Strings("addresses", em.getListOfContractAddresses()),
+	)
 	return nil
 }
 
@@ -175,13 +171,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("task %s is already being processed", task.TaskId)
 	}
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
-
-	peers := []*peering.OperatorPeerInfo{}
-	for _, peer := range em.peers {
-		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
-			peers = append(peers, peer)
-		}
-	}
 
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
@@ -196,7 +185,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		em.config.AggregatorAddress,
 		em.config.AggregatorUrl,
 		sig,
-		peers,
 		em.resultsQueue,
 		em.logger,
 	)
@@ -240,6 +228,132 @@ func (em *AvsExecutionManager) HandleTaskResultFromExecutor(taskResult *types.Ta
 
 	ts := task.(*taskSession.TaskSession)
 	ts.RecordResult(taskResult)
+	return nil
+}
+
+func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error {
+	lg := lwb.Log
+	em.logger.Sugar().Infow("Received TaskCreated event",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+	)
+	task, err := convertTask(lg, lwb.Block, lg.Address)
+	if err != nil {
+		return fmt.Errorf("failed to convert task: %w", err)
+	}
+	em.logger.Sugar().Infow("Converted task",
+		zap.Any("task", task),
+	)
+
+	if task.AVSAddress != strings.ToLower(em.config.AvsAddress) {
+		em.logger.Sugar().Infow("Ignoring task for different AVS address",
+			zap.String("taskAvsAddress", task.AVSAddress),
+			zap.String("currentAvsAddress", em.config.AvsAddress),
+		)
+		return nil
+	}
+	var peers []*peering.OperatorPeerInfo
+	for _, peer := range em.operatorPeers {
+		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
+			peers = append(peers, peer.Copy())
+		}
+	}
+	task.RecipientOperators = peers
+	em.taskQueue <- task
+	em.logger.Sugar().Infow("Added task to queue")
+	return nil
+}
+
+func (em *AvsExecutionManager) parseOperatorSetData(
+	lwb *chainPoller.LogWithBlock,
+) (operatorSetRegistrationData, error) {
+	lg := lwb.Log
+	em.logger.Sugar().Infow("Received operator registration event",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+	)
+
+	operatorAddr, ok := lg.Arguments[0].Value.(string)
+	if !ok {
+		return operatorSetRegistrationData{}, fmt.Errorf("failed to parse operator address from event")
+	}
+
+	outputBytes, err := json.Marshal(lg.OutputData)
+	if err != nil {
+		return operatorSetRegistrationData{}, fmt.Errorf("failed to marshal output data: %w", err)
+	}
+
+	type operatorSetData struct {
+		Avs string `json:"avs"`
+		Id  uint32 `json:"id"`
+	}
+
+	var operatorSet operatorSetData
+	if err := json.Unmarshal(outputBytes, &operatorSet); err != nil {
+		return operatorSetRegistrationData{}, fmt.Errorf("failed to unmarshal operatorSet data: %w", err)
+	}
+
+	em.logger.Sugar().Infow("Parsed operator registration",
+		zap.String("operator", operatorAddr),
+		zap.String("avs", strings.ToLower(operatorSet.Avs)),
+		zap.Uint32("operatorSetId", operatorSet.Id),
+	)
+
+	return operatorSetRegistrationData{
+		AvsId:           operatorSet.Avs,
+		OperatorAddress: operatorAddr,
+		OperatorSetId:   operatorSet.Id,
+	}, nil
+}
+
+func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBlock) error {
+	registration, err := em.parseOperatorSetData(lwb)
+	if err != nil {
+		return err
+	}
+	if registration.AvsId != em.config.AvsAddress {
+		return nil
+	}
+	if operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]; ok {
+		operatorPeering.OperatorSetIds = append(operatorPeering.OperatorSetIds, registration.OperatorSetId)
+		return nil
+	}
+	observedPeers, err := em.chainContractCallers[lwb.Block.ChainId].GetOperatorSetMembersWithPeering(
+		registration.AvsId,
+		registration.OperatorSetId,
+	)
+	if err != nil {
+		// TODO: emit metric
+		return err
+	}
+	for _, observedPeer := range observedPeers {
+		if observedPeer.OperatorAddress == registration.OperatorAddress {
+			em.operatorPeers[registration.OperatorAddress] = observedPeer
+			break
+		}
+	}
+	return nil
+}
+
+func (em *AvsExecutionManager) processOperatorRemoved(lwb *chainPoller.LogWithBlock) error {
+	deregistration, err := em.parseOperatorSetData(lwb)
+	if err != nil {
+		return err
+	}
+	if deregistration.AvsId != em.config.AvsAddress {
+		return nil
+	}
+	peerInfo, ok := em.operatorPeers[deregistration.OperatorAddress]
+	if !ok {
+		// TODO: emit metric
+		return fmt.Errorf("peer not found for deregistration: %s", deregistration.OperatorAddress)
+	}
+	for i, operatorSetId := range peerInfo.OperatorSetIds {
+		if deregistration.OperatorSetId == operatorSetId {
+			peerInfo.OperatorSetIds = append(peerInfo.OperatorSetIds[:i], peerInfo.OperatorSetIds[i+1:]...)
+			break
+		}
+	}
 	return nil
 }
 

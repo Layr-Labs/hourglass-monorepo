@@ -15,7 +15,6 @@ import (
 type TaskSession struct {
 	task                *types.Task
 	aggregatorSignature []byte
-	recipientOperators  []*peering.OperatorPeerInfo
 	context             context.Context
 	contextCancel       context.CancelFunc
 	logger              *zap.Logger
@@ -34,7 +33,6 @@ func NewTaskSession(
 	aggregatorAddress string,
 	aggregatorUrl string,
 	aggregatorSignature []byte,
-	recipientOperators []*peering.OperatorPeerInfo,
 	resultsQueue chan *TaskSession,
 	logger *zap.Logger,
 ) *TaskSession {
@@ -43,7 +41,6 @@ func NewTaskSession(
 		aggregatorAddress:   aggregatorAddress,
 		aggregatorUrl:       aggregatorUrl,
 		aggregatorSignature: aggregatorSignature,
-		recipientOperators:  recipientOperators,
 		results:             sync.Map{},
 		context:             ctx,
 		contextCancel:       cancel,
@@ -70,7 +67,7 @@ func (ts *TaskSession) Process() error {
 func (ts *TaskSession) Broadcast() {
 	ts.logger.Sugar().Infow("task session broadcast started",
 		zap.String("taskId", ts.task.TaskId),
-		zap.Any("recipientOperators", ts.recipientOperators),
+		zap.Any("recipientOperators", ts.task.RecipientOperators),
 	)
 	taskSubmission := &executorV1.TaskSubmission{
 		TaskId:            ts.task.TaskId,
@@ -85,7 +82,7 @@ func (ts *TaskSession) Broadcast() {
 	)
 
 	var wg sync.WaitGroup
-	for _, peer := range ts.recipientOperators {
+	for _, peer := range ts.task.RecipientOperators {
 		wg.Add(1)
 
 		go func(wg *sync.WaitGroup, peer *peering.OperatorPeerInfo) {
@@ -135,7 +132,7 @@ func (ts *TaskSession) Broadcast() {
 }
 
 func (ts *TaskSession) findOperatorByAddress(address string) *peering.OperatorPeerInfo {
-	for _, peer := range ts.recipientOperators {
+	for _, peer := range ts.task.RecipientOperators {
 		if strings.EqualFold(peer.OperatorAddress, address) {
 			return peer
 		}
@@ -163,7 +160,7 @@ func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
 	ts.results.Store(peer, taskResult)
 	ts.resultsCount.Add(1)
 
-	if ts.resultsCount.Load() == uint32(len(ts.recipientOperators)) {
+	if ts.resultsCount.Load() == uint32(len(ts.task.RecipientOperators)) {
 		ts.resultsQueue <- ts
 		ts.logger.Sugar().Infow("Task result published to channel",
 			"taskId", ts.task.TaskId,

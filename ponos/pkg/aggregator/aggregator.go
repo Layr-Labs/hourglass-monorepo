@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -47,7 +48,7 @@ type Aggregator struct {
 	contractStore contractStore.IContractStore
 
 	// chainContractCallers is a future-proof placeholder for the ContractCaller in another PR
-	chainContractCallers map[config.ChainId]interface{}
+	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
 
 	// avsExecutionManagers map of avsAddress to its AvsExecutionManager
 	avsExecutionManagers map[string]*avsExecutionManager.AvsExecutionManager
@@ -71,7 +72,7 @@ func NewAggregatorWithRpcServer(
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
-	chainContractCallers map[config.ChainId]interface{},
+	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signer signer.ISigner,
 	logger *zap.Logger,
@@ -91,7 +92,7 @@ func NewAggregator(
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
-	chainContractCallers map[config.ChainId]interface{},
+	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signer signer.ISigner,
 	logger *zap.Logger,
