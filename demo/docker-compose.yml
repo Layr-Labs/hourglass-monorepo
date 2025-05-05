@@ -30,6 +30,8 @@ services:
     ports:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:8081:8081"
+    environment:
+      MAILBOX_CONTRACT_ADDRESS_OVERRIDE: "0x7306a649b451ae08781108445425bd4e8acf1e00"
     command:
       - "aggregator"
       - "run"

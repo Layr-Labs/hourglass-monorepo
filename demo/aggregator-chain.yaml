@@ -48,6 +48,8 @@ operator:
         }
       password: ""
 
+l1ChainId: 1
+
 chains:
   - name: "ethereum"
     network: "mainnet"
@@ -60,7 +62,7 @@ chains:
       automaticPoller: false
 
 avss:
-  - address: "0xavs1..."
+  - address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
     privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
     responseTimeout: 3000
     chainIds: [1]

@@ -3,6 +3,7 @@ package aggregatorConfig
 import (
 	"encoding/json"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -101,6 +102,8 @@ type AggregatorConfig struct {
 	// ServerConfig contains the configuration for the ExecutionManager grpc server
 	ServerConfig ServerConfig `json:"serverConfig" yaml:"serverConfig"`
 
+	L1ChainId config.ChainId `json:"l1ChainId" yaml:"l1ChainId"`
+
 	// Chains contains the list of chains that the aggregator supports
 	Chains []*Chain `json:"chains" yaml:"chains"`
 
@@ -130,6 +133,18 @@ func (arc *AggregatorConfig) Validate() error {
 			}
 		}
 	}
+
+	if arc.L1ChainId == 0 {
+		allErrors = append(allErrors, field.Required(field.NewPath("l1ChainId"), "l1ChainId is required"))
+	} else {
+		found := util.Find(arc.Chains, func(c *Chain) bool {
+			return c.ChainId == arc.L1ChainId
+		})
+		if found == nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("l1ChainId"), arc.L1ChainId, "l1ChainId must be one of the configured chains"))
+		}
+	}
+
 	if len(arc.Avss) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
 	} else {

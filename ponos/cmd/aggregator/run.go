@@ -66,8 +66,7 @@ var runCmd = &cobra.Command{
 		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
 		// load the contracts and create the store
-		// TODO: configure which L1 chain to use
-		coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(config.ChainId_EthereumHolesky)
+		coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(Config.L1ChainId)
 		if err != nil {
 			return fmt.Errorf("failed to load core contracts: %w", err)
 		}

@@ -48,6 +48,8 @@ operator:
         }
       password: ""
 
+l1ChainId: 1
+
 chains:
   - name: "ethereum"
     network: "mainnet"
