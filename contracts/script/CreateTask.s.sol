@@ -2,8 +2,10 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
-import {OperatorSet} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {ITaskMailbox, ITaskMailboxTypes} from "src/interfaces/ITaskMailbox.sol";
+
+import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+
+import {ITaskMailbox, ITaskMailboxTypes} from "../src/interfaces/ITaskMailbox.sol";
 
 contract CreateTask is Script {
     function setUp() public {}

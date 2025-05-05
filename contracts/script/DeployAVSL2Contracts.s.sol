@@ -3,11 +3,10 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {IAllocationManager} from
-    "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
-import {AVSTaskHook} from "src/avs/l2-contracts/AVSTaskHook.sol";
-import {BN254CertificateVerifier} from "src/avs/l2-contracts/BN254CertificateVerifier.sol";
+import {AVSTaskHook} from "../src/avs/l2-contracts/AVSTaskHook.sol";
+import {BN254CertificateVerifier} from "../src/avs/l2-contracts/BN254CertificateVerifier.sol";
 
 contract DeployAVSL2Contracts is Script {
     function setUp() public {}

@@ -6,12 +6,12 @@ import {Script, console} from "forge-std/Script.sol";
 import {
     OperatorSet,
     OperatorSetLib
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {IERC20} from "@eigenlayer-middleware/lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {ITaskMailbox, ITaskMailboxTypes} from "src/interfaces/ITaskMailbox.sol";
-import {IAVSTaskHook} from "src/interfaces/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "src/interfaces/IBN254CertificateVerifier.sol";
+import {ITaskMailbox, ITaskMailboxTypes} from "../src/interfaces/ITaskMailbox.sol";
+import {IAVSTaskHook} from "../src/interfaces/IAVSTaskHook.sol";
+import {IBN254CertificateVerifier} from "../src/interfaces/IBN254CertificateVerifier.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {
     function setUp() public {}

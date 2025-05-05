@@ -6,9 +6,9 @@ import {Script, console} from "forge-std/Script.sol";
 import {
     IAllocationManager,
     IAllocationManagerTypes
-} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
-import {IAVSRegistrar} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
-import {IStrategy} from "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
+} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAVSRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
+import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 
 contract SetupAVSL1 is Script {
     // Eigenlayer Core Contracts

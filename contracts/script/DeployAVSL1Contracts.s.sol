@@ -3,10 +3,9 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {IAllocationManager} from
-    "@eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
-import {TaskAVSRegistrar} from "src/avs/l1-contracts/TaskAVSRegistrar.sol";
+import {TaskAVSRegistrar} from "../src/avs/l1-contracts/TaskAVSRegistrar.sol";
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts
