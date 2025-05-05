@@ -5,7 +5,6 @@ import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces
 
 import {TaskAVSRegistrarBase} from "../../src/avs/l1-contracts/TaskAVSRegistrarBase.sol";
 
-
 contract MockTaskAVSRegistrar is TaskAVSRegistrarBase {
     constructor(address avs, IAllocationManager allocationManager) TaskAVSRegistrarBase(avs, allocationManager) {}
 }
