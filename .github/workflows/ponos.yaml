@@ -43,6 +43,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Run Forge build
+        run: |
+          forge build --sizes
+        working-directory: ./contracts
+        id: build
       - name: Run tests
         run: |
           cd ponos

@@ -34,7 +34,7 @@ services:
       - "aggregator"
       - "run"
       - "--config"
-      - "/ponos-config/aggregator.yaml"
+      - "/ponos-config/aggregator-chain.yaml"
     volumes:
       - .:/ponos-config
 networks:
