@@ -15,7 +15,7 @@ type CoreContractsData struct {
 	Contracts []*contracts.Contract `json:"contracts"`
 }
 
-func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*contracts.Contract, error) {
+func LoadCoreContractsForL1ChainFromConfig(chainId config.ChainId) (map[string]*contracts.Contract, error) {
 	var data []byte
 	var err error
 	switch chainId {
@@ -32,8 +32,16 @@ func LoadCoreContractsForL1Chain(chainId config.ChainId) (map[string]*contracts.
 		return nil, fmt.Errorf("failed to load core contracts for chainId %d: %w", chainId, err)
 	}
 
+	return loadCoreContractsFromJsonData(data)
+}
+
+func LoadCoreContractsForL1ChainFromRuntime(jsonData string) (map[string]*contracts.Contract, error) {
+	return loadCoreContractsFromJsonData([]byte(jsonData))
+}
+
+func loadCoreContractsFromJsonData(jsonData []byte) (map[string]*contracts.Contract, error) {
 	var coreContractsData *CoreContractsData
-	if err = json.Unmarshal(data, &coreContractsData); err != nil {
+	if err := json.Unmarshal(jsonData, &coreContractsData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal core contracts data: %w", err)
 	}
 

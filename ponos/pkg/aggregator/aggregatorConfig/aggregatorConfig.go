@@ -112,6 +112,9 @@ type AggregatorConfig struct {
 
 	// SimulationConfig contains the configuration for the simulation mode
 	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
+
+	// Contracts is an optional field to override the addresses and ABIs for the core contracts that are loaded
+	Contracts json.RawMessage `json:"contracts" yaml:"contracts"`
 }
 
 func (arc *AggregatorConfig) Validate() error {

@@ -11,7 +11,7 @@ func Test_CoreContracts(t *testing.T) {
 	t.Run("holesky", func(t *testing.T) {
 		t.Run("Should load core contracts for holesky", func(t *testing.T) {
 			contractAddresses := config.GetContractsMapForChain(config.ChainId_EthereumHolesky)
-			contracts, err := LoadCoreContractsForL1Chain(config.ChainId_EthereumHolesky)
+			contracts, err := LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumHolesky)
 			if err != nil {
 				t.Fatalf("Failed to load core contracts for holesky: %v", err)
 			}
@@ -20,7 +20,7 @@ func Test_CoreContracts(t *testing.T) {
 		})
 		t.Run("Should parse the allocation manager contract to an abi.Abi", func(t *testing.T) {
 			contractAddresses := config.GetContractsMapForChain(config.ChainId_EthereumHolesky)
-			contracts, err := LoadCoreContractsForL1Chain(config.ChainId_EthereumHolesky)
+			contracts, err := LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumHolesky)
 			if err != nil {
 				t.Fatalf("Failed to load core contracts for holesky: %v", err)
 			}
@@ -37,7 +37,7 @@ func Test_CoreContracts(t *testing.T) {
 	t.Run("mainnet", func(t *testing.T) {
 		t.Run("Should load core contracts for mainnet", func(t *testing.T) {
 			contractAddresses := config.GetContractsMapForChain(config.ChainId_EthereumMainnet)
-			contracts, err := LoadCoreContractsForL1Chain(config.ChainId_EthereumMainnet)
+			contracts, err := LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumMainnet)
 			if err != nil {
 				t.Fatalf("Failed to load core contracts for holesky: %v", err)
 			}
@@ -46,7 +46,7 @@ func Test_CoreContracts(t *testing.T) {
 		})
 		t.Run("Should parse the allocation manager contract to an abi.Abi", func(t *testing.T) {
 			contractAddresses := config.GetContractsMapForChain(config.ChainId_EthereumMainnet)
-			contracts, err := LoadCoreContractsForL1Chain(config.ChainId_EthereumMainnet)
+			contracts, err := LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumMainnet)
 			if err != nil {
 				t.Fatalf("Failed to load core contracts for holesky: %v", err)
 			}

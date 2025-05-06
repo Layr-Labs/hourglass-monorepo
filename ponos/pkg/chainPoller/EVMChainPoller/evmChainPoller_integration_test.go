@@ -49,7 +49,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 		t.Fatalf("Failed to read mailbox ABI json: %v", err)
 	}
 
-	coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(config.ChainId_EthereumMainnet)
+	coreContracts, err := eigenlayer.LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to load core contracts: %v", err)
 	}
