@@ -59,6 +59,7 @@ jobs:
           chmod -R 775 internal/testData/
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
+          pwd
           make ci-test
   build-container:
     runs-on: ubuntu-24.04
