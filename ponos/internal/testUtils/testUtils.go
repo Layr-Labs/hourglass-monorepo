@@ -78,6 +78,12 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("path is a directory: %s", fullPath)
 	}
 
+	contents, err := os.ReadFile(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	fmt.Printf("Contents of anvil state file: %s\n", string(contents))
+
 	args := []string{
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
