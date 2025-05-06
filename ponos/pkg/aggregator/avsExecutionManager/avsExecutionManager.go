@@ -102,6 +102,7 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	em.operatorPeers = operatorPeers
 	em.logger.Sugar().Infow("Fetched executor peers",
 		zap.Int("numPeers", len(peers)),
+		zap.Any("peers", peers),
 	)
 	return nil
 }

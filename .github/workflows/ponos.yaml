@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - "*"
-  pull_request:
-    branches:
-      - "*"
 
 jobs:
   gofmt:
@@ -56,8 +53,10 @@ jobs:
         run: |
           which anvil
           cd ponos
+          chmod -R 775 internal/testData/
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
+          pwd
           make ci-test
   build-container:
     runs-on: ubuntu-24.04

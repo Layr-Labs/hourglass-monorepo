@@ -148,4 +148,4 @@ fmtcheck:
 
 .PHONY: anvil/start
 anvil/start:
-	anvil --fork-url https://eth.llamarpc.com --fork-block-number 22396947 --load-state ./internal/testData/anvil-state.json
+	anvil --fork-url https://eth.llamarpc.com --fork-block-number 22396947 --load-state ./internal/testData/anvil-state.json --block-time 12

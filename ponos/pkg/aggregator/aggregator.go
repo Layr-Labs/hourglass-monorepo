@@ -158,8 +158,6 @@ func (a *Aggregator) initializePollers() error {
 			BlockType: ethereum.BlockType_Latest,
 		}, a.logger)
 
-		contracts := config.GetContractsMapForChain(chain.ChainId)
-
 		var poller chainPoller.IChainPoller
 		if chain.Simulation != nil && chain.Simulation.Enabled {
 			if chain.Simulation.AutomaticPoller {
@@ -188,11 +186,9 @@ func (a *Aggregator) initializePollers() error {
 			}
 		} else {
 			pCfg := &EVMChainPoller.EVMChainPollerConfig{
-				ChainId:         chain.ChainId,
-				PollingInterval: time.Duration(chain.PollIntervalSeconds) * time.Second,
-				InterestingContracts: []string{
-					contracts.TaskMailbox,
-				},
+				ChainId:              chain.ChainId,
+				PollingInterval:      time.Duration(chain.PollIntervalSeconds) * time.Second,
+				InterestingContracts: []string{},
 			}
 			if config.IsL1Chain(chain.ChainId) {
 				pCfg.EigenLayerCoreContracts = a.contractStore.ListContractAddresses()

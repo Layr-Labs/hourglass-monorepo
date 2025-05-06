@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"time"
 )
 
 func GetProjectRootPath() string {
@@ -62,14 +64,48 @@ func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
 
 func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	// exec anvil command to start the anvil node
+	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if stat.IsDir() {
+		return nil, fmt.Errorf("path is a directory: %s", fullPath)
+	}
+
 	args := []string{
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
-		"--load-state", fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot),
+		"--load-state", fullPath,
+		"-vvv",
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	return cmd, cmd.Start()
+	err = cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start anvil: %w", err)
+	}
+	fmt.Printf("Sleeping for 20 seconds\n\n")
+	time.Sleep(20 * time.Second)
+	fmt.Println("Checking if anvil is up and running...")
+
+	for i := 1; i < 10; i++ {
+		res, err := http.Post("http://localhost:8545", "application/json", nil)
+		if err == nil && res.StatusCode == 200 {
+			fmt.Println("Anvil is up and running")
+			return cmd, nil
+		}
+		fmt.Printf("Anvil not ready yet, retrying... %d\n", i)
+		time.Sleep(time.Second * time.Duration(i))
+	}
+
+	return nil, fmt.Errorf("failed to start anvil")
 }
 
 func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {
