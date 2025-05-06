@@ -68,7 +68,6 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
-	fmt.Printf("\n\nUsing anvil state file: %s\n\n", fullPath)
 
 	stat, err := os.Stat(fullPath)
 	if err != nil {
@@ -92,7 +91,6 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to start anvil: %w", err)
 	}
-	fmt.Printf("Anvil started with PID: %d\n", cmd.Process.Pid)
 	time.Sleep(10 * time.Second)
 
 	for i := 1; i < 10; i++ {
