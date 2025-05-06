@@ -148,4 +148,8 @@ fmtcheck:
 
 .PHONY: anvil/start
 anvil/start:
-	anvil --fork-url https://eth.llamarpc.com --load-state ./internal/testData/anvil-state.json --block-time 3
+	anvil \
+		--fork-url https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/ \
+		--fork-block-number 22396947 \
+		--load-state ./internal/testData/anvil-state.json \
+		--block-time 5

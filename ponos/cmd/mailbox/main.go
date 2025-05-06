@@ -1,8 +1,10 @@
+//nolint:all
 package main
 
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -19,6 +21,9 @@ func main() {
 		panic(err)
 	}
 
+	root := testUtils.GetProjectRootPath()
+	chainConfig, err := testUtils.ReadChainConfig(root)
+
 	client := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   "http://localhost:8545",
 		BlockType: ethereum.BlockType_Latest,
@@ -30,17 +35,16 @@ func main() {
 	}
 
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          privateKey,
-		AVSRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
-		TaskMailboxAddress:  mailboxContractAddress,
+		PrivateKey:          chainConfig.AppAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddress,
 	}, ethCaller, l)
 	if err != nil {
 		panic(err)
 	}
 
 	payloadJsonBytes := []byte(`{ "numberToBeSquared": 4 }`)
-
-	receipt, err := cc.PublishMessageToInbox(context.Background(), "0x70997970c51812dc3a010c7d01b50e0d17dc79c8", 1, payloadJsonBytes)
+	receipt, err := cc.PublishMessageToInbox(context.Background(), chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		panic(err)
 	}
