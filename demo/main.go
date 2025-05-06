@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/server"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"math/big"
+	"strings"
 	"time"
 )
 
@@ -22,78 +21,54 @@ func NewTaskWorker(logger *zap.Logger) *TaskWorker {
 	}
 }
 
-type TaskRequestPayload struct {
-	NumberToBeSquared json.Number `json:"numberToBeSquared"`
-}
+func parseHexBytesToBigInt(payload []byte) (*big.Int, error) {
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("payload is empty")
+	}
 
-func (trp *TaskRequestPayload) GetBigInt() (*big.Int, error) {
-	i, success := new(big.Int).SetString(trp.NumberToBeSquared.String(), 10)
+	payloadStr := strings.TrimPrefix(string(payload), "0x")
+
+	i, success := new(big.Int).SetString(payloadStr, 16)
 	if !success {
-		return nil, fmt.Errorf("failed to convert json.Number to big.Int")
+		return nil, fmt.Errorf("failed to convert hex string to big.Int")
 	}
 	return i, nil
 }
 
-type TaskResponsePayload struct {
-	Result        *big.Int
-	UnixTimestamp uint64
-}
-
-func (tw *TaskWorker) marshalPayload(t *performerV1.Task) (*TaskRequestPayload, error) {
-	if len(t.Payload) == 0 {
-		return nil, fmt.Errorf("task payload is empty")
+func parseBigIntToHex(i *big.Int) []byte {
+	if i == nil {
+		return nil
 	}
-
-	payloadBytes := t.GetPayload()
-	var payload *TaskRequestPayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal payload")
+	hexStr := i.Text(16)
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
 	}
-	return payload, nil
+	return []byte("0x" + hexStr)
 }
 
 func (tw *TaskWorker) ValidateTask(t *performerV1.Task) error {
 	tw.logger.Sugar().Infow("Validating task",
 		zap.Any("task", t),
 	)
-	payload, err := tw.marshalPayload(t)
-	if err != nil {
-		return errors.Wrap(err, "invalid task payload")
-	}
+	_, err := parseHexBytesToBigInt(t.Payload)
 
-	_, err = payload.GetBigInt()
-	if err != nil {
-		return errors.Wrap(err, "failed to get big.Int from payload")
-	}
-
-	return nil
+	return err
 }
 
 func (tw *TaskWorker) HandleTask(t *performerV1.Task) (*performerV1.TaskResult, error) {
 	tw.logger.Sugar().Infow("Handling task",
 		zap.Any("task", t),
 	)
-	payload, err := tw.marshalPayload(t)
+	i, err := parseHexBytesToBigInt(t.Payload)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal payload")
-	}
-
-	i, err := payload.GetBigInt()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get big.Int from payload")
+		return nil, err
 	}
 
 	squaredNumber := new(big.Int).Exp(i, big.NewInt(2), nil)
 
-	responsePayload := &TaskResponsePayload{
-		Result:        squaredNumber,
-		UnixTimestamp: uint64(time.Now().Unix()),
-	}
-	responseBytes, err := json.Marshal(responsePayload)
-
 	return &performerV1.TaskResult{
 		TaskId: t.TaskId,
-		Result: responseBytes,
+		Result: parseBigIntToHex(squaredNumber),
 	}, nil
 }
 

@@ -1,23 +1,19 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
 )
 
 func Test_TaskRequestPayload(t *testing.T) {
-	t.Run("Should unmarshal a correct json", func(t *testing.T) {
-		jsonStr := `{ "numberToBeSquared": 4 }`
+	t.Run("Should parse bytes as a big.Int", func(t *testing.T) {
+		b := parseBigIntToHex(new(big.Int).SetUint64(4))
 
-		var payload TaskRequestPayload
-		err := json.Unmarshal([]byte(jsonStr), &payload)
-		assert.Nil(t, err)
+		i, err := parseHexBytesToBigInt(b)
 
-		i, err := payload.GetBigInt()
 		assert.Nil(t, err)
-		assert.Equal(t, big.NewInt(4), i)
+		assert.Equal(t, new(big.Int).SetInt64(4), i)
 	})
 
 }
