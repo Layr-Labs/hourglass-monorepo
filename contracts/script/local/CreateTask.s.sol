@@ -10,7 +10,7 @@ import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMa
 contract CreateTask is Script {
     function setUp() public {}
 
-    function run(address taskMailbox, address avs) public {
+    function run(address taskMailbox, address avs) public returns (bytes32) {
         // Load the private key from the environment variable
         uint256 appPrivateKey = vm.envUint("PRIVATE_KEY_APP");
         address app = vm.addr(appPrivateKey);
@@ -34,5 +34,6 @@ contract CreateTask is Script {
         console.log("Task payload:", string(task.payload));
 
         vm.stopBroadcast();
+        return taskHash;
     }
 }
