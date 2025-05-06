@@ -8,8 +8,8 @@ import (
 )
 
 type Contract struct {
-	Address     string
-	AbiVersions []string
+	Address     string   `json:"address"`
+	AbiVersions []string `json:"abiVersions"`
 }
 
 func (c *Contract) GetCombinedAbis() (string, error) {
