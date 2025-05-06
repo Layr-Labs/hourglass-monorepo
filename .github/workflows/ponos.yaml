@@ -53,8 +53,6 @@ jobs:
         run: |
           which anvil
           cd ponos
-          echo "Generating test data"
-          ./scripts/generateTestChainState.sh
           chmod -R 775 internal/testData/
           
           echo "building dependencies"
