@@ -70,6 +70,14 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	}
 	fmt.Printf("\n\nUsing anvil state file: %s\n\n", fullPath)
 
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if stat.IsDir() {
+		return nil, fmt.Errorf("path is a directory: %s", fullPath)
+	}
+
 	args := []string{
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
