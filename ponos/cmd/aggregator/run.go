@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"slices"
@@ -66,9 +67,19 @@ var runCmd = &cobra.Command{
 		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
 		// load the contracts and create the store
-		coreContracts, err := eigenlayer.LoadCoreContractsForL1Chain(Config.L1ChainId)
-		if err != nil {
-			return fmt.Errorf("failed to load core contracts: %w", err)
+		var coreContracts []*contracts.Contract
+		if len(Config.Contracts) > 0 {
+			log.Sugar().Infow("Loading core contracts from runtime config")
+			coreContracts, err = eigenlayer.LoadContractsFromRuntime(string(Config.Contracts))
+			if err != nil {
+				return fmt.Errorf("failed to load core contracts from runtime: %w", err)
+			}
+		} else {
+			log.Sugar().Infow("Loading core contracts from embedded config")
+			coreContracts, err = eigenlayer.LoadContracts()
+			if err != nil {
+				return fmt.Errorf("failed to load core contracts: %w", err)
+			}
 		}
 
 		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, log)

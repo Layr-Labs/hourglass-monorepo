@@ -15,6 +15,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -121,6 +122,8 @@ func (a *Aggregator) Initialize() error {
 		return fmt.Errorf("failed to initialize pollers: %w", err)
 	}
 
+	loadedContracts := a.contractStore.ListContracts()
+
 	for _, avs := range a.config.AVSs {
 		aem := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
 			AvsAddress: avs.Address,
@@ -129,9 +132,17 @@ func (a *Aggregator) Initialize() error {
 			}),
 			MailboxContractAddresses: util.Reduce(avs.ChainIds, func(acc map[config.ChainId]string, chainId uint) map[config.ChainId]string {
 				cId := config.ChainId(chainId)
-				contracts := config.GetContractsMapForChain(cId)
+				chainTaskMailbox := util.Find(loadedContracts, func(c *contracts.Contract) bool {
+					return c.Name == config.ContractName_TaskMailbox
+				})
+				if chainTaskMailbox == nil {
+					a.logger.Sugar().Warnw("TaskMailbox contract not found for chain",
+						zap.Uint64("chainId", uint64(cId)),
+					)
+					return acc
+				}
 
-				acc[cId] = contracts.TaskMailbox
+				acc[cId] = chainTaskMailbox.Address
 				return acc
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,

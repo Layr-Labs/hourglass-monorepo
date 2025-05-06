@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"os"
 	"slices"
 )
 
@@ -17,7 +16,8 @@ const (
 )
 
 const (
-	MAILBOX_CONTRACT_ADDRESS_OVERRIDE = "MAILBOX_CONTRACT_ADDRESS_OVERRIDE"
+	ContractName_AllocationManager = "AllocationManager"
+	ContractName_TaskMailbox       = "TaskMailbox"
 )
 
 func IsL1Chain(chainId ChainId) bool {
@@ -50,18 +50,6 @@ var (
 		},
 	}
 )
-
-func GetMailboxContractAddressOverride() string {
-	return os.Getenv(MAILBOX_CONTRACT_ADDRESS_OVERRIDE)
-}
-
-func OverrideMailboxContractAddress(providedAddress string) string {
-	override := GetMailboxContractAddressOverride()
-	if override != "" {
-		return override
-	}
-	return providedAddress
-}
 
 func GetCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error) {
 	contracts, ok := CoreContracts[chainId]

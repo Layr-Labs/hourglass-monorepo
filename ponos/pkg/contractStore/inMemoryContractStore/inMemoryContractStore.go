@@ -3,16 +3,17 @@ package inMemoryContractStore
 import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"strings"
 )
 
 type InMemoryContractStore struct {
-	contracts map[string]*contracts.Contract
+	contracts []*contracts.Contract
 	logger    *zap.Logger
 }
 
-func NewInMemoryContractStore(contracts map[string]*contracts.Contract, logger *zap.Logger) *InMemoryContractStore {
+func NewInMemoryContractStore(contracts []*contracts.Contract, logger *zap.Logger) *InMemoryContractStore {
 	fmt.Printf("contracts: %+v\n", contracts)
 	return &InMemoryContractStore{
 		contracts: contracts,
@@ -20,11 +21,15 @@ func NewInMemoryContractStore(contracts map[string]*contracts.Contract, logger *
 	}
 }
 
+// TODO(seanmcgary): take a chain ID as an argument to increase specificity
 func (ics *InMemoryContractStore) GetContractByAddress(address string) (*contracts.Contract, error) {
 	address = strings.ToLower(address)
 
-	contract, ok := ics.contracts[address]
-	if !ok {
+	contract := util.Find(ics.contracts, func(c *contracts.Contract) bool {
+		return strings.EqualFold(c.Address, address)
+	})
+
+	if contract == nil {
 		ics.logger.Error("Contract not found", zap.String("address", address))
 		return nil, nil
 	}
@@ -32,9 +37,11 @@ func (ics *InMemoryContractStore) GetContractByAddress(address string) (*contrac
 }
 
 func (ics *InMemoryContractStore) ListContractAddresses() []string {
-	addresses := make([]string, 0, len(ics.contracts))
-	for address := range ics.contracts {
-		addresses = append(addresses, address)
-	}
-	return addresses
+	return util.Map(ics.contracts, func(c *contracts.Contract, i uint64) string {
+		return strings.ToLower(c.Address)
+	})
+}
+
+func (ics *InMemoryContractStore) ListContracts() []*contracts.Contract {
+	return ics.contracts
 }

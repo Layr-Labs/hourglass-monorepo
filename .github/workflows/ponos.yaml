@@ -54,9 +54,12 @@ jobs:
           which anvil
           cd ponos
           chmod -R 775 internal/testData/
+          
+          echo "building dependencies"
           make deps
           export PATH=$PATH:$(go env GOPATH)/bin
-          pwd
+          
+          echo "Running tests"
           make ci-test
   build-container:
     runs-on: ubuntu-24.04
