@@ -197,12 +197,10 @@ func (a *Aggregator) initializePollers() error {
 			}
 		} else {
 			pCfg := &EVMChainPoller.EVMChainPollerConfig{
-				ChainId:              chain.ChainId,
-				PollingInterval:      time.Duration(chain.PollIntervalSeconds) * time.Second,
-				InterestingContracts: []string{},
-			}
-			if config.IsL1Chain(chain.ChainId) {
-				pCfg.EigenLayerCoreContracts = a.contractStore.ListContractAddresses()
+				ChainId:                 chain.ChainId,
+				PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
+				EigenLayerCoreContracts: a.contractStore.ListContractAddresses(),
+				InterestingContracts:    []string{},
 			}
 			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
 		}

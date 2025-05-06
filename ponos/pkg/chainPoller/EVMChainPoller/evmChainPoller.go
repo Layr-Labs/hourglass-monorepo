@@ -46,6 +46,9 @@ func NewEVMChainPoller(
 	config *EVMChainPollerConfig,
 	logger *zap.Logger,
 ) *EVMChainPoller {
+	for i, contract := range config.EigenLayerCoreContracts {
+		fmt.Printf("Contract %d: %s\n", i, contract)
+	}
 	return &EVMChainPoller{
 		ethClient:       ethClient,
 		logger:          logger,
@@ -108,12 +111,12 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	}
 
 	if ecp.lastObservedBlock == nil {
-		ecp.logger.Sugar().Infow("Latest Ethereum Block not found, initializing last observed block")
+		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1")
 		ecp.lastObservedBlock = &ethereum.EthereumBlock{
 			Number: ethereum.EthereumQuantity(latestBlockNum - 1),
 		}
 	} else {
-		ecp.logger.Sugar().Infow("Latest Ethereum Block:",
+		ecp.logger.Sugar().Infow("latest on chain block",
 			zap.Uint64("blockNumber", latestBlockNum),
 			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
 		)
@@ -267,6 +270,10 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 		go func(contract string, wg *sync.WaitGroup) {
 			defer wg.Done()
 
+			ecp.logger.Sugar().Infow("Fetching logs for contract",
+				zap.String("contract", contract),
+				zap.Uint64("blockNumber", blockNumber),
+			)
 			logs, err := ecp.ethClient.GetLogs(context.Background(), contract, blockNumber, blockNumber)
 			if err != nil {
 				ecp.logger.Sugar().Errorw("Failed to fetch logs for contract",
@@ -278,7 +285,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				return
 			}
 			if len(logs) == 0 {
-				ecp.logger.Sugar().Debugw("No logs found for contract",
+				ecp.logger.Sugar().Infow("No logs found for contract",
 					zap.String("contract", contract),
 					zap.Uint64("blockNumber", blockNumber),
 				)
@@ -296,6 +303,9 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	wg.Wait()
 	close(logResultsChan)
 	close(errorsChan)
+	ecp.logger.Sugar().Infow("All logs fetched for contracts",
+		zap.Uint64("blockNumber", blockNumber),
+	)
 
 	allErrors := make([]error, 0)
 	for err := range errorsChan {
@@ -309,6 +319,10 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	for contractLogs := range logResultsChan {
 		allLogs = append(allLogs, contractLogs...)
 	}
+	ecp.logger.Sugar().Infow("All logs fetched for contracts",
+		zap.Uint64("blockNumber", blockNumber),
+		zap.Int("logCount", len(allLogs)),
+	)
 
 	return allLogs, nil
 }
