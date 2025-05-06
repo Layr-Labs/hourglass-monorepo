@@ -13,7 +13,7 @@ import (
 )
 
 type TaskSession struct {
-	task                *types.Task
+	Task                *types.Task
 	aggregatorSignature []byte
 	context             context.Context
 	contextCancel       context.CancelFunc
@@ -37,7 +37,7 @@ func NewTaskSession(
 	logger *zap.Logger,
 ) *TaskSession {
 	ts := &TaskSession{
-		task:                task,
+		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		aggregatorUrl:       aggregatorUrl,
 		aggregatorSignature: aggregatorSignature,
@@ -53,43 +53,42 @@ func NewTaskSession(
 
 func (ts *TaskSession) Process() error {
 	ts.logger.Sugar().Infow("task session started",
-		zap.String("taskId", ts.task.TaskId),
+		zap.String("taskId", ts.Task.TaskId),
 	)
 	go ts.Broadcast()
 
 	<-ts.context.Done()
 	ts.logger.Sugar().Infow("task session context done",
-		zap.String("taskId", ts.task.TaskId),
+		zap.String("taskId", ts.Task.TaskId),
 	)
 	return nil
 }
 
 func (ts *TaskSession) Broadcast() {
 	ts.logger.Sugar().Infow("task session broadcast started",
-		zap.String("taskId", ts.task.TaskId),
-		zap.Any("recipientOperators", ts.task.RecipientOperators),
+		zap.String("taskId", ts.Task.TaskId),
+		zap.Any("recipientOperators", ts.Task.RecipientOperators),
 	)
 	taskSubmission := &executorV1.TaskSubmission{
-		TaskId:            ts.task.TaskId,
-		AvsAddress:        ts.task.AVSAddress,
+		TaskId:            ts.Task.TaskId,
+		AvsAddress:        ts.Task.AVSAddress,
 		AggregatorAddress: ts.aggregatorAddress,
-		Payload:           ts.task.Payload,
+		Payload:           ts.Task.Payload,
 		AggregatorUrl:     ts.aggregatorUrl,
 		Signature:         ts.aggregatorSignature,
 	}
-	ts.logger.Sugar().Infow("broadcasting task to operators",
+	ts.logger.Sugar().Infow("broadcasting task session to operators",
 		zap.Any("taskSubmission", taskSubmission),
-		zap.Any("recipientOperators", ts.task.RecipientOperators),
 	)
 
 	var wg sync.WaitGroup
-	for _, peer := range ts.task.RecipientOperators {
+	for _, peer := range ts.Task.RecipientOperators {
 		wg.Add(1)
 
 		go func(wg *sync.WaitGroup, peer *peering.OperatorPeerInfo) {
 			defer wg.Done()
 			ts.logger.Sugar().Infow("task session broadcast to operator",
-				zap.String("taskId", ts.task.TaskId),
+				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.String("networkAddress", peer.NetworkAddress),
 			)
@@ -97,7 +96,7 @@ func (ts *TaskSession) Broadcast() {
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
 					zap.String("executorAddress", peer.OperatorAddress),
-					zap.String("taskId", ts.task.TaskId),
+					zap.String("taskId", ts.Task.TaskId),
 					zap.Error(err),
 				)
 				return
@@ -107,7 +106,7 @@ func (ts *TaskSession) Broadcast() {
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
 					zap.String("executorAddress", peer.OperatorAddress),
-					zap.String("taskId", ts.task.TaskId),
+					zap.String("taskId", ts.Task.TaskId),
 					zap.Error(err),
 				)
 				return
@@ -115,25 +114,27 @@ func (ts *TaskSession) Broadcast() {
 			if !res.Success {
 				ts.logger.Sugar().Errorw("task submission failed",
 					zap.String("executorAddress", peer.OperatorAddress),
-					zap.String("taskId", ts.task.TaskId),
+					zap.String("taskId", ts.Task.TaskId),
 					zap.String("message", res.Message),
 				)
 				return
 			}
 			ts.logger.Sugar().Debugw("Successfully submitted task to executor",
 				zap.String("executorAddress", peer.OperatorAddress),
-				zap.String("taskId", ts.task.TaskId),
+				zap.String("taskId", ts.Task.TaskId),
 			)
 		}(&wg, peer)
 	}
 	wg.Wait()
 	ts.logger.Sugar().Infow("task submission completed",
-		zap.String("taskId", ts.task.TaskId),
+		zap.String("taskId", ts.Task.TaskId),
 	)
 }
 
 func (ts *TaskSession) findOperatorByAddress(address string) *peering.OperatorPeerInfo {
-	for _, peer := range ts.task.RecipientOperators {
+	for _, peer := range ts.Task.RecipientOperators {
+		ts.logger.Sugar().Infow("find operator by address", "peer", peer)
+		ts.logger.Sugar().Infow("find operator by address address", "address", address)
 		if strings.EqualFold(peer.OperatorAddress, address) {
 			return peer
 		}
@@ -161,10 +162,20 @@ func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
 	ts.results.Store(peer, taskResult)
 	ts.resultsCount.Add(1)
 
-	if ts.resultsCount.Load() == uint32(len(ts.task.RecipientOperators)) {
+	if ts.resultsCount.Load() == uint32(len(ts.Task.RecipientOperators)) {
 		ts.resultsQueue <- ts
 		ts.logger.Sugar().Infow("Task result published to channel",
-			"taskId", ts.task.TaskId,
+			"taskId", ts.Task.TaskId,
 		)
 	}
+}
+
+func (ts *TaskSession) GetOperatorOutputsMap() map[string][]byte {
+	operatorOutputs := make(map[string][]byte)
+	ts.results.Range(func(_, value any) bool {
+		result := value.(*types.TaskResult)
+		operatorOutputs[result.OperatorAddress] = result.Output
+		return true
+	})
+	return operatorOutputs
 }

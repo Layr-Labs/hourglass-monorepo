@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 	"slices"
+	"strings"
 )
 
 const (
@@ -45,6 +46,10 @@ func (c *Chain) Validate() field.ErrorList {
 		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))
 	}
 	return allErrors
+}
+
+func (c *Chain) IsAnvilRpc() bool {
+	return strings.Contains(c.RpcURL, "127.0.0.1:8545")
 }
 
 type AggregatorAvs struct {

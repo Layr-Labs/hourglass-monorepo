@@ -105,17 +105,34 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("peering data fetcher not implemented")
 		}
 
+		if Config.SimulationConfig.SimulateExecutors {
+			c := &aggregatorConfig.AggregatorConfig{
+				Avss:             Config.Avss,
+				Chains:           Config.Chains,
+				Operator:         Config.Operator,
+				ServerConfig:     Config.ServerConfig,
+				SimulationConfig: Config.SimulationConfig,
+				L1ChainId:        Config.L1ChainId,
+			}
+			executors, err := buildSimulatedExecutors(context.Background(), c, log)
+			if err != nil {
+				return fmt.Errorf("failed to build executors: %w", err)
+			}
+			for _, executor := range executors {
+				executor.Start(context.Background())
+			}
+		}
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
 				AVSs:          Config.Avss,
 				Chains:        Config.Chains,
 				Address:       Config.Operator.Address,
+				PrivateKey:    Config.Operator.OperatorPrivateKey,
 				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
 			},
 			imContractStore,
 			tlp,
-			nil,
 			pdf,
 			sig,
 			log,
@@ -142,6 +159,7 @@ var runCmd = &cobra.Command{
 			log.Sugar().Info("Shutting down...")
 			cancel()
 		}, time.Second*5, log)
+
 		return nil
 	},
 }
@@ -157,7 +175,6 @@ func initRunCmd(cmd *cobra.Command) {
 	})
 }
 
-//nolint:unused
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
 	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)
@@ -189,7 +206,7 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 		}
 
 		aggregatorClient := aggregatorpb.NewAggregatorServiceClient(clientConn)
-		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, peer.PublicKey)
+		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, peer.OperatorAddress)
 		executorpb.RegisterExecutorServiceServer(rpc.GetGrpcServer(), exe)
 		err = rpc.Start(ctx)
 		if err != nil {

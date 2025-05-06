@@ -3,12 +3,12 @@ debug: false
 simulationConfig:
   enabled: true
   secureConnection: false
-  simulateExecutors: false
+  simulateExecutors: true
   simulatePeering:
     enabled: true
     operatorPeers:
       - networkAddress: "localhost:9090"
-        operatorAddress: "0xoperator123..."
+        operatorAddress: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
         operatorSetId: 1
         publicKey: "27ca30a9935d5c8435d4a2854cc6c376c253d6a4cb6e0026ea7a98b12789fd0b297a85d16550fe94ee0433eeac9a6a854d64e61ed82d7484b4287cb289ea962212e3a593a27a8aa7e196adc51336857c6fb30791fb70ac5bd8a522d4d486d0e3043f3e74c00a9f10bed939b07a06ff1b9bbb47794e613aa597d3e364c540bdf7"
 
@@ -19,8 +19,8 @@ serverConfig:
   aggregatorUrl: "aggregator:9000"
 
 operator:
-  address: "0xaggregator123..."
-  operatorPrivateKey: "..."
+  address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  operatorPrivateKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
   signingKeys:
     bls:
       keystore: |
@@ -52,17 +52,17 @@ l1ChainId: 1
 
 chains:
   - name: "ethereum"
-    network: "mainnet"
     chainId: 1
-    rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
+    rpcUrl: "http://127.0.0.1:8545"
+    pollIntervalSeconds: 1
+    writeIntervalSeconds: 1
     simulation:
-      enabled: true
+      enabled: false
       port: 8080
       automaticPoller: false
 
 avss:
-  - address: "0xavs1..."
-    privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+  - address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
     responseTimeout: 3000
     chainIds: [1]
     signingCurve: "bn254"
