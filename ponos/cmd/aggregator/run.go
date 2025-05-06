@@ -67,16 +67,16 @@ var runCmd = &cobra.Command{
 		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
 
 		// load the contracts and create the store
-		var coreContracts map[string]*contracts.Contract
+		var coreContracts []*contracts.Contract
 		if len(Config.Contracts) > 0 {
 			log.Sugar().Infow("Loading core contracts from runtime config")
-			coreContracts, err = eigenlayer.LoadCoreContractsForL1ChainFromRuntime(string(Config.Contracts))
+			coreContracts, err = eigenlayer.LoadContractsFromRuntime(string(Config.Contracts))
 			if err != nil {
 				return fmt.Errorf("failed to load core contracts from runtime: %w", err)
 			}
 		} else {
 			log.Sugar().Infow("Loading core contracts from embedded config")
-			coreContracts, err = eigenlayer.LoadCoreContractsForL1ChainFromConfig(Config.L1ChainId)
+			coreContracts, err = eigenlayer.LoadContracts()
 			if err != nil {
 				return fmt.Errorf("failed to load core contracts: %w", err)
 			}

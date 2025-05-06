@@ -10,13 +10,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"testing"
 	"time"
 )
@@ -40,26 +38,10 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
-	if err := os.Setenv(config.MAILBOX_CONTRACT_ADDRESS_OVERRIDE, chainConfig.MailboxContractAddress); err != nil {
-		t.Fatalf("Failed to set environment variable: %v", err)
-	}
-
-	mbJson, err := testUtils.ReadMailboxAbiJson(root)
-	if err != nil {
-		t.Fatalf("Failed to read mailbox ABI json: %v", err)
-	}
-
-	coreContracts, err := eigenlayer.LoadCoreContractsForL1ChainFromConfig(config.ChainId_EthereumMainnet)
+	coreContracts, err := eigenlayer.LoadContracts()
 	if err != nil {
 		t.Fatalf("Failed to load core contracts: %v", err)
 	}
-
-	// manually inject the mailbox contract
-	mailboxContract := &contracts.Contract{
-		Address:     chainConfig.MailboxContractAddress,
-		AbiVersions: []string{string(mbJson)},
-	}
-	coreContracts[chainConfig.MailboxContractAddress] = mailboxContract
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
 

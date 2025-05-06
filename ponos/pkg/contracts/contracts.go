@@ -2,14 +2,17 @@ package contracts
 
 import (
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"regexp"
 	"strings"
 )
 
 type Contract struct {
-	Address     string   `json:"address"`
-	AbiVersions []string `json:"abiVersions"`
+	Name        string         `json:"name"`
+	Address     string         `json:"address"`
+	AbiVersions []string       `json:"abiVersions"`
+	ChainId     config.ChainId `json:"chainId"`
 }
 
 func (c *Contract) GetCombinedAbis() (string, error) {

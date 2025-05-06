@@ -4,7 +4,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 )
 
@@ -15,40 +14,25 @@ type CoreContractsData struct {
 	Contracts []*contracts.Contract `json:"contracts"`
 }
 
-func LoadCoreContractsForL1ChainFromConfig(chainId config.ChainId) (map[string]*contracts.Contract, error) {
-	var data []byte
-	var err error
-	switch chainId {
-	case config.ChainId_EthereumHolesky:
-		data, err = CoreContracts.ReadFile("coreContracts/holesky.json")
-	case config.ChainId_EthereumHoodi:
-		return nil, fmt.Errorf("chainId %d not supported", chainId)
-
-	case config.ChainId_EthereumMainnet:
-		data, err = CoreContracts.ReadFile("coreContracts/mainnet.json")
-	}
+func LoadContracts() ([]*contracts.Contract, error) {
+	data, err := CoreContracts.ReadFile("coreContracts/contracts.json")
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to load core contracts for chainId %d: %w", chainId, err)
+		return nil, fmt.Errorf("failed to load core contracts: %w", err)
 	}
 
 	return loadCoreContractsFromJsonData(data)
 }
 
-func LoadCoreContractsForL1ChainFromRuntime(jsonData string) (map[string]*contracts.Contract, error) {
+func LoadContractsFromRuntime(jsonData string) ([]*contracts.Contract, error) {
 	return loadCoreContractsFromJsonData([]byte(jsonData))
 }
 
-func loadCoreContractsFromJsonData(jsonData []byte) (map[string]*contracts.Contract, error) {
+func loadCoreContractsFromJsonData(jsonData []byte) ([]*contracts.Contract, error) {
 	var coreContractsData *CoreContractsData
 	if err := json.Unmarshal(jsonData, &coreContractsData); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal core contracts data: %w", err)
 	}
 
-	mappedContracts := make(map[string]*contracts.Contract)
-	for _, contractData := range coreContractsData.Contracts {
-		mappedContracts[contractData.Address] = contractData
-	}
-
-	return mappedContracts, nil
+	return coreContractsData.Contracts, nil
 }

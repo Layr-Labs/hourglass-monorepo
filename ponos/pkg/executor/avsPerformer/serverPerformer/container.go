@@ -45,7 +45,7 @@ func (aps *AvsPerformerServer) waitForRunning(
 		}
 
 		// Not ready yet, sleep and retry
-		time.Sleep(100 * time.Millisecond * time.Duration(attempts+1))
+		time.Sleep(1 * time.Second * time.Duration(attempts+1))
 	}
 	return false, fmt.Errorf("container %s is not running after 10 attempts", containerId)
 }
