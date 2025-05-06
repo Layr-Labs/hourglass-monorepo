@@ -14,6 +14,3 @@ sudo mv /tmp/buf/bin/* $BIN
 
 rm -rf /tmp/buf
 
-# install foundry to get anvil
-curl -L https://foundry.paradigm.xyz | bash
-

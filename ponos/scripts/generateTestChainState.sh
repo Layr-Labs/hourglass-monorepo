@@ -106,15 +106,20 @@ forge script script/SetupAVSTaskMailboxConfig.s.sol --rpc-url $RPC_URL --broadca
 # -----------------------------------------------------------------------------
 # Create test task
 # -----------------------------------------------------------------------------
-forge script script/CreateTask.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddress $avsAccountAddress
+# forge script script/CreateTask.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddress $avsAccountAddress
 
 kill $anvilPid
 sleep 3
 
 cd ../ponos
 
+rm -rf ./internal/testData/anvil*.json
+
 cp -R ./anvil-final.json internal/testData/anvil-state.json
 cp -R ./anvil-config-final.json internal/testData/anvil-config.json
+
+# make the files read-only since anvil likes to overwrite things
+chmod 444 ./anvil-config-final.json internal/testData/anvil*
 
 # create a heredoc json file and dump it to internal/testData/chain-config.json
 cat <<EOF > internal/testData/chain-config.json

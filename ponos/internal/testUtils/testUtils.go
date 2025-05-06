@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"time"
 )
 
 func GetProjectRootPath() string {
@@ -68,8 +70,26 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		"--load-state", fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot),
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	return cmd, cmd.Start()
+	err := cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start anvil: %w", err)
+	}
+	fmt.Printf("Anvil started with PID: %d\n", cmd.Process.Pid)
+
+	for i := 1; i < 10; i++ {
+		res, err := http.Post("http://localhost:8545", "application/json", nil)
+		if err == nil && res.StatusCode == 200 {
+			fmt.Println("Anvil is up and running")
+			return cmd, nil
+		}
+		fmt.Printf("Anvil not ready yet, retrying... %d\n", i)
+		time.Sleep(time.Second * time.Duration(i))
+	}
+
+	return nil, fmt.Errorf("failed to start anvil")
 }
 
 func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {
