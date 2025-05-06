@@ -77,8 +77,9 @@ func (ts *TaskSession) Broadcast() {
 		AggregatorUrl:     ts.aggregatorUrl,
 		Signature:         ts.aggregatorSignature,
 	}
-	ts.logger.Sugar().Infow("task session broadcast to operators",
+	ts.logger.Sugar().Infow("broadcasting task to operators",
 		zap.Any("taskSubmission", taskSubmission),
+		zap.Any("recipientOperators", ts.task.RecipientOperators),
 	)
 
 	var wg sync.WaitGroup

@@ -64,16 +64,22 @@ func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
 
 func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	// exec anvil command to start the anvil node
+	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	fmt.Printf("\n\nUsing anvil state file: %s\n\n", fullPath)
+
 	args := []string{
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
-		"--load-state", fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot),
+		"--load-state", fullPath,
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start anvil: %w", err)
 	}

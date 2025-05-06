@@ -83,6 +83,7 @@ var runCmd = &cobra.Command{
 			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 				OperatorPeers: util.Map(Config.SimulationConfig.SimulatePeering.OperatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
 					return &peering.OperatorPeerInfo{
+						NetworkAddress:  p.NetworkAddress,
 						OperatorAddress: p.OperatorAddress,
 						PublicKey:       p.PublicKey,
 						OperatorSetIds:  []uint32{p.OperatorSetId},
