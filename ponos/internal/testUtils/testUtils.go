@@ -81,6 +81,7 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
 		"--load-state", fullPath,
+		"--block-time", "5",
 		"-vvv",
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
