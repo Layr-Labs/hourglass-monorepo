@@ -78,7 +78,7 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	}
 
 	args := []string{
-		"--fork-url", "https://eth.llamarpc.com",
+		"--fork-url", "https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/",
 		"--fork-block-number", "22396947",
 		"--load-state", fullPath,
 		"--block-time", "2",
