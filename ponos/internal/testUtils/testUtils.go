@@ -81,7 +81,7 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		"--fork-url", "https://eth.llamarpc.com",
 		"--fork-block-number", "22396947",
 		"--load-state", fullPath,
-		"--block-time", "5",
+		"--block-time", "2",
 		"-vvv",
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
@@ -92,9 +92,6 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to start anvil: %w", err)
 	}
-	fmt.Printf("Sleeping for 20 seconds\n\n")
-	time.Sleep(20 * time.Second)
-	fmt.Println("Checking if anvil is up and running...")
 
 	for i := 1; i < 10; i++ {
 		res, err := http.Post("http://localhost:8545", "application/json", nil)

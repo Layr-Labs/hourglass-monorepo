@@ -15,12 +15,13 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 	"time"
 )
 
 const (
-	RPCUrl = "http://localhost:8545"
+	RPCUrl = "http://127.0.0.1:8545"
 )
 
 func Test_EVMChainPollerIntegration(t *testing.T) {
@@ -73,6 +74,15 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
+
+	if os.Getenv("CI") == "" {
+		fmt.Printf("Sleeping for 10 seconds\n\n")
+		time.Sleep(10 * time.Second)
+	} else {
+		fmt.Printf("Sleeping for 30 seconds\n\n")
+		time.Sleep(30 * time.Second)
+	}
+	fmt.Println("Checking if anvil is up and running...")
 
 	// goes after anvil since it has to get the chain ID
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
