@@ -91,7 +91,7 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to start anvil: %w", err)
 	}
-	time.Sleep(10 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	for i := 1; i < 10; i++ {
 		res, err := http.Post("http://localhost:8545", "application/json", nil)

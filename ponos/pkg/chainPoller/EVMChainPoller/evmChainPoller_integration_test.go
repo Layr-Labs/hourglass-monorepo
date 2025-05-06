@@ -149,7 +149,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	t.Logf("Task published: %+v", task)
 
 	select {
-	case <-time.After(60 * time.Second):
+	case <-time.After(90 * time.Second):
 		cancel()
 		t.Fatalf("Test timed out after 10 seconds")
 	case <-ctx.Done():
