@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ethereum mainnet
-FORK_RPC_URL=https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/
+FORK_RPC_URL=https://eth.llamarpc.com
 
 # launc h anvil to generate accounts and dump them to a file
 anvil \
@@ -119,7 +119,12 @@ cp -R ./anvil-final.json internal/testData/anvil-state.json
 cp -R ./anvil-config-final.json internal/testData/anvil-config.json
 
 # make the files read-only since anvil likes to overwrite things
-chmod 444 ./anvil-config-final.json internal/testData/anvil*
+chmod 444 internal/testData/anvil*
+
+rm ./anvil-final.json
+rm ./anvil-config-final.json
+rm ./anvil.json
+rm ./anvil-config.json
 
 # create a heredoc json file and dump it to internal/testData/chain-config.json
 cat <<EOF > internal/testData/chain-config.json
