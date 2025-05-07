@@ -128,10 +128,6 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 
 func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.TaskSession) error {
 	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
-	cc.logger.Sugar().Infow("config private key here", "pk", cc.config.PrivateKey)
-	cc.logger.Sugar().Infow("config mailbox here", "pk", cc.config.TaskMailboxAddress)
-	cc.logger.Sugar().Infow("private key here", "pk", privateKey)
-	cc.logger.Sugar().Infow("public key here", "pk", privateKey.Public())
 	if err != nil {
 		return fmt.Errorf("failed to parse private key: %w", err)
 	}

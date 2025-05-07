@@ -209,7 +209,6 @@ func (a *Aggregator) initializePollers() error {
 		}
 		// TODO: (brandon c) generalize this once anvil is driven through contract configuration.
 		if chain.ChainId == config.ChainId_EthereumMainnet && chain.IsAnvilRpc() {
-			a.logger.Sugar().Infow("EVM chain poller enabled", "pk", a.config.PrivateKey)
 			contractCallerConfig := &caller.ContractCallerConfig{
 				PrivateKey:          a.config.PrivateKey,
 				AVSRegistrarAddress: config.AVSRegistrarSimulationAddress,
