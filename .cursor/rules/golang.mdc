@@ -5,6 +5,8 @@ alwaysApply: false
 ---
 # Go Cursor Rules
 
+All go code is located in the `./ponos` directory.
+
 ## Code Organization
 
 1. **Package Structure**
