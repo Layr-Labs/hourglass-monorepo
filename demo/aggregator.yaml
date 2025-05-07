@@ -48,12 +48,12 @@ operator:
         }
       password: ""
 
-l1ChainId: 1
+l1ChainId: 31337
 
 chains:
   - name: "ethereum"
     network: "mainnet"
-    chainId: 1
+    chainId: 31337
     rpcUrl: "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID"
     simulation:
       enabled: true
@@ -64,5 +64,5 @@ avss:
   - address: "0xavs1..."
     privateKey: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
     responseTimeout: 3000
-    chainIds: [1]
+    chainIds: [31337]
     signingCurve: "bn254"

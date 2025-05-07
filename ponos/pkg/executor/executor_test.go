@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/simulatedAggregator"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -44,6 +45,17 @@ func signTaskPayload(payload []byte) ([]byte, error) {
 
 	sig := inMemorySigner.NewInMemorySigner(pk)
 	return sig.SignMessage(payload)
+}
+
+func bigIntToHex(i *big.Int) []byte {
+	if i == nil {
+		return nil
+	}
+	hexStr := i.Text(16)
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
+	}
+	return []byte("0x" + hexStr)
 }
 
 func Test_Executor(t *testing.T) {
@@ -177,9 +189,9 @@ func Test_Executor(t *testing.T) {
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 
-	payload := []byte(`{"numberToBeSquared": 4}`)
+	payloadJsonBytes := bigIntToHex(new(big.Int).SetUint64(4))
 
-	payloadSig, err := signTaskPayload(payload)
+	payloadSig, err := signTaskPayload(payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
@@ -188,7 +200,7 @@ func Test_Executor(t *testing.T) {
 		TaskId:            "0x1234taskId",
 		AggregatorAddress: aggregatorOperatorAddr,
 		AvsAddress:        simAggConfig.Avss[0].Address,
-		Payload:           payload,
+		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
 		AggregatorUrl:     fmt.Sprintf("localhost:%d", simAggPort),
 	})
@@ -261,7 +273,7 @@ avsPerformers:
 chains:
   - name: ethereum
     network: mainnet
-    chainId: 1
+    chainId: 31337
     rpcUrl: https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID
 operator:
   signingKeys:
@@ -297,7 +309,7 @@ avss:
     privateSigningKey: "some private signing key"
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
-    chainIds: [1]
+    chainIds: [31337]
 `
 	aggregatorKeystore = `{
 		  "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",

@@ -8,6 +8,7 @@ anvil \
     --fork-url $FORK_RPC_URL \
     --dump-state ./anvil.json \
     --config-out ./anvil-config.json \
+    --chain-id 31337 \
     --fork-block-number 22396947 &
 
 anvilPid=$!
@@ -27,6 +28,7 @@ anvil \
     --fork-url $FORK_RPC_URL \
     --dump-state ./anvil-final.json \
     --config-out ./anvil-config-final.json \
+    --chain-id 31337 \
     --fork-block-number 22396947 &
 anvilPid=$!
 
