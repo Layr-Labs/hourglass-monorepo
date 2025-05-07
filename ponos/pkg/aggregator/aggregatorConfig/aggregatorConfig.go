@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 	"slices"
+	"strings"
 )
 
 const (
@@ -45,6 +46,10 @@ func (c *Chain) Validate() field.ErrorList {
 		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))
 	}
 	return allErrors
+}
+
+func (c *Chain) IsAnvilRpc() bool {
+	return strings.Contains(c.RpcURL, "127.0.0.1:8545")
 }
 
 type AggregatorAvs struct {
@@ -85,6 +90,9 @@ type SimulationConfig struct {
 
 	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
+
+	// WriteDelaySeconds is used to slow the aggregator's submission to meet TaskMailbox validation requirements.
+	WriteDelaySeconds int64 `json:"writeDelaySeconds" yaml:"writeDelaySeconds"`
 }
 
 type ServerConfig struct {

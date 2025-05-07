@@ -41,6 +41,7 @@ func (s *SimulatedExecutorServer) SubmitTask(ctx context.Context, req *executorp
 	result := &aggregatorpb.TaskResult{
 		TaskId:          req.TaskId,
 		OperatorAddress: s.operatorAddress,
+		AvsAddress:      req.AvsAddress,
 		Output:          []byte("simulatedOutput"),
 		Signature:       []byte("simulatedSig"),
 	}

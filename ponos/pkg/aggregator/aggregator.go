@@ -14,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -28,10 +29,12 @@ import (
 )
 
 type AggregatorConfig struct {
-	Address       string
-	AggregatorUrl string
-	AVSs          []*aggregatorConfig.AggregatorAvs
-	Chains        []*aggregatorConfig.Chain
+	Address           string
+	AggregatorUrl     string
+	PrivateKey        string
+	WriteDelaySeconds time.Duration
+	AVSs              []*aggregatorConfig.AggregatorAvs
+	Chains            []*aggregatorConfig.Chain
 }
 
 type Aggregator struct {
@@ -73,7 +76,6 @@ func NewAggregatorWithRpcServer(
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
-	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signer signer.ISigner,
 	logger *zap.Logger,
@@ -85,7 +87,7 @@ func NewAggregatorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %w", err)
 	}
 
-	return NewAggregator(rpc, cfg, contractStore, tlp, chainContractCallers, peeringDataFetcher, signer, logger), nil
+	return NewAggregator(rpc, cfg, contractStore, tlp, peeringDataFetcher, signer, logger), nil
 }
 
 func NewAggregator(
@@ -93,7 +95,6 @@ func NewAggregator(
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
-	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signer signer.ISigner,
 	logger *zap.Logger,
@@ -103,10 +104,10 @@ func NewAggregator(
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
 		config:               cfg,
-		chainContractCallers: chainContractCallers,
 		logger:               logger,
 		signer:               signer,
 		peeringDataFetcher:   peeringDataFetcher,
+		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
@@ -147,6 +148,7 @@ func (a *Aggregator) Initialize() error {
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
 			AggregatorUrl:     a.config.AggregatorUrl,
+			WriteDelaySeconds: a.config.WriteDelaySeconds,
 		}, a.chainContractCallers, a.signer, a.peeringDataFetcher, a.logger)
 
 		a.avsExecutionManagers[avs.Address] = aem
@@ -170,6 +172,7 @@ func (a *Aggregator) initializePollers() error {
 		}, a.logger)
 
 		var poller chainPoller.IChainPoller
+		var contractCaller contractCaller.IContractCaller
 		if chain.Simulation != nil && chain.Simulation.Enabled {
 			if chain.Simulation.AutomaticPoller {
 				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
@@ -204,7 +207,27 @@ func (a *Aggregator) initializePollers() error {
 			}
 			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
 		}
+		// TODO: (brandon c) generalize this once anvil is driven through contract configuration.
+		if chain.ChainId == config.ChainId_EthereumMainnet && chain.IsAnvilRpc() {
+			contractCallerConfig := &caller.ContractCallerConfig{
+				PrivateKey:          a.config.PrivateKey,
+				AVSRegistrarAddress: config.AVSRegistrarSimulationAddress,
+				TaskMailboxAddress:  config.EthereumSimulationContracts.TaskMailbox,
+			}
+			ethereumContractCaller, err := ec.GetEthereumContractCaller()
+			if err != nil {
+				a.logger.Sugar().Warnw("failed to get ethereum contract caller", "error", err)
+				return err
+			}
+			cc, err := caller.NewContractCaller(contractCallerConfig, ethereumContractCaller, a.logger)
+			if err != nil {
+				a.logger.Sugar().Errorw("failed to create contract caller", "error", err)
+				return fmt.Errorf("failed to create contract caller: %w", err)
+			}
+			contractCaller = cc
+		}
 
+		a.chainContractCallers[chain.ChainId] = contractCaller
 		a.chainPollers[chain.ChainId] = poller
 	}
 	return nil

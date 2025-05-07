@@ -20,6 +20,15 @@ const (
 	ContractName_TaskMailbox       = "TaskMailbox"
 )
 
+const (
+	AVSRegistrarSimulationAddress = "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+)
+
+var EthereumSimulationContracts = CoreContractAddresses{
+	AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+	TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+}
+
 func IsL1Chain(chainId ChainId) bool {
 	return slices.Contains([]ChainId{
 		ChainId_EthereumMainnet,

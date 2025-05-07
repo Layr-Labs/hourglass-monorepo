@@ -1,26 +1,30 @@
 package caller
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
-	config2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 	"math/big"
+	"slices"
 	"strings"
 )
 
@@ -54,20 +58,20 @@ func NewContractCallerFromEthereumClient(
 }
 
 func NewContractCaller(
-	config *ContractCallerConfig,
+	cfg *ContractCallerConfig,
 	ethclient *ethclient.Client,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
-	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(config.AVSRegistrarAddress), ethclient)
+	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
 	}
 
-	taskMailboxCaller, err := ITaskMailbox.NewITaskMailboxCaller(common.HexToAddress(config.TaskMailboxAddress), ethclient)
+	taskMailboxCaller, err := ITaskMailbox.NewITaskMailboxCaller(common.HexToAddress(cfg.TaskMailboxAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TaskMailbox caller: %w", err)
 	}
-	taskMailboxTransactor, err := ITaskMailbox.NewITaskMailboxTransactor(common.HexToAddress(config.TaskMailboxAddress), ethclient)
+	taskMailboxTransactor, err := ITaskMailbox.NewITaskMailboxTransactor(common.HexToAddress(cfg.TaskMailboxAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TaskMailbox transactor: %w", err)
 	}
@@ -77,7 +81,7 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
-	coreContracts, err := config2.GetCoreContractsForChainId(config2.ChainId(chainId.Uint64()))
+	coreContracts, err := config.GetCoreContractsForChainId(config.ChainId(chainId.Uint64()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get core contracts: %w", err)
 	}
@@ -93,7 +97,7 @@ func NewContractCaller(
 		taskMailboxTransactor:   taskMailboxTransactor,
 		allocationManagerCaller: allocationManagerCaller,
 		ethclient:               ethclient,
-		config:                  config,
+		config:                  cfg,
 		logger:                  logger,
 	}, nil
 }
@@ -122,7 +126,7 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	return opts, nil
 }
 
-func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, task *types.TaskResult) error {
+func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.TaskSession) error {
 	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse private key: %w", err)
@@ -132,27 +136,86 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, task *types.Task
 	if err != nil {
 		return fmt.Errorf("failed to build transaction options: %w", err)
 	}
-
+	taskIdBytes, err := hexutil.Decode(ts.Task.TaskId)
+	if err != nil {
+		return fmt.Errorf("invalid taskId hex: %w", err)
+	}
+	if len(taskIdBytes) != 32 {
+		return fmt.Errorf("taskId must be 32 bytes, got %d", len(taskIdBytes))
+	}
 	var taskId [32]byte
-	copy(taskId[:], task.TaskId)
+	copy(taskId[:], taskIdBytes)
+	cc.logger.Sugar().Infow("submitting task result", "taskId", taskId)
 
-	// TODO(seanmcgary): fill this in with the right info
-	cert := ITaskMailbox.IBN254CertificateVerifierBN254Certificate{}
+	cert := ITaskMailbox.IBN254CertificateVerifierBN254Certificate{
+		ReferenceTimestamp: uint32(ts.Task.BlockNumber),
+		MessageHash:        [32]byte{},
+		Sig: ITaskMailbox.BN254G1Point{
+			X: big.NewInt(0),
+			Y: big.NewInt(0),
+		},
+		Apk: ITaskMailbox.BN254G2Point{
+			X: [2]*big.Int{big.NewInt(0), big.NewInt(0)},
+			Y: [2]*big.Int{big.NewInt(0), big.NewInt(0)},
+		},
+		NonsignerIndices:   []uint32{},
+		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierBN254OperatorInfoWitness{},
+	}
 
-	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, task.Output)
+	operatorMap := ts.GetOperatorOutputsMap()
+	aggregated, err := encodeOperatorOutputMap(operatorMap)
+	if err != nil {
+		return fmt.Errorf("failed to encode operator-output map: %w", err)
+	}
+
+	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, aggregated)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskResult")
+	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
 	if err != nil {
 		return fmt.Errorf("failed to send transaction: %w", err)
 	}
-	cc.logger.Sugar().Infow("Successfully submitted task result",
-		zap.String("taskId", task.TaskId),
+
+	cc.logger.Sugar().Infow("Successfully submitted task session result",
+		zap.String("taskId", ts.Task.TaskId),
 		zap.String("transactionHash", receipt.TxHash.Hex()),
 	)
 	return nil
+}
+
+func encodeOperatorOutputMap(m map[string][]byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	for _, op := range keys {
+		output := m[op]
+
+		opBytes := []byte(op)
+		opLen := uint32(len(opBytes))
+		outLen := uint32(len(output))
+
+		if err := binary.Write(&buf, binary.BigEndian, opLen); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(opBytes); err != nil {
+			return nil, err
+		}
+		if err := binary.Write(&buf, binary.BigEndian, outLen); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(output); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (cc *ContractCaller) GetOperatorSets(avsAddress string) ([]uint32, error) {
@@ -184,7 +247,10 @@ func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId
 	return members, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error) {
+func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
+	avsAddress string,
+	operatorSetId uint32,
+) ([]*peering.OperatorPeerInfo, error) {
 	members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
 	if err != nil {
 		return nil, err

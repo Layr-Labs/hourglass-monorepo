@@ -29,6 +29,7 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	AggregatorUrl            string
+	WriteDelaySeconds        time.Duration
 }
 
 type operatorSetRegistrationData struct {
@@ -127,10 +128,24 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 				)
 			}
 		case result := <-em.resultsQueue:
-			// TODO: post result to the chain
 			em.logger.Sugar().Infow("Received task result",
 				zap.Any("taskSession", result),
 			)
+			em.logger.Sugar().Infow("Received task result", "chain", result.Task.ChainId)
+			if chainCaller, ok := em.chainContractCallers[result.Task.ChainId]; ok {
+				em.logger.Sugar().Infow("Calling chain contract", "chain", result.Task.ChainId)
+				// TODO: (brandon c) remove this and handle case of submission to same block task was created.
+				time.Sleep(em.config.WriteDelaySeconds)
+				err := chainCaller.SubmitTaskResult(ctx, result)
+				if err != nil {
+					// TODO: emit metric
+					em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
+				}
+				continue
+			}
+			// TODO: emit metric
+			em.logger.Sugar().Errorw("Failed to find contract caller for task", "taskId", result.Task.TaskId)
+			return fmt.Errorf("failed to find contract caller for task")
 		case <-ctx.Done():
 			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
 			return ctx.Err()

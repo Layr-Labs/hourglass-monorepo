@@ -3,7 +3,7 @@ package contractCaller
 import (
 	"context"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"math/big"
 )
 
@@ -25,11 +25,11 @@ type ExecutorOperatorSetTaskConfig struct {
 
 type IContractCaller interface {
 	// TODO: task will need a certificate
-	SubmitTaskResult(ctx context.Context, task *types.TaskResult) error
+	SubmitTaskResult(ctx context.Context, task *taskSession.TaskSession) error
 
-	GetAVSConfig(ctx context.Context, avsAddress string) (*AVSConfig, error)
+	GetAVSConfig(avsAddress string) (*AVSConfig, error)
 
-	GetTaskConfigForExecutorOperatorSet(ctx context.Context, avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
+	GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
 
 	GetOperatorSets(avsAddress string) ([]uint32, error)
 
@@ -39,5 +39,5 @@ type IContractCaller interface {
 
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
 
-	PublishMessageToInbox(ctx context.Context) (interface{}, error)
+	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error)
 }
