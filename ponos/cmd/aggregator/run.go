@@ -120,7 +120,10 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("failed to build executors: %w", err)
 			}
 			for _, executor := range executors {
-				executor.Start(context.Background())
+				err := executor.Start(context.Background())
+				if err != nil {
+					return err
+				}
 			}
 		}
 		agg, err := aggregator.NewAggregatorWithRpcServer(
