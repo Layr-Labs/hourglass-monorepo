@@ -123,6 +123,12 @@ func (a *Aggregator) Initialize() error {
 		return fmt.Errorf("failed to initialize pollers: %w", err)
 	}
 
+	callers, err := a.initializeContractCallers()
+	if err != nil {
+		return fmt.Errorf("failed to initialize contract callers: %w", err)
+	}
+	a.chainContractCallers = callers
+
 	loadedContracts := a.contractStore.ListContracts()
 
 	for _, avs := range a.config.AVSs {
@@ -149,7 +155,12 @@ func (a *Aggregator) Initialize() error {
 			AggregatorAddress: a.config.Address,
 			AggregatorUrl:     a.config.AggregatorUrl,
 			WriteDelaySeconds: a.config.WriteDelaySeconds,
-		}, a.chainContractCallers, a.signer, a.peeringDataFetcher, a.logger)
+		},
+			a.chainContractCallers,
+			a.signer,
+			a.peeringDataFetcher,
+			a.logger,
+		)
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}
@@ -172,7 +183,6 @@ func (a *Aggregator) initializePollers() error {
 		}, a.logger)
 
 		var poller chainPoller.IChainPoller
-		var contractCaller contractCaller.IContractCaller
 		if chain.Simulation != nil && chain.Simulation.Enabled {
 			if chain.Simulation.AutomaticPoller {
 				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
@@ -207,30 +217,55 @@ func (a *Aggregator) initializePollers() error {
 			}
 			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
 		}
-		// TODO: (brandon c) generalize this once anvil is driven through contract configuration.
-		if chain.ChainId == config.ChainId_EthereumMainnet && chain.IsAnvilRpc() {
-			contractCallerConfig := &caller.ContractCallerConfig{
-				PrivateKey:          a.config.PrivateKey,
-				AVSRegistrarAddress: config.AVSRegistrarSimulationAddress,
-				TaskMailboxAddress:  config.EthereumSimulationContracts.TaskMailbox,
-			}
-			ethereumContractCaller, err := ec.GetEthereumContractCaller()
-			if err != nil {
-				a.logger.Sugar().Warnw("failed to get ethereum contract caller", "error", err)
-				return err
-			}
-			cc, err := caller.NewContractCaller(contractCallerConfig, ethereumContractCaller, a.logger)
-			if err != nil {
-				a.logger.Sugar().Errorw("failed to create contract caller", "error", err)
-				return fmt.Errorf("failed to create contract caller: %w", err)
-			}
-			contractCaller = cc
-		}
 
-		a.chainContractCallers[chain.ChainId] = contractCaller
 		a.chainPollers[chain.ChainId] = poller
 	}
 	return nil
+}
+
+func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
+	a.logger.Sugar().Infow("Initializing contract callers...")
+	contractCallers := make(map[config.ChainId]contractCaller.IContractCaller)
+	for _, chain := range a.config.Chains {
+		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+			BaseUrl:   chain.RpcURL,
+			BlockType: ethereum.BlockType_Latest,
+		}, a.logger)
+
+		var mailboxContractAddress string
+		if chain.Simulation != nil && chain.Simulation.Enabled {
+			mailboxContractAddress = config.EthereumSimulationContracts.TaskMailbox
+		} else {
+			mailboxContract := util.Find(a.contractStore.ListContracts(), func(c *contracts.Contract) bool {
+				return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
+			})
+			if mailboxContract == nil {
+				a.logger.Sugar().Errorw("Mailbox contract not found",
+					zap.Uint64("chainId", uint64(chain.ChainId)),
+				)
+				return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
+			}
+			mailboxContractAddress = mailboxContract.Address
+		}
+
+		ethereumContractCaller, err := ec.GetEthereumContractCaller()
+		if err != nil {
+			a.logger.Sugar().Errorw("failed to get ethereum contract caller", "error", err)
+			return nil, err
+		}
+
+		cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+			PrivateKey:          a.config.PrivateKey,
+			AVSRegistrarAddress: config.AVSRegistrarSimulationAddress, // TODO: this address should be dynamically discovered at some point
+			TaskMailboxAddress:  mailboxContractAddress,
+		}, ethereumContractCaller, a.logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create contract caller: %w", err)
+		}
+
+		contractCallers[chain.ChainId] = cc
+	}
+	return contractCallers, nil
 }
 
 // Start starts the aggregator and its components
