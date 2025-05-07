@@ -162,13 +162,19 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierBN254OperatorInfoWitness{},
 	}
 
-	operatorMap := ts.GetOperatorOutputsMap()
-	aggregated, err := encodeOperatorOutputMap(operatorMap)
-	if err != nil {
-		return fmt.Errorf("failed to encode operator-output map: %w", err)
+	// operatorMap := ts.GetOperatorOutputsMap()
+	// aggregated, err := encodeOperatorOutputMap(operatorMap)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to encode operator-output map: %w", err)
+	// }
+
+	payload := []byte{}
+	allResults := ts.GetTaskResults()
+	if len(allResults) > 0 {
+		payload = allResults[0].Output
 	}
 
-	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, aggregated)
+	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, payload)
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -185,6 +191,7 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.
 	return nil
 }
 
+//nolint:unused
 func encodeOperatorOutputMap(m map[string][]byte) ([]byte, error) {
 	var buf bytes.Buffer
 

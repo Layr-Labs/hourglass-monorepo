@@ -179,3 +179,13 @@ func (ts *TaskSession) GetOperatorOutputsMap() map[string][]byte {
 	})
 	return operatorOutputs
 }
+
+func (ts *TaskSession) GetTaskResults() []*types.TaskResult {
+	results := make([]*types.TaskResult, 0)
+	ts.results.Range(func(_, value any) bool {
+		result := value.(*types.TaskResult)
+		results = append(results, result)
+		return true
+	})
+	return results
+}
