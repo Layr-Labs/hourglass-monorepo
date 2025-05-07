@@ -19,6 +19,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
@@ -139,9 +140,16 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.
 	if err != nil {
 		return fmt.Errorf("failed to build transaction options: %w", err)
 	}
-
+	taskIdBytes, err := hexutil.Decode(ts.Task.TaskId)
+	if err != nil {
+		return fmt.Errorf("invalid taskId hex: %w", err)
+	}
+	if len(taskIdBytes) != 32 {
+		return fmt.Errorf("taskId must be 32 bytes, got %d", len(taskIdBytes))
+	}
 	var taskId [32]byte
-	copy(taskId[:], ts.Task.TaskId)
+	copy(taskId[:], taskIdBytes)
+	cc.logger.Sugar().Infow("submitting task result", "taskId", taskId)
 
 	cert := ITaskMailbox.IBN254CertificateVerifierBN254Certificate{
 		ReferenceTimestamp: uint32(ts.Task.BlockNumber),

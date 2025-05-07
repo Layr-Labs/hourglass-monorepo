@@ -90,6 +90,9 @@ type SimulationConfig struct {
 
 	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
+
+	// WriteDelaySeconds is used to slow the aggregator's submission to meet TaskMailbox validation requirements.
+	WriteDelaySeconds int64 `json:"writeDelaySeconds" yaml:"writeDelaySeconds"`
 }
 
 type ServerConfig struct {

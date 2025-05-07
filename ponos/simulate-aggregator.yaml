@@ -1,6 +1,8 @@
 ---
 debug: false
 simulationConfig:
+  # TODO: (brandon c) remove and simplify with proper submission error handling/chain-based submission rate.
+  writeDelaySeconds: 5
   enabled: true
   secureConnection: false
   simulateExecutors: true
@@ -55,7 +57,6 @@ chains:
     chainId: 1
     rpcUrl: "http://127.0.0.1:8545"
     pollIntervalSeconds: 1
-    writeIntervalSeconds: 1
     simulation:
       enabled: false
       port: 8080

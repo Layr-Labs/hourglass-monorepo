@@ -106,6 +106,7 @@ var runCmd = &cobra.Command{
 		}
 
 		if Config.SimulationConfig.SimulateExecutors {
+			log.Sugar().Infow("Loading simulated executors from runtime config")
 			c := &aggregatorConfig.AggregatorConfig{
 				Avss:             Config.Avss,
 				Chains:           Config.Chains,
@@ -125,11 +126,12 @@ var runCmd = &cobra.Command{
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
-				AVSs:          Config.Avss,
-				Chains:        Config.Chains,
-				Address:       Config.Operator.Address,
-				PrivateKey:    Config.Operator.OperatorPrivateKey,
-				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
+				AVSs:              Config.Avss,
+				Chains:            Config.Chains,
+				Address:           Config.Operator.Address,
+				PrivateKey:        Config.Operator.OperatorPrivateKey,
+				AggregatorUrl:     Config.ServerConfig.AggregatorUrl,
+				WriteDelaySeconds: time.Duration(Config.SimulationConfig.WriteDelaySeconds) * time.Second,
 			},
 			imContractStore,
 			tlp,

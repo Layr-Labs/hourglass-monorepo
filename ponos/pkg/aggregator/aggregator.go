@@ -29,11 +29,12 @@ import (
 )
 
 type AggregatorConfig struct {
-	Address       string
-	AggregatorUrl string
-	PrivateKey    string
-	AVSs          []*aggregatorConfig.AggregatorAvs
-	Chains        []*aggregatorConfig.Chain
+	Address           string
+	AggregatorUrl     string
+	PrivateKey        string
+	WriteDelaySeconds time.Duration
+	AVSs              []*aggregatorConfig.AggregatorAvs
+	Chains            []*aggregatorConfig.Chain
 }
 
 type Aggregator struct {
@@ -147,6 +148,7 @@ func (a *Aggregator) Initialize() error {
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
 			AggregatorUrl:     a.config.AggregatorUrl,
+			WriteDelaySeconds: a.config.WriteDelaySeconds,
 		}, a.chainContractCallers, a.signer, a.peeringDataFetcher, a.logger)
 
 		a.avsExecutionManagers[avs.Address] = aem

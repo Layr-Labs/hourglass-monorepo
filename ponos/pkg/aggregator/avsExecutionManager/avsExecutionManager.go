@@ -29,6 +29,7 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	AggregatorUrl            string
+	WriteDelaySeconds        time.Duration
 }
 
 type operatorSetRegistrationData struct {
@@ -133,6 +134,8 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			em.logger.Sugar().Infow("Received task result", "chain", result.Task.ChainId)
 			if chainCaller, ok := em.chainContractCallers[result.Task.ChainId]; ok {
 				em.logger.Sugar().Infow("Calling chain contract", "chain", result.Task.ChainId)
+				// TODO: (brandon c) remove this and handle case of submission to same block task was created.
+				time.Sleep(em.config.WriteDelaySeconds)
 				err := chainCaller.SubmitTaskResult(ctx, result)
 				if err != nil {
 					// TODO: emit metric
