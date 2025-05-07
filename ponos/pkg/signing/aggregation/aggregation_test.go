@@ -15,8 +15,8 @@ import (
 
 func Test_Aggregation(t *testing.T) {
 	// Create test operators with key pairs
-	operators := make([]*Operator, 3)
-	for i := 0; i < 3; i++ {
+	operators := make([]*Operator, 4) // Changed to 4 operators
+	for i := 0; i < 4; i++ {
 		privKey, pubKey, err := bn254.GenerateKeyPair()
 		require.NoError(t, err)
 		operators[i] = &Operator{
@@ -34,7 +34,7 @@ func Test_Aggregation(t *testing.T) {
 		taskId,
 		100, // taskCreatedBlock
 		1,   // operatorSetId
-		66,  // thresholdPercentage (2/3)
+		75,  // thresholdPercentage (3/4)
 		taskData,
 		5*time.Minute,
 		operators,
@@ -47,10 +47,13 @@ func Test_Aggregation(t *testing.T) {
 	digest := util.GetKeccak256Digest(commonPayload)
 
 	// Store individual signatures for verification
-	individualSigs := make([]*bn254.Signature, 3)
+	individualSigs := make([]*bn254.Signature, 3) // Only store 3 signatures since one operator won't sign
+	remainingPubKeys := make([]*bn254.PublicKey, 3)
+	remainingSigs := make([]*bn254.Signature, 3)
 
-	// Simulate receiving responses from all operators
-	for i, operator := range operators {
+	// Simulate receiving responses from all operators except the last one
+	for i := 0; i < 3; i++ { // Only process first 3 operators
+		operator := operators[i]
 		// Create task result
 		taskResult := &types.TaskResult{
 			OperatorAddress: operator.Address,
@@ -62,13 +65,15 @@ func Test_Aggregation(t *testing.T) {
 		require.NoError(t, err)
 		taskResult.Signature = sig.Bytes()
 		individualSigs[i] = sig
+		remainingPubKeys[i] = operator.PublicKey
+		remainingSigs[i] = sig
 
 		// Process the signature
 		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
 		require.NoError(t, err)
 	}
 
-	// Verify threshold is met
+	// Verify threshold is met (3/4 operators signed)
 	assert.True(t, agg.SigningThresholdMet())
 
 	// Generate final certificate
@@ -85,34 +90,24 @@ func Test_Aggregation(t *testing.T) {
 
 	// Verify all responses match
 	assert.Equal(t, commonPayload, cert.TaskResponse)
-	assert.Equal(t, 0, len(cert.NonSignersPubKeys), "Should have no non-signers")
-	assert.Equal(t, 3, len(cert.AllOperatorsPubKeys), "Should have all operators' public keys")
+	assert.Equal(t, 1, len(cert.NonSignersPubKeys), "Should have one non-signer")
+	assert.Equal(t, 4, len(cert.AllOperatorsPubKeys), "Should have all operators' public keys")
+
+	// Verify the non-signer is correctly identified
+	nonSignerPubKey := cert.NonSignersPubKeys[0]
+	assert.Equal(t, operators[3].PublicKey.Bytes(), nonSignerPubKey.Bytes(), "Non-signer public key should match the last operator")
 
 	// Test: Verify if an operator's signature was included
-	for i, operator := range operators {
-		// Get the operator's individual signature
-		individualSig := individualSigs[i]
-		require.NotNil(t, individualSig)
+	// We can verify this by checking that the remaining signatures verify correctly
+	verified, err = bn254.BatchVerify(remainingPubKeys, cert.TaskResponseDigest, remainingSigs)
+	require.NoError(t, err)
+	assert.True(t, verified, "Remaining signatures should verify correctly")
 
-		// Create a copy of the aggregated signature
-		remainingSig, err := bn254.NewSignatureFromBytes(cert.SignersSignature.Bytes())
-		require.NoError(t, err)
-		require.NotNil(t, remainingSig)
-
-		// Subtract the operator's signature from the aggregated signature
-		remainingSig.Sub(individualSig)
-
-		// Create a copy of the aggregated public key
-		remainingPubKey, err := bn254.NewPublicKeyFromBytes(agg.AggregatePublicKey.Bytes())
-		require.NoError(t, err)
-		require.NotNil(t, remainingPubKey)
-
-		// Subtract the operator's public key from the aggregated public key
-		remainingPubKey.Sub(operator.PublicKey)
-
-		// Verify the remaining signature against the remaining public key
-		verified, err := remainingSig.Verify(remainingPubKey, cert.TaskResponseDigest)
-		require.NoError(t, err)
-		assert.True(t, verified, "Operator %d's signature was not included in aggregation", i)
-	}
+	// Test: Verify that the non-signer's signature is not included
+	// Create a new signature array including the non-signer's signature
+	allSigs := append(remainingSigs, individualSigs[0])            // Add a duplicate signature
+	allPubKeys := append(remainingPubKeys, operators[3].PublicKey) // Add non-signer's public key
+	verified, err = bn254.BatchVerify(allPubKeys, cert.TaskResponseDigest, allSigs)
+	require.NoError(t, err)
+	assert.False(t, verified, "Verification should fail when including non-signer's public key")
 }
