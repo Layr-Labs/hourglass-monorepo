@@ -6,7 +6,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"strings"
 	"sync"
 	"time"
 )
@@ -89,7 +88,7 @@ type ReceivedResponse struct {
 
 type aggregatedOperators struct {
 	// aggregated public keys of signers
-	signersG2 *bn254.G1Point
+	signersG2 *bn254.G2Point
 
 	// aggregated signatures of signers
 	signersAggSig *bn254.Signature
@@ -121,10 +120,10 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 	defer ac.mu.Unlock()
 
 	// Validate operator is in the allowed set
-	foundOp := util.Find(ac.Operators, func(op *Operator) bool {
+	operator := util.Find(ac.Operators, func(op *Operator) bool {
 		return op.Address == taskResponse.OperatorAddress
 	})
-	if foundOp == nil {
+	if operator == nil {
 		return fmt.Errorf("operator %s is not in the allowed set", taskResponse.OperatorAddress)
 	}
 
@@ -143,7 +142,7 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 	}
 
 	// verify the signature
-	sig, err := ac.VerifyResponseSignature(taskResponse)
+	sig, err := ac.VerifyResponseSignature(taskResponse, operator)
 	if err != nil {
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
@@ -162,7 +161,7 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 		// no signers yet, initialize the aggregated operators
 		ac.aggregatedOperators = &aggregatedOperators{
 			// operator's public key
-			// signersG2: bn254.NewZeroG1Point().Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{}))),
+			signersG2: bn254.NewZeroG2Point().AddPublicKey(operator.PublicKey),
 
 			signersAggSig: sig,
 
@@ -171,7 +170,10 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 			totalSigners: 1,
 		}
 	} else {
-		// ac.aggregatedOperators.signersG2.Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{})))
+		ac.aggregatedOperators.signersG2.AddPublicKey(operator.PublicKey)
+		ac.aggregatedOperators.signersAggSig.Add(sig)
+		ac.aggregatedOperators.signersOperatorSet[taskResponse.OperatorAddress] = true
+		ac.aggregatedOperators.totalSigners++
 	}
 
 	return nil
@@ -179,19 +181,13 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 
 // VerifyResponseSignature verifies that the signature of the response is valid against
 // the operators public key.
-func (ac *AggregationCertificate) VerifyResponseSignature(taskResponse *types.TaskResult) (*bn254.Signature, error) {
+func (ac *AggregationCertificate) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator) (*bn254.Signature, error) {
 	digestBytes := util.GetKeccak256Digest(taskResponse.Output)
 	sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
 	}
 
-	operator := util.Find(ac.Operators, func(op *Operator) bool {
-		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
-	})
-	if operator == nil {
-		return nil, fmt.Errorf("operator %s not found in allowed set", taskResponse.OperatorAddress)
-	}
 	if verified, err := sig.Verify(operator.PublicKey, digestBytes[:]); err != nil {
 		return nil, fmt.Errorf("signature verification failed: %w", err)
 	} else if !verified {

@@ -234,6 +234,18 @@ func (s *Signature) Bytes() []byte {
 	return s.SigBytes
 }
 
+// Add adds another signature to this one
+func (s *Signature) Add(other *Signature) *Signature {
+	if other == nil || other.sig == nil {
+		return s
+	}
+	// Add the G1 points
+	s.sig.Add(s.sig, other.sig)
+	// Update the bytes representation
+	s.SigBytes = s.sig.Marshal()
+	return s
+}
+
 // NewSignatureFromBytes creates a signature from bytes
 func NewSignatureFromBytes(data []byte) (*Signature, error) {
 	sig := new(bn254.G1Affine)
@@ -456,6 +468,15 @@ func (p *G1Point) Sub(p2 *G1Point) *G1Point {
 	return p
 }
 
+// AddPublicKey adds the G1 point from a public key to this point
+func (p *G1Point) AddPublicKey(pk *PublicKey) *G1Point {
+	if pk.g1Point == nil {
+		return p
+	}
+	p.G1Affine.Add(p.G1Affine, pk.g1Point)
+	return p
+}
+
 // GetG1Point returns the G1 point of the public key
 func (pk *PublicKey) GetG1Point() *bn254.G1Affine {
 	return pk.g1Point
@@ -464,4 +485,57 @@ func (pk *PublicKey) GetG1Point() *bn254.G1Affine {
 // GetG2Point returns the G2 point of the public key
 func (pk *PublicKey) GetG2Point() *bn254.G2Affine {
 	return pk.g2Point
+}
+
+type G2Point struct {
+	*bn254.G2Affine
+}
+
+func NewG2Point(x0, x1, y0, y1 *big.Int) *G2Point {
+	return &G2Point{
+		&bn254.G2Affine{
+			X: struct {
+				A0 fp.Element
+				A1 fp.Element
+			}{
+				A0: newFpElement(x0),
+				A1: newFpElement(x1),
+			},
+			Y: struct {
+				A0 fp.Element
+				A1 fp.Element
+			}{
+				A0: newFpElement(y0),
+				A1: newFpElement(y1),
+			},
+		},
+	}
+}
+
+func NewZeroG2Point() *G2Point {
+	return NewG2Point(
+		big.NewInt(0), big.NewInt(0), // X coordinates
+		big.NewInt(0), big.NewInt(0), // Y coordinates
+	)
+}
+
+// Add another G2 point to this one
+func (p *G2Point) Add(p2 *G2Point) *G2Point {
+	p.G2Affine.Add(p.G2Affine, p2.G2Affine)
+	return p
+}
+
+// Sub another G2 point from this one
+func (p *G2Point) Sub(p2 *G2Point) *G2Point {
+	p.G2Affine.Sub(p.G2Affine, p2.G2Affine)
+	return p
+}
+
+// AddPublicKey adds the G2 point from a public key to this point
+func (p *G2Point) AddPublicKey(pk *PublicKey) *G2Point {
+	if pk.g2Point == nil {
+		return p
+	}
+	p.G2Affine.Add(p.G2Affine, pk.g2Point)
+	return p
 }
