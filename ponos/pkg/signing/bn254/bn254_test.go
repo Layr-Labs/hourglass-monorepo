@@ -2,7 +2,6 @@ package bn254
 
 import (
 	"bytes"
-	"math"
 	"testing"
 )
 
@@ -330,36 +329,6 @@ func Test_BN254(t *testing.T) {
 		}
 	})
 
-	t.Run("HashToG2", func(t *testing.T) {
-		// Test hashing with various messages
-		messages := [][]byte{
-			[]byte(""),
-			[]byte("Hello, world!"),
-			[]byte("This is a longer message with some special characters: !@#$%^&*()"),
-			bytes.Repeat([]byte("a"), 1000), // Long message
-		}
-
-		for i, msg := range messages {
-			t.Run(string(msg[:int(math.Min(float64(len(msg)), 20))]), func(t *testing.T) {
-				point := hashToG2(msg)
-				if point == nil {
-					t.Errorf("hashToG2 returned nil for message %d", i)
-					return
-				}
-
-				// Check that the point is on the curve
-				if !point.IsOnCurve() {
-					t.Errorf("Point for message %d is not on the curve", i)
-				}
-
-				// Check that the point is in the correct subgroup
-				if !point.IsInSubGroup() {
-					t.Errorf("Point for message %d is not in the correct subgroup", i)
-				}
-			})
-		}
-	})
-
 	t.Run("EIP2333NotSupported", func(t *testing.T) {
 		// Test using the scheme
 		scheme := NewScheme()
@@ -374,4 +343,156 @@ func Test_BN254(t *testing.T) {
 			t.Error("Expected EIP-2333 to be unsupported, but no error was returned")
 		}
 	})
+}
+
+func TestHashToG1(t *testing.T) {
+	tests := []struct {
+		name    string
+		message []byte
+	}{
+		{
+			name:    "empty message",
+			message: []byte{},
+		},
+		{
+			name:    "simple message",
+			message: []byte("Hello, World!"),
+		},
+		{
+			name:    "long message",
+			message: []byte("This is a longer message with some special characters: !@#$%^&*()"),
+		},
+		{
+			name:    "very long message",
+			message: bytes.Repeat([]byte("a"), 1000),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			point := hashToG1(tt.message)
+
+			// Check that the point is not nil
+			if point == nil {
+				t.Fatal("hashToG1 returned nil point")
+			}
+
+			// Check that the point is on the curve
+			if !point.IsOnCurve() {
+				t.Error("hashToG1 returned point not on curve")
+			}
+
+			// Check that the point is in the correct subgroup
+			if !point.IsInSubGroup() {
+				t.Error("hashToG1 returned point not in subgroup")
+			}
+		})
+	}
+}
+
+func TestPublicKeyG2(t *testing.T) {
+	// Generate a key pair
+	sk, pk, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	// Check that the public key is in G2
+	if !pk.point.IsOnCurve() {
+		t.Error("Public key point is not on curve")
+	}
+
+	if !pk.point.IsInSubGroup() {
+		t.Error("Public key point is not in subgroup")
+	}
+
+	// Verify that the public key matches the private key
+	expectedPk := sk.Public()
+	if !bytes.Equal(pk.PointBytes, expectedPk.PointBytes) {
+		t.Error("Public key does not match private key")
+	}
+}
+
+func TestSignatureG1(t *testing.T) {
+	// Generate a key pair
+	sk, pk, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	// Sign a message
+	message := []byte("test message")
+	sig, err := sk.Sign(message)
+	if err != nil {
+		t.Fatalf("Failed to sign message: %v", err)
+	}
+
+	// Check that the signature is in G1
+	if !sig.sig.IsOnCurve() {
+		t.Error("Signature point is not on curve")
+	}
+
+	if !sig.sig.IsInSubGroup() {
+		t.Error("Signature point is not in subgroup")
+	}
+
+	// Verify the signature
+	valid, err := sig.Verify(pk, message)
+	if err != nil {
+		t.Fatalf("Failed to verify signature: %v", err)
+	}
+	if !valid {
+		t.Error("Signature verification failed")
+	}
+}
+
+func TestAggregateSignaturesG1(t *testing.T) {
+	// Generate multiple key pairs
+	numKeys := 3
+	privateKeys := make([]*PrivateKey, numKeys)
+	publicKeys := make([]*PublicKey, numKeys)
+	signatures := make([]*Signature, numKeys)
+
+	message := []byte("test message")
+
+	for i := 0; i < numKeys; i++ {
+		sk, pk, err := GenerateKeyPair()
+		if err != nil {
+			t.Fatalf("Failed to generate key pair %d: %v", i, err)
+		}
+
+		privateKeys[i] = sk
+		publicKeys[i] = pk
+
+		// Sign the message
+		sig, err := sk.Sign(message)
+		if err != nil {
+			t.Fatalf("Failed to sign message with key %d: %v", i, err)
+		}
+		signatures[i] = sig
+	}
+
+	// Aggregate signatures
+	aggSig, err := AggregateSignatures(signatures)
+	if err != nil {
+		t.Fatalf("Failed to aggregate signatures: %v", err)
+	}
+
+	// Check that the aggregated signature is in G1
+	if !aggSig.sig.IsOnCurve() {
+		t.Error("Aggregated signature point is not on curve")
+	}
+
+	if !aggSig.sig.IsInSubGroup() {
+		t.Error("Aggregated signature point is not in subgroup")
+	}
+
+	// Verify the aggregated signature
+	valid, err := BatchVerify(publicKeys, message, signatures)
+	if err != nil {
+		t.Fatalf("Failed to batch verify signatures: %v", err)
+	}
+	if !valid {
+		t.Error("Batch signature verification failed")
+	}
 }

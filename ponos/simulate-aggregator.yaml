@@ -12,7 +12,7 @@ simulationConfig:
       - networkAddress: "localhost:9090"
         operatorAddress: "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
         operatorSetId: 1
-        publicKey: "1b62c6ebbb2e62704bccd850f3cb6e42c07263866d76e361f1bd436ea79eec20150fc9e5f63ce1a11ead51f062494d6f6ae6f1cd8e3d212525e5d25dc082c1b6"
+        publicKey: "1e14b1b9a847b5bedea4e44e18541fe153a7d791d68f651bc86ac4be7dfe36000116d8d71bd4ae56331f58bec5967ae1adad91823b5d4b90746a5d85c3c8faaa13a4880b8c163984d2fec316803a146b1b97f63d95e6ac9536c061924b6367131799e6499a8ea979bc6fac9e01d0002a5547894e9212f09d6b2ed94843593145"
 
 
 serverConfig:
@@ -27,12 +27,12 @@ operator:
     bls:
       keystore: |
         {
-          "publicKey": "10d2dcc53580b7c54f584ea9d0ce935c558243a898e9b221c3f7d172545455a726f701c37cda46ac284006cccba284c84bac254a1aa2a7bd10d46fa79cddb01d",
+          "publicKey": "0b9adbefd52a9ef6d081d06dbdb8f5791321cd6676c19e1a594d845d4801e4551c61d9d2fcace2053b9928773cbaefb3a7b071be410ca21086941a4904d573261e2672e196e9e8528296807af313b0c4c27ac42a51db525842e4abbc66f4020426c07af913dd7703ebaef038004f892dc17d44f9f9c76c9c17dfb8de794e9213",
           "crypto": {
             "cipher": "aes-128-ctr",
-            "ciphertext": "8a277efe25159b05fc5193aeb0c5346d12d565c0db8d28e8bb18904f63945c9c",
+            "ciphertext": "d364b7efca8f6df2a5d0a973976d2ae27893e8ba04bed1c8008c95557591ff73",
             "cipherparams": {
-              "iv": "27b36cf4cbdeba506cd17ec00757c98a"
+              "iv": "0b27b6a532f5519b011b2075372507cb"
             },
             "kdf": "scrypt",
             "kdfparams": {
@@ -40,11 +40,11 @@ operator:
               "n": 262144,
               "p": 1,
               "r": 8,
-              "salt": "a46e025642a031f83b0b78badbd6120a2e5ae3edf4dbe772e2877f723f88c9b9"
+              "salt": "f9eb85d1059ac71f7971aea310029ed9cd8c0da6b03e2cc854ddffc55e21d2cd"
             },
-            "mac": "647a73d802ae702f302c0012300cc2c7cc61142ec5f4f7edf0930f90144c6df2"
+            "mac": "295f897f1e50a71884d96debbec2fed3c23403776941017fa689567b9ac946d8"
           },
-          "uuid": "829bd1cf-2b64-4996-afa9-4664b2aafbf8",
+          "uuid": "4b9804d5-b594-4690-b4a3-dc1c76a0f110",
           "version": 4,
           "curveType": "bn254"
         }

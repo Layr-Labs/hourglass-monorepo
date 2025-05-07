@@ -8,12 +8,12 @@ operator:
     bls:
       keystore: |
         {
-          "publicKey": "1b62c6ebbb2e62704bccd850f3cb6e42c07263866d76e361f1bd436ea79eec20150fc9e5f63ce1a11ead51f062494d6f6ae6f1cd8e3d212525e5d25dc082c1b6",
+          "publicKey": "1e14b1b9a847b5bedea4e44e18541fe153a7d791d68f651bc86ac4be7dfe36000116d8d71bd4ae56331f58bec5967ae1adad91823b5d4b90746a5d85c3c8faaa13a4880b8c163984d2fec316803a146b1b97f63d95e6ac9536c061924b6367131799e6499a8ea979bc6fac9e01d0002a5547894e9212f09d6b2ed94843593145",
           "crypto": {
             "cipher": "aes-128-ctr",
-            "ciphertext": "751ea48ca668b7ae5b812690a8ded38a0e2675c0536fbbfeb4918a2c0c0ab732",
+            "ciphertext": "db732ba0e076baf789ca3fbc86aa80439f3579c6cea64d87f36471faec28cd4d",
             "cipherparams": {
-              "iv": "43c937bd6659eabfe166741f4d74dad7"
+              "iv": "85bd4fc4ab4c5d221c3811bbc371cf8c"
             },
             "kdf": "scrypt",
             "kdfparams": {
@@ -21,11 +21,11 @@ operator:
               "n": 262144,
               "p": 1,
               "r": 8,
-              "salt": "fb4c8d27ddb45b7a7412ad3afa6b62bfdaea2c6d8dc1a1869f83adb47e72198e"
+              "salt": "c5387a9a14477c31b5b8c3ffea7815eedf06af1c666aa3dae57cd65dd68522aa"
             },
-            "mac": "8b8d33cd738dd37ef3c577a113e5f65d2563dc47d5142891610ec3edbba7bb5f"
+            "mac": "db7a282c30fb234101a4e8d20f73e6e7b410b4d2e486c602b8d4826d1c6ceeab"
           },
-          "uuid": "741a2583-e42b-43a3-8f11-85fd4e2b2669",
+          "uuid": "09c040f4-6b9c-4c33-bad7-7d7cf005a020",
           "version": 4,
           "curveType": "bn254"
         }
@@ -45,5 +45,5 @@ simulation:
       - networkAddress: "localhost:9999"
         operatorAddress: "0xaggregator123..."
         operatorSetId: 0
-        publicKey: "10d2dcc53580b7c54f584ea9d0ce935c558243a898e9b221c3f7d172545455a726f701c37cda46ac284006cccba284c84bac254a1aa2a7bd10d46fa79cddb01d"
+        publicKey: "0b9adbefd52a9ef6d081d06dbdb8f5791321cd6676c19e1a594d845d4801e4551c61d9d2fcace2053b9928773cbaefb3a7b071be410ca21086941a4904d573261e2672e196e9e8528296807af313b0c4c27ac42a51db525842e4abbc66f4020426c07af913dd7703ebaef038004f892dc17d44f9f9c76c9c17dfb8de794e9213"
 

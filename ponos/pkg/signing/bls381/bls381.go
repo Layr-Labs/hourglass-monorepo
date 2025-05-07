@@ -33,13 +33,13 @@ type PrivateKey struct {
 // PublicKey represents a BLS public key
 type PublicKey struct {
 	PointBytes []byte
-	point      *bls12381.G1Affine
+	point      *bls12381.G2Affine
 }
 
 // Signature represents a BLS signature
 type Signature struct {
 	SigBytes []byte
-	sig      *bls12381.G2Affine
+	sig      *bls12381.G1Affine
 }
 
 // GenerateKeyPair creates a new random private key and the corresponding public key
@@ -52,7 +52,7 @@ func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 	}
 
 	// Compute the public key
-	pkPoint := new(bls12381.G1Affine).ScalarMultiplication(&g1Gen, sk)
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, sk)
 
 	// Create private key
 	privateKey := &PrivateKey{
@@ -88,7 +88,7 @@ func GenerateKeyPairFromSeed(seed []byte) (*PrivateKey, *PublicKey, error) {
 	sk.Mod(sk, frOrder)
 
 	// Compute the public key
-	pkPoint := new(bls12381.G1Affine).ScalarMultiplication(&g1Gen, sk)
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, sk)
 
 	// Create private key
 	privateKey := &PrivateKey{
@@ -143,7 +143,7 @@ func GenerateKeyPairEIP2333(seed []byte, path []uint32) (*PrivateKey, *PublicKey
 	}
 
 	// Compute the public key
-	pkPoint := new(bls12381.G1Affine).ScalarMultiplication(&g1Gen, currentKey)
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, currentKey)
 
 	// Create private key
 	privateKey := &PrivateKey{
@@ -172,11 +172,11 @@ func NewPrivateKeyFromBytes(data []byte) (*PrivateKey, error) {
 
 // Sign signs a message using the private key
 func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
-	// Hash the message to a point on G2
-	hashPoint := hashToG2(message)
+	// Hash the message to a point on G1
+	hashPoint := hashToG1(message)
 
 	// Multiply the hash point by the private key scalar
-	sigPoint := new(bls12381.G2Affine).ScalarMultiplication(hashPoint, pk.scalar)
+	sigPoint := new(bls12381.G1Affine).ScalarMultiplication(hashPoint, pk.scalar)
 
 	// Create and return the signature
 	return &Signature{
@@ -187,7 +187,7 @@ func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
 
 // Public returns the public key corresponding to the private key
 func (pk *PrivateKey) Public() *PublicKey {
-	pkPoint := new(bls12381.G1Affine).ScalarMultiplication(&g1Gen, pk.scalar)
+	pkPoint := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, pk.scalar)
 
 	return &PublicKey{
 		point:      pkPoint,
@@ -207,7 +207,7 @@ func (pk *PublicKey) Bytes() []byte {
 
 // NewPublicKeyFromBytes creates a public key from bytes
 func NewPublicKeyFromBytes(data []byte) (*PublicKey, error) {
-	point := new(bls12381.G1Affine)
+	point := new(bls12381.G2Affine)
 	if err := point.Unmarshal(data); err != nil {
 		return nil, fmt.Errorf("invalid public key bytes: %w", err)
 	}
@@ -233,7 +233,7 @@ func (s *Signature) Bytes() []byte {
 
 // NewSignatureFromBytes creates a signature from bytes
 func NewSignatureFromBytes(data []byte) (*Signature, error) {
-	sig := new(bls12381.G2Affine)
+	sig := new(bls12381.G1Affine)
 	if err := sig.Unmarshal(data); err != nil {
 		return nil, fmt.Errorf("invalid signature bytes: %w", err)
 	}
@@ -246,18 +246,18 @@ func NewSignatureFromBytes(data []byte) (*Signature, error) {
 
 // Verify verifies a signature against a message and public key
 func (s *Signature) Verify(publicKey *PublicKey, message []byte) (bool, error) {
-	// Hash the message to a point on G2
-	hashPoint := hashToG2(message)
+	// Hash the message to a point on G1
+	hashPoint := hashToG1(message)
 
-	// e(PK, H(m)) = e(G1, S)
-	// Left-hand side: e(PK, H(m))
-	lhs, err := bls12381.Pair([]bls12381.G1Affine{*publicKey.point}, []bls12381.G2Affine{*hashPoint})
+	// e(S, G2) = e(H(m), PK)
+	// Left-hand side: e(S, G2)
+	lhs, err := bls12381.Pair([]bls12381.G1Affine{*s.sig}, []bls12381.G2Affine{g2Gen})
 	if err != nil {
 		return false, err
 	}
 
-	// Right-hand side: e(G1, S)
-	rhs, err := bls12381.Pair([]bls12381.G1Affine{g1Gen}, []bls12381.G2Affine{*s.sig})
+	// Right-hand side: e(H(m), PK)
+	rhs, err := bls12381.Pair([]bls12381.G1Affine{*hashPoint}, []bls12381.G2Affine{*publicKey.point})
 	if err != nil {
 		return false, err
 	}
@@ -273,18 +273,18 @@ func AggregateSignatures(signatures []*Signature) (*Signature, error) {
 	}
 
 	// Convert first signature to Jacobian coordinates
-	aggSig := new(bls12381.G2Jac)
+	aggSig := new(bls12381.G1Jac)
 	aggSig.FromAffine(signatures[0].sig)
 
 	// Add all other signatures
 	for i := 1; i < len(signatures); i++ {
-		var temp bls12381.G2Jac
+		var temp bls12381.G1Jac
 		temp.FromAffine(signatures[i].sig)
 		aggSig.AddAssign(&temp)
 	}
 
 	// Convert back to affine coordinates
-	result := new(bls12381.G2Affine)
+	result := new(bls12381.G1Affine)
 	result.FromJacobian(aggSig)
 
 	return &Signature{
@@ -300,25 +300,11 @@ func BatchVerify(publicKeys []*PublicKey, message []byte, signatures []*Signatur
 		return false, fmt.Errorf("mismatched number of public keys and signatures")
 	}
 
-	// Hash the message to a point on G2
-	hashPoint := hashToG2(message)
+	// Hash the message to a point on G1
+	hashPoint := hashToG1(message)
 
 	// For batch verification, we need to check:
-	// e(∑ PK_i, H(m)) = e(G1, ∑ S_i)
-
-	// Aggregate public keys
-	aggPk := new(bls12381.G1Jac)
-	aggPk.FromAffine(publicKeys[0].point)
-
-	for i := 1; i < len(publicKeys); i++ {
-		var temp bls12381.G1Jac
-		temp.FromAffine(publicKeys[i].point)
-		aggPk.AddAssign(&temp)
-	}
-
-	// Convert to affine coordinates
-	aggPkAffine := new(bls12381.G1Affine)
-	aggPkAffine.FromJacobian(aggPk)
+	// e(∑ S_i, G2) = e(H(m), ∑ PK_i)
 
 	// Aggregate signatures
 	aggSig, err := AggregateSignatures(signatures)
@@ -326,13 +312,27 @@ func BatchVerify(publicKeys []*PublicKey, message []byte, signatures []*Signatur
 		return false, err
 	}
 
+	// Aggregate public keys
+	aggPk := new(bls12381.G2Jac)
+	aggPk.FromAffine(publicKeys[0].point)
+
+	for i := 1; i < len(publicKeys); i++ {
+		var temp bls12381.G2Jac
+		temp.FromAffine(publicKeys[i].point)
+		aggPk.AddAssign(&temp)
+	}
+
+	// Convert to affine coordinates
+	aggPkAffine := new(bls12381.G2Affine)
+	aggPkAffine.FromJacobian(aggPk)
+
 	// Compute pairings
-	lhs, err := bls12381.Pair([]bls12381.G1Affine{*aggPkAffine}, []bls12381.G2Affine{*hashPoint})
+	lhs, err := bls12381.Pair([]bls12381.G1Affine{*aggSig.sig}, []bls12381.G2Affine{g2Gen})
 	if err != nil {
 		return false, err
 	}
 
-	rhs, err := bls12381.Pair([]bls12381.G1Affine{g1Gen}, []bls12381.G2Affine{*aggSig.sig})
+	rhs, err := bls12381.Pair([]bls12381.G1Affine{*hashPoint}, []bls12381.G2Affine{*aggPkAffine})
 	if err != nil {
 		return false, err
 	}
@@ -348,32 +348,24 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 	}
 
 	// For aggregate verification of different messages, we need to check:
-	// e(∑ PK_i, H(m_i)) = e(G1, S)
+	// e(S, G2) = ∏ e(H(m_i), PK_i)
 
-	// Aggregate public keys
-	aggPk := new(bls12381.G1Jac)
-	aggPk.FromAffine(publicKeys[0].point)
-
-	for i := 1; i < len(publicKeys); i++ {
-		var temp bls12381.G1Jac
-		temp.FromAffine(publicKeys[i].point)
-		aggPk.AddAssign(&temp)
+	// Left-hand side: e(S, G2)
+	lhs, err := bls12381.Pair([]bls12381.G1Affine{*aggSignature.sig}, []bls12381.G2Affine{g2Gen})
+	if err != nil {
+		return false, err
 	}
-
-	// Convert to affine coordinates
-	aggPkAffine := new(bls12381.G1Affine)
-	aggPkAffine.FromJacobian(aggPk)
 
 	// Initialize result to 1 (identity element for GT)
 	rhs := bls12381.GT{}
 	rhs.SetOne() // Initialize to 1 (neutral element for multiplication)
 
-	// Compute right-hand side: ∏ e(PK_i, H(m_i))
+	// Compute right-hand side: ∏ e(H(m_i), PK_i)
 	for i := 0; i < len(publicKeys); i++ {
-		hashPoint := hashToG2(messages[i])
+		hashPoint := hashToG1(messages[i])
 
-		// e(PK_i, H(m_i))
-		temp, err := bls12381.Pair([]bls12381.G1Affine{*publicKeys[i].point}, []bls12381.G2Affine{*hashPoint})
+		// e(H(m_i), PK_i)
+		temp, err := bls12381.Pair([]bls12381.G1Affine{*hashPoint}, []bls12381.G2Affine{*publicKeys[i].point})
 		if err != nil {
 			return false, err
 		}
@@ -382,24 +374,18 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 		rhs.Mul(&rhs, &temp)
 	}
 
-	// Left-hand side: e(G1, S)
-	lhs, err := bls12381.Pair([]bls12381.G1Affine{g1Gen}, []bls12381.G2Affine{*aggSignature.sig})
-	if err != nil {
-		return false, err
-	}
-
 	// Check if the pairings are equal
 	return lhs.Equal(&rhs), nil
 }
 
-// Helper function to hash a message to a G2 point
-func hashToG2(message []byte) *bls12381.G2Affine {
+// Helper function to hash a message to a G1 point
+func hashToG1(message []byte) *bls12381.G1Affine {
 	// Use hash-to-curve functionality
-	hashPoint, err := bls12381.HashToG2(message, []byte("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_"))
+	hashPoint, err := bls12381.HashToG1(message, []byte("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_"))
 	if err != nil {
 		// In case of error, fall back to a simpler but less secure approach
 		messageHash := new(big.Int).SetBytes(message)
-		hashPointAffine := new(bls12381.G2Affine).ScalarMultiplication(&g2Gen, messageHash)
+		hashPointAffine := new(bls12381.G1Affine).ScalarMultiplication(&g1Gen, messageHash)
 		return hashPointAffine
 	}
 
