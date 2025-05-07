@@ -66,6 +66,11 @@ func (tw *TaskWorker) HandleTask(t *performerV1.Task) (*performerV1.TaskResult, 
 
 	squaredNumber := new(big.Int).Exp(i, big.NewInt(2), nil)
 
+	tw.logger.Sugar().Infow("Task result",
+		zap.Uint64("originalInput", i.Uint64()),
+		zap.Uint64("squaredResult", squaredNumber.Uint64()),
+	)
+
 	return &performerV1.TaskResult{
 		TaskId: t.TaskId,
 		Result: parseBigIntToHex(squaredNumber),
