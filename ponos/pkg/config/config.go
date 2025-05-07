@@ -57,6 +57,10 @@ var (
 			AllocationManager: "",
 			TaskMailbox:       "0xtaskMailbox",
 		},
+		ChainId_EthereumAnvil: {
+			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+		},
 	}
 )
 
