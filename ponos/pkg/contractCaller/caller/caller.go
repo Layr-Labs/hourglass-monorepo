@@ -273,7 +273,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 
 	allMembers := make([]*peering.OperatorPeerInfo, len(peerMembers))
 	for i, pm := range peerMembers {
-		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG2)
+		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG1)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err

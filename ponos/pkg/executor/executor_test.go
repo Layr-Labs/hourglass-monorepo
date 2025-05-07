@@ -15,6 +15,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/simulatedAggregator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"math/big"
@@ -25,7 +26,7 @@ import (
 
 const (
 	aggregatorOperatorAddr = "0x1234aggregator"
-	aggregatorPublicKey    = "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29"
+	aggregatorPublicKey    = "10d2dcc53580b7c54f584ea9d0ce935c558243a898e9b221c3f7d172545455a726f701c37cda46ac284006cccba284c84bac254a1aa2a7bd10d46fa79cddb01d"
 )
 
 func signTaskPayload(payload []byte) ([]byte, error) {
@@ -149,7 +150,8 @@ func Test_Executor(t *testing.T) {
 			return
 		}
 
-		verified, err := sig.Verify(privateSigningKey.Public(), result.Output)
+		digest := util.GetKeccak256Digest(result.Output)
+		verified, err := sig.Verify(privateSigningKey.Public(), digest[:])
 		if err != nil {
 			errors = true
 			t.Errorf("Failed to verify signature: %v", err)
@@ -236,12 +238,12 @@ operator:
     bls:
       keystore: |
         {
-          "publicKey": "27ca30a9935d5c8435d4a2854cc6c376c253d6a4cb6e0026ea7a98b12789fd0b297a85d16550fe94ee0433eeac9a6a854d64e61ed82d7484b4287cb289ea962212e3a593a27a8aa7e196adc51336857c6fb30791fb70ac5bd8a522d4d486d0e3043f3e74c00a9f10bed939b07a06ff1b9bbb47794e613aa597d3e364c540bdf7",
+          "publicKey": "1b62c6ebbb2e62704bccd850f3cb6e42c07263866d76e361f1bd436ea79eec20150fc9e5f63ce1a11ead51f062494d6f6ae6f1cd8e3d212525e5d25dc082c1b6",
           "crypto": {
             "cipher": "aes-128-ctr",
-            "ciphertext": "a0e75151edfb59c0a224a4ef74c6b572d98607a2fa48f85133a693b399d5c316",
+            "ciphertext": "751ea48ca668b7ae5b812690a8ded38a0e2675c0536fbbfeb4918a2c0c0ab732",
             "cipherparams": {
-              "iv": "6f02e76da70983d69a7cb9f072f3a384"
+              "iv": "43c937bd6659eabfe166741f4d74dad7"
             },
             "kdf": "scrypt",
             "kdfparams": {
@@ -249,11 +251,11 @@ operator:
               "n": 262144,
               "p": 1,
               "r": 8,
-              "salt": "c06be39f07a19428c69bec6c5d136a38ed5bb73ec0f68c81af1634dfda099ab8"
+              "salt": "fb4c8d27ddb45b7a7412ad3afa6b62bfdaea2c6d8dc1a1869f83adb47e72198e"
             },
-            "mac": "28b382b5cb3fb663d7ac0e17dc7c7fdc9fe8065901e536fea12ce30c2d7a70a4"
+            "mac": "8b8d33cd738dd37ef3c577a113e5f65d2563dc47d5142891610ec3edbba7bb5f"
           },
-          "uuid": "2d34e7e1-0c94-4741-bfdc-a8aae120cf2f",
+          "uuid": "741a2583-e42b-43a3-8f11-85fd4e2b2669",
           "version": 4,
           "curveType": "bn254"
         }
@@ -281,12 +283,12 @@ operator:
       password: ""
       keystore: | 
         {
-          "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
+          "publicKey": "10d2dcc53580b7c54f584ea9d0ce935c558243a898e9b221c3f7d172545455a726f701c37cda46ac284006cccba284c84bac254a1aa2a7bd10d46fa79cddb01d",
           "crypto": {
             "cipher": "aes-128-ctr",
-            "ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
+            "ciphertext": "8a277efe25159b05fc5193aeb0c5346d12d565c0db8d28e8bb18904f63945c9c",
             "cipherparams": {
-              "iv": "db170afaeb4ba040992820b10f3cb305"
+              "iv": "27b36cf4cbdeba506cd17ec00757c98a"
             },
             "kdf": "scrypt",
             "kdfparams": {
@@ -294,11 +296,11 @@ operator:
               "n": 262144,
               "p": 1,
               "r": 8,
-              "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
+              "salt": "a46e025642a031f83b0b78badbd6120a2e5ae3edf4dbe772e2877f723f88c9b9"
             },
-            "mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
+            "mac": "647a73d802ae702f302c0012300cc2c7cc61142ec5f4f7edf0930f90144c6df2"
           },
-          "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
+          "uuid": "829bd1cf-2b64-4996-afa9-4664b2aafbf8",
           "version": 4,
           "curveType": "bn254"
         }
@@ -312,25 +314,25 @@ avss:
     chainIds: [31337]
 `
 	aggregatorKeystore = `{
-		  "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
-		  "crypto": {
-			"cipher": "aes-128-ctr",
-			"ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
-			"cipherparams": {
-			  "iv": "db170afaeb4ba040992820b10f3cb305"
-			},
-			"kdf": "scrypt",
-			"kdfparams": {
-			  "dklen": 32,
-			  "n": 262144,
-			  "p": 1,
-			  "r": 8,
-			  "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
-			},
-			"mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
-		  },
-		  "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
-		  "version": 4,
-		  "curveType": "bn254"
-		}`
+          "publicKey": "10d2dcc53580b7c54f584ea9d0ce935c558243a898e9b221c3f7d172545455a726f701c37cda46ac284006cccba284c84bac254a1aa2a7bd10d46fa79cddb01d",
+          "crypto": {
+            "cipher": "aes-128-ctr",
+            "ciphertext": "8a277efe25159b05fc5193aeb0c5346d12d565c0db8d28e8bb18904f63945c9c",
+            "cipherparams": {
+              "iv": "27b36cf4cbdeba506cd17ec00757c98a"
+            },
+            "kdf": "scrypt",
+            "kdfparams": {
+              "dklen": 32,
+              "n": 262144,
+              "p": 1,
+              "r": 8,
+              "salt": "a46e025642a031f83b0b78badbd6120a2e5ae3edf4dbe772e2877f723f88c9b9"
+            },
+            "mac": "647a73d802ae702f302c0012300cc2c7cc61142ec5f4f7edf0930f90144c6df2"
+          },
+          "uuid": "829bd1cf-2b64-4996-afa9-4664b2aafbf8",
+          "version": 4,
+          "curveType": "bn254"
+        }`
 )

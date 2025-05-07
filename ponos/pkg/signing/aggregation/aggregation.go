@@ -1,4 +1,4 @@
-package signing
+package aggregation
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"math/big"
-	"slices"
 	"strings"
 	"sync"
 	"time"

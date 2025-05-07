@@ -330,7 +330,7 @@ func Test_BN254(t *testing.T) {
 		}
 	})
 
-	t.Run("HashToG1", func(t *testing.T) {
+	t.Run("HashToG2", func(t *testing.T) {
 		// Test hashing with various messages
 		messages := [][]byte{
 			[]byte(""),
@@ -341,9 +341,9 @@ func Test_BN254(t *testing.T) {
 
 		for i, msg := range messages {
 			t.Run(string(msg[:int(math.Min(float64(len(msg)), 20))]), func(t *testing.T) {
-				point := hashToG1(msg)
+				point := hashToG2(msg)
 				if point == nil {
-					t.Errorf("hashToG1 returned nil for message %d", i)
+					t.Errorf("hashToG2 returned nil for message %d", i)
 					return
 				}
 
