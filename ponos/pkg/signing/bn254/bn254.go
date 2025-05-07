@@ -239,9 +239,17 @@ func (s *Signature) Add(other *Signature) *Signature {
 	if other == nil || other.sig == nil {
 		return s
 	}
-	// Add the G1 points
 	s.sig.Add(s.sig, other.sig)
-	// Update the bytes representation
+	s.SigBytes = s.sig.Marshal()
+	return s
+}
+
+// Sub subtracts another signature from this one
+func (s *Signature) Sub(other *Signature) *Signature {
+	if other == nil || other.sig == nil {
+		return s
+	}
+	s.sig.Sub(s.sig, other.sig)
 	s.SigBytes = s.sig.Marshal()
 	return s
 }
@@ -538,4 +546,14 @@ func (p *G2Point) AddPublicKey(pk *PublicKey) *G2Point {
 	}
 	p.G2Affine.Add(p.G2Affine, pk.g2Point)
 	return p
+}
+
+// Sub subtracts another public key from this one
+func (pk *PublicKey) Sub(other *PublicKey) *PublicKey {
+	if other == nil || other.g2Point == nil {
+		return pk
+	}
+	pk.g2Point.Sub(pk.g2Point, other.g2Point)
+	pk.PointBytes = pk.g2Point.Marshal()
+	return pk
 }

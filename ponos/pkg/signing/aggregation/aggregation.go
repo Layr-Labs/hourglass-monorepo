@@ -3,17 +3,19 @@ package aggregation
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 )
 
 type Operator struct {
-	Address   string
-	PublicKey *bn254.PublicKey
+	Address    string
+	PublicKey  *bn254.PublicKey
+	privateKey *bn254.PrivateKey // For testing purposes only
 }
 
 // InitializeNewTaskWithWindow initializes a new aggregation certificate for a task window.
@@ -37,6 +39,7 @@ func InitializeNewTaskWithWindow(
 	if thresholdPercentage == 0 || thresholdPercentage > 100 {
 		return nil, ErrInvalidThreshold
 	}
+
 	aggPub, err := AggregatePublicKeys(util.Map(operators, func(o *Operator, i uint64) *bn254.PublicKey {
 		return o.PublicKey
 	}))
@@ -65,12 +68,26 @@ var (
 )
 
 type AggregatedCertificate struct {
-	TaskId              []byte
-	TaskResponse        []byte
-	TaskResponseDigest  []byte
-	NonSignersPubKeys   []*bn254.PublicKey
+	// the unique identifier for the task
+	TaskId []byte
+
+	// the output of the task
+	TaskResponse []byte
+
+	// keccak256 hash of the task response
+	TaskResponseDigest []byte
+
+	// public keys for all operators that did not sign the task
+	NonSignersPubKeys []*bn254.PublicKey
+
+	// public keys for all operators that were selected to participate in the task
 	AllOperatorsPubKeys []*bn254.PublicKey
-	SignersSignature    *bn254.Signature
+
+	// aggregated signature of the signers
+	SignersSignature *bn254.Signature
+
+	// aggregated public key of the signers
+	SignersPublicKey *bn254.G2Point
 }
 
 // GenerateFinalCertificate generates the final aggregated certificate for the task.
@@ -83,6 +100,7 @@ func (ac *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertifica
 		}
 	}
 
+	// TODO: add this based on the avs registry
 	// the contract requires a sorted nonSignersOperatorIds
 	// sort.SliceStable(nonSignerOperatorIds, func(i, j int) bool {
 	// 	iOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[i][:])
@@ -108,6 +126,7 @@ func (ac *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertifica
 		TaskResponseDigest:  ac.aggregatedOperators.lastReceivedResponse.Digest,
 		NonSignersPubKeys:   nonSignerPublicKeys,
 		AllOperatorsPubKeys: allPublicKeys,
+		SignersPublicKey:    ac.aggregatedOperators.signersG2,
 		SignersSignature:    ac.aggregatedOperators.signersAggSig,
 	}, nil
 }
@@ -259,6 +278,7 @@ func (ac *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.Task
 	return sig, digestBytes[:], nil
 }
 
+// AggregatePublicKeys aggregates a list of public keys into a single public key.
 func AggregatePublicKeys(pubKeys []*bn254.PublicKey) (*bn254.PublicKey, error) {
 	return bn254.AggregatePublicKeys(pubKeys)
 }
