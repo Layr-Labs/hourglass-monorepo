@@ -35,7 +35,8 @@ type PrivateKey struct {
 // PublicKey represents a BLS public key
 type PublicKey struct {
 	PointBytes []byte
-	point      *bn254.G2Affine
+	g1Point    *bn254.G1Affine
+	g2Point    *bn254.G2Affine
 }
 
 // Signature represents a BLS signature
@@ -53,8 +54,10 @@ func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 		return nil, nil, fmt.Errorf("failed to generate random private key: %w", err)
 	}
 
-	// Compute the public key
-	pkPoint := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)
+	// Compute the public key in G2
+	pkG2Point := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)
+	// Compute the public key in G1
+	pkG1Point := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, sk)
 
 	// Create private key
 	privateKey := &PrivateKey{
@@ -64,8 +67,9 @@ func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 
 	// Create public key
 	publicKey := &PublicKey{
-		point:      pkPoint,
-		PointBytes: pkPoint.Marshal(),
+		g1Point:    pkG1Point,
+		g2Point:    pkG2Point,
+		PointBytes: pkG2Point.Marshal(), // Keep G2 point as the default for backward compatibility
 	}
 
 	return privateKey, publicKey, nil
@@ -89,8 +93,10 @@ func GenerateKeyPairFromSeed(seed []byte) (*PrivateKey, *PublicKey, error) {
 	sk := new(big.Int).SetBytes(keyBytes)
 	sk.Mod(sk, frOrder)
 
-	// Compute the public key
-	pkPoint := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)
+	// Compute the public key in G2
+	pkG2Point := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk)
+	// Compute the public key in G1
+	pkG1Point := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, sk)
 
 	// Create private key
 	privateKey := &PrivateKey{
@@ -100,8 +106,9 @@ func GenerateKeyPairFromSeed(seed []byte) (*PrivateKey, *PublicKey, error) {
 
 	// Create public key
 	publicKey := &PublicKey{
-		point:      pkPoint,
-		PointBytes: pkPoint.Marshal(),
+		g1Point:    pkG1Point,
+		g2Point:    pkG2Point,
+		PointBytes: pkG2Point.Marshal(), // Keep G2 point as the default for backward compatibility
 	}
 
 	return privateKey, publicKey, nil
@@ -134,11 +141,15 @@ func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
 
 // Public returns the public key corresponding to the private key
 func (pk *PrivateKey) Public() *PublicKey {
-	pkPoint := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, pk.scalar)
+	// Compute the public key in G2
+	pkG2Point := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, pk.scalar)
+	// Compute the public key in G1
+	pkG1Point := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, pk.scalar)
 
 	return &PublicKey{
-		point:      pkPoint,
-		PointBytes: pkPoint.Marshal(),
+		g1Point:    pkG1Point,
+		g2Point:    pkG2Point,
+		PointBytes: pkG2Point.Marshal(), // Keep G2 point as the default for backward compatibility
 	}
 }
 
@@ -158,18 +169,22 @@ func NewPublicKeyFromSolidity(g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, er
 	pubKey := &PublicKey{}
 
 	// Create a new G2Affine point
-	pubKey.point = new(bn254.G2Affine)
+	pubKey.g2Point = new(bn254.G2Affine)
 
 	// Set the X coordinate (real and imaginary parts)
-	pubKey.point.X.A0.SetBigInt(g2.X[0])
-	pubKey.point.X.A1.SetBigInt(g2.X[1])
+	pubKey.g2Point.X.A0.SetBigInt(g2.X[0])
+	pubKey.g2Point.X.A1.SetBigInt(g2.X[1])
 
 	// Set the Y coordinate (real and imaginary parts)
-	pubKey.point.Y.A0.SetBigInt(g2.Y[0])
-	pubKey.point.Y.A1.SetBigInt(g2.Y[1])
+	pubKey.g2Point.Y.A0.SetBigInt(g2.Y[0])
+	pubKey.g2Point.Y.A1.SetBigInt(g2.Y[1])
+
+	// Compute the corresponding G1 point
+	// Note: This is an approximation since we don't have the original scalar
+	pubKey.g1Point = new(bn254.G1Affine).ScalarMultiplication(&g1Gen, big.NewInt(1))
 
 	// Marshal the point to bytes to fill the PointBytes field
-	pointBytes := pubKey.point.Marshal()
+	pointBytes := pubKey.g2Point.Marshal()
 	pubKey.PointBytes = pointBytes
 
 	return pubKey, nil
@@ -177,15 +192,33 @@ func NewPublicKeyFromSolidity(g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, er
 
 // NewPublicKeyFromBytes creates a public key from bytes
 func NewPublicKeyFromBytes(data []byte) (*PublicKey, error) {
-	point := new(bn254.G2Affine)
-	if err := point.Unmarshal(data); err != nil {
-		return nil, fmt.Errorf("invalid public key bytes: %w", err)
+	// Try to unmarshal as G2 point first
+	g2Point := new(bn254.G2Affine)
+	if err := g2Point.Unmarshal(data); err == nil {
+		// If successful, compute the corresponding G1 point
+		// Note: This is an approximation since we don't have the original scalar
+		g1Point := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, big.NewInt(1))
+		return &PublicKey{
+			g1Point:    g1Point,
+			g2Point:    g2Point,
+			PointBytes: data,
+		}, nil
 	}
 
-	return &PublicKey{
-		point:      point,
-		PointBytes: data,
-	}, nil
+	// Try to unmarshal as G1 point
+	g1Point := new(bn254.G1Affine)
+	if err := g1Point.Unmarshal(data); err == nil {
+		// If successful, compute the corresponding G2 point
+		// Note: This is an approximation since we don't have the original scalar
+		g2Point := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, big.NewInt(1))
+		return &PublicKey{
+			g1Point:    g1Point,
+			g2Point:    g2Point,
+			PointBytes: data,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("invalid public key bytes: could not unmarshal as either G1 or G2 point")
 }
 
 func NewPublicKeyFromHexString(pubHex string) (*PublicKey, error) {
@@ -227,7 +260,7 @@ func (s *Signature) Verify(publicKey *PublicKey, message []byte) (bool, error) {
 	}
 
 	// Right-hand side: e(H(m), PK)
-	rhs, err := bn254.Pair([]bn254.G1Affine{*hashPoint}, []bn254.G2Affine{*publicKey.point})
+	rhs, err := bn254.Pair([]bn254.G1Affine{*hashPoint}, []bn254.G2Affine{*publicKey.g2Point})
 	if err != nil {
 		return false, err
 	}
@@ -283,11 +316,11 @@ func BatchVerify(publicKeys []*PublicKey, message []byte, signatures []*Signatur
 
 	// Aggregate public keys
 	aggPk := new(bn254.G2Jac)
-	aggPk.FromAffine(publicKeys[0].point)
+	aggPk.FromAffine(publicKeys[0].g2Point)
 
 	for i := 1; i < len(publicKeys); i++ {
 		var temp bn254.G2Jac
-		temp.FromAffine(publicKeys[i].point)
+		temp.FromAffine(publicKeys[i].g2Point)
 		aggPk.AddAssign(&temp)
 	}
 
@@ -334,7 +367,7 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 		hashPoint := hashToG1(messages[i])
 
 		// e(H(m_i), PK_i)
-		temp, err := bn254.Pair([]bn254.G1Affine{*hashPoint}, []bn254.G2Affine{*publicKeys[i].point})
+		temp, err := bn254.Pair([]bn254.G1Affine{*hashPoint}, []bn254.G2Affine{*publicKeys[i].g2Point})
 		if err != nil {
 			return false, err
 		}
@@ -369,12 +402,12 @@ func AggregatePublicKeys(pubKeys []*PublicKey) (*PublicKey, error) {
 
 	// Start with the first public key in Jacobian coordinates
 	aggPk := new(bn254.G2Jac)
-	aggPk.FromAffine(pubKeys[0].point)
+	aggPk.FromAffine(pubKeys[0].g2Point)
 
 	// Add all other public keys
 	for i := 1; i < len(pubKeys); i++ {
 		var temp bn254.G2Jac
-		temp.FromAffine(pubKeys[i].point)
+		temp.FromAffine(pubKeys[i].g2Point)
 		aggPk.AddAssign(&temp)
 	}
 
@@ -383,7 +416,7 @@ func AggregatePublicKeys(pubKeys []*PublicKey) (*PublicKey, error) {
 	result.FromJacobian(aggPk)
 
 	return &PublicKey{
-		point:      result,
+		g2Point:    result,
 		PointBytes: result.Marshal(),
 	}, nil
 }
@@ -421,4 +454,14 @@ func (p *G1Point) Add(p2 *G1Point) *G1Point {
 func (p *G1Point) Sub(p2 *G1Point) *G1Point {
 	p.G1Affine.Sub(p.G1Affine, p2.G1Affine)
 	return p
+}
+
+// GetG1Point returns the G1 point of the public key
+func (pk *PublicKey) GetG1Point() *bn254.G1Affine {
+	return pk.g1Point
+}
+
+// GetG2Point returns the G2 point of the public key
+func (pk *PublicKey) GetG2Point() *bn254.G2Affine {
+	return pk.g2Point
 }

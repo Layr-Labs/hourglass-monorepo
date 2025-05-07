@@ -439,11 +439,11 @@ func TestPublicKeyG2(t *testing.T) {
 	}
 
 	// Check that the public key is in G2
-	if !pk.point.IsOnCurve() {
+	if !pk.GetG2Point().IsOnCurve() {
 		t.Error("Public key point is not on curve")
 	}
 
-	if !pk.point.IsInSubGroup() {
+	if !pk.GetG2Point().IsInSubGroup() {
 		t.Error("Public key point is not in subgroup")
 	}
 

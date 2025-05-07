@@ -3,6 +3,8 @@ package bn254
 import (
 	"bytes"
 	"testing"
+
+	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
 )
 
 func Test_BN254(t *testing.T) {
@@ -390,26 +392,76 @@ func TestHashToG1(t *testing.T) {
 	}
 }
 
-func TestPublicKeyG2(t *testing.T) {
+func TestPublicKeyG1G2(t *testing.T) {
 	// Generate a key pair
 	sk, pk, err := GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("Failed to generate key pair: %v", err)
 	}
 
-	// Check that the public key is in G2
-	if !pk.point.IsOnCurve() {
-		t.Error("Public key point is not on curve")
+	// Get both G1 and G2 points
+	g1Point := pk.GetG1Point()
+	g2Point := pk.GetG2Point()
+
+	// Verify G1 point
+	if g1Point == nil {
+		t.Fatal("G1 point is nil")
+	}
+	if !g1Point.IsOnCurve() {
+		t.Fatal("G1 point is not on the curve")
+	}
+	if !g1Point.IsInSubGroup() {
+		t.Fatal("G1 point is not in the subgroup")
 	}
 
-	if !pk.point.IsInSubGroup() {
-		t.Error("Public key point is not in subgroup")
+	// Verify G2 point
+	if g2Point == nil {
+		t.Fatal("G2 point is nil")
+	}
+	if !g2Point.IsOnCurve() {
+		t.Fatal("G2 point is not on the curve")
+	}
+	if !g2Point.IsInSubGroup() {
+		t.Fatal("G2 point is not in the subgroup")
 	}
 
-	// Verify that the public key matches the private key
-	expectedPk := sk.Public()
-	if !bytes.Equal(pk.PointBytes, expectedPk.PointBytes) {
-		t.Error("Public key does not match private key")
+	// Verify that both points correspond to the same private key
+	g1Check := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, sk.scalar)
+	g2Check := new(bn254.G2Affine).ScalarMultiplication(&g2Gen, sk.scalar)
+
+	if !g1Point.Equal(g1Check) {
+		t.Fatal("G1 point does not match private key")
+	}
+	if !g2Point.Equal(g2Check) {
+		t.Fatal("G2 point does not match private key")
+	}
+}
+
+func TestPublicKeyFromBytes(t *testing.T) {
+	// Generate a key pair
+	_, pk, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	// Test G2 point bytes
+	g2Bytes := pk.GetG2Point().Marshal()
+	pkFromG2, err := NewPublicKeyFromBytes(g2Bytes)
+	if err != nil {
+		t.Fatalf("Failed to create public key from G2 bytes: %v", err)
+	}
+	if !pkFromG2.GetG2Point().Equal(pk.GetG2Point()) {
+		t.Fatal("G2 point mismatch after unmarshaling")
+	}
+
+	// Test G1 point bytes
+	g1Bytes := pk.GetG1Point().Marshal()
+	pkFromG1, err := NewPublicKeyFromBytes(g1Bytes)
+	if err != nil {
+		t.Fatalf("Failed to create public key from G1 bytes: %v", err)
+	}
+	if !pkFromG1.GetG1Point().Equal(pk.GetG1Point()) {
+		t.Fatal("G1 point mismatch after unmarshaling")
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -163,7 +162,7 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 		// no signers yet, initialize the aggregated operators
 		ac.aggregatedOperators = &aggregatedOperators{
 			// operator's public key
-			signersG2: bn254.NewZeroG1Point().Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{}))),
+			// signersG2: bn254.NewZeroG1Point().Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{}))),
 
 			signersAggSig: sig,
 
@@ -172,7 +171,7 @@ func (ac *AggregationCertificate) ProcessNewSignature(
 			totalSigners: 1,
 		}
 	} else {
-		ac.aggregatedOperators.signersG2.Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{})))
+		// ac.aggregatedOperators.signersG2.Add(bn254.NewG1Point(sig.Sig.X.BigInt(&big.Int{}), sig.Sig.Y.BigInt(&big.Int{})))
 	}
 
 	return nil
