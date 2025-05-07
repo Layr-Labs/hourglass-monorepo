@@ -8,7 +8,7 @@ import (
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/aggregatorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -135,8 +135,9 @@ func (e *Executor) receiveTaskResponse(originalTask *performerTask.PerformerTask
 }
 
 func (e *Executor) signResult(result *performerTask.PerformerTaskResult) ([]byte, error) {
-	digest := crypto.Keccak256(result.Result)
-	digestBytes := [32]byte(digest)
+	// Generate a keccak256 hash of the result so that our signature is fixed in size.
+	// This is for compatibility with the certificate verifier.
+	digestBytes := util.GetKeccak256Digest(result.Result)
 
 	return e.signer.SignMessage(digestBytes[:])
 }

@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/base64"
+	"github.com/ethereum/go-ethereum/crypto"
 	"strings"
 )
 
@@ -135,4 +136,9 @@ func ShortenHex(publicKey string) string {
 
 func AreAddressesEqual(a, b string) bool {
 	return strings.EqualFold(a, b)
+}
+
+func GetKeccak256Digest(input []byte) [32]byte {
+	digest := crypto.Keccak256(input)
+	return [32]byte(digest)
 }
