@@ -78,7 +78,7 @@ cd contracts/script/common/utils
 go run generate_bls_params.go 0x90F79bf6EB2c4f870365E785982E1f101E93b906 31337
 ```
 
-This will output the `PUBKEY_REGISTRATION_PARAMS` value to use in the next step.
+This will output the `PUBKEY_REGISTRATION_PARAMS` value to use in the next step. Store the BLS private key securely
 
 ### 8. Register Operator
 
