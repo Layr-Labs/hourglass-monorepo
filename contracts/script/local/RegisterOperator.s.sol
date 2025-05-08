@@ -51,7 +51,9 @@ contract RegisterOperator is Script {
                 data: abi.encode(
                     ITaskAVSRegistrarTypes.OperatorRegistrationParams({
                         socket: socket,
-                        pubkeyRegistrationParams: abi.decode(pubkeyRegistrationParams, (ITaskAVSRegistrarTypes.PubkeyRegistrationParams))
+                        pubkeyRegistrationParams: abi.decode(
+                            pubkeyRegistrationParams, (ITaskAVSRegistrarTypes.PubkeyRegistrationParams)
+                        )
                     })
                 )
             })

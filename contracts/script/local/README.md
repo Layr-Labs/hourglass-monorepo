@@ -89,7 +89,7 @@ Register an operator to the EigenLayer Core Protocol and aggregator operator set
 make register-operator \
   OPERATOR_PRIVATE_KEY='<ANVIL-KEY-3>' \
   ALLOCATION_DELAY=7200 \
-  METADATA_URI='Aggregator Operator' \
+  METADATA_URI='AggregatorOperator' \
   AVS_ADDRESS='0x70997970C51812dc3A010C7d01b50e0d17dc79C8' \
   OPERATOR_SET_ID=0 \
   SOCKET='127.0.0.1:8555' \
@@ -105,7 +105,7 @@ Register an operator to the EigenLayer Core Protocol and executor operator set:
 make register-operator \
   OPERATOR_PRIVATE_KEY='<ANVIL-KEY-4>' \
   ALLOCATION_DELAY=7200 \
-  METADATA_URI='Executor Operator' \
+  METADATA_URI='ExecutorOperator' \
   AVS_ADDRESS='0x70997970C51812dc3A010C7d01b50e0d17dc79C8' \
   OPERATOR_SET_ID=1 \
   SOCKET='127.0.0.1:8556' \
