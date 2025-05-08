@@ -10,6 +10,9 @@ import {
 import {IDelegationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 import {IAVSRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
+import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+
+import {ITaskAVSRegistrar, ITaskAVSRegistrarTypes} from "../../src/interfaces/avs/l1/ITaskAVSRegistrar.sol";
 
 contract RegisterOperator is Script {
     // Eigenlayer Core Contracts
@@ -18,7 +21,14 @@ contract RegisterOperator is Script {
 
     function setUp() public {}
 
-    function run(uint32 allocatonDelay, string memory metadataURI, address avs, uint32 operatorSetId, bytes memory data) public {
+    function run(
+        uint32 allocatonDelay,
+        string memory metadataURI,
+        address avs,
+        uint32 operatorSetId,
+        string memory socket,
+        ITaskAVSRegistrarTypes.PubkeyRegistrationParams memory pubkeyRegistrationParams
+    ) public {
         // Load the private key from the environment variable
         uint256 operatorPrivateKey = vm.envUint("PRIVATE_KEY_OPERATOR");
         address operator = vm.addr(operatorPrivateKey);
@@ -28,18 +38,30 @@ contract RegisterOperator is Script {
 
         // 1. Register the operator
         DELEGATION_MANAGER.registerAsOperator(operator, allocatonDelay, metadataURI);
-        bool isOperator = DELEGATION_MANAGER.isOperator(operator);
-        console.log("Operator registered:", operator, isOperator);
+        console.log("Operator registered:", operator, DELEGATION_MANAGER.isOperator(operator));
 
-        // 2. Register to operator set
+        // 2. Register for operator set
         uint32[] memory operatorSetIds = new uint32[](1);
         operatorSetIds[0] = operatorSetId;
-        ALLOCATION_MANAGER.registerForOperatorSets(operator, IAllocationManagerTypes.RegisterParams({
-            avs: avs,
-            operatorSetIds: operatorSetIds,
-            data: data
-        }));
-        console.log("Operator registered to operator set:", operatorSetId);
+        ALLOCATION_MANAGER.registerForOperatorSets(
+            operator,
+            IAllocationManagerTypes.RegisterParams({
+                avs: avs,
+                operatorSetIds: operatorSetIds,
+                data: abi.encode(
+                    ITaskAVSRegistrarTypes.OperatorRegistrationParams({
+                        socket: socket,
+                        pubkeyRegistrationParams: pubkeyRegistrationParams
+                    })
+                )
+            })
+        );
+        console.log(
+            "Operator registered to operator set:",
+            avs,
+            operatorSetId,
+            ALLOCATION_MANAGER.isMemberOfOperatorSet(operator, OperatorSet(avs, operatorSetId))
+        );
 
         vm.stopBroadcast();
     }
