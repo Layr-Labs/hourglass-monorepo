@@ -22,6 +22,7 @@ contract RegisterOperator is Script {
     function setUp() public {}
 
     function run(
+        bytes32 operatorPrivateKey,
         uint32 allocationDelay,
         string memory metadataURI,
         address avs,
@@ -30,10 +31,9 @@ contract RegisterOperator is Script {
         ITaskAVSRegistrarTypes.PubkeyRegistrationParams memory pubkeyRegistrationParams
     ) public {
         // Load the private key from the environment variable
-        uint256 operatorPrivateKey = vm.envUint("PRIVATE_KEY_OPERATOR");
-        address operator = vm.addr(operatorPrivateKey);
+        address operator = vm.addr(uint256(operatorPrivateKey));
 
-        vm.startBroadcast(operatorPrivateKey);
+        vm.startBroadcast(uint256(operatorPrivateKey));
         console.log("Operator address:", operator);
 
         // 1. Register the operator
