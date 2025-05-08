@@ -22,7 +22,7 @@ contract RegisterOperator is Script {
     function setUp() public {}
 
     function run(
-        uint32 allocatonDelay,
+        uint32 allocationDelay,
         string memory metadataURI,
         address avs,
         uint32 operatorSetId,
@@ -37,7 +37,7 @@ contract RegisterOperator is Script {
         console.log("Operator address:", operator);
 
         // 1. Register the operator
-        DELEGATION_MANAGER.registerAsOperator(operator, allocatonDelay, metadataURI);
+        DELEGATION_MANAGER.registerAsOperator(operator, allocationDelay, metadataURI);
         console.log("Operator registered:", operator, DELEGATION_MANAGER.isOperator(operator));
 
         // 2. Register for operator set
