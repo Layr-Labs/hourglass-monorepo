@@ -66,7 +66,21 @@ make setup-avs-task-mailbox-config \
   RPC_URL="127.0.0.1:8545"
 ```
 
-### 7. Register Operator
+### 7. Generate BLS Parameters for Operator Registration
+
+Before registering an operator, you need to generate the `PUBKEY_REGISTRATION_PARAMS`:
+
+```sh
+# First initialize a Go module to install dependencies
+cd contracts/script/common/utils
+
+# Run the script with operator address and chain ID
+go run generate_bls_params.go 0x90F79bf6EB2c4f870365E785982E1f101E93b906 31337
+```
+
+This will output the `PUBKEY_REGISTRATION_PARAMS` value to use in the next step.
+
+### 8. Register Operator
 
 Register an operator to the EigenLayer Core Protocol and operator set:
 
@@ -81,7 +95,7 @@ make register-operator \
   RPC_URL="127.0.0.1:8545"
 ```
 
-### 8. Create Task
+### 9. Create Task
 
 Create a Task on L2 Mailbox
 
@@ -105,6 +119,7 @@ Some scripts require environment variables, such as `PRIVATE_KEY_AVS`, to be set
 - `SetupAVSTaskMailboxConfig.s.sol`: Configures the TaskMailbox with AVS and verifier addresses
 - `RegisterOperator.s.sol`: Registers an operator to the EigenLayer Core Protocol and operator set
 - `CreateTask.s.sol`: Creates a Task on L2 Mailbox
+- `generate_bls_params.go`: Generates BLS parameters for operator registration
 
 ## Additional Notes
 
