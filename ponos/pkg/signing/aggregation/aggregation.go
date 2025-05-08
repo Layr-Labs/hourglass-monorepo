@@ -13,9 +13,8 @@ import (
 )
 
 type Operator struct {
-	Address    string
-	PublicKey  *bn254.PublicKey
-	privateKey *bn254.PrivateKey // For testing purposes only
+	Address   string
+	PublicKey *bn254.PublicKey
 }
 
 // InitializeNewTaskWithWindow initializes a new aggregation certificate for a task window.

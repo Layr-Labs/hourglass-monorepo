@@ -16,14 +16,15 @@ import (
 func Test_Aggregation(t *testing.T) {
 	// Create test operators with key pairs
 	operators := make([]*Operator, 4) // Changed to 4 operators
+	privateKeys := make([]*bn254.PrivateKey, 4)
 	for i := 0; i < 4; i++ {
 		privKey, pubKey, err := bn254.GenerateKeyPair()
 		require.NoError(t, err)
 		operators[i] = &Operator{
-			Address:    fmt.Sprintf("0x%d", i+1), // Simple address format for testing
-			PublicKey:  pubKey,
-			privateKey: privKey,
+			Address:   fmt.Sprintf("0x%d", i+1), // Simple address format for testing
+			PublicKey: pubKey,
 		}
+		privateKeys[i] = privKey
 	}
 
 	// Initialize new task
@@ -61,7 +62,7 @@ func Test_Aggregation(t *testing.T) {
 		}
 
 		// Sign the response
-		sig, err := operator.privateKey.Sign(digest[:])
+		sig, err := privateKeys[i].Sign(digest[:])
 		require.NoError(t, err)
 		taskResult.Signature = sig.Bytes()
 		individualSigs[i] = sig
