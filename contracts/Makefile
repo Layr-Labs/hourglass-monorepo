@@ -1,4 +1,4 @@
-.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config register-operator create-task
+.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config generate-bls-params register-operator create-task 
 
 # Deploy Task Mailbox
 deploy-task-mailbox:
@@ -20,6 +20,10 @@ deploy-avs-l2-contracts:
 setup-avs-task-mailbox-config:
 	forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address, address)" $(TASK_MAILBOX_ADDRESS) $(CERTIFICATE_VERIFIER_ADDRESS) $(TASK_HOOK_ADDRESS)
 
+# Generate BLS Parameters for Operator Registration
+generate-bls-params:
+	cd script/common/utils && go run generate_bls_params.go $(OPERATOR_ADDRESS) $(CHAIN_ID) $(TASK_AVS_REGISTRAR_ADDRESS)
+
 # Register Operator
 register-operator:
 	forge script script/local/RegisterOperator.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(uint32, string, address, uint32, string, bytes)" $(ALLOCATION_DELAY) $(METADATA_URI) $(AVS_ADDRESS) $(OPERATOR_SET_ID) $(SOCKET) $(PUBKEY_REGISTRATION_PARAMS)
@@ -36,6 +40,7 @@ help:
 	@echo "  make setup-avs-l1 TASK_AVS_REGISTRAR_ADDRESS=0x... - Setup AVS on L1"
 	@echo "  make deploy-avs-l2-contracts - Deploy AVS L2 Contracts"
 	@echo "  make setup-avs-task-mailbox-config TASK_MAILBOX_ADDRESS=0x... CERTIFICATE_VERIFIER_ADDRESS=0x... TASK_HOOK_ADDRESS=0x... - Setup AVS Task Mailbox Config"
+	@echo "  make generate-bls-params OPERATOR_ADDRESS=0x... CHAIN_ID=31337 TASK_AVS_REGISTRAR_ADDRESS=0x... - Generate BLS Parameters for Operator Registration"
 	@echo "  make register-operator ALLOCATION_DELAY=0 METADATA_URI=0x... AVS_ADDRESS=0x... OPERATOR_SET_ID=0 SOCKET=0x... PUBKEY_REGISTRATION_PARAMS=0x... - Register Operator"
 	@echo "  make create-task TASK_MAILBOX_ADDRESS=0x... AVS_ADDRESS=0x... - Create Task"
 	@echo ""
