@@ -74,11 +74,11 @@ Before registering an operator, you need to generate the `PUBKEY_REGISTRATION_PA
 # First initialize a Go module to install dependencies
 cd contracts/script/common/utils
 
-# Run the script with operator address and chain ID
-go run generate_bls_params.go 0x90F79bf6EB2c4f870365E785982E1f101E93b906 31337
+# Run the script with operator address, chain ID, and TaskAVSRegistrar contract address
+go run generate_bls_params.go 0x90F79bf6EB2c4f870365E785982E1f101E93b906 31337 0xf4c5C29b14f0237131F7510A51684c8191f98E06
 ```
 
-This will output the `PUBKEY_REGISTRATION_PARAMS` value to use in the next step. Store the BLS private key securely
+This will output the `PUBKEY_REGISTRATION_PARAMS` value to use in the next step. Store the BLS private key securely.
 
 ### 8. Register Operator
 

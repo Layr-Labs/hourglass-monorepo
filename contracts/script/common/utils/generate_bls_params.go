@@ -22,8 +22,8 @@ var (
 )
 
 func main() {
-	if len(os.Args) < 3 {
-		fmt.Println("Usage: go run generate_bls_params.go <operator_address> <chain_id>")
+	if len(os.Args) < 4 {
+		fmt.Println("Usage: go run generate_bls_params.go <operator_address> <chain_id> <contract_address>")
 		os.Exit(1)
 	}
 
@@ -33,6 +33,7 @@ func main() {
 		fmt.Println("Invalid chain ID")
 		os.Exit(1)
 	}
+	contractAddress := common.HexToAddress(os.Args[3])
 
 	// Generate a random private key for BLS signing
 	var privateKeyBytes [32]byte
@@ -94,7 +95,7 @@ func main() {
 	pubkeyG2.ScalarMultiplication(&g2Gen, privateKeyBigInt)
 
 	// Calculate the EIP-712 typed message hash
-	msgHash := calculatePubkeyRegistrationMessageHash(operatorAddress, chainID)
+	msgHash := calculatePubkeyRegistrationMessageHash(operatorAddress, chainID, contractAddress)
 
 	// Hash the message to a point on G1 curve using try-and-increment
 	hashPoint := hashToG1(msgHash)
@@ -111,12 +112,12 @@ func main() {
 }
 
 // calculatePubkeyRegistrationMessageHash calculates the EIP-712 hash for BLS public key registration
-func calculatePubkeyRegistrationMessageHash(operator common.Address, chainID *big.Int) []byte {
+func calculatePubkeyRegistrationMessageHash(operator common.Address, chainID *big.Int, contractAddress common.Address) []byte {
 	// Calculate PUBKEY_REGISTRATION_TYPEHASH = keccak256("BN254PubkeyRegistration(address operator)")
 	pubkeyRegistrationTypehash := crypto.Keccak256([]byte(typehashString))
 
 	// Calculate the domain separator for EIP-712
-	domainSeparator := calculateDomainSeparator(chainID)
+	domainSeparator := calculateDomainSeparator(chainID, contractAddress)
 
 	// Encode the message: keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator))
 	encodedMessage := crypto.Keccak256(
@@ -135,30 +136,35 @@ func calculatePubkeyRegistrationMessageHash(operator common.Address, chainID *bi
 }
 
 // calculateDomainSeparator calculates the EIP-712 domain separator
-func calculateDomainSeparator(chainID *big.Int) []byte {
+func calculateDomainSeparator(chainID *big.Int, contractAddress common.Address) []byte {
 	// EIP-712 domain separator: keccak256(abi.encode(
-	//     keccak256("EIP712Domain(string name,string version,uint256 chainId)"),
+	//     keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
 	//     keccak256(bytes(name)),
 	//     keccak256(bytes(version)),
-	//     chainId))
-	domainTypehash := crypto.Keccak256([]byte("EIP712Domain(string name,string version,uint256 chainId)"))
+	//     chainId,
+	//     verifyingContract))
+	domainTypehash := crypto.Keccak256([]byte("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"))
 	nameHash := crypto.Keccak256([]byte(domainName))
 	versionHash := crypto.Keccak256([]byte(domainVersion))
 
-	// Encode the domain data
+	// Encode the domain data with contract address
 	chainIDPadded := common.LeftPadBytes(chainID.Bytes(), 32)
+	contractAddressPadded := common.LeftPadBytes(contractAddress.Bytes(), 32)
 
-	// Calculate the domain separator
+	// Calculate the domain separator with contract address
 	return crypto.Keccak256(
 		append(
 			append(
 				append(
-					domainTypehash,
-					nameHash...,
+					append(
+						domainTypehash,
+						nameHash...,
+					),
+					versionHash...,
 				),
-				versionHash...,
+				chainIDPadded...,
 			),
-			chainIDPadded...,
+			contractAddressPadded...,
 		),
 	)
 }
