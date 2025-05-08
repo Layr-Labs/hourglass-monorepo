@@ -66,7 +66,22 @@ make setup-avs-task-mailbox-config \
   RPC_URL="127.0.0.1:8545"
 ```
 
-### 7. Create Task
+### 7. Register Operator
+
+Register an operator to the EigenLayer Core Protocol and operator set:
+
+```sh
+make register-operator \
+  ALLOCATION_DELAY=7200 \
+  METADATA_URI='Operator 1' \
+  AVS_ADDRESS='0x70997970C51812dc3A010C7d01b50e0d17dc79C8' \
+  OPERATOR_SET_ID=0 \
+  SOCKET='127.0.0.1:8555' \
+  PUBKEY_REGISTRATION_PARAMS='0x...' \
+  RPC_URL="127.0.0.1:8545"
+```
+
+### 8. Create Task
 
 Create a Task on L2 Mailbox
 
@@ -88,6 +103,8 @@ Some scripts require environment variables, such as `PRIVATE_KEY_AVS`, to be set
 - `SetupAVSL1.s.sol`: Registers AVS L1 contracts
 - `DeployAVSL2Contracts.s.sol`: Deploys AVS L2 contracts
 - `SetupAVSTaskMailboxConfig.s.sol`: Configures the TaskMailbox with AVS and verifier addresses
+- `RegisterOperator.s.sol`: Registers an operator to the EigenLayer Core Protocol and operator set
+- `CreateTask.s.sol`: Creates a Task on L2 Mailbox
 
 ## Additional Notes
 
