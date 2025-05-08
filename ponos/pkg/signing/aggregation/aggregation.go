@@ -17,9 +17,56 @@ type Operator struct {
 	PublicKey *bn254.PublicKey
 }
 
-// InitializeNewTaskWithWindow initializes a new aggregation certificate for a task window.
+// Error variables for input validation
+var (
+	ErrInvalidTaskId       = fmt.Errorf("taskId must not be empty")
+	ErrNoOperatorAddresses = fmt.Errorf("operatorAddresses must not be empty")
+	ErrInvalidThreshold    = fmt.Errorf("thresholdPercentage must be between 1 and 100")
+)
+
+type AggregatedCertificate struct {
+	// the unique identifier for the task
+	TaskId []byte
+
+	// the output of the task
+	TaskResponse []byte
+
+	// keccak256 hash of the task response
+	TaskResponseDigest []byte
+
+	// public keys for all operators that did not sign the task
+	NonSignersPubKeys []*bn254.PublicKey
+
+	// public keys for all operators that were selected to participate in the task
+	AllOperatorsPubKeys []*bn254.PublicKey
+
+	// aggregated signature of the signers
+	SignersSignature *bn254.Signature
+
+	// aggregated public key of the signers
+	SignersPublicKey *bn254.G2Point
+}
+
+// TaskResultAggregator represents the data needed to initialize a new aggregation task window.
+type TaskResultAggregator struct {
+	mu                  sync.Mutex
+	TaskId              []byte
+	TaskCreatedBlock    uint32
+	OperatorSetId       uint32
+	ThresholdPercentage uint8
+	TaskData            []byte
+	TimeToExpiry        time.Duration
+	Operators           []*Operator
+	ReceivedSignatures  map[string]*ReceivedResponse // operator address -> signature
+	AggregatePublicKey  *bn254.PublicKey
+
+	aggregatedOperators *aggregatedOperators
+	// Add more fields as needed for aggregation
+}
+
+// NewTaskResultAggregator initializes a new aggregation certificate for a task window.
 // All required data must be provided as arguments; no network or chain calls are performed.
-func InitializeNewTaskWithWindow(
+func NewTaskResultAggregator(
 	ctx context.Context,
 	taskId []byte,
 	taskCreatedBlock uint32,
@@ -59,94 +106,6 @@ func InitializeNewTaskWithWindow(
 	return cert, nil
 }
 
-// Error variables for input validation
-var (
-	ErrInvalidTaskId       = fmt.Errorf("taskId must not be empty")
-	ErrNoOperatorAddresses = fmt.Errorf("operatorAddresses must not be empty")
-	ErrInvalidThreshold    = fmt.Errorf("thresholdPercentage must be between 1 and 100")
-)
-
-type AggregatedCertificate struct {
-	// the unique identifier for the task
-	TaskId []byte
-
-	// the output of the task
-	TaskResponse []byte
-
-	// keccak256 hash of the task response
-	TaskResponseDigest []byte
-
-	// public keys for all operators that did not sign the task
-	NonSignersPubKeys []*bn254.PublicKey
-
-	// public keys for all operators that were selected to participate in the task
-	AllOperatorsPubKeys []*bn254.PublicKey
-
-	// aggregated signature of the signers
-	SignersSignature *bn254.Signature
-
-	// aggregated public key of the signers
-	SignersPublicKey *bn254.G2Point
-}
-
-// GenerateFinalCertificate generates the final aggregated certificate for the task.
-func (ac *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertificate, error) {
-	// TODO(seanmcgary): nonSignerOperatorIds should be a list of operatorIds which is the hash of their public key
-	nonSignerOperatorIds := make([]*Operator, 0)
-	for _, operator := range ac.Operators {
-		if _, ok := ac.aggregatedOperators.signersOperatorSet[operator.Address]; !ok {
-			nonSignerOperatorIds = append(nonSignerOperatorIds, operator)
-		}
-	}
-
-	// TODO: add this based on the avs registry
-	// the contract requires a sorted nonSignersOperatorIds
-	// sort.SliceStable(nonSignerOperatorIds, func(i, j int) bool {
-	// 	iOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[i][:])
-	// 	jOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[j][:])
-	// 	return iOprInt.Cmp(jOprInt) == -1
-	// })
-
-	nonSignerPublicKeys := make([]*bn254.PublicKey, 0)
-	for _, operatorId := range nonSignerOperatorIds {
-		operator := util.Find(ac.Operators, func(op *Operator) bool {
-			return strings.EqualFold(op.Address, operatorId.Address)
-		})
-		nonSignerPublicKeys = append(nonSignerPublicKeys, operator.PublicKey)
-	}
-
-	allPublicKeys := util.Map(ac.Operators, func(o *Operator, i uint64) *bn254.PublicKey {
-		return o.PublicKey
-	})
-
-	return &AggregatedCertificate{
-		TaskId:              ac.TaskId,
-		TaskResponse:        ac.aggregatedOperators.lastReceivedResponse.TaskResult.Output,
-		TaskResponseDigest:  ac.aggregatedOperators.lastReceivedResponse.Digest,
-		NonSignersPubKeys:   nonSignerPublicKeys,
-		AllOperatorsPubKeys: allPublicKeys,
-		SignersPublicKey:    ac.aggregatedOperators.signersG2,
-		SignersSignature:    ac.aggregatedOperators.signersAggSig,
-	}, nil
-}
-
-// TaskResultAggregator represents the data needed to initialize a new aggregation task window.
-type TaskResultAggregator struct {
-	mu                  sync.Mutex
-	TaskId              []byte
-	TaskCreatedBlock    uint32
-	OperatorSetId       uint32
-	ThresholdPercentage uint8
-	TaskData            []byte
-	TimeToExpiry        time.Duration
-	Operators           []*Operator
-	ReceivedSignatures  map[string]*ReceivedResponse // operator address -> signature
-	AggregatePublicKey  *bn254.PublicKey
-
-	aggregatedOperators *aggregatedOperators
-	// Add more fields as needed for aggregation
-}
-
 type ReceivedResponse struct {
 	// TaskId is the unique identifier for the task
 	TaskId []byte
@@ -177,27 +136,27 @@ type aggregatedOperators struct {
 	lastReceivedResponse *ReceivedResponse
 }
 
-func (ac *TaskResultAggregator) SigningThresholdMet() bool {
+func (tra *TaskResultAggregator) SigningThresholdMet() bool {
 	// Check if threshold is met (by count)
-	required := int((float64(ac.ThresholdPercentage) / 100.0) * float64(len(ac.Operators)))
+	required := int((float64(tra.ThresholdPercentage) / 100.0) * float64(len(tra.Operators)))
 	if required == 0 {
 		required = 1 // Always require at least one
 	}
-	return ac.aggregatedOperators.totalSigners >= required
+	return tra.aggregatedOperators.totalSigners >= required
 }
 
 // ProcessNewSignature processes a new signature submission from an operator.
 // Returns true if the threshold is met after this submission, false otherwise.
-func (ac *TaskResultAggregator) ProcessNewSignature(
+func (tra *TaskResultAggregator) ProcessNewSignature(
 	ctx context.Context,
 	taskId []byte,
 	taskResponse *types.TaskResult,
 ) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
+	tra.mu.Lock()
+	defer tra.mu.Unlock()
 
 	// Validate operator is in the allowed set
-	operator := util.Find(ac.Operators, func(op *Operator) bool {
+	operator := util.Find(tra.Operators, func(op *Operator) bool {
 		return op.Address == taskResponse.OperatorAddress
 	})
 	if operator == nil {
@@ -209,17 +168,17 @@ func (ac *TaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Initialize map if nil
-	if ac.ReceivedSignatures == nil {
-		ac.ReceivedSignatures = make(map[string]*ReceivedResponse)
+	if tra.ReceivedSignatures == nil {
+		tra.ReceivedSignatures = make(map[string]*ReceivedResponse)
 	}
 
 	// check to see if the operator has already submitted a signature
-	if _, ok := ac.ReceivedSignatures[taskResponse.OperatorAddress]; ok {
+	if _, ok := tra.ReceivedSignatures[taskResponse.OperatorAddress]; ok {
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
 	// verify the signature
-	sig, digest, err := ac.VerifyResponseSignature(taskResponse, operator)
+	sig, digest, err := tra.VerifyResponseSignature(taskResponse, operator)
 	if err != nil {
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
@@ -232,12 +191,12 @@ func (ac *TaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Store the signature
-	ac.ReceivedSignatures[taskResponse.OperatorAddress] = rr
+	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
 
 	// verify signature
-	if ac.aggregatedOperators == nil {
+	if tra.aggregatedOperators == nil {
 		// no signers yet, initialize the aggregated operators
-		ac.aggregatedOperators = &aggregatedOperators{
+		tra.aggregatedOperators = &aggregatedOperators{
 			// operator's public key
 			signersG2: bn254.NewZeroG2Point().AddPublicKey(operator.PublicKey),
 
@@ -250,11 +209,11 @@ func (ac *TaskResultAggregator) ProcessNewSignature(
 			lastReceivedResponse: rr,
 		}
 	} else {
-		ac.aggregatedOperators.signersG2.AddPublicKey(operator.PublicKey)
-		ac.aggregatedOperators.signersAggSig.Add(sig)
-		ac.aggregatedOperators.signersOperatorSet[taskResponse.OperatorAddress] = true
-		ac.aggregatedOperators.totalSigners++
-		ac.aggregatedOperators.lastReceivedResponse = rr
+		tra.aggregatedOperators.signersG2.AddPublicKey(operator.PublicKey)
+		tra.aggregatedOperators.signersAggSig.Add(sig)
+		tra.aggregatedOperators.signersOperatorSet[taskResponse.OperatorAddress] = true
+		tra.aggregatedOperators.totalSigners++
+		tra.aggregatedOperators.lastReceivedResponse = rr
 	}
 
 	return nil
@@ -262,7 +221,7 @@ func (ac *TaskResultAggregator) ProcessNewSignature(
 
 // VerifyResponseSignature verifies that the signature of the response is valid against
 // the operators public key.
-func (ac *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator) (*bn254.Signature, []byte, error) {
+func (tra *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator) (*bn254.Signature, []byte, error) {
 	digestBytes := util.GetKeccak256Digest(taskResponse.Output)
 	sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)
 	if err != nil {
@@ -275,6 +234,47 @@ func (ac *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.Task
 		return nil, nil, fmt.Errorf("signature verification failed: signature does not match operator public key")
 	}
 	return sig, digestBytes[:], nil
+}
+
+// GenerateFinalCertificate generates the final aggregated certificate for the task.
+func (tra *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertificate, error) {
+	// TODO(seanmcgary): nonSignerOperatorIds should be a list of operatorIds which is the hash of their public key
+	nonSignerOperatorIds := make([]*Operator, 0)
+	for _, operator := range tra.Operators {
+		if _, ok := tra.aggregatedOperators.signersOperatorSet[operator.Address]; !ok {
+			nonSignerOperatorIds = append(nonSignerOperatorIds, operator)
+		}
+	}
+
+	// TODO: add this based on the avs registry
+	// the contract requires a sorted nonSignersOperatorIds
+	// sort.SliceStable(nonSignerOperatorIds, func(i, j int) bool {
+	// 	iOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[i][:])
+	// 	jOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[j][:])
+	// 	return iOprInt.Cmp(jOprInt) == -1
+	// })
+
+	nonSignerPublicKeys := make([]*bn254.PublicKey, 0)
+	for _, operatorId := range nonSignerOperatorIds {
+		operator := util.Find(tra.Operators, func(op *Operator) bool {
+			return strings.EqualFold(op.Address, operatorId.Address)
+		})
+		nonSignerPublicKeys = append(nonSignerPublicKeys, operator.PublicKey)
+	}
+
+	allPublicKeys := util.Map(tra.Operators, func(o *Operator, i uint64) *bn254.PublicKey {
+		return o.PublicKey
+	})
+
+	return &AggregatedCertificate{
+		TaskId:              tra.TaskId,
+		TaskResponse:        tra.aggregatedOperators.lastReceivedResponse.TaskResult.Output,
+		TaskResponseDigest:  tra.aggregatedOperators.lastReceivedResponse.Digest,
+		NonSignersPubKeys:   nonSignerPublicKeys,
+		AllOperatorsPubKeys: allPublicKeys,
+		SignersPublicKey:    tra.aggregatedOperators.signersG2,
+		SignersSignature:    tra.aggregatedOperators.signersAggSig,
+	}, nil
 }
 
 // AggregatePublicKeys aggregates a list of public keys into a single public key.

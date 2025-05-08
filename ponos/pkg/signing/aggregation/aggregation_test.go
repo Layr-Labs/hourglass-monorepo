@@ -30,7 +30,7 @@ func Test_Aggregation(t *testing.T) {
 	// Initialize new task
 	taskId := []byte("test-task-1")
 	taskData := []byte("test-data")
-	agg, err := InitializeNewTaskWithWindow(
+	agg, err := NewTaskResultAggregator(
 		context.Background(),
 		taskId,
 		100, // taskCreatedBlock
