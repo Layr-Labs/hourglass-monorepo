@@ -28,7 +28,7 @@ contract RegisterOperator is Script {
         address avs,
         uint32 operatorSetId,
         string memory socket,
-        ITaskAVSRegistrarTypes.PubkeyRegistrationParams memory pubkeyRegistrationParams
+        bytes memory pubkeyRegistrationParams
     ) public {
         // Load the private key from the environment variable
         address operator = vm.addr(uint256(operatorPrivateKey));
@@ -51,7 +51,7 @@ contract RegisterOperator is Script {
                 data: abi.encode(
                     ITaskAVSRegistrarTypes.OperatorRegistrationParams({
                         socket: socket,
-                        pubkeyRegistrationParams: pubkeyRegistrationParams
+                        pubkeyRegistrationParams: abi.decode(pubkeyRegistrationParams, (ITaskAVSRegistrarTypes.PubkeyRegistrationParams))
                     })
                 )
             })
