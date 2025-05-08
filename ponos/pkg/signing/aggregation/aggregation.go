@@ -57,7 +57,7 @@ type TaskResultAggregator struct {
 	TaskData            []byte
 	TimeToExpiry        time.Duration
 	Operators           []*Operator
-	ReceivedSignatures  map[string]*ReceivedResponse // operator address -> signature
+	ReceivedSignatures  map[string]*ReceivedResponseWithDigest // operator address -> signature
 	AggregatePublicKey  *bn254.PublicKey
 
 	aggregatedOperators *aggregatedOperators
@@ -106,7 +106,7 @@ func NewTaskResultAggregator(
 	return cert, nil
 }
 
-type ReceivedResponse struct {
+type ReceivedResponseWithDigest struct {
 	// TaskId is the unique identifier for the task
 	TaskId []byte
 
@@ -133,7 +133,7 @@ type aggregatedOperators struct {
 	// simple count of signers. eventually this could represent stake weight or something
 	totalSigners int
 
-	lastReceivedResponse *ReceivedResponse
+	lastReceivedResponse *ReceivedResponseWithDigest
 }
 
 func (tra *TaskResultAggregator) SigningThresholdMet() bool {
@@ -169,7 +169,7 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 
 	// Initialize map if nil
 	if tra.ReceivedSignatures == nil {
-		tra.ReceivedSignatures = make(map[string]*ReceivedResponse)
+		tra.ReceivedSignatures = make(map[string]*ReceivedResponseWithDigest)
 	}
 
 	// check to see if the operator has already submitted a signature
@@ -183,7 +183,7 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
 
-	rr := &ReceivedResponse{
+	rr := &ReceivedResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
@@ -197,15 +197,19 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 	if tra.aggregatedOperators == nil {
 		// no signers yet, initialize the aggregated operators
 		tra.aggregatedOperators = &aggregatedOperators{
-			// operator's public key
+			// operator's public key to start an aggregated public key
 			signersG2: bn254.NewZeroG2Point().AddPublicKey(operator.PublicKey),
 
+			// signature of the task result payload
 			signersAggSig: sig,
 
+			// initialize the map of signers (operatorAddress --> true) to track who actually signed
 			signersOperatorSet: map[string]bool{taskResponse.OperatorAddress: true},
 
+			// initialize the count of signers (could eventually be weight or something else)
 			totalSigners: 1,
 
+			// store the last received response
 			lastReceivedResponse: rr,
 		}
 	} else {
@@ -237,7 +241,7 @@ func (tra *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.Tas
 }
 
 // GenerateFinalCertificate generates the final aggregated certificate for the task.
-func (tra *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertificate, error) {
+func (tra *TaskResultAggregator) GenerateFinalCertificate() *AggregatedCertificate {
 	// TODO(seanmcgary): nonSignerOperatorIds should be a list of operatorIds which is the hash of their public key
 	nonSignerOperatorIds := make([]*Operator, 0)
 	for _, operator := range tra.Operators {
@@ -274,7 +278,7 @@ func (tra *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertific
 		AllOperatorsPubKeys: allPublicKeys,
 		SignersPublicKey:    tra.aggregatedOperators.signersG2,
 		SignersSignature:    tra.aggregatedOperators.signersAggSig,
-	}, nil
+	}
 }
 
 // AggregatePublicKeys aggregates a list of public keys into a single public key.

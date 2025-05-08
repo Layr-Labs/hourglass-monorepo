@@ -78,8 +78,7 @@ func Test_Aggregation(t *testing.T) {
 	assert.True(t, agg.SigningThresholdMet())
 
 	// Generate final certificate
-	cert, err := agg.GenerateFinalCertificate()
-	require.NoError(t, err)
+	cert := agg.GenerateFinalCertificate()
 	require.NotNil(t, cert)
 
 	// Verify the aggregated signature
