@@ -190,10 +190,14 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 		Digest:     digest,
 	}
 
-	// Store the signature
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
 
-	// verify signature
+	// Begin aggregating signatures and public keys.
+	// The lastReceivedResponse will end up being the value used to for the final certificate.
+	//
+	// TODO: probably need some kind of comparison on results, otherwise the last operator in
+	// will always be the one that is used for the final certificate and could potentially be
+	// wrong or malicious.
 	if tra.aggregatedOperators == nil {
 		// no signers yet, initialize the aggregated operators
 		tra.aggregatedOperators = &aggregatedOperators{
