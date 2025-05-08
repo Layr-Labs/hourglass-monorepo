@@ -10,7 +10,7 @@ simulationConfig:
       - networkAddress: "localhost:9090"
         operatorAddress: "0xoperator123..."
         operatorSetId: 1
-        publicKey: "27ca30a9935d5c8435d4a2854cc6c376c253d6a4cb6e0026ea7a98b12789fd0b297a85d16550fe94ee0433eeac9a6a854d64e61ed82d7484b4287cb289ea962212e3a593a27a8aa7e196adc51336857c6fb30791fb70ac5bd8a522d4d486d0e3043f3e74c00a9f10bed939b07a06ff1b9bbb47794e613aa597d3e364c540bdf7"
+        publicKey: "1e14b1b9a847b5bedea4e44e18541fe153a7d791d68f651bc86ac4be7dfe36000116d8d71bd4ae56331f58bec5967ae1adad91823b5d4b90746a5d85c3c8faaa13a4880b8c163984d2fec316803a146b1b97f63d95e6ac9536c061924b6367131799e6499a8ea979bc6fac9e01d0002a5547894e9212f09d6b2ed94843593145"
 
 
 serverConfig:
@@ -25,12 +25,12 @@ operator:
     bls:
       keystore: |
         {
-          "publicKey": "006298d9fcf37ad16474df4a7536fbf7e8a0e8a5bbb24d73abdf048a4bf820330787130e90af3671e60afa2256a075966a2eecd21d04bc979d7bf3bd289a785004c3cc9aa53a8fa23b29787511315b4ad67577950e9091658f78cc60025c19f01ba6fd7aabda8e70984d3fec6b2fe6ebcb037e44dd9f261fb3ce87d54cd15b29",
+          "publicKey": "0b9adbefd52a9ef6d081d06dbdb8f5791321cd6676c19e1a594d845d4801e4551c61d9d2fcace2053b9928773cbaefb3a7b071be410ca21086941a4904d573261e2672e196e9e8528296807af313b0c4c27ac42a51db525842e4abbc66f4020426c07af913dd7703ebaef038004f892dc17d44f9f9c76c9c17dfb8de794e9213",
           "crypto": {
             "cipher": "aes-128-ctr",
-            "ciphertext": "a3ff48995642e16e0a11da5d6122ef96d701175e72f8cd62df84b92f0cf2c6ef",
+            "ciphertext": "d364b7efca8f6df2a5d0a973976d2ae27893e8ba04bed1c8008c95557591ff73",
             "cipherparams": {
-              "iv": "db170afaeb4ba040992820b10f3cb305"
+              "iv": "0b27b6a532f5519b011b2075372507cb"
             },
             "kdf": "scrypt",
             "kdfparams": {
@@ -38,11 +38,11 @@ operator:
               "n": 262144,
               "p": 1,
               "r": 8,
-              "salt": "368d6a44c048b2d997be7513d6be6df30f0727dbae65fba0f441e6fe736f9b14"
+              "salt": "f9eb85d1059ac71f7971aea310029ed9cd8c0da6b03e2cc854ddffc55e21d2cd"
             },
-            "mac": "21a460e60c8db10af0e2d04c63cd92d1c57ad57ad57bd8f6ebc0d8bacc9604ad"
+            "mac": "295f897f1e50a71884d96debbec2fed3c23403776941017fa689567b9ac946d8"
           },
-          "uuid": "738d25a7-5a24-4f43-b40d-967cf4ede834",
+          "uuid": "4b9804d5-b594-4690-b4a3-dc1c76a0f110",
           "version": 4,
           "curveType": "bn254"
         }

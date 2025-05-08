@@ -1,9 +1,7 @@
 // Package signing provides a generic interface for BLS signature schemes
 package signing
 
-import (
-	"errors"
-)
+import "errors"
 
 // Common errors
 var (

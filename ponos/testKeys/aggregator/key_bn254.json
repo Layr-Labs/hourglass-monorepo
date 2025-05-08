@@ -1,0 +1,22 @@
+{
+  "publicKey": "0b9adbefd52a9ef6d081d06dbdb8f5791321cd6676c19e1a594d845d4801e4551c61d9d2fcace2053b9928773cbaefb3a7b071be410ca21086941a4904d573261e2672e196e9e8528296807af313b0c4c27ac42a51db525842e4abbc66f4020426c07af913dd7703ebaef038004f892dc17d44f9f9c76c9c17dfb8de794e9213",
+  "crypto": {
+    "cipher": "aes-128-ctr",
+    "ciphertext": "d364b7efca8f6df2a5d0a973976d2ae27893e8ba04bed1c8008c95557591ff73",
+    "cipherparams": {
+      "iv": "0b27b6a532f5519b011b2075372507cb"
+    },
+    "kdf": "scrypt",
+    "kdfparams": {
+      "dklen": 32,
+      "n": 262144,
+      "p": 1,
+      "r": 8,
+      "salt": "f9eb85d1059ac71f7971aea310029ed9cd8c0da6b03e2cc854ddffc55e21d2cd"
+    },
+    "mac": "295f897f1e50a71884d96debbec2fed3c23403776941017fa689567b9ac946d8"
+  },
+  "uuid": "4b9804d5-b594-4690-b4a3-dc1c76a0f110",
+  "version": 4,
+  "curveType": "bn254"
+}
