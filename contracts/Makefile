@@ -2,23 +2,23 @@
 
 # Deploy Task Mailbox
 deploy-task-mailbox:
-	forge script script/local/DeployTaskMailbox.s.sol --rpc-url $(RPC_URL) --broadcast
+	forge script script/local/DeployTaskMailbox.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
 # Deploy AVS L1 Contracts
 deploy-avs-l1-contracts:
-	forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(AVS_ADDRESS)
+	forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(AVS_ADDRESS) -vvvv
 
 # Setup AVS L1
 setup-avs-l1:
-	forge script script/local/SetupAVSL1.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(TASK_AVS_REGISTRAR_ADDRESS)
+	forge script script/local/SetupAVSL1.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(TASK_AVS_REGISTRAR_ADDRESS) -vvvv
 
 # Deploy AVS L2 Contracts
 deploy-avs-l2-contracts:
-	forge script script/local/DeployAVSL2Contracts.s.sol --rpc-url $(RPC_URL) --broadcast
+	forge script script/local/DeployAVSL2Contracts.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
 # Setup AVS Task Mailbox Config
 setup-avs-task-mailbox-config:
-	forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address, address)" $(TASK_MAILBOX_ADDRESS) $(CERTIFICATE_VERIFIER_ADDRESS) $(TASK_HOOK_ADDRESS)
+	forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address, address)" $(TASK_MAILBOX_ADDRESS) $(CERTIFICATE_VERIFIER_ADDRESS) $(TASK_HOOK_ADDRESS) -vvvv
 
 # Generate BLS Parameters for Operator Registration
 generate-bls-params:
@@ -31,11 +31,11 @@ generate-bls-params:
 
 # Register Operator
 register-operator:
-	forge script script/local/RegisterOperator.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(bytes32, uint32, string, address, uint32, string, bytes)" $(OPERATOR_PRIVATE_KEY) $(ALLOCATION_DELAY) $(METADATA_URI) $(AVS_ADDRESS) $(OPERATOR_SET_ID) $(SOCKET) $(PUBKEY_REGISTRATION_PARAMS)
+	forge script script/local/RegisterOperator.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(bytes32, uint32, string, address, uint32, string, bytes)" $(OPERATOR_PRIVATE_KEY) $(ALLOCATION_DELAY) $(METADATA_URI) $(AVS_ADDRESS) $(OPERATOR_SET_ID) $(SOCKET) $(PUBKEY_REGISTRATION_PARAMS) -vvvv
 
 # Create Task
 create-task:
-	forge script script/local/CreateTask.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address)" $(TASK_MAILBOX_ADDRESS) $(AVS_ADDRESS)
+	forge script script/local/CreateTask.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address)" $(TASK_MAILBOX_ADDRESS) $(AVS_ADDRESS) -vvvv
 
 # Helper message
 help:
