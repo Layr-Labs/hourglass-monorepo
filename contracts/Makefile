@@ -22,7 +22,12 @@ setup-avs-task-mailbox-config:
 
 # Generate BLS Parameters for Operator Registration
 generate-bls-params:
-	cd script/common/utils && go run generate_bls_params.go $(OPERATOR_ADDRESS) $(CHAIN_ID) $(TASK_AVS_REGISTRAR_ADDRESS)
+	@HASH_POINT=$$(cast call $(TASK_AVS_REGISTRAR_ADDRESS) "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $(OPERATOR_ADDRESS) --rpc-url $(RPC_URL)); \
+	HASH_POINT_X=$$(echo "$$HASH_POINT" | head -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'); \
+	HASH_POINT_Y=$$(echo "$$HASH_POINT" | tail -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'); \
+	echo "Hash Point X: $$HASH_POINT_X"; \
+	echo "Hash Point Y: $$HASH_POINT_Y"; \
+	cd script/common/utils && go run generate_bls_params.go $(OPERATOR_ADDRESS) $(CHAIN_ID) $(TASK_AVS_REGISTRAR_ADDRESS) $$HASH_POINT_X $$HASH_POINT_Y
 
 # Register Operator
 register-operator:
@@ -40,7 +45,7 @@ help:
 	@echo "  make setup-avs-l1 TASK_AVS_REGISTRAR_ADDRESS=0x... - Setup AVS on L1"
 	@echo "  make deploy-avs-l2-contracts - Deploy AVS L2 Contracts"
 	@echo "  make setup-avs-task-mailbox-config TASK_MAILBOX_ADDRESS=0x... CERTIFICATE_VERIFIER_ADDRESS=0x... TASK_HOOK_ADDRESS=0x... - Setup AVS Task Mailbox Config"
-	@echo "  make generate-bls-params OPERATOR_ADDRESS=0x... CHAIN_ID=31337 TASK_AVS_REGISTRAR_ADDRESS=0x... - Generate BLS Parameters for Operator Registration"
+	@echo "  make generate-bls-params OPERATOR_ADDRESS=0x... CHAIN_ID=1 TASK_AVS_REGISTRAR_ADDRESS=0x... RPC_URL=http://... - Generate BLS Parameters for Operator Registration"
 	@echo "  make register-operator OPERATOR_PRIVATE_KEY=0x... ALLOCATION_DELAY=0 METADATA_URI=0x... AVS_ADDRESS=0x... OPERATOR_SET_ID=0 SOCKET=0x... PUBKEY_REGISTRATION_PARAMS=0x... - Register Operator"
 	@echo "  make create-task TASK_MAILBOX_ADDRESS=0x... AVS_ADDRESS=0x... - Create Task"
 	@echo ""

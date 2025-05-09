@@ -22,8 +22,9 @@ var (
 )
 
 func main() {
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: go run generate_bls_params.go <operator_address> <chain_id> <contract_address>")
+	if len(os.Args) < 6 {
+		fmt.Println("Usage: go run generate_bls_params.go <operator_address> <chain_id> <contract_address> <hash_point_x> <hash_point_y>")
+		fmt.Println("The hash_point_x and hash_point_y values should be obtained from calling pubkeyRegistrationMessageHash on the contract.")
 		os.Exit(1)
 	}
 
@@ -34,6 +35,19 @@ func main() {
 		os.Exit(1)
 	}
 	contractAddress := common.HexToAddress(os.Args[3])
+
+	// Parse the hash point coordinates from command line
+	hashPointX, ok := new(big.Int).SetString(os.Args[4], 10)
+	if !ok {
+		fmt.Println("Invalid hash point X coordinate")
+		os.Exit(1)
+	}
+
+	hashPointY, ok := new(big.Int).SetString(os.Args[5], 10)
+	if !ok {
+		fmt.Println("Invalid hash point Y coordinate")
+		os.Exit(1)
+	}
 
 	// Generate a random private key for BLS signing
 	var privateKeyBytes [32]byte
@@ -96,9 +110,25 @@ func main() {
 
 	// Calculate the EIP-712 typed message hash
 	msgHash := calculatePubkeyRegistrationMessageHash(operatorAddress, chainID, contractAddress)
+	fmt.Println("Message hash: 0x" + hex.EncodeToString(msgHash))
 
-	// Hash the message to a point on G1 curve using try-and-increment
-	hashPoint := hashToG1(msgHash)
+	// Use the hash point coordinates directly from the contract
+	var hashPoint bn254.G1Affine
+
+	// Set the point coordinates directly using SetString
+	_, err = hashPoint.X.SetString(hashPointX.String())
+	if err != nil {
+		fmt.Printf("Error setting hash point X: %v\n", err)
+		os.Exit(1)
+	}
+
+	_, err = hashPoint.Y.SetString(hashPointY.String())
+	if err != nil {
+		fmt.Printf("Error setting hash point Y: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Hash point: E([%s,%s])\n", hashPointX.String(), hashPointY.String())
 
 	// Sign the message (scalar multiplication of the hash point by private key)
 	var signature bn254.G1Affine
@@ -167,27 +197,6 @@ func calculateDomainSeparator(chainID *big.Int, contractAddress common.Address) 
 			contractAddressPadded...,
 		),
 	)
-}
-
-// hashToG1 maps a hash to a point on the G1 curve
-// This is a simplified implementation - in production, you'd want a proper hash-to-curve method
-func hashToG1(hash []byte) bn254.G1Affine {
-	// Create a proper G1 generator point
-	var g1Gen bn254.G1Affine
-	_, _ = g1Gen.X.SetString("1")
-	_, _ = g1Gen.Y.SetString("2")
-
-	// Convert hash to scalar
-	scalar := new(big.Int).SetBytes(hash)
-
-	// Apply modulo to ensure it's in the valid range for the field
-	scalar.Mod(scalar, bn254.ID.ScalarField())
-
-	// Multiply the generator by this scalar
-	var result bn254.G1Affine
-	result.ScalarMultiplication(&g1Gen, scalar)
-
-	return result
 }
 
 // Format the BLS parameters for Solidity
