@@ -333,15 +333,7 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 		return fmt.Errorf("failed to find peer for task")
 	}
 
-	pubKey, err := scheme.NewPublicKeyFromHexString(peer.PublicKey)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create public key from bytes",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	verfied, err := sig.Verify(pubKey, t.Payload)
+	verfied, err := sig.Verify(peer.PublicKey, t.Payload)
 	if err != nil {
 		aps.logger.Sugar().Errorw("Failed to verify signature",
 			zap.String("avsAddress", aps.config.AvsAddress),

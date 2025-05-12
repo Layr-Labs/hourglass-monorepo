@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/simulatedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -96,11 +97,16 @@ func Test_Executor(t *testing.T) {
 		l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 	}
 
+	aggPubKey, err := bn254.NewPublicKeyFromBytes([]byte(aggregatorPublicKey))
+	if err != nil {
+		t.Fatalf("Failed to create public key from bytes: %v", err)
+	}
+
 	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 		AggregatorPeers: []*peering.OperatorPeerInfo{
 			{
 				OperatorAddress: aggregatorOperatorAddr,
-				PublicKey:       aggregatorPublicKey,
+				PublicKey:       aggPubKey,
 				OperatorSetIds:  []uint32{0},
 				NetworkAddress:  "localhost",
 			},

@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,17 +19,13 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -91,15 +88,13 @@ var runCmd = &cobra.Command{
 
 		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
 		if Config.SimulationConfig.SimulatePeering.Enabled {
+			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.SimulationConfig.SimulatePeering.OperatorPeers)
+			if err != nil {
+				log.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
+			}
+
 			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-				OperatorPeers: util.Map(Config.SimulationConfig.SimulatePeering.OperatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
-					return &peering.OperatorPeerInfo{
-						NetworkAddress:  p.NetworkAddress,
-						OperatorAddress: p.OperatorAddress,
-						PublicKey:       p.PublicKey,
-						OperatorSetIds:  []uint32{p.OperatorSetId},
-					}
-				}),
+				OperatorPeers: simulatedPeers,
 			}, log)
 		} else {
 			return fmt.Errorf("peering data fetcher not implemented")
