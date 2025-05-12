@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
@@ -292,9 +291,9 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 		return nil, err
 	}
 
-	allMembers := make([]*peering.OperatorPeerInfo, len(peerMembers))
+	allMembers := make([]*peering.OperatorPeerInfo, 0)
 	for i, pm := range peerMembers {
-		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG2)
+		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG1, pm.PubkeyInfo.PubkeyG2)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err
@@ -302,7 +301,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			NetworkAddress:  pm.Socket,
-			PublicKey:       hex.EncodeToString(pubKey.Bytes()),
+			PublicKey:       pubKey,
 			OperatorAddress: members[i],
 			OperatorSetIds:  []uint32{operatorSetId},
 		})
@@ -426,8 +425,6 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	fmt.Printf("CreateOperator tx: %+v\n", tx)
-
 	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterAsOperator")
 }
 
@@ -445,18 +442,42 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
+	// Convert G2 point to precompile format
+	g2Point := &bn254.G2Point{
+		G2Affine: publicKey.GetG2Point(),
+	}
+	g2Bytes, err := g2Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	// Convert G1 point to precompile format
+	g1Point := &bn254.G1Point{
+		G1Affine: signature.GetG1Point(),
+	}
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
+
 	registrationPayload := ITaskAVSRegistrar.ITaskAVSRegistrarTypesPubkeyRegistrationParams{
 		PubkeyRegistrationSignature: ITaskAVSRegistrar.BN254G1Point{
-			X: signature.GetG1Point().X.BigInt(new(big.Int)),
-			Y: signature.GetG1Point().Y.BigInt(new(big.Int)),
+			X: new(big.Int).SetBytes(g1Bytes[0:32]),
+			Y: new(big.Int).SetBytes(g1Bytes[32:64]),
 		},
 		PubkeyG1: ITaskAVSRegistrar.BN254G1Point{
 			X: publicKey.GetG1Point().X.BigInt(new(big.Int)),
 			Y: publicKey.GetG1Point().Y.BigInt(new(big.Int)),
 		},
 		PubkeyG2: ITaskAVSRegistrar.BN254G2Point{
-			X: [2]*big.Int{publicKey.GetG2Point().X.A0.BigInt(new(big.Int)), publicKey.GetG2Point().X.A1.BigInt(new(big.Int))},
-			Y: [2]*big.Int{publicKey.GetG2Point().Y.A0.BigInt(new(big.Int)), publicKey.GetG2Point().Y.A1.BigInt(new(big.Int))},
+			X: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[0:32]),
+				new(big.Int).SetBytes(g2Bytes[32:64]),
+			},
+			Y: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[64:96]),
+				new(big.Int).SetBytes(g2Bytes[96:128]),
+			},
 		},
 	}
 
@@ -464,8 +485,6 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack register payload: %w", err)
 	}
-
-	fmt.Printf("Contracts: %+v\n", cc.coreContracts)
 
 	tx, err := cc.allocationManagerTransactor.RegisterForOperatorSets(noSendTxOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
 		Avs:            avsAddress,

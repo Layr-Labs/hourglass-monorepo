@@ -206,27 +206,35 @@ func (pk *PublicKey) Bytes() []byte {
 	return pk.PointBytes
 }
 
-// NewPublicKeyFromSolidity creates a public key from a Solidity G2 point
-func NewPublicKeyFromSolidity(g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
+// NewPublicKeyFromSolidity creates a public key from a Solidity G1 and G2 points
+func NewPublicKeyFromSolidity(g1 ITaskAVSRegistrar.BN254G1Point, g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
 	// Create a new PublicKey struct
 	pubKey := &PublicKey{}
 
-	// Create a new G2Affine point
+	// Create and set G1 point
+	pubKey.g1Point = new(bn254.G1Affine)
+	pubKey.g1Point.X.SetBigInt(g1.X)
+	pubKey.g1Point.Y.SetBigInt(g1.Y)
+
+	// Validate G1 point is in correct subgroup
+	if !pubKey.g1Point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+
+	// Create and set G2 point
 	pubKey.g2Point = new(bn254.G2Affine)
+	// Note: Contract stores coordinates as [X.A1, X.A0, Y.A1, Y.A0]
+	pubKey.g2Point.X.A1.SetBigInt(g2.X[0])
+	pubKey.g2Point.X.A0.SetBigInt(g2.X[1])
+	pubKey.g2Point.Y.A1.SetBigInt(g2.Y[0])
+	pubKey.g2Point.Y.A0.SetBigInt(g2.Y[1])
 
-	// Set the X coordinate (real and imaginary parts)
-	pubKey.g2Point.X.A0.SetBigInt(g2.X[0])
-	pubKey.g2Point.X.A1.SetBigInt(g2.X[1])
+	// Validate G2 point is in correct subgroup
+	if !pubKey.g2Point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
 
-	// Set the Y coordinate (real and imaginary parts)
-	pubKey.g2Point.Y.A0.SetBigInt(g2.Y[0])
-	pubKey.g2Point.Y.A1.SetBigInt(g2.Y[1])
-
-	// Compute the corresponding G1 point
-	// Note: This is an approximation since we don't have the original scalar
-	pubKey.g1Point = new(bn254.G1Affine).ScalarMultiplication(&g1Gen, big.NewInt(1))
-
-	// Marshal the point to bytes to fill the PointBytes field
+	// Marshal the G2 point to bytes to fill the PointBytes field
 	pointBytes := pubKey.g2Point.Marshal()
 	pubKey.PointBytes = pointBytes
 

@@ -39,11 +39,15 @@ func GetProjectRootPath() string {
 }
 
 type ChainConfig struct {
-	AVSAccountAddress       string `json:"avsAccountAddress"`
-	AppAccountAddress       string `json:"appAccountAddress"`
-	AppAccountPrivateKey    string `json:"appAccountPk"`
-	MailboxContractAddress  string `json:"mailboxContractAddress"`
-	AVSTaskRegistrarAddress string `json:"avsTaskRegistrarAddress"`
+	AVSAccountAddress          string `json:"avsAccountAddress"`
+	AppAccountAddress          string `json:"appAccountAddress"`
+	AppAccountPrivateKey       string `json:"appAccountPk"`
+	MailboxContractAddress     string `json:"mailboxContractAddress"`
+	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
+	OperatorAccountPrivateKey  string `json:"operatorAccountPk"`
+	OperatorAccountAddress     string `json:"operatorAccountAddress"`
+	ExecOperatorAccountPk      string `json:"execOperatorAccountPk"`
+	ExecOperatorAccountAddress string `json:"execOperatorAccountAddress"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
