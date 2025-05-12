@@ -59,7 +59,6 @@ func (pdf *PeeringDataFetcher) ListAggregatorOperators(ctx context.Context, avsA
 		pdf.logger.Sugar().Errorf("Failed to get AVS config", zap.Error(err))
 		return nil, err
 	}
-	fmt.Printf("AVS config: %+v\n", avsConfig)
 
 	if avsConfig == nil {
 		pdf.logger.Sugar().Errorf("AVS config is nil")
