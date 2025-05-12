@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # ethereum mainnet
-FORK_RPC_URL=https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/
+FORK_RPC_URL=https://virtual.mainnet.rpc.tenderly.co/9d86e329-5246-4485-86fe-f8dc7875bfca
 
 # launc h anvil to generate accounts and dump them to a file
 anvil \
@@ -58,20 +58,25 @@ echo "App account private key: $appAccountPk"
 echo $deployAccount
 echo $deployAccountPk
 
+# export RPC_URL="http://localhost:8545"
+export RPC_URL="https://virtual.mainnet.rpc.tenderly.co/9d86e329-5246-4485-86fe-f8dc7875bfca"
+
 # Get the ChainID from the anvil fork
-chainId=$(curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' http://localhost:8545  | jq -r '.result' | xargs printf "%d\n")
+chainId=$(curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' $RPC_URL | jq -r '.result' | xargs printf "%d\n")
 
 echo "Chain ID: $chainId"
 
 cd ../contracts
 
-export RPC_URL="http://localhost:8545"
+
+verifierUrl="https://api.tenderly.co/api/v1/account/eigen-labs/project/hourglass-mainnet-fork/etherscan/verify/fork/9d86e329-5246-4485-86fe-f8dc7875bfca"
+tenderlyKey="B0HeWtFYfvaqyJ1t-Uj3ePMSWRNf6xMl"
 
 # -----------------------------------------------------------------------------
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
 echo "Deploying mailbox contract..."
-forge script script/local/DeployTaskMailbox.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast
 
 mailboxContractAddress=$(cat ./broadcast/DeployTaskMailbox.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddress"
@@ -80,7 +85,7 @@ echo "Mailbox contract address: $mailboxContractAddress"
 # Deploy L1 avs contract
 # -----------------------------------------------------------------------------
 echo "Deploying L1 AVS contract..."
-forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
+forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast --sig "run(address)" "${avsAccountAddress}"
 
 avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "L1 AVS contract address: $l1ContractAddress"
@@ -89,13 +94,13 @@ echo "L1 AVS contract address: $l1ContractAddress"
 # Setup L1 AVS
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSL1.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
+forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast --sig "run(address)" $avsTaskRegistrarAddress
 
 # -----------------------------------------------------------------------------
 # Deploy L2
 # -----------------------------------------------------------------------------
 echo "Deploying L2 contracts..."
-forge script script/local/DeployAVSL2Contracts.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast
 taskHookAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
@@ -103,7 +108,7 @@ certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId
 # Setup L1 task mailbox config
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
 
 # -----------------------------------------------------------------------------
 # Create test task

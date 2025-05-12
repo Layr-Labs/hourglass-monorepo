@@ -45,6 +45,10 @@ type Signature struct {
 	sig      *bn254.G1Affine
 }
 
+func (s *Signature) GetG1Point() *bn254.G1Affine {
+	return s.sig
+}
+
 // GenerateKeyPair creates a new random private key and the corresponding public key
 func GenerateKeyPair() (*PrivateKey, *PublicKey, error) {
 	// Generate private key (random scalar)
@@ -129,6 +133,17 @@ func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
 	// Hash the message to a point on G1
 	hashPoint := hashToG1(message)
 
+	// Multiply the hash point by the private key scalar
+	sigPoint := new(bn254.G1Affine).ScalarMultiplication(hashPoint, pk.scalar)
+
+	// Create and return the signature
+	return &Signature{
+		sig:      sigPoint,
+		SigBytes: sigPoint.Marshal(),
+	}, nil
+}
+
+func (pk *PrivateKey) SignG1Point(hashPoint *bn254.G1Affine) (*Signature, error) {
 	// Multiply the hash point by the private key scalar
 	sigPoint := new(bn254.G1Affine).ScalarMultiplication(hashPoint, pk.scalar)
 

@@ -5,6 +5,7 @@ libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./"}]
 show_progress=true
 gas_reports = ["*"]
+cbor_metadata = true
 
 # Defines paths for Solidity imports.
 remappings = [

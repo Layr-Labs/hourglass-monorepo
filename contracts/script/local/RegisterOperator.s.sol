@@ -67,4 +67,10 @@ contract RegisterOperator is Script {
 
         vm.stopBroadcast();
     }
+
+    // function doStuff(
+    //     ITaskAVSRegistrarTypes.OperatorRegistrationParams memory parameters
+    // ) public {
+    //     console.log("Registering operator...");
+    // }
 }
