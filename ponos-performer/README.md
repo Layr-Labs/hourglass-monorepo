@@ -31,7 +31,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/server"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"

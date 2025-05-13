@@ -3,7 +3,7 @@ package serverPerformer
 import (
 	"context"
 	"fmt"
-	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
@@ -91,7 +91,7 @@ func (aps *AvsPerformerServer) createNetworkIfNotExists(ctx context.Context, doc
 func (aps *AvsPerformerServer) startHealthCheck(ctx context.Context) {
 	for {
 		time.Sleep(5 * time.Second)
-		res, err := aps.performerClient.Health(ctx, &performerV1.HealthRequest{})
+		res, err := aps.performerClient.HealthCheck(ctx, &performerV1.HealthCheckRequest{})
 		if err != nil {
 			aps.logger.Sugar().Errorw("Failed to get health from performer",
 				zap.String("avsAddress", aps.config.AvsAddress),
@@ -101,7 +101,7 @@ func (aps *AvsPerformerServer) startHealthCheck(ctx context.Context) {
 		}
 		aps.logger.Sugar().Infow("Got health response",
 			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("status", res.Status),
+			zap.String("status", res.Status.String()),
 		)
 	}
 }

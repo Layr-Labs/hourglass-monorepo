@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
@@ -280,6 +280,13 @@ func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 		aps.logger.Sugar().Infow("Waiting for tasks", zap.String("avs", aps.config.AvsAddress))
 		for task := range aps.taskBacklog {
 			res, err := aps.processTask(ctx, task)
+			if err != nil {
+				aps.logger.Sugar().Errorw("Failed to process task",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.Error(err),
+				)
+				continue
+			}
 			aps.reportTaskResponse(task, res, err)
 		}
 
@@ -290,8 +297,8 @@ func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
 func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
 
-	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.Task{
-		TaskId:   task.TaskID,
+	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
+		TaskId:   []byte(task.TaskID),
 		Metadata: task.Metadata,
 		Payload:  task.Payload,
 	})
