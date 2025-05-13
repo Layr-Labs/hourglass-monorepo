@@ -272,7 +272,15 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 	var peers []*peering.OperatorPeerInfo
 	for _, peer := range em.operatorPeers {
 		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
-			peers = append(peers, peer.Copy())
+			clonedPeer, err := peer.Copy()
+			if err != nil {
+				em.logger.Sugar().Errorw("Failed to clone peer",
+					zap.String("peer", peer.OperatorAddress),
+					zap.Error(err),
+				)
+				return fmt.Errorf("failed to clone peer: %w", err)
+			}
+			peers = append(peers, clonedPeer)
 		}
 	}
 	task.RecipientOperators = peers

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -15,6 +16,30 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"golang.org/x/crypto/hkdf"
 )
+
+// Error types for precompile compatibility
+var (
+	ErrInvalidPointFormat = errors.New("invalid point format for precompile")
+	ErrPointNotInSubgroup = errors.New("point not in correct subgroup")
+	ErrInvalidFieldOrder  = errors.New("number not in valid field order")
+)
+
+// FieldModulus is the BN254 field modulus
+var FieldModulus = func() *big.Int {
+	n, _ := new(big.Int).SetString("21888242871839275222246405745257275088696311157297823662689037894645226208583", 10)
+	return n
+}()
+
+// Precompile format constants
+const (
+	G1PointSize = 64  // 32 bytes for x, 32 bytes for y
+	G2PointSize = 128 // 64 bytes for x, 64 bytes for y
+)
+
+// ValidateFieldOrder checks if a number is in the correct field
+func ValidateFieldOrder(n *big.Int) bool {
+	return n.Cmp(FieldModulus) < 0
+}
 
 var (
 	g1Gen bn254.G1Affine
@@ -43,6 +68,10 @@ type PublicKey struct {
 type Signature struct {
 	SigBytes []byte
 	sig      *bn254.G1Affine
+}
+
+func (s *Signature) GetG1Point() *bn254.G1Affine {
+	return s.sig
 }
 
 // GenerateKeyPair creates a new random private key and the corresponding public key
@@ -127,8 +156,22 @@ func NewPrivateKeyFromBytes(data []byte) (*PrivateKey, error) {
 // Sign signs a message using the private key
 func (pk *PrivateKey) Sign(message []byte) (*Signature, error) {
 	// Hash the message to a point on G1
-	hashPoint := hashToG1(message)
+	hashPoint, err := hashToG1(message)
+	if err != nil {
+		return nil, err
+	}
 
+	// Multiply the hash point by the private key scalar
+	sigPoint := new(bn254.G1Affine).ScalarMultiplication(hashPoint, pk.scalar)
+
+	// Create and return the signature
+	return &Signature{
+		sig:      sigPoint,
+		SigBytes: sigPoint.Marshal(),
+	}, nil
+}
+
+func (pk *PrivateKey) SignG1Point(hashPoint *bn254.G1Affine) (*Signature, error) {
 	// Multiply the hash point by the private key scalar
 	sigPoint := new(bn254.G1Affine).ScalarMultiplication(hashPoint, pk.scalar)
 
@@ -163,27 +206,35 @@ func (pk *PublicKey) Bytes() []byte {
 	return pk.PointBytes
 }
 
-// NewPublicKeyFromSolidity creates a public key from a Solidity G2 point
-func NewPublicKeyFromSolidity(g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
+// NewPublicKeyFromSolidity creates a public key from a Solidity G1 and G2 points
+func NewPublicKeyFromSolidity(g1 ITaskAVSRegistrar.BN254G1Point, g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
 	// Create a new PublicKey struct
 	pubKey := &PublicKey{}
 
-	// Create a new G2Affine point
+	// Create and set G1 point
+	pubKey.g1Point = new(bn254.G1Affine)
+	pubKey.g1Point.X.SetBigInt(g1.X)
+	pubKey.g1Point.Y.SetBigInt(g1.Y)
+
+	// Validate G1 point is in correct subgroup
+	if !pubKey.g1Point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+
+	// Create and set G2 point
 	pubKey.g2Point = new(bn254.G2Affine)
+	// Note: Contract stores coordinates as [X.A1, X.A0, Y.A1, Y.A0]
+	pubKey.g2Point.X.A1.SetBigInt(g2.X[0])
+	pubKey.g2Point.X.A0.SetBigInt(g2.X[1])
+	pubKey.g2Point.Y.A1.SetBigInt(g2.Y[0])
+	pubKey.g2Point.Y.A0.SetBigInt(g2.Y[1])
 
-	// Set the X coordinate (real and imaginary parts)
-	pubKey.g2Point.X.A0.SetBigInt(g2.X[0])
-	pubKey.g2Point.X.A1.SetBigInt(g2.X[1])
+	// Validate G2 point is in correct subgroup
+	if !pubKey.g2Point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
 
-	// Set the Y coordinate (real and imaginary parts)
-	pubKey.g2Point.Y.A0.SetBigInt(g2.Y[0])
-	pubKey.g2Point.Y.A1.SetBigInt(g2.Y[1])
-
-	// Compute the corresponding G1 point
-	// Note: This is an approximation since we don't have the original scalar
-	pubKey.g1Point = new(bn254.G1Affine).ScalarMultiplication(&g1Gen, big.NewInt(1))
-
-	// Marshal the point to bytes to fill the PointBytes field
+	// Marshal the G2 point to bytes to fill the PointBytes field
 	pointBytes := pubKey.g2Point.Marshal()
 	pubKey.PointBytes = pointBytes
 
@@ -270,7 +321,10 @@ func NewSignatureFromBytes(data []byte) (*Signature, error) {
 // Verify verifies a signature against a message and public key
 func (s *Signature) Verify(publicKey *PublicKey, message []byte) (bool, error) {
 	// Hash the message to a point on G1
-	hashPoint := hashToG1(message)
+	hashPoint, err := hashToG1(message)
+	if err != nil {
+		return false, err
+	}
 
 	// e(S, G2) = e(H(m), PK)
 	// Left-hand side: e(S, G2)
@@ -323,7 +377,10 @@ func BatchVerify(publicKeys []*PublicKey, message []byte, signatures []*Signatur
 	}
 
 	// Hash the message to a point on G1
-	hashPoint := hashToG1(message)
+	hashPoint, err := hashToG1(message)
+	if err != nil {
+		return false, err
+	}
 
 	// For batch verification, we need to check:
 	// e(∑ S_i, G2) = e(H(m), ∑ PK_i)
@@ -384,7 +441,10 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 
 	// Compute right-hand side: ∏ e(H(m_i), PK_i)
 	for i := 0; i < len(publicKeys); i++ {
-		hashPoint := hashToG1(messages[i])
+		hashPoint, err := hashToG1(messages[i])
+		if err != nil {
+			return false, err
+		}
 
 		// e(H(m_i), PK_i)
 		temp, err := bn254.Pair([]bn254.G1Affine{*hashPoint}, []bn254.G2Affine{*publicKeys[i].g2Point})
@@ -401,17 +461,19 @@ func AggregateVerify(publicKeys []*PublicKey, messages [][]byte, aggSignature *S
 }
 
 // Helper function to hash a message to a G1 point
-func hashToG1(message []byte) *bn254.G1Affine {
-	// Use hash-to-curve functionality
+func hashToG1(message []byte) (*bn254.G1Affine, error) {
+	// Use hash-to-curve functionality with the standardized domain separator
 	hashPoint, err := bn254.HashToG1(message, []byte("BLS_SIG_BN254G1_XMD:SHA-256_SSWU_RO_NUL_"))
 	if err != nil {
-		// In case of error, fall back to a simpler but less secure approach
-		messageHash := new(big.Int).SetBytes(message)
-		hashPointAffine := new(bn254.G1Affine).ScalarMultiplication(&g1Gen, messageHash)
-		return hashPointAffine
+		return nil, fmt.Errorf("failed to hash message to G1: %w", err)
 	}
 
-	return &hashPoint
+	// Verify the point is in the correct subgroup
+	if !hashPoint.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+
+	return &hashPoint, nil
 }
 
 // AggregatePublicKeys combines multiple public keys into a single aggregated public key.
@@ -468,6 +530,29 @@ func NewZeroG1Point() *G1Point {
 func (p *G1Point) Add(p2 *G1Point) *G1Point {
 	p.G1Affine.Add(p.G1Affine, p2.G1Affine)
 	return p
+}
+
+// ToPrecompileFormat converts a G1 point to the format expected by the Ethereum precompile
+func (p *G1Point) ToPrecompileFormat() ([]byte, error) {
+	if !p.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+	return p.Marshal(), nil
+}
+
+// FromPrecompileFormat creates a G1 point from the Ethereum precompile format
+func G1PointFromPrecompileFormat(data []byte) (*G1Point, error) {
+	if len(data) != G1PointSize {
+		return nil, fmt.Errorf("%w: expected %d bytes, got %d", ErrInvalidPointFormat, G1PointSize, len(data))
+	}
+	point := new(bn254.G1Affine)
+	if err := point.Unmarshal(data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal G1 point: %w", err)
+	}
+	if !point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+	return &G1Point{point}, nil
 }
 
 // Sub another G1 point from this one
@@ -531,6 +616,29 @@ func NewZeroG2Point() *G2Point {
 func (p *G2Point) Add(p2 *G2Point) *G2Point {
 	p.G2Affine.Add(p.G2Affine, p2.G2Affine)
 	return p
+}
+
+// ToPrecompileFormat converts a G2 point to the format expected by the Ethereum precompile
+func (p *G2Point) ToPrecompileFormat() ([]byte, error) {
+	if !p.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+	return p.Marshal(), nil
+}
+
+// FromPrecompileFormat creates a G2 point from the Ethereum precompile format
+func G2PointFromPrecompileFormat(data []byte) (*G2Point, error) {
+	if len(data) != G2PointSize {
+		return nil, fmt.Errorf("%w: expected %d bytes, got %d", ErrInvalidPointFormat, G2PointSize, len(data))
+	}
+	point := new(bn254.G2Affine)
+	if err := point.Unmarshal(data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal G2 point: %w", err)
+	}
+	if !point.IsInSubGroup() {
+		return nil, ErrPointNotInSubgroup
+	}
+	return &G2Point{point}, nil
 }
 
 // Sub another G2 point from this one

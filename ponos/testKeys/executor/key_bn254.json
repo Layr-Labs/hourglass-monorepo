@@ -1,10 +1,10 @@
 {
-  "publicKey": "1e14b1b9a847b5bedea4e44e18541fe153a7d791d68f651bc86ac4be7dfe36000116d8d71bd4ae56331f58bec5967ae1adad91823b5d4b90746a5d85c3c8faaa13a4880b8c163984d2fec316803a146b1b97f63d95e6ac9536c061924b6367131799e6499a8ea979bc6fac9e01d0002a5547894e9212f09d6b2ed94843593145",
+  "publicKey": "2d6b7590f1fea33186b11a795b5a6c5c77b3ebdd5563ad11404098c8e4d92a8209e5d2e5fd537eb2c253a9d13735935079bcb8902f09bbd7a117d07f3142d5f9039ca163db601221d77db55b0fe3876aab1ff8bdf90a205f60cb244633789f0020d166cd401deed5dcac545ae8d58ba6e024b7aa626c51ef74b23ef5fa170ba4",
   "crypto": {
     "cipher": "aes-128-ctr",
-    "ciphertext": "db732ba0e076baf789ca3fbc86aa80439f3579c6cea64d87f36471faec28cd4d",
+    "ciphertext": "de8e36c294f88c582d0f84ebadef0470b38dfd6209597e3f71013d780d033105",
     "cipherparams": {
-      "iv": "85bd4fc4ab4c5d221c3811bbc371cf8c"
+      "iv": "780729b623bea9237293d11d949c6790"
     },
     "kdf": "scrypt",
     "kdfparams": {
@@ -12,11 +12,11 @@
       "n": 262144,
       "p": 1,
       "r": 8,
-      "salt": "c5387a9a14477c31b5b8c3ffea7815eedf06af1c666aa3dae57cd65dd68522aa"
+      "salt": "fc621449564675b56cfa22785b8fa362e63666a4f834e86f33683e5ccef700c2"
     },
-    "mac": "db7a282c30fb234101a4e8d20f73e6e7b410b4d2e486c602b8d4826d1c6ceeab"
+    "mac": "a9e8175072147ef23ee6742aaeb96b4da0003a84925f1e74b78bedf4c6f8fd8a"
   },
-  "uuid": "09c040f4-6b9c-4c33-bad7-7d7cf005a020",
+  "uuid": "7c5feddd-b78f-404a-8548-7f84eac102e1",
   "version": 4,
   "curveType": "bn254"
 }

@@ -23,18 +23,10 @@ var (
 
 func main() {
 	if len(os.Args) < 6 {
-		fmt.Println("Usage: go run generate_bls_params.go <operator_address> <chain_id> <contract_address> <hash_point_x> <hash_point_y>")
+		fmt.Println("Usage: go run generate_bls_params.go <hash_point_x> <hash_point_y>")
 		fmt.Println("The hash_point_x and hash_point_y values should be obtained from calling pubkeyRegistrationMessageHash on the contract.")
 		os.Exit(1)
 	}
-
-	operatorAddress := common.HexToAddress(os.Args[1])
-	chainID, ok := new(big.Int).SetString(os.Args[2], 10)
-	if !ok {
-		fmt.Println("Invalid chain ID")
-		os.Exit(1)
-	}
-	contractAddress := common.HexToAddress(os.Args[3])
 
 	// Parse the hash point coordinates from command line
 	hashPointX, ok := new(big.Int).SetString(os.Args[4], 10)
@@ -107,10 +99,6 @@ func main() {
 	// G2 public key
 	var pubkeyG2 bn254.G2Affine
 	pubkeyG2.ScalarMultiplication(&g2Gen, privateKeyBigInt)
-
-	// Calculate the EIP-712 typed message hash
-	msgHash := calculatePubkeyRegistrationMessageHash(operatorAddress, chainID, contractAddress)
-	fmt.Println("Message hash: 0x" + hex.EncodeToString(msgHash))
 
 	// Use the hash point coordinates directly from the contract
 	var hashPoint bn254.G1Affine

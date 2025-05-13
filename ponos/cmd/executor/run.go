@@ -6,13 +6,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -39,12 +38,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse keystore JSON: %w", err)
 		}
 
-		keyScheme, err := keystore.GetSigningSchemeForCurveType(storedKeys.CurveType)
-		if err != nil {
-			return fmt.Errorf("failed to get signing scheme: %w", err)
-		}
-
-		privateSigningKey, err := storedKeys.GetPrivateKey(Config.Operator.SigningKeys.BLS.Password, keyScheme)
+		privateSigningKey, err := storedKeys.GetBN254PrivateKey(Config.Operator.SigningKeys.BLS.Password)
 		if err != nil {
 			return fmt.Errorf("failed to get private key: %w", err)
 		}
@@ -60,14 +54,12 @@ var runCmd = &cobra.Command{
 
 		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
 		if Config.Simulation.SimulatePeering.Enabled {
+			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.Simulation.SimulatePeering.AggregatorPeers)
+			if err != nil {
+				l.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
+			}
 			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-				AggregatorPeers: util.Map(Config.Simulation.SimulatePeering.AggregatorPeers, func(p config.SimulatedPeer, i uint64) *peering.OperatorPeerInfo {
-					return &peering.OperatorPeerInfo{
-						OperatorAddress: p.OperatorAddress,
-						PublicKey:       p.PublicKey,
-						OperatorSetIds:  []uint32{p.OperatorSetId},
-					}
-				}),
+				AggregatorPeers: simulatedPeers,
 			}, l)
 		} else {
 			return fmt.Errorf("peering data fetcher not implemented")

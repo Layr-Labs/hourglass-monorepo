@@ -40,6 +40,7 @@ func IsL1Chain(chainId ChainId) bool {
 
 type CoreContractAddresses struct {
 	AllocationManager string
+	DelegationManager string
 	TaskMailbox       string
 }
 
@@ -47,18 +48,22 @@ var (
 	CoreContracts = map[ChainId]*CoreContractAddresses{
 		ChainId_EthereumMainnet: {
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
+			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
 			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumHoodi: {
 			AllocationManager: "",
+			DelegationManager: "",
 			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumAnvil: {
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
 	}

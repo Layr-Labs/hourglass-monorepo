@@ -4,8 +4,6 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg6
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=
 github.com/DataDog/zstd v1.4.5/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
-github.com/Layr-Labs/eigenlayer-contracts v1.3.0 h1:ZpmO21pYaS7CsJ+pBdWwu9rK2g5KkWHkVBqjN0gDsK8=
-github.com/Layr-Labs/eigenlayer-contracts v1.3.0/go.mod h1:Ie8YE3EQkTHqG6/tnUS0He7/UPMkXPo/3OFXwSy0iRo=
 github.com/Layr-Labs/eigenlayer-contracts v1.4.1 h1:FZKdVMcOgF8enRIgyfaaPVJFdRJtV9zt3INfJZnaP3I=
 github.com/Layr-Labs/eigenlayer-contracts v1.4.1/go.mod h1:Ie8YE3EQkTHqG6/tnUS0He7/UPMkXPo/3OFXwSy0iRo=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=

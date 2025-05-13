@@ -269,4 +269,12 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         }
         return pubkeyInfosAndSockets;
     }
+
+    function packRegisterPayload(
+        string memory socket,
+        PubkeyRegistrationParams memory pubkeyRegistrationParams
+    ) public pure returns (bytes memory) {
+        return
+            abi.encode(OperatorRegistrationParams({socket: socket, pubkeyRegistrationParams: pubkeyRegistrationParams}));
+    }
 }

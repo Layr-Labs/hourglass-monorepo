@@ -62,6 +62,30 @@ func (k *Keystore) GetPrivateKey(password string, scheme signing.SigningScheme) 
 	return privateKey, nil
 }
 
+func (k *Keystore) GetBN254PrivateKey(password string) (*bn254.PrivateKey, error) {
+	if k == nil {
+		return nil, fmt.Errorf("keystore data cannot be nil")
+	}
+
+	// Decrypt the private key
+	keyBytes, err := keystore.DecryptDataV3(k.Crypto, password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
+	}
+
+	if k.CurveType != "bn254" {
+		return nil, fmt.Errorf("keystore curve type is not bn254")
+	}
+
+	// Recreate the private key using the provided scheme
+	privateKey, err := bn254.NewPrivateKeyFromBytes(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create private key from decrypted data: %w", err)
+	}
+
+	return privateKey, nil
+}
+
 // Options provides configuration options for keystore operations
 type Options struct {
 	// ScryptN is the N parameter of scrypt encryption algorithm

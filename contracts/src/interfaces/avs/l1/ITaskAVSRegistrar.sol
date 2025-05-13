@@ -136,4 +136,9 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
     function getBatchOperatorPubkeyInfoAndSocket(
         address[] calldata operators
     ) external view returns (PubkeyInfoAndSocket[] memory);
+
+    function packRegisterPayload(
+        string memory socket,
+        PubkeyRegistrationParams memory pubkeyRegistrationParams
+    ) external pure returns (bytes memory);
 }

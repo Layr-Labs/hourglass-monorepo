@@ -5,14 +5,15 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
@@ -20,12 +21,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 	"math/big"
 	"slices"
-	"strings"
 )
 
 type ContractCallerConfig struct {
@@ -35,13 +36,16 @@ type ContractCallerConfig struct {
 }
 
 type ContractCaller struct {
-	avsRegistrarCaller      *ITaskAVSRegistrar.ITaskAVSRegistrarCaller
-	taskMailboxCaller       *ITaskMailbox.ITaskMailboxCaller
-	taskMailboxTransactor   *ITaskMailbox.ITaskMailboxTransactor
-	allocationManagerCaller *IAllocationManager.IAllocationManagerCaller
-	ethclient               *ethclient.Client
-	config                  *ContractCallerConfig
-	logger                  *zap.Logger
+	avsRegistrarCaller          *ITaskAVSRegistrar.ITaskAVSRegistrarCaller
+	taskMailboxCaller           *ITaskMailbox.ITaskMailboxCaller
+	taskMailboxTransactor       *ITaskMailbox.ITaskMailboxTransactor
+	allocationManagerCaller     *IAllocationManager.IAllocationManagerCaller
+	allocationManagerTransactor *IAllocationManager.IAllocationManagerTransactor
+	delegationManagerTransactor *IDelegationManager.IDelegationManagerTransactor
+	ethclient                   *ethclient.Client
+	config                      *ContractCallerConfig
+	logger                      *zap.Logger
+	coreContracts               *config.CoreContractAddresses
 }
 
 func NewContractCallerFromEthereumClient(
@@ -91,25 +95,41 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to create AllocationManager caller: %w", err)
 	}
 
+	allocationManagerTransactor, err := IAllocationManager.NewIAllocationManagerTransactor(common.HexToAddress(coreContracts.AllocationManager), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AllocationManager transactor: %w", err)
+	}
+
+	delegationManagerTransactor, err := IDelegationManager.NewIDelegationManagerTransactor(common.HexToAddress(coreContracts.DelegationManager), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DelegationManager transactor: %w", err)
+	}
+
 	return &ContractCaller{
-		avsRegistrarCaller:      avsRegistrarCaller,
-		taskMailboxCaller:       taskMailboxCaller,
-		taskMailboxTransactor:   taskMailboxTransactor,
-		allocationManagerCaller: allocationManagerCaller,
-		ethclient:               ethclient,
-		config:                  cfg,
-		logger:                  logger,
+		avsRegistrarCaller:          avsRegistrarCaller,
+		taskMailboxCaller:           taskMailboxCaller,
+		taskMailboxTransactor:       taskMailboxTransactor,
+		allocationManagerCaller:     allocationManagerCaller,
+		allocationManagerTransactor: allocationManagerTransactor,
+		delegationManagerTransactor: delegationManagerTransactor,
+		ethclient:                   ethclient,
+		coreContracts:               coreContracts,
+		config:                      cfg,
+		logger:                      logger,
 	}, nil
 }
 
-func (cc *ContractCaller) getECDSAPrivateKeyFromString(privateKey string) (*ecdsa.PrivateKey, error) {
-	privateKey = strings.TrimPrefix(privateKey, "0x")
-
-	pk, err := crypto.HexToECDSA(privateKey)
+func (cc *ContractCaller) buildNoSendOptsWithPrivateKey(ctx context.Context) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
-	return pk, nil
+
+	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+	return noSendTxOpts, privateKey, nil
 }
 
 func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
@@ -127,7 +147,7 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 }
 
 func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.TaskSession) error {
-	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -271,9 +291,9 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 		return nil, err
 	}
 
-	allMembers := make([]*peering.OperatorPeerInfo, len(peerMembers))
+	allMembers := make([]*peering.OperatorPeerInfo, 0)
 	for i, pm := range peerMembers {
-		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG2)
+		pubKey, err := bn254.NewPublicKeyFromSolidity(pm.PubkeyInfo.PubkeyG1, pm.PubkeyInfo.PubkeyG2)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err
@@ -281,7 +301,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			NetworkAddress:  pm.Socket,
-			PublicKey:       hex.EncodeToString(pubKey.Bytes()),
+			PublicKey:       pubKey,
 			OperatorAddress: members[i],
 			OperatorSetIds:  []uint32{operatorSetId},
 		})
@@ -342,7 +362,7 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 }
 
 func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error) {
-	privateKey, err := cc.getECDSAPrivateKeyFromString(cc.config.PrivateKey)
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -381,4 +401,123 @@ func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress 
 		zap.String("transactionHash", receipt.TxHash.Hex()),
 	)
 	return receipt, nil
+}
+
+func (cc *ContractCaller) GetOperatorRegistrationMessageHash(ctx context.Context, operatorAddress common.Address) (ITaskAVSRegistrar.BN254G1Point, error) {
+	return cc.avsRegistrarCaller.PubkeyRegistrationMessageHash(&bind.CallOpts{
+		Context: ctx,
+	}, operatorAddress)
+}
+
+func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress common.Address, allocationDelay uint32, metadataUri string) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := cc.delegationManagerTransactor.RegisterAsOperator(
+		noSendTxOpts,
+		operatorAddress,
+		allocationDelay,
+		metadataUri,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterAsOperator")
+}
+
+func (cc *ContractCaller) registerOperatorWithAvs(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetIds []uint32,
+	publicKey *bn254.PublicKey,
+	signature *bn254.Signature,
+	socket string,
+) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	// Convert G2 point to precompile format
+	g2Point := &bn254.G2Point{
+		G2Affine: publicKey.GetG2Point(),
+	}
+	g2Bytes, err := g2Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	// Convert G1 point to precompile format
+	g1Point := &bn254.G1Point{
+		G1Affine: signature.GetG1Point(),
+	}
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
+
+	registrationPayload := ITaskAVSRegistrar.ITaskAVSRegistrarTypesPubkeyRegistrationParams{
+		PubkeyRegistrationSignature: ITaskAVSRegistrar.BN254G1Point{
+			X: new(big.Int).SetBytes(g1Bytes[0:32]),
+			Y: new(big.Int).SetBytes(g1Bytes[32:64]),
+		},
+		PubkeyG1: ITaskAVSRegistrar.BN254G1Point{
+			X: publicKey.GetG1Point().X.BigInt(new(big.Int)),
+			Y: publicKey.GetG1Point().Y.BigInt(new(big.Int)),
+		},
+		PubkeyG2: ITaskAVSRegistrar.BN254G2Point{
+			X: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[0:32]),
+				new(big.Int).SetBytes(g2Bytes[32:64]),
+			},
+			Y: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[64:96]),
+				new(big.Int).SetBytes(g2Bytes[96:128]),
+			},
+		},
+	}
+
+	packedBytes, err := cc.avsRegistrarCaller.PackRegisterPayload(&bind.CallOpts{}, socket, registrationPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack register payload: %w", err)
+	}
+
+	tx, err := cc.allocationManagerTransactor.RegisterForOperatorSets(noSendTxOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
+		Avs:            avsAddress,
+		OperatorSetIds: operatorSetIds,
+		Data:           packedBytes,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterForOperatorSets")
+}
+
+func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorAddress common.Address,
+	operatorSetIds []uint32,
+	publicKey *bn254.PublicKey,
+	signature *bn254.Signature,
+	socket string,
+	allocationDelay uint32,
+	metadataUri string,
+) (*types.Receipt, error) {
+	createdOperator, err := cc.createOperator(ctx, operatorAddress, allocationDelay, metadataUri)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register as operator: %w", err)
+	}
+	cc.logger.Sugar().Infow("Successfully registered as operator",
+		zap.Any("receipt", createdOperator),
+	)
+	cc.logger.Sugar().Infow("Registering operator with AVS")
+
+	return cc.registerOperatorWithAvs(ctx, operatorAddress, avsAddress, operatorSetIds, publicKey, signature, socket)
 }

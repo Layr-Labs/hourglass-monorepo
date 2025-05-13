@@ -2,6 +2,7 @@ package bn254
 
 import (
 	"bytes"
+	"math/big"
 	"testing"
 
 	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
@@ -372,7 +373,10 @@ func TestHashToG1(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			point := hashToG1(tt.message)
+			point, err := hashToG1(tt.message)
+			if err != nil {
+				t.Fatalf("hashToG1 failed: %v", err)
+			}
 
 			// Check that the point is not nil
 			if point == nil {
@@ -547,4 +551,78 @@ func TestAggregateSignaturesG1(t *testing.T) {
 	if !valid {
 		t.Error("Batch signature verification failed")
 	}
+}
+
+func TestPrecompileCompatibility(t *testing.T) {
+	t.Run("G1PointFormat", func(t *testing.T) {
+		// Test G1 point serialization
+		g1Point := NewG1Point(big.NewInt(1), big.NewInt(2))
+		precompileFormat, err := g1Point.ToPrecompileFormat()
+		if err != nil {
+			t.Fatalf("Failed to convert G1 point to precompile format: %v", err)
+		}
+		if len(precompileFormat) != G1PointSize {
+			t.Errorf("G1 point precompile format should be %d bytes, got %d", G1PointSize, len(precompileFormat))
+		}
+
+		// Test round-trip conversion
+		recoveredG1, err := G1PointFromPrecompileFormat(precompileFormat)
+		if err != nil {
+			t.Fatalf("Failed to recover G1 point: %v", err)
+		}
+		if !recoveredG1.G1Affine.Equal(g1Point.G1Affine) {
+			t.Error("G1 point mismatch after round-trip conversion")
+		}
+	})
+
+	t.Run("G2PointFormat", func(t *testing.T) {
+		// Create a valid G2 point by scalar multiplication with the generator
+		scalar := big.NewInt(12345)
+		g2Point := &G2Point{new(bn254.G2Affine).ScalarMultiplication(&g2Gen, scalar)}
+
+		precompileFormat, err := g2Point.ToPrecompileFormat()
+		if err != nil {
+			t.Fatalf("Failed to convert G2 point to precompile format: %v", err)
+		}
+		if len(precompileFormat) != G2PointSize {
+			t.Errorf("G2 point precompile format should be %d bytes, got %d", G2PointSize, len(precompileFormat))
+		}
+
+		// Test round-trip conversion
+		recoveredG2, err := G2PointFromPrecompileFormat(precompileFormat)
+		if err != nil {
+			t.Fatalf("Failed to recover G2 point: %v", err)
+		}
+		if !recoveredG2.G2Affine.Equal(g2Point.G2Affine) {
+			t.Error("G2 point mismatch after round-trip conversion")
+		}
+	})
+
+	t.Run("InvalidPointFormats", func(t *testing.T) {
+		// Test invalid G1 point format
+		_, err := G1PointFromPrecompileFormat(make([]byte, G1PointSize-1))
+		if err == nil {
+			t.Error("Expected error for invalid G1 point length")
+		}
+
+		// Test invalid G2 point format
+		_, err = G2PointFromPrecompileFormat(make([]byte, G2PointSize-1))
+		if err == nil {
+			t.Error("Expected error for invalid G2 point length")
+		}
+	})
+
+	t.Run("FieldOrderValidation", func(t *testing.T) {
+		// Test valid field order
+		valid := ValidateFieldOrder(big.NewInt(1))
+		if !valid {
+			t.Error("Expected valid field order for small number")
+		}
+
+		// Test invalid field order
+		invalid := ValidateFieldOrder(new(big.Int).Add(FieldModulus, big.NewInt(1)))
+		if invalid {
+			t.Error("Expected invalid field order for number larger than modulus")
+		}
+	})
 }

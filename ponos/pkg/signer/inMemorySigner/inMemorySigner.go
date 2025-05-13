@@ -1,14 +1,14 @@
 package inMemorySigner
 
 import (
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 )
 
 type InMemorySigner struct {
-	privateKey signing.PrivateKey
+	privateKey *bn254.PrivateKey
 }
 
-func NewInMemorySigner(privateKey signing.PrivateKey) *InMemorySigner {
+func NewInMemorySigner(privateKey *bn254.PrivateKey) *InMemorySigner {
 	return &InMemorySigner{
 		privateKey: privateKey,
 	}

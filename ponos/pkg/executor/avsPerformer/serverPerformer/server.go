@@ -10,7 +10,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -18,6 +18,7 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"strings"
 	"sync"
 	"time"
 )
@@ -306,15 +307,7 @@ func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performerT
 }
 
 func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
-	scheme, err := keystore.GetSigningSchemeForCurveType(aps.config.SigningCurve)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to get signing scheme for curve type",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	sig, err := scheme.NewSignatureFromBytes(t.Signature)
+	sig, err := bn254.NewSignatureFromBytes(t.Signature)
 	if err != nil {
 		aps.logger.Sugar().Errorw("Failed to create signature from bytes",
 			zap.String("avsAddress", aps.config.AvsAddress),
@@ -323,7 +316,7 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 		return err
 	}
 	peer := util.Find(aps.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
-		return p.OperatorAddress == t.AggregatorAddress
+		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
 	})
 	if peer == nil {
 		aps.logger.Sugar().Errorw("Failed to find peer for task",
@@ -333,15 +326,7 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 		return fmt.Errorf("failed to find peer for task")
 	}
 
-	pubKey, err := scheme.NewPublicKeyFromHexString(peer.PublicKey)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create public key from bytes",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	verfied, err := sig.Verify(pubKey, t.Payload)
+	verfied, err := sig.Verify(peer.PublicKey, t.Payload)
 	if err != nil {
 		aps.logger.Sugar().Errorw("Failed to verify signature",
 			zap.String("avsAddress", aps.config.AvsAddress),
