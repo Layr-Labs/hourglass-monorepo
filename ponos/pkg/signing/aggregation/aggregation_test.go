@@ -3,7 +3,6 @@ package aggregation
 import (
 	"context"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"testing"
 	"time"
 
@@ -30,9 +29,6 @@ func Test_Aggregation(t *testing.T) {
 
 	// Initialize new task
 	taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
-	taskIdBytes, err := hexutil.Decode(taskId)
-	assert.Nil(t, err)
-
 	taskData := []byte("test-data")
 
 	deadline := time.Now().Add(10 * time.Minute)
@@ -77,7 +73,7 @@ func Test_Aggregation(t *testing.T) {
 		remainingSigs[i] = sig
 
 		// Process the signature
-		err = agg.ProcessNewSignature(context.Background(), taskIdBytes, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
 		require.NoError(t, err)
 	}
 

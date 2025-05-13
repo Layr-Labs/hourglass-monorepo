@@ -29,12 +29,7 @@ import (
 
 const (
 	RPCUrl = "http://127.0.0.1:8545"
-	// RPCUrl = "https://virtual.mainnet.rpc.tenderly.co/a0e34c85-7746-4cd8-9856-371fe7c95465"
 )
-
-func createTaskResultCertificate() {
-
-}
 
 func Test_EVMChainPollerIntegration(t *testing.T) {
 	// t.Skip("Flaky, skipping for now")
