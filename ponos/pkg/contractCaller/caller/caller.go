@@ -13,7 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	crypto2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
+	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
@@ -120,7 +120,7 @@ func NewContractCaller(
 }
 
 func (cc *ContractCaller) buildNoSendOptsWithPrivateKey(ctx context.Context) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {
-	privateKey, err := crypto2.StringToECDSAPrivateKey(cc.config.PrivateKey)
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -147,7 +147,7 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 }
 
 func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.TaskSession) error {
-	privateKey, err := crypto2.StringToECDSAPrivateKey(cc.config.PrivateKey)
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -362,7 +362,7 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 }
 
 func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error) {
-	privateKey, err := crypto2.StringToECDSAPrivateKey(cc.config.PrivateKey)
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
@@ -509,8 +509,7 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 	socket string,
 	allocationDelay uint32,
 	metadataUri string,
-
-) (interface{}, error) {
+) (*types.Receipt, error) {
 	createdOperator, err := cc.createOperator(ctx, operatorAddress, allocationDelay, metadataUri)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register as operator: %w", err)
