@@ -6,17 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
-	"math/big"
 	"slices"
 	"strings"
 	"sync"
@@ -128,19 +124,30 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 				)
 			}
 		case result := <-em.resultsQueue:
-			em.logger.Sugar().Infow("Received task result",
-				zap.Any("taskSession", result),
-			)
-			em.logger.Sugar().Infow("Received task result", "chain", result.Task.ChainId)
+			em.logger.Sugar().Infow("Received task result", zap.Any("taskSession", result))
+
 			if chainCaller, ok := em.chainContractCallers[result.Task.ChainId]; ok {
-				em.logger.Sugar().Infow("Calling chain contract", "chain", result.Task.ChainId)
+				em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(result.Task.ChainId)))
+
 				// TODO: (brandon c) remove this and handle case of submission to same block task was created.
 				time.Sleep(em.config.WriteDelaySeconds)
-				err := chainCaller.SubmitTaskResult(ctx, result)
+
+				if result.AggregateCertificate == nil {
+					em.logger.Sugar().Errorw("Received nil aggregate certificate", zap.String("taskId", result.Task.TaskId))
+					return fmt.Errorf("received nil aggregate certificate")
+				}
+
+				receipt, err := chainCaller.SubmitTaskResult(ctx, result.AggregateCertificate)
 				if err != nil {
 					// TODO: emit metric
 					em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
+				} else {
+					em.logger.Sugar().Infow("Successfully submitted task result",
+						zap.String("taskId", result.Task.TaskId),
+						zap.String("transactionHash", receipt.TxHash.String()),
+					)
 				}
+
 				continue
 			}
 			// TODO: emit metric
@@ -195,7 +202,7 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}
 
-	ts := taskSession.NewTaskSession(
+	ts, err := taskSession.NewTaskSession(
 		ctx,
 		cancel,
 		task,
@@ -205,6 +212,14 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		em.resultsQueue,
 		em.logger,
 	)
+	if err != nil {
+		cancel()
+		em.logger.Sugar().Errorw("Failed to create task session",
+			zap.String("taskId", task.TaskId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to create task session: %w", err)
+	}
 
 	em.logger.Sugar().Infow("Created task session",
 		zap.Any("taskSession", ts),
@@ -254,7 +269,7 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 		zap.String("eventName", lg.EventName),
 		zap.String("contractAddress", lg.Address),
 	)
-	task, err := convertTask(lg, lwb.Block, lg.Address)
+	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
 	if err != nil {
 		return fmt.Errorf("failed to convert task: %w", err)
 	}
@@ -380,52 +395,4 @@ func (em *AvsExecutionManager) processOperatorRemoved(lwb *chainPoller.LogWithBl
 		}
 	}
 	return nil
-}
-
-func convertTask(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAddress string) (*types.Task, error) {
-	var avsAddress string
-	var taskId string
-
-	taskId, ok := log.Arguments[1].Value.(string)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task id")
-	}
-
-	avsAddr, ok := log.Arguments[2].Value.(common.Address)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse task event address")
-	}
-	avsAddress = avsAddr.String()
-
-	// it aint stupid if it works...
-	// take the output data, turn it into a json string, then Unmarshal it into a typed struct
-	// rather than trying to coerce data types
-	outputBytes, err := json.Marshal(log.OutputData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal output data: %w", err)
-	}
-
-	type outputDataType struct {
-		ExecutorOperatorSetId uint32
-		TaskDeadline          uint64
-		Payload               []byte
-	}
-	var od *outputDataType
-	if err := json.Unmarshal(outputBytes, &od); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal output data: %w", err)
-	}
-	parsedTaskDeadline := new(big.Int).SetUint64(od.TaskDeadline)
-	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
-
-	return &types.Task{
-		TaskId:              taskId,
-		AVSAddress:          strings.ToLower(avsAddress),
-		OperatorSetId:       od.ExecutorOperatorSetId,
-		CallbackAddr:        inboxAddress,
-		DeadlineUnixSeconds: &taskDeadlineTime,
-		Payload:             []byte(od.Payload),
-		ChainId:             block.ChainId,
-		BlockNumber:         block.Number.Value(),
-		BlockHash:           block.Hash.Value(),
-	}, nil
 }

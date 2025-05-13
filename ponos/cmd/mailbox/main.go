@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"math/big"
 )
 
@@ -15,17 +16,6 @@ const (
 	privateKey             = "5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
 	mailboxContractAddress = "0x7306a649b451ae08781108445425bd4e8acf1e00"
 )
-
-func bigIntToHex(i *big.Int) []byte {
-	if i == nil {
-		return nil
-	}
-	hexStr := i.Text(16)
-	if len(hexStr)%2 != 0 {
-		hexStr = "0" + hexStr
-	}
-	return []byte("0x" + hexStr)
-}
 
 func main() {
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
@@ -55,7 +45,7 @@ func main() {
 		panic(err)
 	}
 
-	payloadJsonBytes := bigIntToHex(new(big.Int).SetUint64(4))
+	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	receipt, err := cc.PublishMessageToInbox(context.Background(), chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		panic(err)

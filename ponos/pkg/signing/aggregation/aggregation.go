@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"strings"
 	"sync"
 	"time"
@@ -45,17 +46,20 @@ type AggregatedCertificate struct {
 
 	// aggregated public key of the signers
 	SignersPublicKey *bn254.G2Point
+
+	// the time the certificate was signed
+	SignedAt *time.Time
 }
 
 // TaskResultAggregator represents the data needed to initialize a new aggregation task window.
 type TaskResultAggregator struct {
 	mu                  sync.Mutex
-	TaskId              []byte
-	TaskCreatedBlock    uint32
+	TaskId              string
+	TaskCreatedBlock    uint64
 	OperatorSetId       uint32
 	ThresholdPercentage uint8
 	TaskData            []byte
-	TimeToExpiry        time.Duration
+	TaskExpirationTime  *time.Time
 	Operators           []*Operator
 	ReceivedSignatures  map[string]*ReceivedResponseWithDigest // operator address -> signature
 	AggregatePublicKey  *bn254.PublicKey
@@ -68,12 +72,12 @@ type TaskResultAggregator struct {
 // All required data must be provided as arguments; no network or chain calls are performed.
 func NewTaskResultAggregator(
 	ctx context.Context,
-	taskId []byte,
-	taskCreatedBlock uint32,
+	taskId string,
+	taskCreatedBlock uint64,
 	operatorSetId uint32,
 	thresholdPercentage uint8,
 	taskData []byte,
-	timeToExpiry time.Duration,
+	taskExpirationTime *time.Time,
 	operators []*Operator,
 ) (*TaskResultAggregator, error) {
 	if len(taskId) == 0 {
@@ -99,7 +103,7 @@ func NewTaskResultAggregator(
 		OperatorSetId:       operatorSetId,
 		ThresholdPercentage: thresholdPercentage,
 		TaskData:            taskData,
-		TimeToExpiry:        timeToExpiry,
+		TaskExpirationTime:  taskExpirationTime,
 		Operators:           operators,
 		AggregatePublicKey:  aggPub,
 	}
@@ -108,7 +112,7 @@ func NewTaskResultAggregator(
 
 type ReceivedResponseWithDigest struct {
 	// TaskId is the unique identifier for the task
-	TaskId []byte
+	TaskId string
 
 	// The full task result from the operator
 	TaskResult *types.TaskResult
@@ -149,7 +153,7 @@ func (tra *TaskResultAggregator) SigningThresholdMet() bool {
 // Returns true if the threshold is met after this submission, false otherwise.
 func (tra *TaskResultAggregator) ProcessNewSignature(
 	ctx context.Context,
-	taskId []byte,
+	taskId string,
 	taskResponse *types.TaskResult,
 ) error {
 	tra.mu.Lock()
@@ -245,7 +249,7 @@ func (tra *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.Tas
 }
 
 // GenerateFinalCertificate generates the final aggregated certificate for the task.
-func (tra *TaskResultAggregator) GenerateFinalCertificate() *AggregatedCertificate {
+func (tra *TaskResultAggregator) GenerateFinalCertificate() (*AggregatedCertificate, error) {
 	// TODO(seanmcgary): nonSignerOperatorIds should be a list of operatorIds which is the hash of their public key
 	nonSignerOperatorIds := make([]*Operator, 0)
 	for _, operator := range tra.Operators {
@@ -274,15 +278,21 @@ func (tra *TaskResultAggregator) GenerateFinalCertificate() *AggregatedCertifica
 		return o.PublicKey
 	})
 
+	taskIdBytes, err := hexutil.Decode(tra.TaskId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode taskId: %w", err)
+	}
+
 	return &AggregatedCertificate{
-		TaskId:              tra.TaskId,
+		TaskId:              taskIdBytes,
 		TaskResponse:        tra.aggregatedOperators.lastReceivedResponse.TaskResult.Output,
 		TaskResponseDigest:  tra.aggregatedOperators.lastReceivedResponse.Digest,
 		NonSignersPubKeys:   nonSignerPublicKeys,
 		AllOperatorsPubKeys: allPublicKeys,
 		SignersPublicKey:    tra.aggregatedOperators.signersG2,
 		SignersSignature:    tra.aggregatedOperators.signersAggSig,
-	}
+		SignedAt:            new(time.Time),
+	}, nil
 }
 
 // AggregatePublicKeys aggregates a list of public keys into a single public key.

@@ -29,6 +29,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.17.0 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/consensys/bavard v0.1.22 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect
@@ -88,3 +89,5 @@ require (
 )
 
 replace github.com/Layr-Labs/hourglass-monorepo/contracts => ../contracts
+
+replace github.com/ethereum/go-ethereum => /Users/seanmcgary/Code/open-source/go-ethereum

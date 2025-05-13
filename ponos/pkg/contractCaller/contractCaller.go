@@ -4,8 +4,9 @@ import (
 	"context"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/ethereum/go-ethereum/common"
+	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 )
 
@@ -27,7 +28,7 @@ type ExecutorOperatorSetTaskConfig struct {
 
 type IContractCaller interface {
 	// TODO: task will need a certificate
-	SubmitTaskResult(ctx context.Context, task *taskSession.TaskSession) error
+	SubmitTaskResult(ctx context.Context, task *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
 
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
 
@@ -41,7 +42,7 @@ type IContractCaller interface {
 
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
 
-	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error)
+	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
 	GetOperatorRegistrationMessageHash(ctx context.Context, address common.Address) (ITaskAVSRegistrar.BN254G1Point, error)
 }

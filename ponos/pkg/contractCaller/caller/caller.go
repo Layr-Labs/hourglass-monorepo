@@ -15,12 +15,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -146,69 +145,68 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	return opts, nil
 }
 
-func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, ts *taskSession.TaskSession) error {
-	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
+func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to parse private key: %w", err)
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
-	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
-	if err != nil {
-		return fmt.Errorf("failed to build transaction options: %w", err)
-	}
-	taskIdBytes, err := hexutil.Decode(ts.Task.TaskId)
-	if err != nil {
-		return fmt.Errorf("invalid taskId hex: %w", err)
-	}
-	if len(taskIdBytes) != 32 {
-		return fmt.Errorf("taskId must be 32 bytes, got %d", len(taskIdBytes))
+	if len(aggCert.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
 	}
 	var taskId [32]byte
-	copy(taskId[:], taskIdBytes)
+	copy(taskId[:], aggCert.TaskId)
 	cc.logger.Sugar().Infow("submitting task result", "taskId", taskId)
 
+	// Convert signature to G1 point in precompile format
+	g1Point := &bn254.G1Point{
+		G1Affine: aggCert.SignersSignature.GetG1Point(),
+	}
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
+	_ = g1Bytes
+
+	// Convert public key to G2 point in precompile format
+	g2Bytes, err := aggCert.SignersPublicKey.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	var digest [32]byte
+	copy(digest[:], aggCert.TaskResponseDigest)
+
 	cert := ITaskMailbox.IBN254CertificateVerifierBN254Certificate{
-		ReferenceTimestamp: uint32(ts.Task.BlockNumber),
-		MessageHash:        [32]byte{},
+		ReferenceTimestamp: uint32(aggCert.SignedAt.Unix()),
+		MessageHash:        digest,
 		Sig: ITaskMailbox.BN254G1Point{
-			X: big.NewInt(0),
-			Y: big.NewInt(0),
+			X: new(big.Int).SetBytes(g1Bytes[0:32]),
+			Y: new(big.Int).SetBytes(g1Bytes[32:64]),
 		},
 		Apk: ITaskMailbox.BN254G2Point{
-			X: [2]*big.Int{big.NewInt(0), big.NewInt(0)},
-			Y: [2]*big.Int{big.NewInt(0), big.NewInt(0)},
+			X: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[0:32]),
+				new(big.Int).SetBytes(g2Bytes[32:64]),
+			},
+			Y: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[64:96]),
+				new(big.Int).SetBytes(g2Bytes[96:128]),
+			},
 		},
+		// TODO: technically these are all empty since we default to needing all operators to sign.
 		NonsignerIndices:   []uint32{},
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierBN254OperatorInfoWitness{},
 	}
+	fmt.Printf("taskId: %v\n", taskId)
+	fmt.Printf("Submitting task: %+v\n", cert)
 
-	// operatorMap := ts.GetOperatorOutputsMap()
-	// aggregated, err := encodeOperatorOutputMap(operatorMap)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to encode operator-output map: %w", err)
-	// }
-
-	payload := []byte{}
-	allResults := ts.GetTaskResults()
-	if len(allResults) > 0 {
-		payload = allResults[0].Output
-	}
-
-	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, payload)
+	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, aggCert.TaskResponse)
 	if err != nil {
-		return fmt.Errorf("failed to create transaction: %w", err)
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
-	if err != nil {
-		return fmt.Errorf("failed to send transaction: %w", err)
-	}
-
-	cc.logger.Sugar().Infow("Successfully submitted task session result",
-		zap.String("taskId", ts.Task.TaskId),
-		zap.String("transactionHash", receipt.TxHash.Hex()),
-	)
-	return nil
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
 }
 
 //nolint:unused
@@ -361,7 +359,7 @@ func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string,
 	}, nil
 }
 
-func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (interface{}, error) {
+func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*types.Receipt, error) {
 	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)

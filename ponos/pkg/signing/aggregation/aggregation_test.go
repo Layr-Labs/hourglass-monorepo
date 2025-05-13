@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"testing"
 	"time"
 
@@ -28,8 +29,14 @@ func Test_Aggregation(t *testing.T) {
 	}
 
 	// Initialize new task
-	taskId := []byte("test-task-1")
+	taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+	taskIdBytes, err := hexutil.Decode(taskId)
+	assert.Nil(t, err)
+
 	taskData := []byte("test-data")
+
+	deadline := time.Now().Add(10 * time.Minute)
+
 	agg, err := NewTaskResultAggregator(
 		context.Background(),
 		taskId,
@@ -37,7 +44,7 @@ func Test_Aggregation(t *testing.T) {
 		1,   // operatorSetId
 		75,  // thresholdPercentage (3/4)
 		taskData,
-		5*time.Minute,
+		&deadline,
 		operators,
 	)
 	require.NoError(t, err)
@@ -70,7 +77,7 @@ func Test_Aggregation(t *testing.T) {
 		remainingSigs[i] = sig
 
 		// Process the signature
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskIdBytes, taskResult)
 		require.NoError(t, err)
 	}
 
@@ -78,7 +85,8 @@ func Test_Aggregation(t *testing.T) {
 	assert.True(t, agg.SigningThresholdMet())
 
 	// Generate final certificate
-	cert := agg.GenerateFinalCertificate()
+	cert, err := agg.GenerateFinalCertificate()
+	require.NoError(t, err)
 	require.NotNil(t, cert)
 
 	// Verify the aggregated signature

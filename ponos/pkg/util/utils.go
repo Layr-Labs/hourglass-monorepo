@@ -3,6 +3,7 @@ package util
 import (
 	"encoding/base64"
 	"github.com/ethereum/go-ethereum/crypto"
+	"math/big"
 	"strings"
 )
 
@@ -141,4 +142,15 @@ func AreAddressesEqual(a, b string) bool {
 func GetKeccak256Digest(input []byte) [32]byte {
 	digest := crypto.Keccak256(input)
 	return [32]byte(digest)
+}
+
+func BigIntToHex(i *big.Int) []byte {
+	if i == nil {
+		return nil
+	}
+	hexStr := i.Text(16)
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
+	}
+	return []byte("0x" + hexStr)
 }
