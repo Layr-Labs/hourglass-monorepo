@@ -166,7 +166,6 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggrega
 	if err != nil {
 		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
 	}
-	_ = g1Bytes
 
 	// Convert public key to G2 point in precompile format
 	g2Bytes, err := aggCert.SignersPublicKey.ToPrecompileFormat()
