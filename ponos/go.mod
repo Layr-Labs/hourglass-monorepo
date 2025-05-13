@@ -5,6 +5,7 @@ go 1.23.6
 require (
 	github.com/Layr-Labs/eigenlayer-contracts v1.4.1
 	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-00010101000000-000000000000
+	github.com/Layr-Labs/protocol-apis v1.12.1
 	github.com/consensys/gnark-crypto v0.14.0
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0
@@ -18,8 +19,8 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.35.0
-	google.golang.org/grpc v1.69.0-dev
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/grpc v1.70.0
+	google.golang.org/protobuf v1.36.6
 	k8s.io/apimachinery v0.32.0-alpha.3
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -80,7 +81,7 @@ require (
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect

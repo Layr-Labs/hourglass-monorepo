@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
-	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/worker"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"go.uber.org/zap"
 	"time"
 )

@@ -2,7 +2,7 @@ package performerTask
 
 import (
 	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
-	performerV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/performer"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 )
 
 type PerformerTask struct {
@@ -38,9 +38,9 @@ func NewPerformerTaskResult(taskID string, result []byte) *PerformerTaskResult {
 	}
 }
 
-func NewTaskResultFromResultProto(result *performerV1.TaskResult) *PerformerTaskResult {
+func NewTaskResultFromResultProto(result *performerV1.TaskResponse) *PerformerTaskResult {
 	return &PerformerTaskResult{
-		TaskID: result.TaskId,
+		TaskID: string(result.TaskId),
 		Result: result.Result,
 	}
 }
