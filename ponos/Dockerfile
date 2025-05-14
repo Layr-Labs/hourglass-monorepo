@@ -15,3 +15,4 @@ FROM debian:stable-slim
 
 COPY --from=0 /usr/local/bin/executor /usr/local/bin/
 COPY --from=0 /usr/local/bin/aggregator /usr/local/bin/
+COPY --from=0 /usr/local/bin/bls-helper /usr/local/bin/
