@@ -90,7 +90,7 @@ func NewEthereumClient(cfg *EthereumClientConfig, l *zap.Logger) *Client {
 		Timeout: time.Second * 10,
 	}
 
-	l.Sugar().Infow("Creating new Ethereum client", zap.Any("config", cfg))
+	l.Sugar().Debugw("Creating new Ethereum client", zap.Any("config", cfg))
 
 	return &Client{
 		httpClient:   client,
