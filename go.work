@@ -1,0 +1,8 @@
+go 1.23.6
+
+use (
+	./ponos
+	./contracts
+)
+
+replace github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250513203819-86cd35c94abd => ./contracts

@@ -86,5 +86,3 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-replace github.com/Layr-Labs/hourglass-monorepo/contracts => ../contracts
