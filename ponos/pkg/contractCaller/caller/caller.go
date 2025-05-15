@@ -425,20 +425,11 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterAsOperator")
 }
 
-func (cc *ContractCaller) registerOperatorWithAvs(
-	ctx context.Context,
-	operatorAddress common.Address,
-	avsAddress common.Address,
-	operatorSetIds []uint32,
+func (cc *ContractCaller) CreateOperatorRegistrationPayload(
 	publicKey *bn254.PublicKey,
 	signature *bn254.Signature,
 	socket string,
-) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build transaction options: %w", err)
-	}
-
+) ([]byte, error) {
 	// Convert G2 point to precompile format
 	g2Point := &bn254.G2Point{
 		G2Affine: publicKey.GetG2Point(),
@@ -478,9 +469,26 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		},
 	}
 
-	packedBytes, err := cc.avsRegistrarCaller.PackRegisterPayload(&bind.CallOpts{}, socket, registrationPayload)
+	return cc.avsRegistrarCaller.PackRegisterPayload(&bind.CallOpts{}, socket, registrationPayload)
+}
+
+func (cc *ContractCaller) registerOperatorWithAvs(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetIds []uint32,
+	publicKey *bn254.PublicKey,
+	signature *bn254.Signature,
+	socket string,
+) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack register payload: %w", err)
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	packedBytes, err := cc.CreateOperatorRegistrationPayload(publicKey, signature, socket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create operator registration payload: %w", err)
 	}
 
 	tx, err := cc.allocationManagerTransactor.RegisterForOperatorSets(noSendTxOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
