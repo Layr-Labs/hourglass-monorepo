@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
@@ -192,8 +191,7 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 			return nil, err
 		}
 
-		aggregatorClient := aggregatorpb.NewAggregatorServiceClient(clientConn)
-		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, aggregatorClient, peer.OperatorAddress)
+		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, nil, peer.OperatorAddress)
 		if err != nil {
 			logger.Sugar().Fatalw("Failed to create simulated executor", "error", err)
 			return nil, err

@@ -3,23 +3,20 @@ package service
 import (
 	"context"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"go.uber.org/zap"
 	"log"
 )
 
 type SimulatedExecutorServer struct {
-	rpcServer        *rpcServer.RpcServer
-	aggregatorClient aggregatorpb.AggregatorServiceClient
-	operatorAddress  string
+	rpcServer       *rpcServer.RpcServer
+	operatorAddress string
 }
 
 func NewSimulatedExecutorWithRpcServer(
 	port int,
 	logger *zap.Logger,
-	client aggregatorpb.AggregatorServiceClient,
 	operatorAddress string,
 ) (*SimulatedExecutorServer, error) {
 	server, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
@@ -29,21 +26,19 @@ func NewSimulatedExecutorWithRpcServer(
 		return nil, err
 	}
 
-	return NewSimulatedExecutorServer(server, client, operatorAddress), nil
+	return NewSimulatedExecutorServer(server, operatorAddress), nil
 }
 
 func NewSimulatedExecutorServer(
 	rpcServer *rpcServer.RpcServer,
-	client aggregatorpb.AggregatorServiceClient,
 	operatorAddress string,
 ) *SimulatedExecutorServer {
 	es := &SimulatedExecutorServer{
-		rpcServer:        rpcServer,
-		aggregatorClient: client,
-		operatorAddress:  operatorAddress,
+		rpcServer:       rpcServer,
+		operatorAddress: operatorAddress,
 	}
 
-	executorpb.RegisterExecutorServiceServer(rpcServer.GetGrpcServer(), es)
+	executorV1.RegisterExecutorServiceServer(rpcServer.GetGrpcServer(), es)
 	return es
 }
 
@@ -55,10 +50,10 @@ func (s *SimulatedExecutorServer) Close() error {
 	return nil
 }
 
-func (s *SimulatedExecutorServer) SubmitTask(ctx context.Context, req *executorpb.TaskSubmission) (*v1.SubmitAck, error) {
+func (s *SimulatedExecutorServer) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*v1.SubmitAck, error) {
 	log.Printf("Received task %s from aggregator %s", req.TaskId, req.AggregatorAddress)
 
-	result := &aggregatorpb.TaskResult{
+	result := &executorV1.TaskResult{
 		TaskId:          req.TaskId,
 		OperatorAddress: s.operatorAddress,
 		AvsAddress:      req.AvsAddress,

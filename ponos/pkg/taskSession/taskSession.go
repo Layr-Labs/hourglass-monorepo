@@ -102,19 +102,17 @@ func (ts *TaskSession) Broadcast() {
 		AvsAddress:        ts.Task.AVSAddress,
 		AggregatorAddress: ts.aggregatorAddress,
 		Payload:           ts.Task.Payload,
-		AggregatorUrl:     ts.aggregatorUrl,
 		Signature:         ts.aggregatorSignature,
 	}
 	ts.logger.Sugar().Infow("broadcasting task session to operators",
 		zap.Any("taskSubmission", taskSubmission),
 	)
 
-	var wg sync.WaitGroup
-	for _, peer := range ts.Task.RecipientOperators {
-		wg.Add(1)
+	resultsChan := make(chan *types.TaskResult)
 
-		go func(wg *sync.WaitGroup, peer *peering.OperatorPeerInfo) {
-			defer wg.Done()
+	for _, peer := range ts.Task.RecipientOperators {
+
+		go func(peer *peering.OperatorPeerInfo) {
 			ts.logger.Sugar().Infow("task session broadcast to operator",
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
@@ -139,61 +137,60 @@ func (ts *TaskSession) Broadcast() {
 				)
 				return
 			}
-			if !res.Success {
-				ts.logger.Sugar().Errorw("task submission failed",
-					zap.String("executorAddress", peer.OperatorAddress),
-					zap.String("taskId", ts.Task.TaskId),
-					zap.String("message", res.Message),
-				)
-				return
-			}
-			ts.logger.Sugar().Debugw("Successfully submitted task to executor",
-				zap.String("executorAddress", peer.OperatorAddress),
+			resultsChan <- types.TaskResultFromTaskResultProto(res)
+		}(peer)
+	}
+
+	// iterate over results until we meet the signing threshold
+	for taskResult := range resultsChan {
+		if taskResult == nil {
+			ts.logger.Sugar().Errorw("task result is nil",
 				zap.String("taskId", ts.Task.TaskId),
 			)
-		}(&wg, peer)
+			continue
+		}
+		if ts.thresholdMet.Load() {
+			ts.logger.Sugar().Infow("task completion threshold already met",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+			)
+			return
+		}
+		if err := ts.taskAggregator.ProcessNewSignature(ts.context, taskResult.TaskId, taskResult); err != nil {
+			ts.logger.Sugar().Errorw("Failed to process task result",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+				zap.Error(err),
+			)
+		}
+
+		if !ts.taskAggregator.SigningThresholdMet() {
+			return
+		}
+		ts.thresholdMet.Store(true)
+		ts.logger.Sugar().Infow("task completion threshold met",
+			zap.String("taskId", taskResult.TaskId),
+			zap.String("operatorAddress", taskResult.OperatorAddress),
+		)
+
+		cert, err := ts.taskAggregator.GenerateFinalCertificate()
+		if err != nil {
+			ts.logger.Sugar().Errorw("Failed to generate final certificate",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+				zap.Error(err),
+			)
+			return
+		}
+		ts.AggregateCertificate = cert
 	}
-	wg.Wait()
+
 	ts.logger.Sugar().Infow("task submission completed",
 		zap.String("taskId", ts.Task.TaskId),
 	)
 }
 
 func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
-	if ts.thresholdMet.Load() {
-		ts.logger.Sugar().Infow("task completion threshold already met",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-		)
-		return
-	}
-	if err := ts.taskAggregator.ProcessNewSignature(ts.context, taskResult.TaskId, taskResult); err != nil {
-		ts.logger.Sugar().Errorw("Failed to process task result",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-			zap.Error(err),
-		)
-	}
-
-	if !ts.taskAggregator.SigningThresholdMet() {
-		return
-	}
-	ts.thresholdMet.Store(true)
-	ts.logger.Sugar().Infow("task completion threshold met",
-		zap.String("taskId", taskResult.TaskId),
-		zap.String("operatorAddress", taskResult.OperatorAddress),
-	)
-
-	cert, err := ts.taskAggregator.GenerateFinalCertificate()
-	if err != nil {
-		ts.logger.Sugar().Errorw("Failed to generate final certificate",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-			zap.Error(err),
-		)
-		return
-	}
-	ts.AggregateCertificate = cert
 
 	ts.resultsQueue <- ts
 }

@@ -4,12 +4,10 @@ package eigenlayer.hourglass.v1;
 
 option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor";
 
-import "eigenlayer/common/v1/types.proto";
-
 // This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 service ExecutorService {
   // SubmitTask submits a task to the executor from the aggregator
-  rpc SubmitTask(TaskSubmission) returns (eigenlayer.common.v1.SubmitAck) {}
+  rpc SubmitTask(TaskSubmission) returns (TaskResult) {}
 }
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
@@ -19,6 +17,12 @@ message TaskSubmission {
   string avs_address = 3;
   bytes payload = 4;
   bytes signature = 5;
-  string aggregator_url = 6;
 }
 
+message TaskResult {
+  string task_id = 1;
+  string operator_address = 2;
+  bytes output = 3;
+  bytes signature = 4;
+  string avs_address = 5;
+}

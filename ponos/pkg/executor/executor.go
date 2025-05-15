@@ -70,7 +70,6 @@ func (e *Executor) Initialize() error {
 					SigningCurve:         avs.SigningCurve,
 				},
 				e.peeringFetcher,
-				e.receiveTaskResponse,
 				e.logger,
 			)
 			if err != nil {
@@ -110,13 +109,6 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 				zap.Error(err),
 			)
 			return fmt.Errorf("failed to initialize AVS performer: %v", err)
-		}
-		if err := performer.ProcessTasks(ctx); err != nil {
-			e.logger.Sugar().Errorw("Failed to process tasks",
-				zap.String("avsAddress", avsAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to process tasks: %v", err)
 		}
 	}
 	go func() {
