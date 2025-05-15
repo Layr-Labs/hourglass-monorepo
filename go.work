@@ -4,5 +4,3 @@ use (
 	./ponos
 	./contracts
 )
-
-replace github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250515131806-e969f008e833 => ./contracts
