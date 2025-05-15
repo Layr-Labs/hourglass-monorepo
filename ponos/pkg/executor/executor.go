@@ -6,7 +6,6 @@ import (
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/connectedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -22,9 +21,7 @@ type Executor struct {
 	config        *executorConfig.ExecutorConfig
 	avsPerformers map[string]avsPerformer.IAvsPerformer
 	rpcServer     *rpcServer.RpcServer
-	//nolint:unused
-	aggregators map[string]*connectedAggregator.ConnectedAggregator
-	signer      signer.ISigner
+	signer        signer.ISigner
 
 	inflightTasks *sync.Map
 
