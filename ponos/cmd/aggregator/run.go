@@ -16,7 +16,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
@@ -169,7 +168,6 @@ func initRunCmd(cmd *cobra.Command) {
 
 func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
 	var executors []runnable.IRunnable
-	aggregatorUrl := fmt.Sprintf("localhost:%d", cfg.ServerConfig.Port)
 	var allocatedPorts []int
 
 	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
@@ -185,13 +183,7 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 			return nil, fmt.Errorf("port %d is already allocated", port)
 		}
 
-		clientConn, err := clients.NewGrpcClient(aggregatorUrl, false)
-		if err != nil {
-			logger.Sugar().Fatalw("Failed to create aggregator client", "error", err)
-			return nil, err
-		}
-
-		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, nil, peer.OperatorAddress)
+		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, peer.OperatorAddress)
 		if err != nil {
 			logger.Sugar().Fatalw("Failed to create simulated executor", "error", err)
 			return nil, err
