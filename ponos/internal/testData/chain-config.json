@@ -9,9 +9,9 @@
   "operatorAccountPk": "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   "execOperatorAccountAddress": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
   "execOperatorAccountPk": "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
-  "mailboxContractAddress": "0xc3e53f4d16ae77db1c982e75a937b9f60fe63690",
-  "avsTaskRegistrarAddress": "0x84ea74d481ee0a5332c457a4d796187f6ba67feb",
-  "taskHookAddress": "0x9e545e3c0baab3e08cdfd552c960a1050f373042",
-  "certificateVerifierAddress": "0xa82ff9afd8f496c3d6ac40e2a0f282e47488cfc9",
+  "mailboxContractAddress": "0x7306a649b451ae08781108445425bd4e8acf1e00",
+  "avsTaskRegistrarAddress": "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
+  "taskHookAddress": "0x934a389cabfb84cdb3f0260b2a4fd575b8b345a3",
+  "certificateVerifierAddress": "0xc91b651f770ed996a223a16da9ccd6f7df56c987",
   "destinationEnv": "anvil"
 }

@@ -83,7 +83,7 @@ export RPC_URL="http://localhost:8545"
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
 echo "Deploying mailbox contract..."
-forge script script/local/DeployTaskMailbox.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $RPC_URL --broadcast
 
 mailboxContractAddress=$(cat ./broadcast/DeployTaskMailbox.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddress"
@@ -92,7 +92,7 @@ echo "Mailbox contract address: $mailboxContractAddress"
 # Deploy L1 avs contract
 # -----------------------------------------------------------------------------
 echo "Deploying L1 AVS contract..."
-forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
+forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
 
 avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "L1 AVS contract address: $l1ContractAddress"
@@ -101,13 +101,13 @@ echo "L1 AVS contract address: $l1ContractAddress"
 # Setup L1 AVS
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSL1.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
+forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
 
 # -----------------------------------------------------------------------------
 # Deploy L2
 # -----------------------------------------------------------------------------
 echo "Deploying L2 contracts..."
-forge script script/local/DeployAVSL2Contracts.s.sol --rpc-url $RPC_URL --broadcast
+forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $RPC_URL --broadcast
 taskHookAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
@@ -115,7 +115,7 @@ certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId
 # Setup L1 task mailbox config
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
 
 # -----------------------------------------------------------------------------
 # Create test task
