@@ -487,6 +487,9 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	}
 
 	packedBytes, err := cc.CreateOperatorRegistrationPayload(publicKey, signature, socket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create operator registration payload: %w", err)
+	}
 
 	tx, err := cc.allocationManagerTransactor.RegisterForOperatorSets(noSendTxOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
 		Avs:            avsAddress,
