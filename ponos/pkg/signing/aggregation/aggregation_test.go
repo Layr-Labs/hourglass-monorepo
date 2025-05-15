@@ -28,8 +28,11 @@ func Test_Aggregation(t *testing.T) {
 	}
 
 	// Initialize new task
-	taskId := []byte("test-task-1")
+	taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
 	taskData := []byte("test-data")
+
+	deadline := time.Now().Add(10 * time.Minute)
+
 	agg, err := NewTaskResultAggregator(
 		context.Background(),
 		taskId,
@@ -37,7 +40,7 @@ func Test_Aggregation(t *testing.T) {
 		1,   // operatorSetId
 		75,  // thresholdPercentage (3/4)
 		taskData,
-		5*time.Minute,
+		&deadline,
 		operators,
 	)
 	require.NoError(t, err)
@@ -78,7 +81,8 @@ func Test_Aggregation(t *testing.T) {
 	assert.True(t, agg.SigningThresholdMet())
 
 	// Generate final certificate
-	cert := agg.GenerateFinalCertificate()
+	cert, err := agg.GenerateFinalCertificate()
+	require.NoError(t, err)
 	require.NotNil(t, cert)
 
 	// Verify the aggregated signature

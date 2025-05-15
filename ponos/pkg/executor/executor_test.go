@@ -25,17 +25,6 @@ import (
 	"time"
 )
 
-func bigIntToHex(i *big.Int) []byte {
-	if i == nil {
-		return nil
-	}
-	hexStr := i.Text(16)
-	if len(hexStr)%2 != 0 {
-		hexStr = "0" + hexStr
-	}
-	return []byte("0x" + hexStr)
-}
-
 func Test_Executor(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second))
 
@@ -178,7 +167,7 @@ func Test_Executor(t *testing.T) {
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 
-	payloadJsonBytes := bigIntToHex(new(big.Int).SetUint64(4))
+	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
 
 	if err != nil {

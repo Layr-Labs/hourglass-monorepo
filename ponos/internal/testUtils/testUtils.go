@@ -40,6 +40,7 @@ func GetProjectRootPath() string {
 
 type ChainConfig struct {
 	AVSAccountAddress          string `json:"avsAccountAddress"`
+	AVSAccountPrivateKey       string `json:"avsAccountPk"`
 	AppAccountAddress          string `json:"appAccountAddress"`
 	AppAccountPrivateKey       string `json:"appAccountPk"`
 	MailboxContractAddress     string `json:"mailboxContractAddress"`
@@ -52,6 +53,22 @@ type ChainConfig struct {
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
 	filePath := fmt.Sprintf("%s/internal/testData/chain-config.json", projectRoot)
+
+	// read the file into bytes
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	var cf *ChainConfig
+	if err := json.Unmarshal(file, &cf); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal file: %w", err)
+	}
+	return cf, nil
+}
+
+func ReadTenderlyChainConfig(projectRoot string) (*ChainConfig, error) {
+	filePath := fmt.Sprintf("%s/internal/testData/tenderly-chain-config.json", projectRoot)
 
 	// read the file into bytes
 	file, err := os.ReadFile(filePath)

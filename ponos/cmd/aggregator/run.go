@@ -14,14 +14,12 @@ import (
 	"time"
 
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
-	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
@@ -188,12 +186,6 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 			return nil, fmt.Errorf("port %d is already allocated", port)
 		}
 
-		rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{GrpcPort: port}, logger)
-		if err != nil {
-			logger.Sugar().Fatalw("Failed to create rpcServer for executor", "error", err)
-			return nil, err
-		}
-
 		clientConn, err := clients.NewGrpcClient(aggregatorUrl, false)
 		if err != nil {
 			logger.Sugar().Fatalw("Failed to create aggregator client", "error", err)
@@ -201,11 +193,10 @@ func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.Aggregat
 		}
 
 		aggregatorClient := aggregatorpb.NewAggregatorServiceClient(clientConn)
-		exe := service.NewSimulatedExecutorServer(rpc, aggregatorClient, peer.OperatorAddress)
-		executorpb.RegisterExecutorServiceServer(rpc.GetGrpcServer(), exe)
-		err = rpc.Start(ctx)
+		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, aggregatorClient, peer.OperatorAddress)
 		if err != nil {
-			return nil, fmt.Errorf("failed to start executor: %w", err)
+			logger.Sugar().Fatalw("Failed to create simulated executor", "error", err)
+			return nil, err
 		}
 
 		executors = append(executors, exe)

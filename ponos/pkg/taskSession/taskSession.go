@@ -5,9 +5,10 @@ import (
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
-	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -23,7 +24,10 @@ type TaskSession struct {
 	aggregatorAddress   string
 	aggregatorUrl       string
 
-	resultsQueue chan *TaskSession
+	taskAggregator       *aggregation.TaskResultAggregator
+	resultsQueue         chan *TaskSession
+	thresholdMet         atomic.Bool
+	AggregateCertificate *aggregation.AggregatedCertificate
 }
 
 func NewTaskSession(
@@ -35,7 +39,27 @@ func NewTaskSession(
 	aggregatorSignature []byte,
 	resultsQueue chan *TaskSession,
 	logger *zap.Logger,
-) *TaskSession {
+) (*TaskSession, error) {
+	operators := util.Map(task.RecipientOperators, func(peer *peering.OperatorPeerInfo, i uint64) *aggregation.Operator {
+		return &aggregation.Operator{
+			Address:   peer.OperatorAddress,
+			PublicKey: peer.PublicKey,
+		}
+	})
+
+	ta, err := aggregation.NewTaskResultAggregator(
+		ctx,
+		task.TaskId,
+		task.BlockNumber,
+		task.OperatorSetId,
+		100,
+		task.Payload,
+		task.DeadlineUnixSeconds,
+		operators,
+	)
+	if err != nil {
+		return nil, err
+	}
 	ts := &TaskSession{
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
@@ -46,9 +70,13 @@ func NewTaskSession(
 		contextCancel:       cancel,
 		logger:              logger,
 		resultsQueue:        resultsQueue,
+		taskAggregator:      ta,
+		thresholdMet:        atomic.Bool{},
 	}
 	ts.resultsCount.Store(0)
-	return ts
+	ts.thresholdMet.Store(false)
+
+	return ts, nil
 }
 
 func (ts *TaskSession) Process() error {
@@ -131,43 +159,43 @@ func (ts *TaskSession) Broadcast() {
 	)
 }
 
-func (ts *TaskSession) findOperatorByAddress(address string) *peering.OperatorPeerInfo {
-	for _, peer := range ts.Task.RecipientOperators {
-		ts.logger.Sugar().Infow("find operator by address", "peer", peer)
-		ts.logger.Sugar().Infow("find operator by address address", "address", address)
-		if strings.EqualFold(peer.OperatorAddress, address) {
-			return peer
-		}
-	}
-	return nil
-}
-
 func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
-	peer := ts.findOperatorByAddress(taskResult.OperatorAddress)
-	if peer == nil {
-		ts.logger.Sugar().Errorw("Failed to find operator by address",
-			"address", taskResult.OperatorAddress,
-			"taskId", taskResult.TaskId,
+	if ts.thresholdMet.Load() {
+		ts.logger.Sugar().Infow("task completion threshold already met",
+			zap.String("taskId", taskResult.TaskId),
+			zap.String("operatorAddress", taskResult.OperatorAddress),
 		)
 		return
 	}
+	if err := ts.taskAggregator.ProcessNewSignature(ts.context, taskResult.TaskId, taskResult); err != nil {
+		ts.logger.Sugar().Errorw("Failed to process task result",
+			zap.String("taskId", taskResult.TaskId),
+			zap.String("operatorAddress", taskResult.OperatorAddress),
+			zap.Error(err),
+		)
+	}
 
-	if _, ok := ts.results.Load(peer); ok {
-		ts.logger.Sugar().Errorw("Duplicate result for task",
-			"taskId", taskResult.TaskId,
-			"operatorAddress", taskResult.OperatorAddress,
+	if !ts.taskAggregator.SigningThresholdMet() {
+		return
+	}
+	ts.thresholdMet.Store(true)
+	ts.logger.Sugar().Infow("task completion threshold met",
+		zap.String("taskId", taskResult.TaskId),
+		zap.String("operatorAddress", taskResult.OperatorAddress),
+	)
+
+	cert, err := ts.taskAggregator.GenerateFinalCertificate()
+	if err != nil {
+		ts.logger.Sugar().Errorw("Failed to generate final certificate",
+			zap.String("taskId", taskResult.TaskId),
+			zap.String("operatorAddress", taskResult.OperatorAddress),
+			zap.Error(err),
 		)
 		return
 	}
-	ts.results.Store(peer, taskResult)
-	ts.resultsCount.Add(1)
+	ts.AggregateCertificate = cert
 
-	if ts.resultsCount.Load() == uint32(len(ts.Task.RecipientOperators)) {
-		ts.resultsQueue <- ts
-		ts.logger.Sugar().Infow("Task result published to channel",
-			"taskId", ts.Task.TaskId,
-		)
-	}
+	ts.resultsQueue <- ts
 }
 
 func (ts *TaskSession) GetOperatorOutputsMap() map[string][]byte {

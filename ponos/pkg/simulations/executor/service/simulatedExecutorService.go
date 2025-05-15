@@ -6,6 +6,7 @@ import (
 	aggregatorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorpb "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
+	"go.uber.org/zap"
 	"log"
 )
 
@@ -15,16 +16,35 @@ type SimulatedExecutorServer struct {
 	operatorAddress  string
 }
 
+func NewSimulatedExecutorWithRpcServer(
+	port int,
+	logger *zap.Logger,
+	client aggregatorpb.AggregatorServiceClient,
+	operatorAddress string,
+) (*SimulatedExecutorServer, error) {
+	server, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: port,
+	}, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSimulatedExecutorServer(server, client, operatorAddress), nil
+}
+
 func NewSimulatedExecutorServer(
 	rpcServer *rpcServer.RpcServer,
 	client aggregatorpb.AggregatorServiceClient,
 	operatorAddress string,
 ) *SimulatedExecutorServer {
-	return &SimulatedExecutorServer{
+	es := &SimulatedExecutorServer{
 		rpcServer:        rpcServer,
 		aggregatorClient: client,
 		operatorAddress:  operatorAddress,
 	}
+
+	executorpb.RegisterExecutorServiceServer(rpcServer.GetGrpcServer(), es)
+	return es
 }
 
 func (s *SimulatedExecutorServer) Start(ctx context.Context) error {
