@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
@@ -117,30 +118,18 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				l.Sugar().Fatalf("failed to generate key pair: %v", err)
 			}
 
-			g1Point, err := cc.GetOperatorRegistrationMessageHash(ctx, testOperatorAddress)
-			if err != nil {
-				l.Sugar().Fatalf("failed to get operator registration message hash: %v", err)
-			}
-
-			// Create G1 point from contract coordinates
-			hashPoint := bn254.NewG1Point(g1Point.X, g1Point.Y)
-
-			// Sign the hash point
-			signature, err := privateKey.SignG1Point(hashPoint.G1Affine)
-			if err != nil {
-				l.Sugar().Fatalf("failed to sign hash point: %v", err)
-			}
-
-			result, err := cc.CreateOperatorAndRegisterWithAvs(
+			result, err := operator.RegisterOperatorToOperatorSets(
 				ctx,
-				common.HexToAddress(chainConfig.AVSAccountAddress),
+				cc,
 				testOperatorAddress,
+				common.HexToAddress(chainConfig.AVSAccountAddress),
 				tc.operatorSets,
 				publicKey,
-				signature,
+				privateKey,
 				"localhost:8545",
 				7200,
 				"http://localhost:8545",
+				l,
 			)
 			assert.Nil(t, err)
 			fmt.Printf("Result: %+v\n", result)

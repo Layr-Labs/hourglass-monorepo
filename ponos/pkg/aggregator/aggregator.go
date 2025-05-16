@@ -3,8 +3,6 @@ package aggregator
 import (
 	"context"
 	"fmt"
-	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
-	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -21,10 +19,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
-	"strings"
 	"time"
 )
 
@@ -112,8 +108,6 @@ func NewAggregator(
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
 	}
-
-	aggregatorV1.RegisterAggregatorServiceServer(rpcServer.GetGrpcServer(), agg)
 	return agg
 }
 
@@ -153,7 +147,6 @@ func (a *Aggregator) Initialize() error {
 				return acc
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
-			AggregatorUrl:     a.config.AggregatorUrl,
 			WriteDelaySeconds: a.config.WriteDelaySeconds,
 		},
 			a.chainContractCallers,
@@ -212,7 +205,7 @@ func (a *Aggregator) initializePollers() error {
 			pCfg := &EVMChainPoller.EVMChainPollerConfig{
 				ChainId:                 chain.ChainId,
 				PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
-				EigenLayerCoreContracts: a.contractStore.ListContractAddresses(),
+				EigenLayerCoreContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 				InterestingContracts:    []string{},
 			}
 			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
@@ -341,21 +334,4 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 		}
 	}
 	return nil
-}
-
-func (a *Aggregator) SubmitTaskResult(ctx context.Context, result *aggregatorV1.TaskResult) (*v1.SubmitAck, error) {
-	tr := types.TaskResultFromTaskResultProto(result)
-
-	for avsAddress, avs := range a.avsExecutionManagers {
-		// check if the AVS address matches the execution manager
-		if !strings.EqualFold(avsAddress, tr.AvsAddress) {
-			continue
-		}
-
-		if err := avs.HandleTaskResultFromExecutor(tr); err != nil {
-			a.logger.Error("Error submitting task result", zap.Error(err))
-			return &v1.SubmitAck{Success: false, Message: "error"}, err
-		}
-	}
-	return &v1.SubmitAck{Success: true, Message: "ok"}, nil
 }

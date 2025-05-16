@@ -8,7 +8,6 @@ package executor
 
 import (
 	context "context"
-	v1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/common/v1"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -30,7 +29,7 @@ const (
 // This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 type ExecutorServiceClient interface {
 	// SubmitTask submits a task to the executor from the aggregator
-	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error)
+	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*TaskResult, error)
 }
 
 type executorServiceClient struct {
@@ -41,9 +40,9 @@ func NewExecutorServiceClient(cc grpc.ClientConnInterface) ExecutorServiceClient
 	return &executorServiceClient{cc}
 }
 
-func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*v1.SubmitAck, error) {
+func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*TaskResult, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(v1.SubmitAck)
+	out := new(TaskResult)
 	err := c.cc.Invoke(ctx, ExecutorService_SubmitTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -58,7 +57,7 @@ func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmissi
 // This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
 type ExecutorServiceServer interface {
 	// SubmitTask submits a task to the executor from the aggregator
-	SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error)
+	SubmitTask(context.Context, *TaskSubmission) (*TaskResult, error)
 }
 
 // UnimplementedExecutorServiceServer should be embedded to have
@@ -68,7 +67,7 @@ type ExecutorServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedExecutorServiceServer struct{}
 
-func (UnimplementedExecutorServiceServer) SubmitTask(context.Context, *TaskSubmission) (*v1.SubmitAck, error) {
+func (UnimplementedExecutorServiceServer) SubmitTask(context.Context, *TaskSubmission) (*TaskResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitTask not implemented")
 }
 func (UnimplementedExecutorServiceServer) testEmbeddedByValue() {}

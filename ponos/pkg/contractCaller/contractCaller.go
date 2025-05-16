@@ -5,13 +5,13 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 )
 
 type AVSConfig struct {
-	ResultSubmitter         string
 	AggregatorOperatorSetId uint32
 	ExecutorOperatorSetIds  []uint32
 }
@@ -45,4 +45,16 @@ type IContractCaller interface {
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
 	GetOperatorRegistrationMessageHash(ctx context.Context, address common.Address) (ITaskAVSRegistrar.BN254G1Point, error)
+
+	CreateOperatorAndRegisterWithAvs(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorAddress common.Address,
+		operatorSetIds []uint32,
+		publicKey *bn254.PublicKey,
+		signature *bn254.Signature,
+		socket string,
+		allocationDelay uint32,
+		metadataUri string,
+	) (*ethereumTypes.Receipt, error)
 }

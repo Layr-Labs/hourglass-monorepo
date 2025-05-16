@@ -3,7 +3,6 @@ package executor
 import (
 	"context"
 	"fmt"
-	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
@@ -11,14 +10,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/simulatedAggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -67,13 +63,6 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("failed to get private key: %v", err)
 	}
 
-	baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: execConfig.GrpcPort,
-	}, l)
-	if err != nil {
-		l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
-	}
-
 	pubKey := aggPrivateSigningKey.Public()
 	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 		AggregatorPeers: []*peering.OperatorPeerInfo{
@@ -86,7 +75,10 @@ func Test_Executor(t *testing.T) {
 		},
 	}, l)
 
-	exec := NewExecutor(execConfig, baseRpcServer, l, execSigner, pdf)
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf)
+	if err != nil {
+		t.Fatalf("Failed to create executor: %v", err)
+	}
 
 	if err := exec.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
@@ -96,54 +88,10 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("Failed to boot performers: %v", err)
 	}
 
-	// ------------------------------------------------------------------------
-	// aggregator sim setup
-	// ------------------------------------------------------------------------
-	simAggPort := 5678
-	aggBaseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: simAggPort,
-	}, l)
-	if err != nil {
-		l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
-	}
-
 	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
 
 	success := atomic.Bool{}
 	success.Store(false)
-
-	simAggregator, err := simulatedAggregator.NewSimulatedAggregator(simAggConfig, l, aggBaseRpcServer, func(result *aggregatorV1.TaskResult) {
-		errors := false
-		defer func() {
-			success.Store(!errors)
-			cancel()
-		}()
-
-		sig, err := bn254.NewSignatureFromBytes(result.Signature)
-		if err != nil {
-			errors = true
-			t.Errorf("Failed to create signature from bytes: %v", err)
-			return
-		}
-
-		digest := util.GetKeccak256Digest(result.Output)
-		verified, err := sig.Verify(privateSigningKey.Public(), digest[:])
-		if err != nil {
-			errors = true
-			t.Errorf("Failed to verify signature: %v", err)
-			return
-		}
-
-		if !verified {
-			errors = true
-			t.Errorf("Signature verification failed")
-			return
-		}
-		t.Logf("Successfully verified signature for task %s", result.TaskId)
-	})
-	if err != nil {
-		t.Fatalf("Failed to create simulated aggregator: %v", err)
-	}
 
 	execClient, err := executorClient.NewExecutorClient(fmt.Sprintf("localhost:%d", execConfig.GrpcPort), true)
 	if err != nil {
@@ -153,13 +101,6 @@ func Test_Executor(t *testing.T) {
 	go func() {
 		if err := exec.Run(ctx); err != nil {
 			t.Errorf("Failed to run executor: %v", err)
-			return
-		}
-	}()
-
-	go func() {
-		if err := simAggregator.Run(ctx); err != nil {
-			t.Errorf("Failed to run simulated aggregator: %v", err)
 			return
 		}
 	}()
@@ -174,33 +115,34 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
 
-	ack, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
+	taskResult, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
 		TaskId:            "0x1234taskId",
 		AggregatorAddress: simAggConfig.Operator.Address,
 		AvsAddress:        simAggConfig.Avss[0].Address,
 		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
-		AggregatorUrl:     fmt.Sprintf("localhost:%d", simAggPort),
 	})
 	if err != nil {
 		cancel()
 		time.Sleep(5 * time.Second)
 		t.Fatalf("Failed to submit task: %v", err)
 	}
-	if ack == nil {
-		cancel()
-		time.Sleep(5 * time.Second)
-		t.Fatalf("Ack is nil")
-	}
-	if ack.Success != true {
-		cancel()
-		time.Sleep(5 * time.Second)
-		t.Fatalf("Ack success is false")
-	}
+	assert.NotNil(t, taskResult)
+
+	sig, err := bn254.NewSignatureFromBytes(taskResult.Signature)
+	assert.Nil(t, err)
+
+	digest := util.GetKeccak256Digest(taskResult.Output)
+	verified, err := sig.Verify(privateSigningKey.Public(), digest[:])
+	assert.Nil(t, err)
+	assert.True(t, verified)
+	cancel()
+
+	t.Logf("Successfully verified signature for task %s", taskResult.TaskId)
 
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
-	assert.True(t, success.Load(), "task completed successfully")
+	time.Sleep(3 * time.Second)
 }
 
 const (

@@ -47,7 +47,7 @@ func NewEVMChainPoller(
 	logger *zap.Logger,
 ) *EVMChainPoller {
 	for i, contract := range config.EigenLayerCoreContracts {
-		fmt.Printf("Contract %d: %s\n", i, contract)
+		logger.Sugar().Infof("EigenLayerCoreContract %d: %s\n", i, contract)
 	}
 	return &EVMChainPoller{
 		ethClient:       ethClient,
@@ -77,7 +77,6 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
 	go func() {
 		for !shouldStop.Load() {
-			ecp.logger.Sugar().Infow("Tick")
 			err := ecp.processNextBlock(ctx)
 			if err != nil {
 				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
@@ -196,17 +195,17 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		"logCount", len(logs),
 	)
 
-	for _, l := range logs {
-		if !ecp.isInterestingLog(l) {
+	for _, log := range logs {
+		if !ecp.isInterestingLog(log) {
 			continue
 		}
 
-		decodedLog, err := ecp.logParser.DecodeLog(nil, l)
+		decodedLog, err := ecp.logParser.DecodeLog(nil, log)
 		if err != nil {
 			ecp.logger.Sugar().Errorw("Failed to decode log",
-				zap.String("transactionHash", l.TransactionHash.Value()),
-				zap.String("logAddress", l.Address.Value()),
-				zap.Uint64("logIndex", l.LogIndex.Value()),
+				zap.String("transactionHash", log.TransactionHash.Value()),
+				zap.String("logAddress", log.Address.Value()),
+				zap.Uint64("logIndex", log.LogIndex.Value()),
 				zap.Error(err),
 			)
 			return nil, nil, err
@@ -220,20 +219,20 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		case ecp.chainEventsChan <- lwb:
 			ecp.logger.Sugar().Infow("Enqueued log for processing",
 				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", l.TransactionHash.Value()),
-				zap.String("logAddress", l.Address.Value()),
-				zap.Uint64("logIndex", l.LogIndex.Value()),
+				zap.String("transactionHash", log.TransactionHash.Value()),
+				zap.String("logAddress", log.Address.Value()),
+				zap.Uint64("logIndex", log.LogIndex.Value()),
 			)
 		case <-time.After(100 * time.Millisecond):
 			ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
 				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", l.TransactionHash.Value()),
-				zap.String("logAddress", l.Address.Value()),
-				zap.Uint64("logIndex", l.LogIndex.Value()),
+				zap.String("transactionHash", log.TransactionHash.Value()),
+				zap.String("logAddress", log.Address.Value()),
+				zap.Uint64("logIndex", log.LogIndex.Value()),
 			)
 		}
 	}
-	ecp.logger.Sugar().Infow("Processed logs",
+	ecp.logger.Sugar().Debugw("Processed logs",
 		zap.Uint64("blockNumber", block.Number.Value()),
 	)
 	ecp.lastObservedBlock = block
@@ -270,7 +269,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 		go func(contract string, wg *sync.WaitGroup) {
 			defer wg.Done()
 
-			ecp.logger.Sugar().Infow("Fetching logs for contract",
+			ecp.logger.Sugar().Debugw("Fetching logs for contract",
 				zap.String("contract", contract),
 				zap.Uint64("blockNumber", blockNumber),
 			)
@@ -285,7 +284,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				return
 			}
 			if len(logs) == 0 {
-				ecp.logger.Sugar().Infow("No logs found for contract",
+				ecp.logger.Sugar().Debugw("No logs found for contract",
 					zap.String("contract", contract),
 					zap.Uint64("blockNumber", blockNumber),
 				)
@@ -303,7 +302,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	wg.Wait()
 	close(logResultsChan)
 	close(errorsChan)
-	ecp.logger.Sugar().Infow("All logs fetched for contracts",
+	ecp.logger.Sugar().Debugw("All logs fetched for contracts",
 		zap.Uint64("blockNumber", blockNumber),
 	)
 
@@ -319,7 +318,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	for contractLogs := range logResultsChan {
 		allLogs = append(allLogs, contractLogs...)
 	}
-	ecp.logger.Sugar().Infow("All logs fetched for contracts",
+	ecp.logger.Sugar().Debugw("All logs fetched for contracts",
 		zap.Uint64("blockNumber", blockNumber),
 		zap.Int("logCount", len(allLogs)),
 	)

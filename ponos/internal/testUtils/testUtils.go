@@ -106,8 +106,12 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		"-vvv",
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	joinOutput := os.Getenv("JOIN_ANVIL_OUTPUT")
+	if joinOutput == "true" {
+		cmd.Stdout = os.Stdout
+	}
 
 	err = cmd.Start()
 	if err != nil {

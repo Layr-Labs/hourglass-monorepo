@@ -3,7 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
-	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -62,7 +62,7 @@ type TaskResult struct {
 	Signature       []byte
 }
 
-func TaskResultFromTaskResultProto(tr *aggregatorV1.TaskResult) *TaskResult {
+func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {
 	return &TaskResult{
 		TaskId:          tr.TaskId,
 		Output:          tr.Output,

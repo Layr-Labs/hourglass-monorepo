@@ -197,8 +197,6 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggrega
 		NonsignerIndices:   []uint32{},
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierBN254OperatorInfoWitness{},
 	}
-	fmt.Printf("taskId: %v\n", taskId)
-	fmt.Printf("Submitting task: %+v\n", cert)
 
 	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, aggCert.TaskResponse)
 	if err != nil {
@@ -331,7 +329,6 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 	}
 
 	return &contractCaller.AVSConfig{
-		ResultSubmitter:         avsConfig.ResultSubmitter.String(),
 		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
 		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
 	}, nil
@@ -519,7 +516,7 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 	if err != nil {
 		return nil, fmt.Errorf("failed to register as operator: %w", err)
 	}
-	cc.logger.Sugar().Infow("Successfully registered as operator",
+	cc.logger.Sugar().Infow("Successfully created operator",
 		zap.Any("receipt", createdOperator),
 	)
 	cc.logger.Sugar().Infow("Registering operator with AVS")

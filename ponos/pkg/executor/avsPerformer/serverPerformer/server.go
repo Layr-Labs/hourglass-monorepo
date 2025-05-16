@@ -19,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -29,12 +28,8 @@ type AvsPerformerServer struct {
 	containerId     string
 	dockerClient    *client.Client
 	performerClient performerV1.PerformerServiceClient
-	// TODO(seanmcgary) make this an actual chan with a type
-	taskBacklog chan *performerTask.PerformerTask
 
 	peeringFetcher peering.IPeeringDataFetcher
-
-	reportTaskResponse avsPerformer.ReceiveTaskResponse
 
 	aggregatorPeers []*peering.OperatorPeerInfo
 }
@@ -42,15 +37,12 @@ type AvsPerformerServer struct {
 func NewAvsPerformerServer(
 	config *avsPerformer.AvsPerformerConfig,
 	peeringFetcher peering.IPeeringDataFetcher,
-	reportTaskResponse avsPerformer.ReceiveTaskResponse,
 	logger *zap.Logger,
 ) (*AvsPerformerServer, error) {
 	return &AvsPerformerServer{
-		config:             config,
-		logger:             logger,
-		taskBacklog:        make(chan *performerTask.PerformerTask, 50),
-		reportTaskResponse: reportTaskResponse,
-		peeringFetcher:     peeringFetcher,
+		config:         config,
+		logger:         logger,
+		peeringFetcher: peeringFetcher,
 	}, nil
 }
 
@@ -270,49 +262,6 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (aps *AvsPerformerServer) ProcessTasks(ctx context.Context) error {
-	var wg sync.WaitGroup
-	for i := 0; i < aps.config.WorkerCount; i++ {
-		wg.Add(1)
-	}
-	go func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		aps.logger.Sugar().Infow("Waiting for tasks", zap.String("avs", aps.config.AvsAddress))
-		for task := range aps.taskBacklog {
-			res, err := aps.processTask(ctx, task)
-			if err != nil {
-				aps.logger.Sugar().Errorw("Failed to process task",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.Error(err),
-				)
-				continue
-			}
-			aps.reportTaskResponse(task, res, err)
-		}
-
-	}(&wg)
-	return nil
-}
-
-func (aps *AvsPerformerServer) processTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
-	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
-
-	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
-		TaskId:   []byte(task.TaskID),
-		Metadata: task.Metadata,
-		Payload:  task.Payload,
-	})
-	if err != nil {
-		aps.logger.Sugar().Errorw("Performer failed to handle task",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	return performerTask.NewTaskResultFromResultProto(res), nil
-}
-
 func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
 	sig, err := bn254.NewSignatureFromBytes(t.Signature)
 	if err != nil {
@@ -345,6 +294,7 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 	if !verfied {
 		aps.logger.Sugar().Errorw("Failed to verify signature",
 			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("publicKey", string(peer.PublicKey.Bytes())),
 			zap.Error(err),
 		)
 		return fmt.Errorf("failed to verify signature")
@@ -353,15 +303,23 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 	return nil
 }
 
-func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) error {
-	select {
-	case aps.taskBacklog <- task:
-		aps.logger.Sugar().Infow("PerformerTask added to backlog")
-	default:
-		aps.logger.Sugar().Infow("PerformerTask backlog is full, dropping task")
-		return fmt.Errorf("task backlog is full for avs %s", aps.config.AvsAddress)
+func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
+	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
+
+	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
+		TaskId:   []byte(task.TaskID),
+		Metadata: task.Metadata,
+		Payload:  task.Payload,
+	})
+	if err != nil {
+		aps.logger.Sugar().Errorw("Performer failed to handle task",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return nil, err
 	}
-	return nil
+
+	return performerTask.NewTaskResultFromResultProto(res), nil
 }
 
 func (aps *AvsPerformerServer) Shutdown() error {

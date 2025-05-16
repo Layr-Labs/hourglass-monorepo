@@ -99,6 +99,15 @@ func NewEthereumClient(cfg *EthereumClientConfig, l *zap.Logger) *Client {
 	}
 }
 
+func (c *Client) GetWebsocketConnection(wsUrl string) (*ethclient.Client, error) {
+	d, err := ethclient.Dial(wsUrl)
+	if err != nil {
+		return nil, err
+	}
+
+	return d, nil
+}
+
 func (c *Client) SetHttpClient(client *http.Client) {
 	c.httpClient = client
 }

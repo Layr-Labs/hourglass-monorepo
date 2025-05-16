@@ -2,6 +2,8 @@ package taskSession
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -22,12 +24,9 @@ type TaskSession struct {
 	results             sync.Map
 	resultsCount        atomic.Uint32
 	aggregatorAddress   string
-	aggregatorUrl       string
 
-	taskAggregator       *aggregation.TaskResultAggregator
-	resultsQueue         chan *TaskSession
-	thresholdMet         atomic.Bool
-	AggregateCertificate *aggregation.AggregatedCertificate
+	taskAggregator *aggregation.TaskResultAggregator
+	thresholdMet   atomic.Bool
 }
 
 func NewTaskSession(
@@ -35,9 +34,7 @@ func NewTaskSession(
 	cancel context.CancelFunc,
 	task *types.Task,
 	aggregatorAddress string,
-	aggregatorUrl string,
 	aggregatorSignature []byte,
-	resultsQueue chan *TaskSession,
 	logger *zap.Logger,
 ) (*TaskSession, error) {
 	operators := util.Map(task.RecipientOperators, func(peer *peering.OperatorPeerInfo, i uint64) *aggregation.Operator {
@@ -63,13 +60,11 @@ func NewTaskSession(
 	ts := &TaskSession{
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
-		aggregatorUrl:       aggregatorUrl,
 		aggregatorSignature: aggregatorSignature,
 		results:             sync.Map{},
 		context:             ctx,
 		contextCancel:       cancel,
 		logger:              logger,
-		resultsQueue:        resultsQueue,
 		taskAggregator:      ta,
 		thresholdMet:        atomic.Bool{},
 	}
@@ -79,20 +74,43 @@ func NewTaskSession(
 	return ts, nil
 }
 
-func (ts *TaskSession) Process() error {
+func (ts *TaskSession) Process() (*aggregation.AggregatedCertificate, error) {
 	ts.logger.Sugar().Infow("task session started",
 		zap.String("taskId", ts.Task.TaskId),
 	)
-	go ts.Broadcast()
 
-	<-ts.context.Done()
-	ts.logger.Sugar().Infow("task session context done",
-		zap.String("taskId", ts.Task.TaskId),
-	)
-	return nil
+	certChan := make(chan *aggregation.AggregatedCertificate, 1)
+	errChan := make(chan error, 1)
+
+	go func() {
+		cert, err := ts.Broadcast()
+		if err != nil {
+			ts.logger.Sugar().Errorw("task session broadcast failed",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.Error(err),
+			)
+			errChan <- err
+			return
+		}
+		ts.logger.Sugar().Infow("task session broadcast completed",
+			zap.String("taskId", ts.Task.TaskId),
+			zap.Any("cert", cert),
+		)
+		certChan <- cert
+	}()
+
+	select {
+	case cert := <-certChan:
+		return cert, nil
+	case <-ts.context.Done():
+		if errors.Is(ts.context.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("task session context deadline exceeded: %w", ts.context.Err())
+		}
+		return nil, fmt.Errorf("task session context done: %w", ts.context.Err())
+	}
 }
 
-func (ts *TaskSession) Broadcast() {
+func (ts *TaskSession) Broadcast() (*aggregation.AggregatedCertificate, error) {
 	ts.logger.Sugar().Infow("task session broadcast started",
 		zap.String("taskId", ts.Task.TaskId),
 		zap.Any("recipientOperators", ts.Task.RecipientOperators),
@@ -102,24 +120,17 @@ func (ts *TaskSession) Broadcast() {
 		AvsAddress:        ts.Task.AVSAddress,
 		AggregatorAddress: ts.aggregatorAddress,
 		Payload:           ts.Task.Payload,
-		AggregatorUrl:     ts.aggregatorUrl,
 		Signature:         ts.aggregatorSignature,
 	}
 	ts.logger.Sugar().Infow("broadcasting task session to operators",
 		zap.Any("taskSubmission", taskSubmission),
+		zap.Any("operatorPeers", ts.Task.RecipientOperators),
 	)
 
-	var wg sync.WaitGroup
-	for _, peer := range ts.Task.RecipientOperators {
-		wg.Add(1)
+	resultsChan := make(chan *types.TaskResult)
 
-		go func(wg *sync.WaitGroup, peer *peering.OperatorPeerInfo) {
-			defer wg.Done()
-			ts.logger.Sugar().Infow("task session broadcast to operator",
-				zap.String("taskId", ts.Task.TaskId),
-				zap.String("operatorAddress", peer.OperatorAddress),
-				zap.String("networkAddress", peer.NetworkAddress),
-			)
+	for _, peer := range ts.Task.RecipientOperators {
+		go func(peer *peering.OperatorPeerInfo) {
 			c, err := executorClient.NewExecutorClient(peer.NetworkAddress, true)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
@@ -130,6 +141,11 @@ func (ts *TaskSession) Broadcast() {
 				return
 			}
 
+			ts.logger.Sugar().Infow("broadcasting task to operator",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.String("operatorAddress", peer.OperatorAddress),
+				zap.String("networkAddress", peer.NetworkAddress),
+			)
 			res, err := c.SubmitTask(ts.context, taskSubmission)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
@@ -139,63 +155,71 @@ func (ts *TaskSession) Broadcast() {
 				)
 				return
 			}
-			if !res.Success {
-				ts.logger.Sugar().Errorw("task submission failed",
-					zap.String("executorAddress", peer.OperatorAddress),
-					zap.String("taskId", ts.Task.TaskId),
-					zap.String("message", res.Message),
-				)
-				return
-			}
-			ts.logger.Sugar().Debugw("Successfully submitted task to executor",
-				zap.String("executorAddress", peer.OperatorAddress),
+			ts.logger.Sugar().Infow("received task result from executor",
 				zap.String("taskId", ts.Task.TaskId),
+				zap.String("operatorAddress", peer.OperatorAddress),
+				zap.Any("result", res),
 			)
-		}(&wg, peer)
+			resultsChan <- types.TaskResultFromTaskResultProto(res)
+		}(peer)
 	}
-	wg.Wait()
-	ts.logger.Sugar().Infow("task submission completed",
-		zap.String("taskId", ts.Task.TaskId),
-	)
-}
 
-func (ts *TaskSession) RecordResult(taskResult *types.TaskResult) {
-	if ts.thresholdMet.Load() {
-		ts.logger.Sugar().Infow("task completion threshold already met",
+	// iterate over results until we meet the signing threshold
+	for taskResult := range resultsChan {
+		ts.logger.Sugar().Infow("received task result on channel",
 			zap.String("taskId", taskResult.TaskId),
 			zap.String("operatorAddress", taskResult.OperatorAddress),
 		)
-		return
-	}
-	if err := ts.taskAggregator.ProcessNewSignature(ts.context, taskResult.TaskId, taskResult); err != nil {
-		ts.logger.Sugar().Errorw("Failed to process task result",
+		if ts.thresholdMet.Load() {
+			ts.logger.Sugar().Infow("task completion threshold already met",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+			)
+			continue
+		}
+		if err := ts.taskAggregator.ProcessNewSignature(ts.context, taskResult.TaskId, taskResult); err != nil {
+			ts.logger.Sugar().Errorw("Failed to process task result",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+				zap.Error(err),
+			)
+			continue
+		}
+		ts.logger.Sugar().Infow("task result processed, checking signing threshold",
 			zap.String("taskId", taskResult.TaskId),
 			zap.String("operatorAddress", taskResult.OperatorAddress),
-			zap.Error(err),
 		)
-	}
 
-	if !ts.taskAggregator.SigningThresholdMet() {
-		return
-	}
-	ts.thresholdMet.Store(true)
-	ts.logger.Sugar().Infow("task completion threshold met",
-		zap.String("taskId", taskResult.TaskId),
-		zap.String("operatorAddress", taskResult.OperatorAddress),
-	)
+		if !ts.taskAggregator.SigningThresholdMet() {
+			ts.logger.Sugar().Infow("task completion threshold not met yet",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+			)
+			continue
+		}
+		ts.thresholdMet.Store(true)
 
-	cert, err := ts.taskAggregator.GenerateFinalCertificate()
-	if err != nil {
-		ts.logger.Sugar().Errorw("Failed to generate final certificate",
+		// threshold met, close the results channel to stop further processing
+		close(resultsChan)
+
+		ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
 			zap.String("taskId", taskResult.TaskId),
 			zap.String("operatorAddress", taskResult.OperatorAddress),
-			zap.Error(err),
 		)
-		return
-	}
-	ts.AggregateCertificate = cert
 
-	ts.resultsQueue <- ts
+		cert, err := ts.taskAggregator.GenerateFinalCertificate()
+		if err != nil {
+			ts.logger.Sugar().Errorw("Failed to generate final certificate",
+				zap.String("taskId", taskResult.TaskId),
+				zap.String("operatorAddress", taskResult.OperatorAddress),
+				zap.Error(err),
+			)
+			return nil, fmt.Errorf("failed to generate final certificate: %w", err)
+		}
+		return cert, nil
+	}
+
+	return nil, fmt.Errorf("failed to meet signing threshold")
 }
 
 func (ts *TaskSession) GetOperatorOutputsMap() map[string][]byte {

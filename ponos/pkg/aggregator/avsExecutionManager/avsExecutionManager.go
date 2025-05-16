@@ -49,8 +49,6 @@ type AvsExecutionManager struct {
 
 	taskQueue chan *types.Task
 
-	resultsQueue chan *taskSession.TaskSession
-
 	inflightTasks sync.Map
 }
 
@@ -69,7 +67,6 @@ func NewAvsExecutionManager(
 		peeringDataFetcher:   peeringDataFetcher,
 		inflightTasks:        sync.Map{},
 		taskQueue:            make(chan *types.Task, 10000),
-		resultsQueue:         make(chan *taskSession.TaskSession, 10000),
 	}
 	return manager
 }
@@ -123,36 +120,6 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 					"error", err,
 				)
 			}
-		case result := <-em.resultsQueue:
-			em.logger.Sugar().Infow("Received task result", zap.Any("taskSession", result))
-
-			if chainCaller, ok := em.chainContractCallers[result.Task.ChainId]; ok {
-				em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(result.Task.ChainId)))
-
-				// TODO: (brandon c) remove this and handle case of submission to same block task was created.
-				time.Sleep(em.config.WriteDelaySeconds)
-
-				if result.AggregateCertificate == nil {
-					em.logger.Sugar().Errorw("Received nil aggregate certificate", zap.String("taskId", result.Task.TaskId))
-					return fmt.Errorf("received nil aggregate certificate")
-				}
-
-				receipt, err := chainCaller.SubmitTaskResult(ctx, result.AggregateCertificate)
-				if err != nil {
-					// TODO: emit metric
-					em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
-				} else {
-					em.logger.Sugar().Infow("Successfully submitted task result",
-						zap.String("taskId", result.Task.TaskId),
-						zap.String("transactionHash", receipt.TxHash.String()),
-					)
-				}
-
-				continue
-			}
-			// TODO: emit metric
-			em.logger.Sugar().Errorw("Failed to find contract caller for task", "taskId", result.Task.TaskId)
-			return fmt.Errorf("failed to find contract caller for task")
 		case <-ctx.Done():
 			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
 			return ctx.Err()
@@ -207,9 +174,7 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		cancel,
 		task,
 		em.config.AggregatorAddress,
-		em.config.AggregatorUrl,
 		sig,
-		em.resultsQueue,
 		em.logger,
 	)
 	if err != nil {
@@ -227,39 +192,79 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 
 	em.inflightTasks.Store(task.TaskId, ts)
 
+	doneChan := make(chan bool, 1)
+	errorsChan := make(chan error, 1)
+
 	go func() {
-		if err := ts.Process(); err != nil {
+		em.logger.Sugar().Infow("Processing task session",
+			zap.String("taskId", task.TaskId),
+		)
+		cert, err := ts.Process()
+		if err != nil {
+			cancel()
 			em.logger.Sugar().Errorw("Failed to process task",
 				zap.String("taskId", task.TaskId),
 				zap.Error(err),
 			)
+			errorsChan <- fmt.Errorf("failed to process task: %w", err)
+			return
 		}
-		<-ctx.Done()
-		// check if deadline was reached
+		em.logger.Sugar().Infow("Received task response and certificate",
+			zap.String("taskId", task.TaskId),
+			zap.String("taskResponseDigest", string(cert.TaskResponseDigest)),
+		)
+
+		chainCaller, ok := em.chainContractCallers[ts.Task.ChainId]
+		if !ok {
+			errorsChan <- fmt.Errorf("failed to find chain caller for task: %s", task.TaskId)
+			return
+		}
+
+		em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(ts.Task.ChainId)))
+
+		if cert == nil {
+			em.logger.Sugar().Errorw("Received nil aggregate certificate", zap.String("taskId", ts.Task.TaskId))
+			errorsChan <- fmt.Errorf("received nil aggregate certificate")
+			return
+		}
+
+		receipt, err := chainCaller.SubmitTaskResult(ctx, cert)
+		if err != nil {
+			// TODO: emit metric
+			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
+			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
+			return
+		} else {
+			em.logger.Sugar().Infow("Successfully submitted task result",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.String("transactionHash", receipt.TxHash.String()),
+			)
+		}
+		doneChan <- true
+	}()
+
+	select {
+	case <-doneChan:
+		em.logger.Sugar().Infow("Task session completed",
+			zap.String("taskId", task.TaskId),
+		)
+	case <-errorsChan:
+		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
+		return err
+	case <-ctx.Done():
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			em.logger.Sugar().Errorw("Task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
-			return
+			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
 		}
 		em.logger.Sugar().Errorw("Task session context done",
 			zap.String("taskId", task.TaskId),
 			zap.Error(ctx.Err()),
 		)
-	}()
-	return nil
-}
-
-func (em *AvsExecutionManager) HandleTaskResultFromExecutor(taskResult *types.TaskResult) error {
-	task, ok := em.inflightTasks.Load(taskResult.TaskId)
-	if !ok {
-		em.logger.Sugar().Warnw("Received result for unknown task")
 		return nil
 	}
-
-	ts := task.(*taskSession.TaskSession)
-	ts.RecordResult(taskResult)
 	return nil
 }
 

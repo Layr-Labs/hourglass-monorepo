@@ -9,6 +9,9 @@ import (
 )
 
 func StringToECDSAPrivateKey(pk string) (*ecdsa.PrivateKey, error) {
+	if len(pk) == 0 {
+		return nil, fmt.Errorf("private key is empty")
+	}
 	pk = strings.TrimPrefix(pk, "0x")
 
 	privateKey, err := crypto.HexToECDSA(pk)
