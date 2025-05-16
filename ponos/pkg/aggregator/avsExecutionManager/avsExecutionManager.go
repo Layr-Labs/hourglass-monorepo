@@ -69,7 +69,6 @@ func NewAvsExecutionManager(
 		peeringDataFetcher:   peeringDataFetcher,
 		inflightTasks:        sync.Map{},
 		taskQueue:            make(chan *types.Task, 10000),
-		// resultsQueue:         make(chan *taskSession.TaskSession, 10000),
 	}
 	return manager
 }
@@ -224,9 +223,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		}
 
 		em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(ts.Task.ChainId)))
-
-		// TODO: (brandon c) remove this and handle case of submission to same block task was created.
-		time.Sleep(em.config.WriteDelaySeconds)
 
 		if cert == nil {
 			em.logger.Sugar().Errorw("Received nil aggregate certificate", zap.String("taskId", ts.Task.TaskId))
