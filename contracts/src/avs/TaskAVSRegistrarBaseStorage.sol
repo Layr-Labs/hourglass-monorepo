@@ -29,19 +29,19 @@ abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
 
     /// @notice Mapping from operator address to pubkey hash
     mapping(address operator => bytes32 pubkeyHash) public operatorToPubkeyHash;
-    
+
     /// @notice Mapping from pubkey hash to operator address
     mapping(bytes32 pubkeyHash => address operator) public pubkeyHashToOperator;
-    
+
     /// @notice Mapping from operator address to G1 pubkey
     mapping(address operator => BN254.G1Point pubkeyG1) public operatorToPubkey;
-    
+
     /// @notice Mapping from operator address to G2 pubkey
     mapping(address operator => BN254.G2Point) internal operatorToPubkeyG2;
 
     /// @notice Mapping from pubkey hash to operator socket
     mapping(bytes32 pubkeyHash => string socket) public pubkeyHashToSocket;
-    
+
     /// @notice Mapping from operator address to operator socket
     mapping(address operator => string socket) public operatorToSocket;
 

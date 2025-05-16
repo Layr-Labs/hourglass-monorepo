@@ -40,7 +40,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *                         EXTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Registers an operator with the AVS
      * @param operator The address of the operator to register
@@ -117,7 +117,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Registers a BLS public key for an operator
      * @param operator The address of the operator
@@ -212,7 +212,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *                         VIEW FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Checks if the contract supports a specific AVS
      * @param avs The address of the AVS to check

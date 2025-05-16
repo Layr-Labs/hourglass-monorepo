@@ -123,7 +123,7 @@ interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents,
      *                         EXTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Updates an operator's socket address
      * @param socket The new socket address to set for the operator

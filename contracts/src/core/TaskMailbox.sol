@@ -27,7 +27,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         EXTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Registers or deregisters an AVS with the TaskMailbox
      * @param avs Address of the AVS to register
@@ -233,7 +233,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Determines the actual status of a task, accounting for expiration
      * @param task The task to check status for
@@ -266,7 +266,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         VIEW FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Gets the configuration for an AVS
      * @param avs Address of the AVS to get configuration for
