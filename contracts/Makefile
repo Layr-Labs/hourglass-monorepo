@@ -1,5 +1,17 @@
 .PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config generate-bls-params register-operator create-task 
 
+# Build
+build:
+	forge build
+
+# Test
+test:
+	forge test
+
+# Generate Contract Bindings
+bindings:
+	./bin/compile-bindings.sh
+
 # Deploy Task Mailbox
 deploy-task-mailbox:
 	forge script script/local/DeployTaskMailbox.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv

@@ -34,8 +34,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // 1. OperatorSets are valid
         // 2. Only AVS delegated address can set config.
 
-        require(config.resultSubmitter != address(0), InvalidAddressZero());
-
         AvsConfig memory memAvsConfig = avsConfigs[avs];
         // Deregister all current executor operator sets.
         for (uint256 i = 0; i < memAvsConfig.executorOperatorSetIds.length; i++) {
@@ -57,9 +55,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         }
 
         avsConfigs[avs] = config;
-        emit AvsConfigSet(
-            msg.sender, avs, config.resultSubmitter, config.aggregatorOperatorSetId, config.executorOperatorSetIds
-        );
+        emit AvsConfigSet(msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
     }
 
     function setExecutorOperatorSetTaskConfig(
@@ -87,6 +83,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // TODO: require checks - Figure out what checks are needed
         // 1. OperatorSet is valid
         // TODO: Do we need a gasless version of this function?
+        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
 
         require(isAvsRegistered[taskParams.executorOperatorSet.avs], AvsNotRegistered());
         require(
@@ -117,7 +114,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
             memAvsConfig.aggregatorOperatorSetId,
-            memAvsConfig.resultSubmitter,
             taskParams.refundCollector,
             taskParams.avsFee,
             0, // TODO: Update with fee split % variable
@@ -175,7 +171,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
-        require(msg.sender == task.resultSubmitter, InvalidTaskResultSubmitter());
         require(block.timestamp > task.creationTime, TimestampAtCreation());
 
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
@@ -247,7 +242,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
             task.avs,
             task.executorOperatorSetId,
             task.aggregatorOperatorSetId,
-            task.resultSubmitter,
             task.refundCollector,
             task.avsFee,
             task.feeSplit,

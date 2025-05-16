@@ -10,7 +10,6 @@ import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol
 interface ITaskMailboxTypes {
     // TODO: Pack Storage efficiently.
     struct AvsConfig {
-        address resultSubmitter; // TODO: Do we need result submitter if there is certificate verifier?
         uint32 aggregatorOperatorSetId; // TODO: Add avs address too: Any AVS can be an aggregator.
         uint32[] executorOperatorSetIds;
     }
@@ -35,6 +34,7 @@ interface ITaskMailboxTypes {
         bytes payload;
     }
 
+    // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
     enum TaskStatus {
         Created,
         Canceled,
@@ -50,7 +50,6 @@ interface ITaskMailboxTypes {
         address avs;
         uint32 executorOperatorSetId;
         uint32 aggregatorOperatorSetId;
-        address resultSubmitter;
         address refundCollector;
         uint96 avsFee;
         uint16 feeSplit;
@@ -77,8 +76,6 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
     error InvalidAggregatorOperatorSetId();
     /// @dev Thrown when a task creator is invalid
     error InvalidTaskCreator();
-    /// @dev Thrown when a task result submitter is invalid
-    error InvalidTaskResultSubmitter();
     /// @dev Thrown when a task status is invalid
     error InvalidTaskStatus(TaskStatus expected, TaskStatus actual);
     /// @dev Thrown when a payload is empty
@@ -93,11 +90,7 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
     event AvsRegistered(address indexed caller, address indexed avs, bool isRegistered);
 
     event AvsConfigSet(
-        address indexed caller,
-        address indexed avs,
-        address resultSubmitter,
-        uint32 aggregatorOperatorSetId,
-        uint32[] executorOperatorSetIds
+        address indexed caller, address indexed avs, uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
     );
 
     event ExecutorOperatorSetTaskConfigSet(
