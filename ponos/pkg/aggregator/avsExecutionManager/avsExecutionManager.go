@@ -49,8 +49,6 @@ type AvsExecutionManager struct {
 
 	taskQueue chan *types.Task
 
-	// resultsQueue chan *taskSession.TaskSession
-
 	inflightTasks sync.Map
 }
 
