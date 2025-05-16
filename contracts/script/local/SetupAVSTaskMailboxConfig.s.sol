@@ -25,7 +25,6 @@ contract SetupAVSTaskMailboxConfig is Script {
         uint32[] memory executorOperatorSetIds = new uint32[](1);
         executorOperatorSetIds[0] = 1;
         ITaskMailboxTypes.AvsConfig memory avsConfig = ITaskMailboxTypes.AvsConfig({
-            resultSubmitter: avs,
             aggregatorOperatorSetId: 0,
             executorOperatorSetIds: executorOperatorSetIds
         });
@@ -33,7 +32,6 @@ contract SetupAVSTaskMailboxConfig is Script {
         ITaskMailboxTypes.AvsConfig memory avsConfigStored = ITaskMailbox(taskMailbox).getAvsConfig(avs);
         console.log(
             "AVS config set:",
-            avsConfigStored.resultSubmitter,
             avsConfigStored.aggregatorOperatorSetId,
             avsConfigStored.executorOperatorSetIds[0]
         );
