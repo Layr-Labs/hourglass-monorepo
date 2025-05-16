@@ -6,8 +6,14 @@ import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
+import {ITaskAVSRegistrar} from "../interfaces/avs/l1/ITaskAVSRegistrar.sol";
 import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
 
+/**
+ * @title TaskAVSRegistrarBase
+ * @notice Base contract for registering operators and managing BLS public keys for AVS tasks
+ * @dev Extends EIP712 for signature validation and TaskAVSRegistrarBaseStorage for state variables
+ */
 abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
 
@@ -19,6 +25,11 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         _;
     }
 
+    /**
+     * @notice Constructs the TaskAVSRegistrarBase contract
+     * @param avs The address of the AVS
+     * @param allocationManager The AllocationManager contract address
+     */
     constructor(
         address avs,
         IAllocationManager allocationManager
@@ -28,6 +39,15 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *
      *                         EXTERNAL FUNCTIONS
      *
+     */
+    
+    /**
+     * @notice Registers an operator with the AVS
+     * @param operator The address of the operator to register
+     * @param avs The AVS address the operator is registering with
+     * @param operatorSetIds The IDs of the operator sets to register the operator with
+     * @param data Encoded registration parameters including pubkey and socket
+     * @dev Only callable by the AllocationManager
      */
     function registerOperator(
         address operator,
@@ -57,6 +77,13 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         );
     }
 
+    /**
+     * @notice Deregisters an operator from the AVS
+     * @param operator The address of the operator to deregister
+     * @param avs The AVS address the operator is deregistering from
+     * @param operatorSetIds The IDs of the operator sets to deregister the operator from
+     * @dev Only callable by the AllocationManager
+     */
     function deregisterOperator(
         address operator,
         address avs,
@@ -68,6 +95,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         _processOperatorSetApkUpdate(operator, operatorSetIds, operatorToPubkey[operator].negate());
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function updateOperatorSocket(
         string memory socket
     ) external {
@@ -88,6 +116,14 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *
      *                         INTERNAL FUNCTIONS
      *
+     */
+    
+    /**
+     * @notice Registers a BLS public key for an operator
+     * @param operator The address of the operator
+     * @param params The parameters for registering the pubkey
+     * @param _pubkeyRegistrationMessageHash The message hash that should be signed
+     * @dev Verifies the signature and registers the pubkey
      */
     function _registerBLSPublicKey(
         address operator,
@@ -148,6 +184,13 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         emit OperatorSocketUpdated(operator, pubkeyHash, socket);
     }
 
+    /**
+     * @notice Updates the aggregate public key (APK) for one or more operator sets
+     * @param operator The address of the operator
+     * @param operatorSetIds The IDs of the operator sets to update
+     * @param point The BLS public key point to add or remove from the APK
+     * @dev For registration, adds the point; for deregistration, adds the negation of the point
+     */
     function _processOperatorSetApkUpdate(
         address operator,
         uint32[] memory operatorSetIds,
@@ -169,19 +212,26 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *                         VIEW FUNCTIONS
      *
      */
+    
+    /**
+     * @notice Checks if the contract supports a specific AVS
+     * @param avs The address of the AVS to check
+     * @return True if the AVS is supported, false otherwise
+     */
     function supportsAVS(
         address avs
     ) public view returns (bool) {
         return avs == AVS;
     }
 
-    // TODO: Update operatorSetId to uint32
+    /// @inheritdoc ITaskAVSRegistrar
     function getApk(
         uint8 operatorSetId
     ) public view returns (BN254.G1Point memory) {
         return currentApk[operatorSetId];
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getRegisteredPubkeyInfo(
         address operator
     ) public view returns (PubkeyInfo memory) {
@@ -194,6 +244,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         return PubkeyInfo({pubkeyG1: pubkey, pubkeyG2: pubkeyG2, pubkeyHash: pubkeyHash});
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getRegisteredPubkey(
         address operator
     ) public view returns (BN254.G1Point memory, bytes32) {
@@ -206,6 +257,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         return (pubkey, pubkeyHash);
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getOperatorPubkeyG2(
         address operator
     ) public view override returns (BN254.G2Point memory) {
@@ -213,50 +265,49 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         return operatorToPubkeyG2[operator];
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getOperatorFromPubkeyHash(
         bytes32 pubkeyHash
     ) public view returns (address) {
         return pubkeyHashToOperator[pubkeyHash];
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getOperatorPubkeyHash(
         address operator
     ) public view returns (bytes32) {
         return operatorToPubkeyHash[operator];
     }
 
-    /**
-     * @notice Returns the message hash that an operator must sign to register their BLS public key.
-     * @param operator is the address of the operator registering their BLS public key
-     */
+    /// @inheritdoc ITaskAVSRegistrar
     function pubkeyRegistrationMessageHash(
         address operator
     ) public view returns (BN254.G1Point memory) {
         return BN254.hashToG1(calculatePubkeyRegistrationMessageHash(operator));
     }
 
-    /**
-     * @notice Returns the message hash that an operator must sign to register their BLS public key.
-     * @param operator is the address of the operator registering their BLS public key
-     */
+    /// @inheritdoc ITaskAVSRegistrar
     function calculatePubkeyRegistrationMessageHash(
         address operator
     ) public view returns (bytes32) {
         return _hashTypedDataV4(keccak256(abi.encode(PUBKEY_REGISTRATION_TYPEHASH, operator)));
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getOperatorSocketByPubkeyHash(
         bytes32 pubkeyHash
     ) public view returns (string memory) {
         return pubkeyHashToSocket[pubkeyHash];
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getOperatorSocketByOperator(
         address operator
     ) public view returns (string memory) {
         return operatorToSocket[operator];
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function getBatchOperatorPubkeyInfoAndSocket(
         address[] calldata operators
     ) public view returns (PubkeyInfoAndSocket[] memory) {
@@ -270,6 +321,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         return pubkeyInfosAndSockets;
     }
 
+    /// @inheritdoc ITaskAVSRegistrar
     function packRegisterPayload(
         string memory socket,
         PubkeyRegistrationParams memory pubkeyRegistrationParams
