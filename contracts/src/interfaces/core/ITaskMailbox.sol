@@ -90,10 +90,7 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
     event AvsRegistered(address indexed caller, address indexed avs, bool isRegistered);
 
     event AvsConfigSet(
-        address indexed caller,
-        address indexed avs,
-        uint32 aggregatorOperatorSetId,
-        uint32[] executorOperatorSetIds
+        address indexed caller, address indexed avs, uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
     );
 
     event ExecutorOperatorSetTaskConfigSet(

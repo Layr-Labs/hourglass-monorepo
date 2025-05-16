@@ -55,9 +55,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         }
 
         avsConfigs[avs] = config;
-        emit AvsConfigSet(
-            msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds
-        );
+        emit AvsConfigSet(msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
     }
 
     function setExecutorOperatorSetTaskConfig(
