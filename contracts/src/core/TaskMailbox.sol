@@ -87,6 +87,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // TODO: require checks - Figure out what checks are needed
         // 1. OperatorSet is valid
         // TODO: Do we need a gasless version of this function?
+        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
 
         require(isAvsRegistered[taskParams.executorOperatorSet.avs], AvsNotRegistered());
         require(

@@ -35,6 +35,7 @@ interface ITaskMailboxTypes {
         bytes payload;
     }
 
+    // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
     enum TaskStatus {
         Created,
         Canceled,
