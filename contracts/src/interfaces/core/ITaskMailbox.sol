@@ -105,39 +105,39 @@ interface ITaskMailboxTypes {
 interface ITaskMailboxErrors is ITaskMailboxTypes {
     /// @notice Thrown when an AVS is not registered
     error AvsNotRegistered();
-    
+
     /// @notice Thrown when a certificate verification fails
     error CertificateVerificationFailed();
-    
+
     /// @notice Thrown when an executor operator set id is already in the set
     error DuplicateExecutorOperatorSetId();
-    
+
     /// @notice Thrown when an executor operator set is not registered
     error ExecutorOperatorSetNotRegistered();
-    
+
     /// @notice Thrown when an executor operator set task config is not set
     error ExecutorOperatorSetTaskConfigNotSet();
-    
+
     /// @notice Thrown when an input address is zero
     error InvalidAddressZero();
-    
+
     /// @notice Thrown when an aggregator operator set id is also an executor operator set id
     error InvalidAggregatorOperatorSetId();
-    
+
     /// @notice Thrown when a task creator is invalid
     error InvalidTaskCreator();
-    
+
     /// @notice Thrown when a task status is invalid
     /// @param expected The expected task status
     /// @param actual The actual task status
     error InvalidTaskStatus(TaskStatus expected, TaskStatus actual);
-    
+
     /// @notice Thrown when a payload is empty
     error PayloadIsEmpty();
-    
+
     /// @notice Thrown when a task SLA is zero
     error TaskSLAIsZero();
-    
+
     /// @notice Thrown when a timestamp is at creation
     error TimestampAtCreation();
 }
@@ -240,7 +240,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         EXTERNAL FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Registers or deregisters an AVS with the TaskMailbox
      * @param avs Address of the AVS to register
@@ -299,7 +299,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         VIEW FUNCTIONS
      *
      */
-    
+
     /**
      * @notice Checks if an AVS is registered
      * @param avs Address of the AVS to check
