@@ -195,9 +195,8 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		"logCount", len(logs),
 	)
 
-	for _, l := range logs {
-		log := l
-		if !ecp.isInterestingLog(l) {
+	for _, log := range logs {
+		if !ecp.isInterestingLog(log) {
 			continue
 		}
 

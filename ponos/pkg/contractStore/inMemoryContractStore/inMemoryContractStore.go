@@ -36,6 +36,7 @@ func (ics *InMemoryContractStore) GetContractByAddress(address string) (*contrac
 }
 
 func (ics *InMemoryContractStore) ListContractAddressesForChain(chainId config.ChainId) []string {
+	// use a map to make sure we're getting unique addresses and no duplicates
 	chainContracts := util.Reduce(ics.contracts, func(acc map[string]*contracts.Contract, c *contracts.Contract) map[string]*contracts.Contract {
 		if c.ChainId == chainId {
 			acc[strings.ToLower(c.Address)] = c
