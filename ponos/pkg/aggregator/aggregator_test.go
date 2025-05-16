@@ -210,10 +210,9 @@ func Test_Aggregator(t *testing.T) {
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
 		&AggregatorConfig{
-			AVSs:    aggConfig.Avss,
-			Chains:  aggConfig.Chains,
-			Address: aggConfig.Operator.Address,
-			// NOTE: this private key at the moment is the AVS private key, NOT the aggregator operator private key
+			AVSs:              aggConfig.Avss,
+			Chains:            aggConfig.Chains,
+			Address:           aggConfig.Operator.Address,
 			PrivateKey:        aggConfig.Operator.OperatorPrivateKey,
 			AggregatorUrl:     aggConfig.ServerConfig.AggregatorUrl,
 			WriteDelaySeconds: time.Duration(aggConfig.SimulationConfig.WriteDelaySeconds) * time.Second,
@@ -233,17 +232,17 @@ func Test_Aggregator(t *testing.T) {
 	// Boot up everything
 	// ------------------------------------------------------------------------
 	if err := exec.Initialize(); err != nil {
-		//cancel()
 		t.Logf("Failed to initialize executor: %v", err)
+		cancel()
 	}
 
 	if err := exec.BootPerformers(ctx); err != nil {
-		//cancel()
 		t.Logf("Failed to boot performers: %v", err)
+		cancel()
 	}
 	if err := exec.Run(ctx); err != nil {
-		//cancel()
 		t.Logf("Failed to run executor: %v", err)
+		cancel()
 	}
 
 	if err := agg.Initialize(); err != nil {
@@ -355,7 +354,7 @@ const (
 grpcPort: 9090
 operator:
   address: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
-  operatorPrivateKey: "..."
+  operatorPrivateKey: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
   signingKeys:
     bls:
       keystore: |
@@ -403,8 +402,7 @@ chains:
     pollIntervalSeconds: 10
 operator:
   address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
-  # NOTE: this private key at the moment is the AVS private key, NOT the aggregator operator private key
-  operatorPrivateKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+  operatorPrivateKey: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
   signingKeys:
     bls:
       password: ""

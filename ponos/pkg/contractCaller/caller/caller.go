@@ -329,7 +329,6 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 	}
 
 	return &contractCaller.AVSConfig{
-		ResultSubmitter:         avsConfig.ResultSubmitter.String(),
 		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
 		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
 	}, nil

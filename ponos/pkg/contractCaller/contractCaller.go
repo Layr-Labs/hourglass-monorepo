@@ -12,7 +12,6 @@ import (
 )
 
 type AVSConfig struct {
-	ResultSubmitter         string
 	AggregatorOperatorSetId uint32
 	ExecutorOperatorSetIds  []uint32
 }
