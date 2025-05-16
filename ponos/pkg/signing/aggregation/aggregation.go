@@ -230,7 +230,6 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.totalSigners++
 		tra.aggregatedOperators.lastReceivedResponse = rr
 	}
-	fmt.Printf("Aggregated operators: %+v\n", tra.aggregatedOperators)
 
 	return nil
 }

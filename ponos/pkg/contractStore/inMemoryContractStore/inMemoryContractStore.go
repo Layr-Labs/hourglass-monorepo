@@ -1,7 +1,6 @@
 package inMemoryContractStore
 
 import (
-	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -15,7 +14,6 @@ type InMemoryContractStore struct {
 }
 
 func NewInMemoryContractStore(contracts []*contracts.Contract, logger *zap.Logger) *InMemoryContractStore {
-	fmt.Printf("contracts: %+v\n", contracts)
 	return &InMemoryContractStore{
 		contracts: contracts,
 		logger:    logger,

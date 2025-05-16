@@ -197,8 +197,6 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggrega
 		NonsignerIndices:   []uint32{},
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierBN254OperatorInfoWitness{},
 	}
-	fmt.Printf("taskId: %v\n", taskId)
-	fmt.Printf("Submitting task: %+v\n", cert)
 
 	tx, err := cc.taskMailboxTransactor.SubmitResult(noSendTxOpts, taskId, cert, aggCert.TaskResponse)
 	if err != nil {
