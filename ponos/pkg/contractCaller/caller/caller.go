@@ -519,7 +519,7 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 	if err != nil {
 		return nil, fmt.Errorf("failed to register as operator: %w", err)
 	}
-	cc.logger.Sugar().Infow("Successfully registered as operator",
+	cc.logger.Sugar().Infow("Successfully created operator",
 		zap.Any("receipt", createdOperator),
 	)
 	cc.logger.Sugar().Infow("Registering operator with AVS")

@@ -147,7 +147,6 @@ func (a *Aggregator) Initialize() error {
 				return acc
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
-			AggregatorUrl:     a.config.AggregatorUrl,
 			WriteDelaySeconds: a.config.WriteDelaySeconds,
 		},
 			a.chainContractCallers,
@@ -206,7 +205,7 @@ func (a *Aggregator) initializePollers() error {
 			pCfg := &EVMChainPoller.EVMChainPollerConfig{
 				ChainId:                 chain.ChainId,
 				PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
-				EigenLayerCoreContracts: a.contractStore.ListContractAddresses(),
+				EigenLayerCoreContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 				InterestingContracts:    []string{},
 			}
 			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)

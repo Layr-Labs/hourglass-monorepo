@@ -177,7 +177,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		cancel,
 		task,
 		em.config.AggregatorAddress,
-		em.config.AggregatorUrl,
 		sig,
 		em.logger,
 	)
@@ -200,6 +199,9 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 	errorsChan := make(chan error, 1)
 
 	go func() {
+		em.logger.Sugar().Infow("Processing task session",
+			zap.String("taskId", task.TaskId),
+		)
 		cert, err := ts.Process()
 		if err != nil {
 			cancel()
@@ -210,6 +212,10 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 			errorsChan <- fmt.Errorf("failed to process task: %w", err)
 			return
 		}
+		em.logger.Sugar().Infow("Received task response and certificate",
+			zap.String("taskId", task.TaskId),
+			zap.String("taskResponseDigest", string(cert.TaskResponseDigest)),
+		)
 
 		chainCaller, ok := em.chainContractCallers[ts.Task.ChainId]
 		if !ok {
@@ -240,10 +246,6 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 				zap.String("transactionHash", receipt.TxHash.String()),
 			)
 		}
-		// TODO: emit metric
-		em.logger.Sugar().Errorw("Failed to find contract caller for task",
-			zap.String("taskId", ts.Task.TaskId),
-		)
 		doneChan <- true
 	}()
 

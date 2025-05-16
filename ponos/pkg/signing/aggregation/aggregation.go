@@ -146,6 +146,9 @@ func (tra *TaskResultAggregator) SigningThresholdMet() bool {
 	if required == 0 {
 		required = 1 // Always require at least one
 	}
+	if tra.aggregatedOperators == nil {
+		return false
+	}
 	return tra.aggregatedOperators.totalSigners >= required
 }
 
@@ -161,7 +164,7 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 
 	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator) bool {
-		return op.Address == taskResponse.OperatorAddress
+		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
 	})
 	if operator == nil {
 		return fmt.Errorf("operator %s is not in the allowed set", taskResponse.OperatorAddress)
@@ -227,6 +230,7 @@ func (tra *TaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.totalSigners++
 		tra.aggregatedOperators.lastReceivedResponse = rr
 	}
+	fmt.Printf("Aggregated operators: %+v\n", tra.aggregatedOperators)
 
 	return nil
 }

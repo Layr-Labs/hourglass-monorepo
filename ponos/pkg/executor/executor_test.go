@@ -10,13 +10,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -65,13 +63,6 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("failed to get private key: %v", err)
 	}
 
-	baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: execConfig.GrpcPort,
-	}, l)
-	if err != nil {
-		l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
-	}
-
 	pubKey := aggPrivateSigningKey.Public()
 	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 		AggregatorPeers: []*peering.OperatorPeerInfo{
@@ -84,7 +75,10 @@ func Test_Executor(t *testing.T) {
 		},
 	}, l)
 
-	exec := NewExecutor(execConfig, baseRpcServer, l, execSigner, pdf)
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf)
+	if err != nil {
+		t.Fatalf("Failed to create executor: %v", err)
+	}
 
 	if err := exec.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)

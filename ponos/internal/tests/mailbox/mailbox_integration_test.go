@@ -65,7 +65,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	poller := EVMChainPoller.NewEVMChainPoller(ethereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
 		ChainId:                 config.ChainId_EthereumAnvil,
 		PollingInterval:         time.Duration(10) * time.Second,
-		EigenLayerCoreContracts: imContractStore.ListContractAddresses(),
+		EigenLayerCoreContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
 		InterestingContracts:    []string{},
 	}, l)
 

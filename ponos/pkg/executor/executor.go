@@ -28,6 +28,23 @@ type Executor struct {
 	peeringFetcher peering.IPeeringDataFetcher
 }
 
+func NewExecutorWithRpcServer(
+	port int,
+	config *executorConfig.ExecutorConfig,
+	logger *zap.Logger,
+	signer signer.ISigner,
+	peeringFetcher peering.IPeeringDataFetcher,
+) (*Executor, error) {
+	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: port,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC server: %v", err)
+	}
+
+	return NewExecutor(config, rpc, logger, signer, peeringFetcher), nil
+}
+
 func NewExecutor(
 	config *executorConfig.ExecutorConfig,
 	rpcServer *rpcServer.RpcServer,
@@ -127,7 +144,10 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 }
 
 func (e *Executor) Run(ctx context.Context) error {
-	e.logger.Info("Worker node is running", zap.String("version", "1.0.0"))
+	e.logger.Info("Executor is running",
+		zap.String("version", "1.0.0"),
+		zap.String("operatorAddress", e.config.Operator.Address),
+	)
 	if err := e.rpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start RPC server: %v", err)
 	}

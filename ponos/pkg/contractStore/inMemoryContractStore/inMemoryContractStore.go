@@ -2,6 +2,7 @@ package inMemoryContractStore
 
 import (
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
@@ -36,10 +37,18 @@ func (ics *InMemoryContractStore) GetContractByAddress(address string) (*contrac
 	return contract, nil
 }
 
-func (ics *InMemoryContractStore) ListContractAddresses() []string {
-	return util.Map(ics.contracts, func(c *contracts.Contract, i uint64) string {
-		return strings.ToLower(c.Address)
-	})
+func (ics *InMemoryContractStore) ListContractAddressesForChain(chainId config.ChainId) []string {
+	chainContracts := util.Reduce(ics.contracts, func(acc map[string]*contracts.Contract, c *contracts.Contract) map[string]*contracts.Contract {
+		if c.ChainId == chainId {
+			acc[strings.ToLower(c.Address)] = c
+		}
+		return acc
+	}, make(map[string]*contracts.Contract))
+	addresses := make([]string, 0, len(chainContracts))
+	for a, _ := range chainContracts {
+		addresses = append(addresses, a)
+	}
+	return addresses
 }
 
 func (ics *InMemoryContractStore) ListContracts() []*contracts.Contract {
