@@ -294,6 +294,7 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 	if !verfied {
 		aps.logger.Sugar().Errorw("Failed to verify signature",
 			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("publicKey", string(peer.PublicKey.Bytes())),
 			zap.Error(err),
 		)
 		return fmt.Errorf("failed to verify signature")

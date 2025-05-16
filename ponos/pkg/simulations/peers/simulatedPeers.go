@@ -7,14 +7,14 @@ import (
 )
 
 func NewSimulatedPeerFromConfig(simulatedPeer config.SimulatedPeer) (*peering.OperatorPeerInfo, error) {
-	privKey, err := bn254.NewPrivateKeyFromBytes([]byte(simulatedPeer.OperatorAddress))
+	pubKey, err := bn254.NewPublicKeyFromHexString(simulatedPeer.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 	return &peering.OperatorPeerInfo{
 		OperatorAddress: simulatedPeer.OperatorAddress,
 		NetworkAddress:  simulatedPeer.NetworkAddress,
-		PublicKey:       privKey.Public(),
+		PublicKey:       pubKey,
 		OperatorSetIds:  []uint32{simulatedPeer.OperatorSetId},
 	}, nil
 }
