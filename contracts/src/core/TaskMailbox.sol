@@ -11,6 +11,11 @@ import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
 import {IBN254CertificateVerifier} from "../interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
 
+/**
+ * @title TaskMailbox
+ * @notice Contract for managing tasks that are executed by operator sets
+ * @dev Extends ReentrancyGuard for security and TaskMailboxStorage for state variables
+ */
 contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
 
@@ -22,6 +27,12 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         EXTERNAL FUNCTIONS
      *
      */
+    
+    /**
+     * @notice Registers or deregisters an AVS with the TaskMailbox
+     * @param avs Address of the AVS to register
+     * @param isRegistered Whether to register (true) or deregister (false) the AVS
+     */
     function registerAvs(address avs, bool isRegistered) external {
         // TODO: require checks - Figure out what checks are needed.
         // 1. AVS is valid
@@ -29,6 +40,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         _registerAvs(avs, isRegistered);
     }
 
+    /**
+     * @notice Sets the configuration for an AVS
+     * @param avs Address of the AVS to configure
+     * @param config Configuration for the AVS
+     */
     function setAvsConfig(address avs, AvsConfig memory config) external {
         // TODO: require checks - Figure out what checks are needed.
         // 1. OperatorSets are valid
@@ -58,6 +74,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit AvsConfigSet(msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
     }
 
+    /**
+     * @notice Sets the task configuration for an executor operator set
+     * @param operatorSet The operator set to configure
+     * @param config Task configuration for the operator set
+     */
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
@@ -77,6 +98,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
     }
 
+    /**
+     * @notice Creates a new task
+     * @param taskParams Parameters for the task
+     * @return taskHash Unique identifier of the created task
+     */
     function createTask(
         TaskParams memory taskParams
     ) external nonReentrant returns (bytes32) {
@@ -146,6 +172,10 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return taskHash;
     }
 
+    /**
+     * @notice Cancels a task that has been created but not yet verified
+     * @param taskHash Unique identifier of the task to cancel
+     */
     function cancelTask(
         bytes32 taskHash
     ) external {
@@ -161,6 +191,12 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit TaskCanceled(msg.sender, taskHash, task.avs, task.executorOperatorSetId);
     }
 
+    /**
+     * @notice Submits a verified result for a task
+     * @param taskHash Unique identifier of the task
+     * @param cert Certificate proving the validity of the result
+     * @param result Task execution result data
+     */
     function submitResult(
         bytes32 taskHash,
         IBN254CertificateVerifier.BN254Certificate memory cert,
@@ -197,6 +233,12 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
+    
+    /**
+     * @notice Determines the actual status of a task, accounting for expiration
+     * @param task The task to check status for
+     * @return The current status of the task, considering expiration
+     */
     function _getTaskStatus(
         Task memory task
     ) internal view returns (TaskStatus) {
@@ -209,6 +251,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return task.status;
     }
 
+    /**
+     * @notice Registers or deregisters an AVS
+     * @param avs The AVS address to register or deregister
+     * @param isRegistered Whether to register (true) or deregister (false) the AVS
+     */
     function _registerAvs(address avs, bool isRegistered) internal {
         isAvsRegistered[avs] = isRegistered;
         emit AvsRegistered(msg.sender, avs, isRegistered);
@@ -219,18 +266,34 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         VIEW FUNCTIONS
      *
      */
+    
+    /**
+     * @notice Gets the configuration for an AVS
+     * @param avs Address of the AVS to get configuration for
+     * @return Configuration for the AVS
+     */
     function getAvsConfig(
         address avs
     ) external view returns (AvsConfig memory) {
         return avsConfigs[avs];
     }
 
+    /**
+     * @notice Gets the task configuration for an executor operator set
+     * @param operatorSet The operator set to get configuration for
+     * @return Task configuration for the operator set
+     */
     function getExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet
     ) external view returns (ExecutorOperatorSetTaskConfig memory) {
         return executorOperatorSetTaskConfigs[operatorSet.key()];
     }
 
+    /**
+     * @notice Gets complete information about a task
+     * @param taskHash Unique identifier of the task
+     * @return Complete task information
+     */
     function getTaskInfo(
         bytes32 taskHash
     ) external view returns (Task memory) {
@@ -251,6 +314,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         );
     }
 
+    /**
+     * @notice Gets the current status of a task
+     * @param taskHash Unique identifier of the task
+     * @return Current status of the task
+     */
     function getTaskStatus(
         bytes32 taskHash
     ) external view returns (TaskStatus) {
@@ -258,6 +326,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return _getTaskStatus(task);
     }
 
+    /**
+     * @notice Gets the result of a verified task
+     * @param taskHash Unique identifier of the task
+     * @return Result data of the task
+     */
     function getTaskResult(
         bytes32 taskHash
     ) external view returns (bytes memory) {
