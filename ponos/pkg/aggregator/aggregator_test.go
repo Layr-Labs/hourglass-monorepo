@@ -103,7 +103,7 @@ func Test_Aggregator(t *testing.T) {
 	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
 
 	// ------------------------------------------------------------------------
-	// Chain & anvil setup
+	// L1Chain & anvil setup
 	// ------------------------------------------------------------------------
 	ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   RPCUrl,
@@ -207,6 +207,11 @@ func Test_Aggregator(t *testing.T) {
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(aggCc, l)
 
+	simulationDelay := time.Second
+	if aggConfig.SimulationConfig != nil {
+		simulationDelay = time.Duration(aggConfig.SimulationConfig.WriteDelaySeconds) * time.Second
+	}
+
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
 		&AggregatorConfig{
@@ -215,7 +220,7 @@ func Test_Aggregator(t *testing.T) {
 			Address:           aggConfig.Operator.Address,
 			PrivateKey:        aggConfig.Operator.OperatorPrivateKey,
 			AggregatorUrl:     aggConfig.ServerConfig.AggregatorUrl,
-			WriteDelaySeconds: time.Duration(aggConfig.SimulationConfig.WriteDelaySeconds) * time.Second,
+			WriteDelaySeconds: simulationDelay,
 		},
 		imContractStore,
 		tlp,
@@ -381,6 +386,9 @@ operator:
           "curveType": "bn254"
         }
       password: ""
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 31337
 avsPerformers:
   - image:
       repository: "hello-performer"
@@ -389,6 +397,7 @@ avsPerformers:
     avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
     workerCount: 1
     signingCurve: "bn254"
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 
 	aggregatorConfigYaml = `
@@ -435,5 +444,6 @@ avss:
     responseTimeout: 3000
     chainIds: [31337]
     signingCurve: "bn254"
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 )

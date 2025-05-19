@@ -30,6 +30,10 @@ operator:
           "curveType": "bn254"
         }
       password: ""
+l1Chain:
+  rpcUrl: "http://host.docker.internal:8545"
+  chainId: 31337
+
 avsPerformers:
   - image:
       repository: "hello-performer"
@@ -38,6 +42,7 @@ avsPerformers:
     avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
     workerCount: 1
     signingCurve: "bn254"
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 simulation:
   simulatePeering:
     enabled: true
@@ -46,4 +51,3 @@ simulation:
         operatorAddress: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
         operatorSetId: 0
         publicKey: "1f9f528a1ab51aa8a8300d5abb3956d641d561942661020d93ec15217f72499513246c8fd468a8b1b982a252e7cf970e6bddf52c26c12341b5c6edc9787f94c312c44a2acc0f4a997ee5a06c8adb1451edd5c192bf05c53d142e895a163015c806ea90c5dfc90b58f428c633c0a571ae20f5febb4cb91e9f6ce09d248dcaabf8"
-

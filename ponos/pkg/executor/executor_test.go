@@ -178,6 +178,9 @@ operator:
           "curveType": "bn254"
         }
       password: ""
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 31337
 avsPerformers:
 - image:
     repository: "hello-performer"
@@ -186,6 +189,7 @@ avsPerformers:
   avsAddress: "0xavs1..."
   workerCount: 1
   signingCurve: "bn254"
+  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 
 	aggregatorConfigYaml = `
@@ -231,5 +235,6 @@ avss:
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
     chainIds: [31337]
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 )

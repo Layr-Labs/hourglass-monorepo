@@ -60,7 +60,7 @@ func NewEVMChainPoller(
 
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	sugar := ecp.logger.Sugar()
-	sugar.Infow("Starting Ethereum Chain Listener",
+	sugar.Infow("Starting Ethereum L1Chain Listener",
 		zap.Any("chainId", ecp.config.ChainId),
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
@@ -69,7 +69,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 }
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
-	ecp.logger.Sugar().Infow("Starting Ethereum Chain Listener poll loop")
+	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener poll loop")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -89,7 +89,7 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
 	<-ctx.Done()
 	shouldStop.Store(true)
-	ecp.logger.Sugar().Infow("Ethereum Chain Listener context cancelled, exiting poll loop")
+	ecp.logger.Sugar().Infow("Ethereum L1Chain Listener context cancelled, exiting poll loop")
 }
 
 func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {

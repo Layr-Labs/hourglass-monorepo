@@ -154,3 +154,12 @@ type SimulatedPeeringConfig struct {
 	AggregatorPeers []SimulatedPeer `json:"aggregatorPeers" yaml:"aggregatorPeers"`
 	OperatorPeers   []SimulatedPeer `json:"operatorPeers" yaml:"operatorPeers"`
 }
+
+type OverrideContract struct {
+	Contract string    `json:"contract" yaml:"contract"`
+	ChainIds []ChainId `json:"chainIds" yaml:"chainIds"`
+}
+
+type OverrideContracts struct {
+	TaskMailbox *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
+}

@@ -134,6 +134,10 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	)
 	lg := lwb.Log
 	if !slices.Contains(em.getListOfContractAddresses(), strings.ToLower(lg.Address)) {
+		em.logger.Sugar().Infow("Ignoring log from different contract",
+			zap.String("contractAddress", lg.Address),
+			zap.Strings("addresses", em.getListOfContractAddresses()),
+		)
 		return nil
 	}
 

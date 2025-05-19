@@ -53,11 +53,12 @@ func (c *Chain) IsAnvilRpc() bool {
 }
 
 type AggregatorAvs struct {
-	Address         string `json:"address" yaml:"address"`
-	PrivateKey      string `json:"privateKey" yaml:"privateKey"`
-	ResponseTimeout int    `json:"responseTimeout" yaml:"responseTimeout"`
-	ChainIds        []uint `json:"chainIds" yaml:"chainIds"`
-	SigningCurve    string `json:"signingCurve" yaml:"signingCurve"`
+	Address             string `json:"address" yaml:"address"`
+	PrivateKey          string `json:"privateKey" yaml:"privateKey"`
+	ResponseTimeout     int    `json:"responseTimeout" yaml:"responseTimeout"`
+	ChainIds            []uint `json:"chainIds" yaml:"chainIds"`
+	SigningCurve        string `json:"signingCurve" yaml:"signingCurve"`
+	AVSRegistrarAddress string `json:"avsRegistrarAddress" yaml:"avsRegistrarAddress"`
 }
 
 func (aa *AggregatorAvs) Validate() error {
@@ -69,6 +70,9 @@ func (aa *AggregatorAvs) Validate() error {
 		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
 	} else if !slices.Contains([]string{"bn254", "bls381"}, aa.SigningCurve) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), aa.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
+	}
+	if aa.AVSRegistrarAddress == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("avsRegistrarAddress"), "avsRegistrarAddress is required"))
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
@@ -119,10 +123,12 @@ type AggregatorConfig struct {
 	Avss []*AggregatorAvs `json:"avss" yaml:"avss"`
 
 	// SimulationConfig contains the configuration for the simulation mode
-	SimulationConfig SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
+	SimulationConfig *SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
 
 	// Contracts is an optional field to override the addresses and ABIs for the core contracts that are loaded
 	Contracts json.RawMessage `json:"contracts" yaml:"contracts"`
+
+	OverrideContracts *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
@@ -187,7 +193,7 @@ func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
 func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
 		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
-		SimulationConfig: SimulationConfig{
+		SimulationConfig: &SimulationConfig{
 			Enabled: viper.GetBool("enabled"),
 		},
 	}

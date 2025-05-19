@@ -2,7 +2,6 @@ package mailbox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	chainPoller2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -108,7 +107,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 
 	if err := poller.Start(ctx); err != nil {
 		cancel()
-		t.Fatalf("Failed to start EVM Chain Poller: %v", err)
+		t.Fatalf("Failed to start EVM L1Chain Poller: %v", err)
 	}
 
 	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
@@ -123,9 +122,6 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 			if logWithBlock.Log.EventName != "TaskCreated" {
 				continue
 			}
-
-			prettyBytes, _ := json.MarshalIndent(logWithBlock.Log, "", "  ")
-			fmt.Printf("Log: %s\n", string(prettyBytes))
 
 			assert.Equal(t, "TaskCreated", logWithBlock.Log.EventName)
 

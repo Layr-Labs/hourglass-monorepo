@@ -28,6 +28,19 @@ func LoadContractsFromRuntime(jsonData string) ([]*contracts.Contract, error) {
 	return loadCoreContractsFromJsonData([]byte(jsonData))
 }
 
+func LoadOverrideContract(jsonData string) (*contracts.Contract, error) {
+	var contract *contracts.Contract
+	if err := json.Unmarshal([]byte(jsonData), &contract); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal override contract data: %w", err)
+	}
+
+	if contract == nil {
+		return nil, fmt.Errorf("override contract data is nil")
+	}
+
+	return contract, nil
+}
+
 func loadCoreContractsFromJsonData(jsonData []byte) ([]*contracts.Contract, error) {
 	var coreContractsData *CoreContractsData
 	if err := json.Unmarshal(jsonData, &coreContractsData); err != nil {

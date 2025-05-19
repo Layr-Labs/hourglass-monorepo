@@ -3,15 +3,23 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -52,8 +60,38 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
-		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
-		if Config.Simulation.SimulatePeering.Enabled {
+		var coreContracts []*contracts.Contract
+		if len(Config.Contracts) > 0 {
+			l.Sugar().Infow("Loading core contracts from runtime config")
+			coreContracts, err = eigenlayer.LoadContractsFromRuntime(string(Config.Contracts))
+			if err != nil {
+				return fmt.Errorf("failed to load core contracts from runtime: %w", err)
+			}
+		} else {
+			l.Sugar().Infow("Loading core contracts from embedded config")
+			coreContracts, err = eigenlayer.LoadContracts()
+			if err != nil {
+				return fmt.Errorf("failed to load core contracts: %w", err)
+			}
+		}
+
+		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
+
+		// Allow overriding contracts from the runtime config
+		if Config.OverrideContracts != nil {
+			if Config.OverrideContracts.TaskMailbox != nil && len(Config.OverrideContracts.TaskMailbox.Contract) > 0 {
+				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.TaskMailbox.Contract)
+				if err != nil {
+					return fmt.Errorf("failed to load override contract: %w", err)
+				}
+				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.TaskMailbox.ChainIds, overrideContract); err != nil {
+					return fmt.Errorf("failed to override contract: %w", err)
+				}
+			}
+		}
+
+		var pdf peering.IPeeringDataFetcher
+		if Config.Simulation != nil && Config.Simulation.SimulatePeering != nil && Config.Simulation.SimulatePeering.Enabled {
 			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.Simulation.SimulatePeering.AggregatorPeers)
 			if err != nil {
 				l.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
@@ -62,7 +100,27 @@ var runCmd = &cobra.Command{
 				AggregatorPeers: simulatedPeers,
 			}, l)
 		} else {
-			return fmt.Errorf("peering data fetcher not implemented")
+			ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+				BaseUrl: Config.L1Chain.RpcUrl,
+			}, l)
+
+			mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
+				return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
+			})
+			if mailboxContract == nil {
+				return fmt.Errorf("task mailbox contract not found")
+			}
+
+			cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
+				PrivateKey:          "",
+				AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
+				TaskMailboxAddress:  mailboxContract.Address,
+			}, ethereumClient, l)
+			if err != nil {
+				return fmt.Errorf("failed to initialize contract caller: %w", err)
+			}
+
+			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 		}
 
 		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
