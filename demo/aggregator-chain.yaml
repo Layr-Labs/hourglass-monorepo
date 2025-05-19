@@ -1,16 +1,16 @@
 ---
 debug: false
-# simulationConfig:
-#   enabled: true
-#   secureConnection: false
-#   simulateExecutors: false
-#   simulatePeering:
-#     enabled: true
-#     operatorPeers:
-#       - networkAddress: "executor:9090"
-#         operatorAddress: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
-#         operatorSetId: 1
-#         publicKey: "2d6b7590f1fea33186b11a795b5a6c5c77b3ebdd5563ad11404098c8e4d92a8209e5d2e5fd537eb2c253a9d13735935079bcb8902f09bbd7a117d07f3142d5f9039ca163db601221d77db55b0fe3876aab1ff8bdf90a205f60cb244633789f0020d166cd401deed5dcac545ae8d58ba6e024b7aa626c51ef74b23ef5fa170ba4"
+simulationConfig:
+  enabled: true
+  secureConnection: false
+  simulateExecutors: false
+  simulatePeering:
+    enabled: true
+    operatorPeers:
+      - networkAddress: "executor:9090"
+        operatorAddress: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
+        operatorSetId: 1
+        publicKey: "2d6b7590f1fea33186b11a795b5a6c5c77b3ebdd5563ad11404098c8e4d92a8209e5d2e5fd537eb2c253a9d13735935079bcb8902f09bbd7a117d07f3142d5f9039ca163db601221d77db55b0fe3876aab1ff8bdf90a205f60cb244633789f0020d166cd401deed5dcac545ae8d58ba6e024b7aa626c51ef74b23ef5fa170ba4"
 
 
 serverConfig:
