@@ -6,8 +6,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"slices"
 	"strconv"
 	"strings"
@@ -69,16 +72,28 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("failed to load core contracts: %w", err)
 			}
 		}
-
 		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, log)
+
+		// Allow overriding contracts from the runtime config
+		if Config.OverrideContracts != nil {
+			if Config.OverrideContracts.TaskMailbox != nil && len(Config.OverrideContracts.TaskMailbox.Contract) > 0 {
+				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.TaskMailbox.Contract)
+				if err != nil {
+					return fmt.Errorf("failed to load override contract: %w", err)
+				}
+				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.TaskMailbox.ChainIds, overrideContract); err != nil {
+					return fmt.Errorf("failed to override contract: %w", err)
+				}
+			}
+		}
 
 		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, log)
 
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
-		var pdf *localPeeringDataFetcher.LocalPeeringDataFetcher
-		if Config.SimulationConfig.SimulatePeering.Enabled {
+		var pdf peering.IPeeringDataFetcher
+		if Config.SimulationConfig != nil && Config.SimulationConfig.SimulatePeering != nil && Config.SimulationConfig.SimulatePeering.Enabled {
 			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.SimulationConfig.SimulatePeering.OperatorPeers)
 			if err != nil {
 				log.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
@@ -88,10 +103,25 @@ var runCmd = &cobra.Command{
 				OperatorPeers: simulatedPeers,
 			}, log)
 		} else {
-			return fmt.Errorf("peering data fetcher not implemented")
+			l1Chain := util.Find(Config.Chains, func(c *aggregatorConfig.Chain) bool {
+				return c.ChainId == Config.L1ChainId
+			})
+			if l1Chain == nil {
+				return fmt.Errorf("l1 chain not found in config")
+			}
+
+			cc, err := aggregator.InitializeContractCaller(&aggregatorConfig.Chain{
+				ChainId: l1Chain.ChainId,
+				RpcURL:  l1Chain.RpcURL,
+			}, "", imContractStore, Config.Avss[0].AVSRegistrarAddress, log)
+			if err != nil {
+				return fmt.Errorf("failed to initialize contract caller: %w", err)
+			}
+
+			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, log)
 		}
 
-		if Config.SimulationConfig.SimulateExecutors {
+		if Config.SimulationConfig != nil && Config.SimulationConfig.SimulateExecutors {
 			log.Sugar().Infow("Loading simulated executors from runtime config")
 			c := &aggregatorConfig.AggregatorConfig{
 				Avss:             Config.Avss,
@@ -112,6 +142,11 @@ var runCmd = &cobra.Command{
 				}
 			}
 		}
+		simulationDelay := time.Second
+		if Config.SimulationConfig != nil {
+			simulationDelay = time.Duration(Config.SimulationConfig.WriteDelaySeconds) * time.Second
+		}
+
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
@@ -120,7 +155,7 @@ var runCmd = &cobra.Command{
 				Address:           Config.Operator.Address,
 				PrivateKey:        Config.Operator.OperatorPrivateKey,
 				AggregatorUrl:     Config.ServerConfig.AggregatorUrl,
-				WriteDelaySeconds: time.Duration(Config.SimulationConfig.WriteDelaySeconds) * time.Second,
+				WriteDelaySeconds: simulationDelay,
 			},
 			imContractStore,
 			tlp,

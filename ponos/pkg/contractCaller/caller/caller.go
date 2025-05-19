@@ -65,6 +65,10 @@ func NewContractCaller(
 	ethclient *ethclient.Client,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
+	logger.Sugar().Infow("Creating contract caller",
+		zap.String("AVSRegistrarAddress", cfg.AVSRegistrarAddress),
+		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
+	)
 	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)

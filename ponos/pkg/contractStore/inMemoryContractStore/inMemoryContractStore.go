@@ -5,6 +5,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
+	"slices"
 	"strings"
 )
 
@@ -48,6 +49,43 @@ func (ics *InMemoryContractStore) ListContractAddressesForChain(chainId config.C
 		addresses = append(addresses, a)
 	}
 	return addresses
+}
+
+func (ics *InMemoryContractStore) OverrideContract(contractName string, chainIds []config.ChainId, contract *contracts.Contract) error {
+	found := false
+	for i, origContract := range ics.contracts {
+		if origContract.Name == contractName && (len(chainIds) == 0 || slices.Contains(chainIds, origContract.ChainId)) {
+			ics.logger.Sugar().Infow("Overriding contract",
+				zap.String("name", contractName),
+				zap.String("previousAddress", origContract.Address),
+				zap.String("newAddress", contract.Address),
+				zap.Any("chainId", origContract.ChainId),
+			)
+			ics.contracts[i] = &contracts.Contract{
+				Name:        origContract.Name,
+				Address:     contract.Address,
+				ChainId:     origContract.ChainId,
+				AbiVersions: contract.AbiVersions,
+			}
+			found = true
+		}
+	}
+	if !found {
+		ics.logger.Sugar().Infow("Contract not found for override, adding new contract",
+			zap.String("name", contractName),
+			zap.Any("chainIds", chainIds),
+		)
+		for _, chainId := range chainIds {
+			ics.contracts = append(ics.contracts, &contracts.Contract{
+				Name:        contract.Name,
+				Address:     contract.Address,
+				ChainId:     chainId,
+				AbiVersions: contract.AbiVersions,
+			})
+		}
+
+	}
+	return nil
 }
 
 func (ics *InMemoryContractStore) ListContracts() []*contracts.Contract {

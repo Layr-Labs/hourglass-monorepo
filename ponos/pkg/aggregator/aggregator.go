@@ -124,6 +124,13 @@ func (a *Aggregator) Initialize() error {
 	a.chainContractCallers = callers
 
 	loadedContracts := a.contractStore.ListContracts()
+	for _, c := range loadedContracts {
+		a.logger.Sugar().Infow("Loaded contract",
+			zap.String("name", c.Name),
+			zap.String("address", c.Address),
+			zap.Uint64("chainId", uint64(c.ChainId)),
+		)
+	}
 
 	for _, avs := range a.config.AVSs {
 		aem := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
@@ -134,7 +141,7 @@ func (a *Aggregator) Initialize() error {
 			MailboxContractAddresses: util.Reduce(avs.ChainIds, func(acc map[config.ChainId]string, chainId uint) map[config.ChainId]string {
 				cId := config.ChainId(chainId)
 				chainTaskMailbox := util.Find(loadedContracts, func(c *contracts.Contract) bool {
-					return c.Name == config.ContractName_TaskMailbox
+					return c.Name == config.ContractName_TaskMailbox && c.ChainId == cId
 				})
 				if chainTaskMailbox == nil {
 					a.logger.Sugar().Warnw("TaskMailbox contract not found for chain",
@@ -167,7 +174,7 @@ func (a *Aggregator) initializePollers() error {
 
 	for _, chain := range a.config.Chains {
 		if _, ok := a.chainPollers[chain.ChainId]; ok {
-			a.logger.Sugar().Warnw("Chain poller already exists for chain", "chainId", chain.ChainId)
+			a.logger.Sugar().Warnw("L1Chain poller already exists for chain", "chainId", chain.ChainId)
 			continue
 		}
 		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -216,46 +223,55 @@ func (a *Aggregator) initializePollers() error {
 	return nil
 }
 
+func InitializeContractCaller(
+	chain *aggregatorConfig.Chain,
+	privateKey string,
+	contractStore contractStore.IContractStore,
+	avsRegistrarAddress string,
+	logger *zap.Logger,
+) (contractCaller.IContractCaller, error) {
+	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   chain.RpcURL,
+		BlockType: ethereum.BlockType_Latest,
+	}, logger)
+
+	var mailboxContractAddress string
+	if chain.Simulation != nil && chain.Simulation.Enabled {
+		mailboxContractAddress = config.EthereumSimulationContracts.TaskMailbox
+	} else {
+		mailboxContract := util.Find(contractStore.ListContracts(), func(c *contracts.Contract) bool {
+			return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
+		})
+		if mailboxContract == nil {
+			logger.Sugar().Errorw("Mailbox contract not found",
+				zap.Uint64("chainId", uint64(chain.ChainId)),
+			)
+			return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
+		}
+		mailboxContractAddress = mailboxContract.Address
+	}
+
+	ethereumContractCaller, err := ec.GetEthereumContractCaller()
+	if err != nil {
+		logger.Sugar().Errorw("failed to get ethereum contract caller", "error", err)
+		return nil, err
+	}
+
+	return caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          privateKey,
+		AVSRegistrarAddress: avsRegistrarAddress,
+		TaskMailboxAddress:  mailboxContractAddress,
+	}, ethereumContractCaller, logger)
+}
+
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
 	a.logger.Sugar().Infow("Initializing contract callers...")
 	contractCallers := make(map[config.ChainId]contractCaller.IContractCaller)
 	for _, chain := range a.config.Chains {
-		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-			BaseUrl:   chain.RpcURL,
-			BlockType: ethereum.BlockType_Latest,
-		}, a.logger)
-
-		var mailboxContractAddress string
-		if chain.Simulation != nil && chain.Simulation.Enabled {
-			mailboxContractAddress = config.EthereumSimulationContracts.TaskMailbox
-		} else {
-			mailboxContract := util.Find(a.contractStore.ListContracts(), func(c *contracts.Contract) bool {
-				return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
-			})
-			if mailboxContract == nil {
-				a.logger.Sugar().Errorw("Mailbox contract not found",
-					zap.Uint64("chainId", uint64(chain.ChainId)),
-				)
-				return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
-			}
-			mailboxContractAddress = mailboxContract.Address
-		}
-
-		ethereumContractCaller, err := ec.GetEthereumContractCaller()
+		cc, err := InitializeContractCaller(chain, a.config.PrivateKey, a.contractStore, a.config.AVSs[0].AVSRegistrarAddress, a.logger)
 		if err != nil {
-			a.logger.Sugar().Errorw("failed to get ethereum contract caller", "error", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to initialize contract caller for chain %s: %w", chain.Name, err)
 		}
-
-		cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-			PrivateKey:          a.config.PrivateKey,
-			AVSRegistrarAddress: config.AVSRegistrarSimulationAddress, // TODO: this address should be dynamically discovered at some point
-			TaskMailboxAddress:  mailboxContractAddress,
-		}, ethereumContractCaller, a.logger)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create contract caller: %w", err)
-		}
-
 		contractCallers[chain.ChainId] = cc
 	}
 	return contractCallers, nil
@@ -300,7 +316,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	for _, poller := range a.chainPollers {
 		a.logger.Sugar().Infow("Starting chain poller", "poller", poller)
 		if err := poller.Start(ctx); err != nil {
-			a.logger.Sugar().Errorw("Chain poller failed to start", "error", err)
+			a.logger.Sugar().Errorw("L1Chain poller failed to start", "error", err)
 			cancel()
 		}
 	}
