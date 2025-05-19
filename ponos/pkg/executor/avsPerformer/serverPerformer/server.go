@@ -307,9 +307,8 @@ func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
 
 	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
-		TaskId:   []byte(task.TaskID),
-		Metadata: task.Metadata,
-		Payload:  task.Payload,
+		TaskId:  []byte(task.TaskID),
+		Payload: task.Payload,
 	})
 	if err != nil {
 		aps.logger.Sugar().Errorw("Performer failed to handle task",

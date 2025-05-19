@@ -8,7 +8,6 @@ import (
 type PerformerTask struct {
 	TaskID            string
 	Avs               string
-	Metadata          []byte
 	Payload           []byte
 	Signature         []byte
 	AggregatorAddress string
@@ -19,7 +18,6 @@ func NewPerformerTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *PerformerTas
 	return &PerformerTask{
 		TaskID:            t.TaskId,
 		Avs:               t.AvsAddress,
-		Metadata:          []byte{},
 		Payload:           t.Payload,
 		Signature:         t.Signature,
 		AggregatorAddress: t.AggregatorAddress,

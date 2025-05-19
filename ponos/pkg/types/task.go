@@ -30,9 +30,6 @@ type TaskEvent struct {
 
 	// The payload of the task
 	Payload []byte `json:"payload"`
-
-	// Metadata of the task, sourced from the on-chain AVS config
-	Metadata []byte `json:"metadata"`
 }
 
 type Task struct {
@@ -113,7 +110,7 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		OperatorSetId:       od.ExecutorOperatorSetId,
 		CallbackAddr:        inboxAddress,
 		DeadlineUnixSeconds: &taskDeadlineTime,
-		Payload:             []byte(od.Payload),
+		Payload:             od.Payload,
 		ChainId:             block.ChainId,
 		BlockNumber:         block.Number.Value(),
 		BlockHash:           block.Hash.Value(),
