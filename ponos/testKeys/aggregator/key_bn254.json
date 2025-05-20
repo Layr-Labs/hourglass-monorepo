@@ -1,32 +1,32 @@
 {
-  "crypto": {
-    "kdf": {
-      "function": "scrypt",
-      "params": {
-        "dklen": 32,
-        "n": 262144,
-        "p": 1,
-        "r": 8,
-        "salt": "c15ee4b84cf1e61bc6f38262b7ac944da1afb181b5f48511e3f49aad4ce68d4a"
-      },
-      "message": ""
-    },
-    "checksum": {
-      "function": "sha256",
-      "params": {},
-      "message": "6cf77e14e24f6cb433ce0eba5be988dc1498fe73d71bed230b11dce735c7a331"
-    },
-    "cipher": {
-      "function": "aes-128-ctr",
-      "params": {
-        "iv": "eefebff7bb061f7731cfa68ea4faca92"
-      },
-      "message": "2163157c313bbcf89e7308a21040b8f38515787b9f36212bf5314a1036f9f185"
-    }
-  },
-  "pubkey": "1334d054c0a5d6dcb033fd7378aa3733539ba91eee08452911a36fb17c6626622e9c882fa81bb2b6fd8d338b7574a036676be7cebfe9f9017e52a6a9f3b155c118f8a710e0cdb746a6b4e13b66681d95c1be6a4d67ab7193ad27b84b30c385cf11c361513f9f7cad728672887d167422e180663283779dd4253a3bc612763b45",
-  "path": "m/1/0/0",
-  "uuid": "3a377587-5a94-41a8-95c3-f65f98b4aefc",
-  "version": 4,
-  "curveType": "bn254"
+	"crypto": {
+		"kdf": {
+			"function": "scrypt",
+			"params": {
+				"dklen": 32,
+				"n": 262144,
+				"p": 1,
+				"r": 8,
+				"salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
+			},
+			"message": ""
+		},
+		"checksum": {
+			"function": "sha256",
+			"params": {},
+			"message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
+		},
+		"cipher": {
+			"function": "aes-128-ctr",
+			"params": {
+				"iv": "677edd29eff1f8635a51f66f71bc5c83"
+			},
+			"message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
+		}
+	},
+	"pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
+	"path": "m/1/0/0",
+	"uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
+	"version": 4,
+	"curveType": "bn254"
 }
