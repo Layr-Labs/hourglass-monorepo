@@ -4,13 +4,12 @@ go 1.23.6
 
 require (
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
-	github.com/pkg/errors v0.9.1
+	github.com/Layr-Labs/protocol-apis v1.14.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 )
 
 require (
-	github.com/Layr-Labs/protocol-apis v1.12.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
