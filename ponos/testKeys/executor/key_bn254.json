@@ -1,22 +1,32 @@
 {
-  "publicKey": "2d6b7590f1fea33186b11a795b5a6c5c77b3ebdd5563ad11404098c8e4d92a8209e5d2e5fd537eb2c253a9d13735935079bcb8902f09bbd7a117d07f3142d5f9039ca163db601221d77db55b0fe3876aab1ff8bdf90a205f60cb244633789f0020d166cd401deed5dcac545ae8d58ba6e024b7aa626c51ef74b23ef5fa170ba4",
   "crypto": {
-    "cipher": "aes-128-ctr",
-    "ciphertext": "de8e36c294f88c582d0f84ebadef0470b38dfd6209597e3f71013d780d033105",
-    "cipherparams": {
-      "iv": "780729b623bea9237293d11d949c6790"
+    "kdf": {
+      "function": "scrypt",
+      "params": {
+        "dklen": 32,
+        "n": 262144,
+        "p": 1,
+        "r": 8,
+        "salt": "c15ee4b84cf1e61bc6f38262b7ac944da1afb181b5f48511e3f49aad4ce68d4a"
+      },
+      "message": ""
     },
-    "kdf": "scrypt",
-    "kdfparams": {
-      "dklen": 32,
-      "n": 262144,
-      "p": 1,
-      "r": 8,
-      "salt": "fc621449564675b56cfa22785b8fa362e63666a4f834e86f33683e5ccef700c2"
+    "checksum": {
+      "function": "sha256",
+      "params": {},
+      "message": "6cf77e14e24f6cb433ce0eba5be988dc1498fe73d71bed230b11dce735c7a331"
     },
-    "mac": "a9e8175072147ef23ee6742aaeb96b4da0003a84925f1e74b78bedf4c6f8fd8a"
+    "cipher": {
+      "function": "aes-128-ctr",
+      "params": {
+        "iv": "eefebff7bb061f7731cfa68ea4faca92"
+      },
+      "message": "2163157c313bbcf89e7308a21040b8f38515787b9f36212bf5314a1036f9f185"
+    }
   },
-  "uuid": "7c5feddd-b78f-404a-8548-7f84eac102e1",
+  "pubkey": "1334d054c0a5d6dcb033fd7378aa3733539ba91eee08452911a36fb17c6626622e9c882fa81bb2b6fd8d338b7574a036676be7cebfe9f9017e52a6a9f3b155c118f8a710e0cdb746a6b4e13b66681d95c1be6a4d67ab7193ad27b84b30c385cf11c361513f9f7cad728672887d167422e180663283779dd4253a3bc612763b45",
+  "path": "m/1/0/0",
+  "uuid": "3a377587-5a94-41a8-95c3-f65f98b4aefc",
   "version": 4,
   "curveType": "bn254"
 }
