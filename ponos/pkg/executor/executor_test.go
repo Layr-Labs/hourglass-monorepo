@@ -156,24 +156,34 @@ operator:
     bls:
       keystore: |
         {
-          "publicKey": "2d6b7590f1fea33186b11a795b5a6c5c77b3ebdd5563ad11404098c8e4d92a8209e5d2e5fd537eb2c253a9d13735935079bcb8902f09bbd7a117d07f3142d5f9039ca163db601221d77db55b0fe3876aab1ff8bdf90a205f60cb244633789f0020d166cd401deed5dcac545ae8d58ba6e024b7aa626c51ef74b23ef5fa170ba4",
           "crypto": {
-            "cipher": "aes-128-ctr",
-            "ciphertext": "de8e36c294f88c582d0f84ebadef0470b38dfd6209597e3f71013d780d033105",
-            "cipherparams": {
-              "iv": "780729b623bea9237293d11d949c6790"
+            "kdf": {
+              "function": "scrypt",
+              "params": {
+                "dklen": 32,
+                "n": 262144,
+                "p": 1,
+                "r": 8,
+                "salt": "be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"
+              },
+              "message": ""
             },
-            "kdf": "scrypt",
-            "kdfparams": {
-              "dklen": 32,
-              "n": 262144,
-              "p": 1,
-              "r": 8,
-              "salt": "fc621449564675b56cfa22785b8fa362e63666a4f834e86f33683e5ccef700c2"
+            "checksum": {
+              "function": "sha256",
+              "params": {},
+              "message": "28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"
             },
-            "mac": "a9e8175072147ef23ee6742aaeb96b4da0003a84925f1e74b78bedf4c6f8fd8a"
+            "cipher": {
+              "function": "aes-128-ctr",
+              "params": {
+                "iv": "cbaff55d36de018603dc9a336ac3bdc7"
+              },
+              "message": "3d261076c91fdc6b1de390d0136b22c2a79b83b2838d55dd646218b7cec58396"
+            }
           },
-          "uuid": "7c5feddd-b78f-404a-8548-7f84eac102e1",
+          "pubkey": "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9",
+          "path": "m/1/0/0",
+          "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
           "version": 4,
           "curveType": "bn254"
         }
@@ -206,24 +216,34 @@ operator:
       password: ""
       keystore: | 
         {
-          "publicKey": "1f9f528a1ab51aa8a8300d5abb3956d641d561942661020d93ec15217f72499513246c8fd468a8b1b982a252e7cf970e6bddf52c26c12341b5c6edc9787f94c312c44a2acc0f4a997ee5a06c8adb1451edd5c192bf05c53d142e895a163015c806ea90c5dfc90b58f428c633c0a571ae20f5febb4cb91e9f6ce09d248dcaabf8",
           "crypto": {
-            "cipher": "aes-128-ctr",
-            "ciphertext": "f011291fe6c96bcc74e4e5bd58d6dd169c27bf97ce3d69930cbc7836d9d968eb",
-            "cipherparams": {
-              "iv": "0b7426c25a24db1c90aec9c69c19a402"
+            "kdf": {
+              "function": "scrypt",
+              "params": {
+                "dklen": 32,
+                "n": 262144,
+                "p": 1,
+                "r": 8,
+                "salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
+              },
+              "message": ""
             },
-            "kdf": "scrypt",
-            "kdfparams": {
-              "dklen": 32,
-              "n": 262144,
-              "p": 1,
-              "r": 8,
-              "salt": "0d969931719e36f4946c8660bbb366737f07880ff1d2d9639e066acfec72eb53"
+            "checksum": {
+              "function": "sha256",
+              "params": {},
+              "message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
             },
-            "mac": "095c9dfb4967d2bfe7d8a02cb9928c4e13f29d23254ab0b687b88022f2346551"
+            "cipher": {
+              "function": "aes-128-ctr",
+              "params": {
+                "iv": "677edd29eff1f8635a51f66f71bc5c83"
+              },
+              "message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
+            }
           },
-          "uuid": "2f6cfbda-d9be-4a03-bf16-7750d1b67f22",
+          "pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
+          "path": "m/1/0/0",
+          "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
           "version": 4,
           "curveType": "bn254"
         }
