@@ -3,6 +3,7 @@
 REF=$1
 
 versionFile=$(cat VERSION | tr -d '[:space:]')
+echo "Provided ref: '${REF}'"
 echo "Using version '${versionFile}'"
 if [[ $REF == refs/tags/* ]]; then
     # check if versionFile equals the tag.

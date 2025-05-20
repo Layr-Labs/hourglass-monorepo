@@ -92,6 +92,7 @@ jobs:
           REPOSITORY: "eigenlayer-hourglass"
         run: |
           VERSION=$(cat ./ponos/VERSION | tr -d '[:space:]' | sed 's/+/_/g')
+          echo "Building docker image for version $VERSION"
           if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
             docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
           else
