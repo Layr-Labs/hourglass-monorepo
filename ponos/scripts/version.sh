@@ -5,6 +5,7 @@ REF=$1
 versionFile=$(cat VERSION | tr -d '[:space:]')
 echo "Provided ref: '${REF}'"
 echo "Using version '${versionFile}'"
+echo "Provided ref: '${REF}'"
 if [[ $REF == refs/tags/* ]]; then
     # check if versionFile equals the tag.
     if [[ $versionFile != "${REF#refs/tags/}" ]]; then

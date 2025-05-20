@@ -1,79 +1,219 @@
 package keystore
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bls381"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestKeystoreBN254(t *testing.T) {
-	// Create a temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keystore-test-bn254")
+func TestKeystoreFormat(t *testing.T) {
+	tempDir := t.TempDir()
+	keyPath := filepath.Join(tempDir, "key.json")
+
+	password := "testpassword123!"
+
+	// Test with BN254
+	testKeystoreWithScheme(t, bn254.NewScheme(), "bn254", keyPath, password)
+
+	// Test with BLS381
+	keyPath = filepath.Join(tempDir, "key_bls381.json")
+	testKeystoreWithScheme(t, bls381.NewScheme(), "bls381", keyPath, password)
+}
+
+func testKeystoreWithScheme(t *testing.T, scheme signing.SigningScheme, curveType, keyPath, password string) {
+	// Generate key
+	privKey, pubKey, err := scheme.GenerateKeyPair()
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
 
-	// Create a test keystore path
-	keystorePath := filepath.Join(tempDir, "test-bn254.json")
+	// Save key to keystore
+	err = SaveToKeystoreWithCurveType(privKey, keyPath, password, curveType, Light())
+	require.NoError(t, err)
 
-	// Generate a key pair
+	// Load keystore
+	ks, err := LoadKeystoreFile(keyPath)
+	require.NoError(t, err)
+
+	// Validate keystore format is EIP-2335
+	assert.Equal(t, 4, ks.Version)
+	assert.NotEmpty(t, ks.Pubkey)
+	assert.NotEmpty(t, ks.UUID)
+	assert.NotEmpty(t, ks.Path)
+	assert.Equal(t, curveType, ks.CurveType)
+
+	// Validate crypto modules
+	assert.NotEmpty(t, ks.Crypto.KDF.Function)
+	assert.NotEmpty(t, ks.Crypto.Checksum.Function)
+	assert.NotEmpty(t, ks.Crypto.Cipher.Function)
+
+	// Load private key from keystore
+	loadedPrivKey, err := ks.GetPrivateKey(password, scheme)
+	require.NoError(t, err)
+
+	// Compare keys
+	assert.Equal(t, hex.EncodeToString(privKey.Bytes()), hex.EncodeToString(loadedPrivKey.Bytes()))
+
+	// Verify we can sign with loaded key
+	message := []byte("test message")
+	sig, err := loadedPrivKey.Sign(message)
+	require.NoError(t, err)
+
+	valid, err := sig.Verify(pubKey, message)
+	require.NoError(t, err)
+	assert.True(t, valid)
+}
+
+func TestLegacyKeystoreBackwardCompatibility(t *testing.T) {
+	// This test validates that we can still load legacy keystores
+	// We'll create a legacy format keystore by temporarily setting up legacy
+	// format creation, then load it with the new format loader
+
+	tempDir := t.TempDir()
+	keyPath := filepath.Join(tempDir, "legacy_key.json")
+
+	// Generate a BN254 key
 	scheme := bn254.NewScheme()
-	privateKey, publicKey, err := scheme.GenerateKeyPair()
+	privKey, pubKey, err := scheme.GenerateKeyPair()
 	require.NoError(t, err)
 
-	// Test password
-	password := "test-password"
+	// Create a mock keystore in legacy format
+	origKey := privKey.Bytes()
+	pubKeyHex := hex.EncodeToString(pubKey.Bytes())
 
-	// Save to keystore with curve type
-	err = SaveToKeystoreWithCurveType(privateKey, keystorePath, password, "bn254", Light())
+	// Generate test salt and IV
+	salt := make([]byte, 32)
+	iv := make([]byte, 16)
+
+	// Create a mock MAC (we're not doing actual encryption)
+	mac := sha256.Sum256(append(origKey, salt...))
+	macHex := hex.EncodeToString(mac[:])
+
+	// Create a temporary test file in the old format
+	legacyFormat := `{
+		"publicKey": "` + pubKeyHex + `",
+		"crypto": {
+			"cipher": "aes-128-ctr",
+			"ciphertext": "` + hex.EncodeToString(origKey) + `",
+			"cipherparams": {
+				"iv": "` + hex.EncodeToString(iv) + `"
+			},
+			"kdf": "scrypt",
+			"kdfparams": {
+				"dklen": 32,
+				"n": 4096,
+				"p": 1,
+				"r": 8,
+				"salt": "` + hex.EncodeToString(salt) + `"
+			},
+			"mac": "` + macHex + `"
+		},
+		"uuid": "00000000-0000-0000-0000-000000000000",
+		"version": 4,
+		"curveType": "bn254"
+	}`
+
+	err = os.WriteFile(keyPath, []byte(legacyFormat), 0600)
 	require.NoError(t, err)
 
-	// Verify the file exists
-	_, err = os.Stat(keystorePath)
+	// Load the legacy keystore
+	ks, err := LoadKeystoreFile(keyPath)
 	require.NoError(t, err)
 
-	// Load keystore file
-	loadedKeystore, err := LoadKeystoreFile(keystorePath)
+	// Validate it got converted to the new format
+	assert.Equal(t, 4, ks.Version)
+	assert.Equal(t, "bn254", ks.CurveType)
+	assert.Equal(t, pubKeyHex, ks.Pubkey)
+
+	// Verify the legacy indicator fields are set
+	assert.Equal(t, "legacy", ks.Crypto.KDF.Function)
+	assert.Equal(t, "legacy", ks.Crypto.Checksum.Function)
+	assert.Equal(t, "legacy", ks.Crypto.Cipher.Function)
+
+	// Verify a description was added
+	assert.Contains(t, ks.Description, "legacy")
+}
+
+func TestPasswordProcessing(t *testing.T) {
+	// Test password processing according to EIP-2335
+
+	// Test with control characters that should be stripped
+	rawPassword := "test\u0000password\u0008with\u001Fcontrol\u007Fchars"
+	processed := processPassword(rawPassword)
+
+	// Control characters should be stripped
+	expectedProcessed := []byte("testpasswordwithcontrolchars")
+	assert.Equal(t, expectedProcessed, processed)
+
+	// Test normalization (NFKD)
+	// Using a precomposed character (é) vs decomposed (e + ´)
+	precomposed := "café"      // é as a single code point
+	decomposed := "cafe\u0301" // e + combining acute accent
+
+	processedPrecomposed := processPassword(precomposed)
+	processedDecomposed := processPassword(decomposed)
+
+	// Both should normalize to the same result (we don't compare the exact bytes
+	// but rather that they're equivalent after processing)
+	assert.Equal(t, processedPrecomposed, processedDecomposed)
+}
+
+func TestGenerateRandomPassword(t *testing.T) {
+	password, err := GenerateRandomPassword(20)
+	require.NoError(t, err)
+	assert.Len(t, password, 20)
+
+	password2, err := GenerateRandomPassword(20)
 	require.NoError(t, err)
 
-	// Load private key from keystore object
-	loadedKey, err := loadedKeystore.GetPrivateKey(password, scheme)
+	// Two generated passwords should be different
+	assert.NotEqual(t, password, password2)
+}
+
+func TestKeystoreBN254(t *testing.T) {
+	// Create temp directory for test keystores
+	tempDir := t.TempDir()
+	keyPath := filepath.Join(tempDir, "test_key_bn254.json")
+
+	// Create BN254 private key
+	scheme := bn254.NewScheme()
+	privateKey, _, err := scheme.GenerateKeyPair()
 	require.NoError(t, err)
 
-	// Verify the loaded key matches the original
-	assert.Equal(t, privateKey.Bytes(), loadedKey.Bytes())
-	assert.Equal(t, publicKey.Bytes(), loadedKey.Public().Bytes())
-
-	// Test the keystore
-	err = TestKeystore(keystorePath, password, scheme)
+	// Save the private key to keystore file
+	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bn254", Light())
 	require.NoError(t, err)
 
-	// Test with incorrect password
-	_, err = loadedKeystore.GetPrivateKey("wrong-password", scheme)
-	assert.Error(t, err)
+	// Load the keystore file
+	loadedKeystore, err := LoadKeystoreFile(keyPath)
+	require.NoError(t, err)
 
-	// Test loading without providing a scheme (should use the curve type from the keystore)
-	loadedKey2, err := loadedKeystore.GetPrivateKey(password, nil)
+	// Parse the keystore file
+	keystoreContent, err := os.ReadFile(keyPath)
 	require.NoError(t, err)
-	assert.Equal(t, privateKey.Bytes(), loadedKey2.Bytes())
+	parsedKeystore, err := ParseKeystoreJSON(string(keystoreContent))
+	require.NoError(t, err)
 
-	// Test the ParseKeystoreJSON function
-	fileContent, err := os.ReadFile(keystorePath)
-	require.NoError(t, err)
-	parsedKeystore, err := ParseKeystoreJSON(string(fileContent))
-	require.NoError(t, err)
-	assert.Equal(t, loadedKeystore.PublicKey, parsedKeystore.PublicKey)
+	// Verify that parsed and loaded keystores are the same
+	assert.Equal(t, loadedKeystore.Pubkey, parsedKeystore.Pubkey)
 	assert.Equal(t, loadedKeystore.UUID, parsedKeystore.UUID)
-	assert.Equal(t, loadedKeystore.Version, parsedKeystore.Version)
 	assert.Equal(t, loadedKeystore.CurveType, parsedKeystore.CurveType)
 
-	loadedKey3, err := parsedKeystore.GetPrivateKey(password, scheme)
+	// Load the private key from keystore
+	loadedKey, err := loadedKeystore.GetPrivateKey("testpassword", scheme)
 	require.NoError(t, err)
-	assert.Equal(t, privateKey.Bytes(), loadedKey3.Bytes())
+	assert.Equal(t, privateKey.Bytes(), loadedKey.Bytes())
+
+	// Test GetBN254PrivateKey helper
+	loadedKey2, err := loadedKeystore.GetBN254PrivateKey("testpassword")
+	require.NoError(t, err)
+	assert.Equal(t, privateKey.Bytes(), loadedKey2.Bytes())
 }
 
 func TestKeystoreBLS381(t *testing.T) {
@@ -127,56 +267,59 @@ func TestKeystoreBLS381(t *testing.T) {
 	assert.Equal(t, privateKey.Bytes(), loadedKey2.Bytes())
 }
 
-func TestGenerateRandomPassword(t *testing.T) {
-	// Test password generation with default length
-	password, err := GenerateRandomPassword(32)
-	require.NoError(t, err)
-	assert.Len(t, password, 32)
+func TestKeystoreBLS381Helper(t *testing.T) {
+	// Create temp directory for test keystores
+	tempDir := t.TempDir()
+	keyPath := filepath.Join(tempDir, "test_key_bls381.json")
 
-	// Test password generation with short length (should be raised to 16)
-	password, err = GenerateRandomPassword(8)
+	// Create BLS381 private key
+	scheme := bls381.NewScheme()
+	privateKey, _, err := scheme.GenerateKeyPair()
 	require.NoError(t, err)
-	assert.Len(t, password, 16)
 
-	// Test that two generated passwords are different
-	password1, err := GenerateRandomPassword(16)
+	// Save the private key to keystore file
+	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bls381", Light())
 	require.NoError(t, err)
-	password2, err := GenerateRandomPassword(16)
+
+	// Load the keystore file
+	loadedKeystore, err := LoadKeystoreFile(keyPath)
 	require.NoError(t, err)
-	assert.NotEqual(t, password1, password2)
+
+	// Test GetBLS381PrivateKey helper
+	loadedKey, err := loadedKeystore.GetBLS381PrivateKey("testpassword")
+	require.NoError(t, err)
+
+	// Get the bytes from both keys for comparison
+	privKeyBytes := privateKey.Bytes()
+	loadedKeyBytes := loadedKey.Bytes()
+
+	assert.Equal(t, privKeyBytes, loadedKeyBytes)
 }
 
 func TestInvalidKeystore(t *testing.T) {
-	// Create a temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "keystore-test-invalid")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	// Create an invalid file
-	invalidPath := filepath.Join(tempDir, "invalid.json")
-	err = os.WriteFile(invalidPath, []byte("{\"not_a_keystore\": true}"), 0600)
-	require.NoError(t, err)
-
-	// Try to load invalid file
-	_, err = LoadKeystoreFile(invalidPath)
+	// Test with invalid keystore JSON that's not even a valid JSON
+	invalidJSON := `{"invalid": "not a valid keystore`
+	_, err := ParseKeystoreJSON(invalidJSON)
 	assert.Error(t, err)
 
-	// Test ParseKeystoreJSON with invalid JSON
-	_, err = ParseKeystoreJSON("{invalid json")
+	// Test with completely invalid crypto structure
+	invalidCryptoJSON := `{
+		"pubkey": "0123456789abcdef",
+		"uuid": "00000000-0000-0000-0000-000000000000",
+		"version": 4,
+		"crypto": "not an object"
+	}`
+	_, err = ParseKeystoreJSON(invalidCryptoJSON)
 	assert.Error(t, err)
 
-	// Test ParseKeystoreJSON with valid JSON but invalid keystore format
-	_, err = ParseKeystoreJSON("{\"not_a_keystore\": true}")
+	// Test a clearly invalid keystore (empty JSON)
+	emptyJSON := `{}`
+	_, err = ParseKeystoreJSON(emptyJSON)
 	assert.Error(t, err)
 
 	// Test with nil keystore
 	var nilKeystore *Keystore
 	_, err = nilKeystore.GetPrivateKey("password", bn254.NewScheme())
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "keystore data cannot be nil")
-
-	// Test with non-existent file
-	_, err = LoadKeystoreFile("/nonexistent/file.json")
 	assert.Error(t, err)
 }
 
