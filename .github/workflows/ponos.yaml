@@ -111,7 +111,7 @@ jobs:
         env:
           REF: ${{ github.ref }}
         run: |
-          ./ponos/scripts/version.sh $REF
+          cd ponos && ./ponos/scripts/version.sh $REF
       - name: Build binary
         run: |
           cd ponos

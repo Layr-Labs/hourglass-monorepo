@@ -29,7 +29,7 @@ func GetProjectRootPath() string {
 			panic(err)
 		}
 
-		match := regexp.MustCompile(`\/hourglass-monorepo\/ponos$`)
+		match := regexp.MustCompile(`\/hourglass-monorepo(.+)?\/ponos$`)
 
 		if match.MatchString(p) {
 			return p
