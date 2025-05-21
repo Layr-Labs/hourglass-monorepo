@@ -9,48 +9,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
 	"slices"
-	"strings"
 )
 
 const (
 	Debug = "debug"
 )
-
-type ChainSimulation struct {
-	Enabled         bool `json:"enabled" yaml:"enabled"`
-	Port            int  `json:"port" yaml:"port"`
-	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
-}
-
-type Chain struct {
-	Name                string           `json:"name" yaml:"name"`
-	Version             string           `json:"version" yaml:"version"`
-	ChainId             config.ChainId   `json:"chainId" yaml:"chainId"`
-	RpcURL              string           `json:"rpcUrl" yaml:"rpcUrl"`
-	PollIntervalSeconds int              `json:"pollIntervalSeconds" yaml:"pollIntervalSeconds"`
-	Simulation          *ChainSimulation `json:"simulation" yaml:"simulation"`
-}
-
-func (c *Chain) Validate() field.ErrorList {
-	var allErrors field.ErrorList
-	if c.Name == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("name"), "name is required"))
-	}
-	if c.ChainId == 0 {
-		allErrors = append(allErrors, field.Required(field.NewPath("chainId"), "chainId is required"))
-	}
-	if !slices.Contains(config.SupportedChainIds, c.ChainId) {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainId, "unsupported chainId"))
-	}
-	if c.RpcURL == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))
-	}
-	return allErrors
-}
-
-func (c *Chain) IsAnvilRpc() bool {
-	return strings.Contains(c.RpcURL, "127.0.0.1:8545")
-}
 
 type AggregatorAvs struct {
 	Address             string `json:"address" yaml:"address"`
@@ -117,7 +80,7 @@ type AggregatorConfig struct {
 	L1ChainId config.ChainId `json:"l1ChainId" yaml:"l1ChainId"`
 
 	// Chains contains the list of chains that the aggregator supports
-	Chains []*Chain `json:"chains" yaml:"chains"`
+	Chains []*config.Chain `json:"chains" yaml:"chains"`
 
 	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
 	Avss []*AggregatorAvs `json:"avss" yaml:"avss"`
@@ -154,7 +117,7 @@ func (arc *AggregatorConfig) Validate() error {
 	if arc.L1ChainId == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("l1ChainId"), "l1ChainId is required"))
 	} else {
-		found := util.Find(arc.Chains, func(c *Chain) bool {
+		found := util.Find(arc.Chains, func(c *config.Chain) bool {
 			return c.ChainId == arc.L1ChainId
 		})
 		if found == nil {

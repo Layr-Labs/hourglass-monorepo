@@ -30,7 +30,7 @@ type AggregatorConfig struct {
 	PrivateKey        string
 	WriteDelaySeconds time.Duration
 	AVSs              []*aggregatorConfig.AggregatorAvs
-	Chains            []*aggregatorConfig.Chain
+	Chains            []*config.Chain
 }
 
 type Aggregator struct {

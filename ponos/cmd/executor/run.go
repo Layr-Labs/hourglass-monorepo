@@ -29,7 +29,7 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run the executor",
+	Short: "Start the executor",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
 
@@ -136,8 +136,9 @@ var runCmd = &cobra.Command{
 		}
 
 		go func() {
-			if err := exec.Run(ctx); err != nil {
+			if err := exec.Start(ctx); err != nil {
 				l.Sugar().Fatal("Failed to run executor", zap.Error(err))
+				cancel()
 			}
 		}()
 

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
@@ -33,6 +34,12 @@ type AvsPerformerServer struct {
 	peeringFetcher peering.IPeeringDataFetcher
 
 	aggregatorPeers []*peering.OperatorPeerInfo
+
+	// Health check fields
+	healthMutex     sync.Mutex
+	isHealthy       bool
+	lastHealthErr   error
+	lastHealthCheck time.Time
 }
 
 func NewAvsPerformerServer(
@@ -44,6 +51,10 @@ func NewAvsPerformerServer(
 		config:         config,
 		logger:         logger,
 		peeringFetcher: peeringFetcher,
+		// Initialize health check fields
+		isHealthy:       false,
+		lastHealthCheck: time.Time{}, // Zero time
+		lastHealthErr:   nil,
 	}, nil
 }
 
@@ -366,4 +377,25 @@ func (aps *AvsPerformerServer) Shutdown() error {
 // GetContainerId returns the container ID for this performer
 func (aps *AvsPerformerServer) GetContainerId() string {
 	return aps.containerId
+}
+
+// IsHealthy returns the current health status of the performer
+func (aps *AvsPerformerServer) IsHealthy() bool {
+	aps.healthMutex.Lock()
+	defer aps.healthMutex.Unlock()
+	return aps.isHealthy
+}
+
+// GetLastHealthError returns the last health check error, if any
+func (aps *AvsPerformerServer) GetLastHealthError() error {
+	aps.healthMutex.Lock()
+	defer aps.healthMutex.Unlock()
+	return aps.lastHealthErr
+}
+
+// GetLastHealthCheckTime returns the timestamp of the last health check
+func (aps *AvsPerformerServer) GetLastHealthCheckTime() time.Time {
+	aps.healthMutex.Lock()
+	defer aps.healthMutex.Unlock()
+	return aps.lastHealthCheck
 }

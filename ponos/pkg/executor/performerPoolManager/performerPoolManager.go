@@ -35,12 +35,14 @@ func NewPerformerPoolManager(
 	config *executorConfig.ExecutorConfig,
 	logger *zap.Logger,
 	peeringFetcher peering.IPeeringDataFetcher,
+	planner *PerformerCapacityPlanner,
 ) *PerformerPoolManager {
 	return &PerformerPoolManager{
 		logger:         logger,
 		config:         config,
 		peeringFetcher: peeringFetcher,
 		pools:          make(map[string]*PerformerPool),
+		planner:        planner,
 	}
 }
 
@@ -56,9 +58,6 @@ func (p *PerformerPoolManager) Initialize() error {
 	}
 
 	p.dockerClient = dockerClient
-
-	// Initialize capacity planner
-	p.planner = NewPerformerCapacityPlanner(p.logger)
 
 	// Create performer pools for each AVS
 	for _, avsConfig := range p.config.AvsPerformers {
@@ -162,7 +161,7 @@ func (p *PerformerPoolManager) performLifecycleCheck(ctx context.Context) {
 		// Get capacity plan for this AVS
 		plan := p.planner.GetCapacityPlan(avsAddress)
 
-		// Execute plan (this will handle health checks internally)
+		// Execute plan
 		if err := pool.ExecutePlan(ctx, plan); err != nil {
 			p.logger.Sugar().Errorw("Error executing capacity plan",
 				zap.String("avsAddress", avsAddress),

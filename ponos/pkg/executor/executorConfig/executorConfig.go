@@ -23,12 +23,11 @@ type PerformerImage struct {
 }
 
 type AvsPerformerConfig struct {
-	Image               *PerformerImage
-	ProcessType         string
-	AvsAddress          string
-	WorkerCount         int
-	SigningCurve        string // bn254, bls381, etc
-	AVSRegistrarAddress string
+	Image        *PerformerImage
+	ProcessType  string
+	AvsAddress   string
+	WorkerCount  int
+	SigningCurve string // bn254, bls381, etc
 }
 
 func (ap *AvsPerformerConfig) Validate() error {
@@ -55,11 +54,6 @@ func (ap *AvsPerformerConfig) Validate() error {
 	if ap.WorkerCount == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("workerCount"), "workerCount is required"))
 	}
-
-	if ap.AVSRegistrarAddress == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("avsRegistrarAddress"), "avsRegistrarAddress is required"))
-	}
-
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
 	}
@@ -70,21 +64,13 @@ type SimulationConfig struct {
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
 }
 
-type Chain struct {
-	RpcUrl  string         `json:"rpcUrl" yaml:"rpcUrl"`
-	ChainId config.ChainId `json:"chainId" yaml:"chainId"`
-}
-
 type ExecutorConfig struct {
 	Debug                bool
-	GrpcPort             int                       `json:"grpcPort" yaml:"grpcPort"`
-	PerformerNetworkName string                    `json:"performerNetworkName" yaml:"performerNetworkName"`
-	Operator             *config.OperatorConfig    `json:"operator" yaml:"operator"`
-	AvsPerformers        []*AvsPerformerConfig     `json:"avsPerformers" yaml:"avsPerformers"`
-	Simulation           *SimulationConfig         `json:"simulation" yaml:"simulation"`
-	L1Chain              *Chain                    `json:"l1Chain" yaml:"l1Chain"`
-	Contracts            json.RawMessage           `json:"contracts" yaml:"contracts"`
-	OverrideContracts    *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
+	GrpcPort             int                    `json:"grpcPort" yaml:"grpcPort"`
+	PerformerNetworkName string                 `json:"performerNetworkName" yaml:"performerNetworkName"`
+	Operator             *config.OperatorConfig `json:"operator" yaml:"operator"`
+	AvsPerformers        []*AvsPerformerConfig  `json:"avsPerformers" yaml:"avsPerformers"`
+	Simulation           *SimulationConfig      `json:"simulation" yaml:"simulation"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
@@ -106,15 +92,6 @@ func (ec *ExecutorConfig) Validate() error {
 			}
 		}
 	}
-
-	if ec.L1Chain == nil {
-		allErrors = append(allErrors, field.Required(field.NewPath("l1Chain"), "l1Chain is required"))
-	} else {
-		if ec.L1Chain.RpcUrl == "" {
-			allErrors = append(allErrors, field.Required(field.NewPath("chain.rpcUrl"), "rpcUrl is required"))
-		}
-	}
-
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
 	}

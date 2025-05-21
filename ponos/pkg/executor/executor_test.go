@@ -99,7 +99,7 @@ func Test_Executor(t *testing.T) {
 	}
 
 	go func() {
-		if err := exec.Run(ctx); err != nil {
+		if err := exec.Start(ctx); err != nil {
 			t.Errorf("Failed to run executor: %v", err)
 			return
 		}

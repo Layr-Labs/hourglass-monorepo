@@ -6,8 +6,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
+	"math/big"
+	"slices"
+
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/AVSArtifactRegistry"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -24,18 +28,18 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"math/big"
-	"slices"
 )
 
 type ContractCallerConfig struct {
-	PrivateKey          string
-	AVSRegistrarAddress string
-	TaskMailboxAddress  string
+	PrivateKey                 string
+	AVSRegistrarAddress        string
+	TaskMailboxAddress         string
+	AVSArtifactRegistryAddress string
 }
 
 type ContractCaller struct {
 	avsRegistrarCaller          *ITaskAVSRegistrar.ITaskAVSRegistrarCaller
+	avsArtifactRegistryCaller   *AVSArtifactRegistry.AVSArtifactRegistryCaller
 	taskMailboxCaller           *ITaskMailbox.ITaskMailboxCaller
 	taskMailboxTransactor       *ITaskMailbox.ITaskMailboxTransactor
 	allocationManagerCaller     *IAllocationManager.IAllocationManagerCaller
@@ -70,6 +74,11 @@ func NewContractCaller(
 		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
 	)
 	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
+	}
+
+	avsArtifactRegistryCaller, err := AVSArtifactRegistry.NewAVSArtifactRegistryCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
 	}
@@ -110,6 +119,7 @@ func NewContractCaller(
 
 	return &ContractCaller{
 		avsRegistrarCaller:          avsRegistrarCaller,
+		avsArtifactRegistryCaller:   avsArtifactRegistryCaller,
 		taskMailboxCaller:           taskMailboxCaller,
 		taskMailboxTransactor:       taskMailboxTransactor,
 		allocationManagerCaller:     allocationManagerCaller,

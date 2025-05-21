@@ -245,7 +245,7 @@ func Test_Aggregator(t *testing.T) {
 		t.Logf("Failed to boot performers: %v", err)
 		cancel()
 	}
-	if err := exec.Run(ctx); err != nil {
+	if err := exec.Start(ctx); err != nil {
 		t.Logf("Failed to run executor: %v", err)
 		cancel()
 	}
