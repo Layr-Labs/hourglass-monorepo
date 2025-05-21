@@ -1,7 +1,6 @@
 package executorConfig
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -42,7 +41,7 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.Equal(t, "server", ec.AvsPerformers[0].ProcessType)
 			assert.Equal(t, "0xavs1...", ec.AvsPerformers[0].AvsAddress)
 
-			fmt.Printf("TaskMailbox: %+v\n", ec.OverrideContracts.TaskMailbox.Contract)
+			assert.NotEmpty(t, ec.OverrideContracts.TaskMailbox.Contract)
 		})
 		t.Run("Should fail to parse an invalid yaml config with invalid fields", func(t *testing.T) {
 			_, err := NewExecutorConfigFromYamlBytes([]byte(yamlInvalid))
