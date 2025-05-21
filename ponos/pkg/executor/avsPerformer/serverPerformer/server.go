@@ -5,6 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -18,8 +21,6 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"strings"
-	"time"
 )
 
 type AvsPerformerServer struct {
@@ -360,4 +361,9 @@ func (aps *AvsPerformerServer) Shutdown() error {
 		return err
 	}
 	return nil
+}
+
+// GetContainerId returns the container ID for this performer
+func (aps *AvsPerformerServer) GetContainerId() string {
+	return aps.containerId
 }

@@ -3,13 +3,14 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
 )
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
@@ -35,9 +36,9 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
-	avsPerformer, ok := e.avsPerformers[task.AvsAddress]
+	avsPerformer, ok := e.performerPoolManager.GetPerformer(avsAddress)
 	if !ok {
-		return nil, fmt.Errorf("AVS avsPerformer not found for address %s", task.AvsAddress)
+		return nil, fmt.Errorf("AVS performer not found for address %s", task.AvsAddress)
 	}
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
