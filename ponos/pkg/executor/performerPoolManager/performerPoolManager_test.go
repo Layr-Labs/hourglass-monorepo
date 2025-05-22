@@ -1,85 +1,91 @@
 package performerPoolManager
 
-// Note: This test requires additional dependencies that need to be installed
-// such as github.com/stretchr/testify/mock
-// To run this test in a real environment, add the dependencies:
-//   go get github.com/stretchr/testify/mock@v1.10.0
-//   go get github.com/stretchr/testify/require
-
-/*
 import (
 	"context"
-	"testing"
+	"sync"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 )
 
-// Mock for IPeeringDataFetcher
-type mockPeeringFetcher struct {
-	mock.Mock
+// MockPerformerPoolManager implements IPerformerPoolManager for testing
+type MockPerformerPoolManager struct {
+	mutex sync.RWMutex
+
+	// State tracking
+	Initialized bool
+	Started     bool
+	Pools       map[string]IPerformerPool
+
+	// For controlling return values in tests
+	InitializeFn   func() error
+	StartFn        func(ctx context.Context) error
+	GetPerformerFn func(avsAddress string) (avsPerformer.IAvsPerformer, bool)
 }
 
-func (m *mockPeeringFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	args := m.Called(ctx, avsAddress)
-	return args.Get(0).([]*peering.OperatorPeerInfo), args.Error(1)
+// NewMockPerformerPoolManager creates a new mock performer pool manager
+func NewMockPerformerPoolManager() *MockPerformerPoolManager {
+	return &MockPerformerPoolManager{
+		mutex:       sync.RWMutex{},
+		Initialized: false,
+		Started:     false,
+		Pools:       make(map[string]IPerformerPool),
+	}
 }
 
-func (m *mockPeeringFetcher) ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	args := m.Called(ctx, avsAddress)
-	return args.Get(0).([]*peering.OperatorPeerInfo), args.Error(1)
-}
+// Initialize implements the IPerformerPoolManager interface for testing
+func (m *MockPerformerPoolManager) Initialize() error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-func TestNewPerformerPoolManager(t *testing.T) {
-	// Create a test logger
-	logger, err := zap.NewDevelopment()
-	require.NoError(t, err)
-
-	// Create a mock peering fetcher
-	mockFetcher := new(mockPeeringFetcher)
-
-	// Create a test config
-	config := &executorConfig.ExecutorConfig{
-		PerformerNetworkName: "test-network",
-		AvsPerformers:        []*executorConfig.AvsPerformerConfig{},
+	// Use custom function if provided
+	if m.InitializeFn != nil {
+		return m.InitializeFn()
 	}
 
-	// Create the performer pool manager
-	manager := NewPerformerPoolManager(config, logger, mockFetcher)
-
-	// Verify the manager was created with the correct values
-	require.NotNil(t, manager)
-	require.Equal(t, config, manager.config)
-	require.Equal(t, logger, manager.logger)
-	require.NotNil(t, manager.avsPerformers)
-	require.Empty(t, manager.avsPerformers)
+	// Default implementation marks as initialized
+	m.Initialized = true
+	return nil
 }
 
-func TestPerformerPoolManager_Initialize_NoPerformers(t *testing.T) {
-	// Create a test logger
-	logger, err := zap.NewDevelopment()
-	require.NoError(t, err)
+// Start implements the IPerformerPoolManager interface for testing
+func (m *MockPerformerPoolManager) Start(ctx context.Context) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	// Create a mock peering fetcher
-	mockFetcher := new(mockPeeringFetcher)
-
-	// Create a test config with no performers
-	config := &executorConfig.ExecutorConfig{
-		PerformerNetworkName: "test-network",
-		AvsPerformers:        []*executorConfig.AvsPerformerConfig{},
+	// Use custom function if provided
+	if m.StartFn != nil {
+		return m.StartFn(ctx)
 	}
 
-	// Create the performer pool manager
-	manager := NewPerformerPoolManager(config, logger, mockFetcher)
-
-	// Initialize the manager
-	err = manager.Initialize()
-
-	// Verify initialization succeeded with no performers
-	require.NoError(t, err)
-	require.Empty(t, manager.avsPerformers)
+	// Default implementation marks as started
+	m.Started = true
+	return nil
 }
-*/
+
+// GetPerformer implements the IPerformerPoolManager interface for testing
+func (m *MockPerformerPoolManager) GetPerformer(avsAddress string) (avsPerformer.IAvsPerformer, bool) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	// Use custom function if provided
+	if m.GetPerformerFn != nil {
+		return m.GetPerformerFn(avsAddress)
+	}
+
+	// Check if we have a pool for this AVS
+	pool, exists := m.Pools[avsAddress]
+	if !exists {
+		return nil, false
+	}
+
+	// Return performer from the pool
+	return pool.GetHealthyPerformer()
+}
+
+// AddMockPool is a helper method for tests to add a mock pool for an AVS
+func (m *MockPerformerPoolManager) AddMockPool(avsAddress string, pool IPerformerPool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.Pools[avsAddress] = pool
+}

@@ -1,5 +1,16 @@
 package performerCapacityPlanner
 
+import "context"
+
+// IPerformerCapacityPlanner defines the interface for a performer capacity planner
+type IPerformerCapacityPlanner interface {
+	// GetCapacityPlan returns a capacity plan for the given AVS
+	GetCapacityPlan(avsAddress string) (*PerformerCapacityPlan, error)
+
+	// Start begins processing chain events and discovering operator sets
+	Start(ctx context.Context)
+}
+
 // ArtifactVersion represents a published artifact version for an AVS
 type ArtifactVersion struct {
 	AvsAddress    string
