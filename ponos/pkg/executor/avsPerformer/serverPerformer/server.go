@@ -136,7 +136,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 
 	containerConfg := &container.Config{
 		Hostname: hostname,
-		Image:    fmt.Sprintf("%s:%s", aps.config.Image.Repository, aps.config.Image.Tag),
+		Image:    fmt.Sprintf("%s:%s", aps.config.Image.Registry, aps.config.Image.Digest),
 		ExposedPorts: nat.PortSet{
 			containerPortProto: struct{}{},
 		},

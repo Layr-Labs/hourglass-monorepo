@@ -3,14 +3,13 @@ package performerPoolManager
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/docker/docker/client"
@@ -19,7 +18,7 @@ import (
 
 // PerformerHealth tracks the health status of a performer
 type PerformerHealth struct {
-	ContainerID  string
+	ContainerId  string
 	LastChecked  time.Time
 	Healthy      bool
 	FailureCount int
@@ -28,10 +27,11 @@ type PerformerHealth struct {
 
 // PerformerPool manages the performers for a specific AVS
 type PerformerPool struct {
-	logger         *zap.Logger
-	avsConfig      *executorConfig.AvsPerformerConfig
-	networkName    string
+	logger      *zap.Logger
+	networkName string
+	// TODO: likely use config for avsAddress and signingCurve
 	avsAddress     string
+	signingCurve   string
 	performers     map[string]avsPerformer.IAvsPerformer
 	peeringFetcher peering.IPeeringDataFetcher
 	dockerClient   *client.Client
@@ -43,17 +43,17 @@ type PerformerPool struct {
 
 // NewPerformerPool creates a new performer pool for a specific AVS
 func NewPerformerPool(
-	avsConfig *executorConfig.AvsPerformerConfig,
 	networkName string,
+	avsConfig *avsPerformer.AvsPerformerConfig,
 	dockerClient *client.Client,
 	logger *zap.Logger,
 	peeringFetcher peering.IPeeringDataFetcher,
 ) *PerformerPool {
 	return &PerformerPool{
 		logger:         logger,
-		avsConfig:      avsConfig,
 		networkName:    networkName,
 		avsAddress:     strings.ToLower(avsConfig.AvsAddress),
+		signingCurve:   avsConfig.SigningCurve,
 		performers:     make(map[string]avsPerformer.IAvsPerformer),
 		peeringFetcher: peeringFetcher,
 		dockerClient:   dockerClient,
@@ -62,60 +62,53 @@ func NewPerformerPool(
 }
 
 // createPerformer creates a new performer instance
-func (p *PerformerPool) createPerformer(ctx context.Context, performerId string) error {
+func (p *PerformerPool) createPerformer(ctx context.Context, performerId string, artifact *planner.ArtifactVersion) error {
 	// Check if performer already exists
 	if _, exists := p.performers[performerId]; exists {
 		return fmt.Errorf("performer with ID %s already exists", performerId)
 	}
 
-	switch p.avsConfig.ProcessType {
-	case string(avsPerformer.AvsProcessTypeServer):
-		performer, err := serverPerformer.NewAvsPerformerServer(
-			&avsPerformer.AvsPerformerConfig{
-				AvsAddress:           p.avsAddress,
-				ProcessType:          avsPerformer.AvsProcessType(p.avsConfig.ProcessType),
-				Image:                avsPerformer.PerformerImage{Repository: p.avsConfig.Image.Repository, Tag: p.avsConfig.Image.Tag},
-				WorkerCount:          p.avsConfig.WorkerCount,
-				PerformerNetworkName: p.networkName,
-				SigningCurve:         p.avsConfig.SigningCurve,
-			},
-			p.peeringFetcher,
-			p.logger,
+	performer, err := serverPerformer.NewAvsPerformerServer(
+		&avsPerformer.AvsPerformerConfig{
+			AvsAddress:           p.avsAddress,
+			ProcessType:          avsPerformer.AvsProcessTypeServer,
+			Image:                avsPerformer.PerformerImage{Registry: artifact.RegistryUrl, Digest: artifact.Digest},
+			PerformerNetworkName: p.networkName,
+			SigningCurve:         p.signingCurve,
+		},
+		p.peeringFetcher,
+		p.logger,
+	)
+	if err != nil {
+		p.logger.Sugar().Errorw("Failed to create AVS performer server",
+			zap.String("avsAddress", p.avsAddress),
+			zap.String("performerId", performerId),
+			zap.Error(err),
 		)
-		if err != nil {
-			p.logger.Sugar().Errorw("Failed to create AVS performer server",
-				zap.String("avsAddress", p.avsAddress),
-				zap.String("performerId", performerId),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to create AVS performer server: %v", err)
-		}
-
-		if err := performer.Initialize(ctx); err != nil {
-			p.logger.Sugar().Errorw("Failed to initialize performer",
-				zap.String("avsAddress", p.avsAddress),
-				zap.String("performerId", performerId),
-				zap.Error(err),
-			)
-			return err
-		}
-
-		p.performers[performerId] = performer
-
-		// Store performer health status with container ID
-		p.statusMutex.Lock()
-		p.healthStatus[performerId] = &PerformerHealth{
-			ContainerID: performer.GetContainerId(),
-			Healthy:     true,
-			LastChecked: time.Now(),
-		}
-		p.statusMutex.Unlock()
-
-		return nil
-
-	default:
-		return fmt.Errorf("unsupported AVS performer process type: %s", p.avsConfig.ProcessType)
+		return fmt.Errorf("failed to create AVS performer server: %v", err)
 	}
+
+	if err := performer.Initialize(ctx); err != nil {
+		p.logger.Sugar().Errorw("Failed to initialize performer",
+			zap.String("avsAddress", p.avsAddress),
+			zap.String("performerId", performerId),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	p.performers[performerId] = performer
+
+	// Store performer health status with container ID
+	p.statusMutex.Lock()
+	p.healthStatus[performerId] = &PerformerHealth{
+		ContainerId: performer.GetContainerId(),
+		Healthy:     true,
+		LastChecked: time.Now(),
+	}
+	p.statusMutex.Unlock()
+
+	return nil
 }
 
 // ExecutePlan executes a capacity plan for this AVS
@@ -133,7 +126,7 @@ func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *planner.Performer
 			zap.String("avsAddress", p.avsAddress),
 			zap.Error(err),
 		)
-		// Continue with plan execution even if health check had errors
+		// TODO: double click on this.
 	}
 
 	// Calculate the difference between healthy count and target
@@ -141,7 +134,7 @@ func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *planner.Performer
 
 	if diff > 0 {
 		// Need to scale up
-		return p.scaleUp(ctx, diff)
+		return p.scaleUp(ctx, diff, plan.LatestArtifact)
 	} else if diff < 0 {
 		// Need to scale down
 		return p.scaleDown(ctx, -diff)
@@ -231,9 +224,9 @@ func (p *PerformerPool) checkPerformerHealth(ctx context.Context, performerId st
 	health, ok := p.healthStatus[performerId]
 	p.statusMutex.RUnlock()
 
-	if ok && health.ContainerID != "" {
+	if ok && health.ContainerId != "" {
 		// Check container health via Docker API
-		if !p.isContainerHealthy(ctx, health.ContainerID) {
+		if !p.isContainerHealthy(ctx, health.ContainerId) {
 			return false, fmt.Errorf("container is not running or healthy")
 		}
 	}
@@ -326,22 +319,24 @@ func (p *PerformerPool) recreatePerformer(ctx context.Context, performerId strin
 	p.statusMutex.Unlock()
 
 	// Create a new performer with the same ID
-	return p.createPerformer(ctx, performerId)
+	return p.createPerformer(ctx, performerId, nil)
 }
 
 // scaleUp creates new performers to reach the target count
-func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int) error {
+func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *planner.ArtifactVersion) error {
 	p.logger.Sugar().Infow("Scaling up performers",
 		zap.String("avsAddress", p.avsAddress),
 		zap.Int("currentCount", len(p.performers)),
 		zap.Int("countToAdd", countToAdd),
+		zap.String("artifact", artifact.Digest),
 	)
 
 	// Create the required number of performers
 	for i := 0; i < countToAdd; i++ {
 		performerId := fmt.Sprintf("performer-%d", len(p.performers)+1)
 
-		if err := p.createPerformer(ctx, performerId); err != nil {
+		// TODO: make this async as pulling a container can block other callers.
+		if err := p.createPerformer(ctx, performerId, artifact); err != nil {
 			p.logger.Sugar().Errorw("Failed to create performer during scale up",
 				zap.String("avsAddress", p.avsAddress),
 				zap.String("performerId", performerId),

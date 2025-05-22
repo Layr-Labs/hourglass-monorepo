@@ -253,11 +253,6 @@ func (e *Executor) startChainPoller(ctx context.Context) {
 	}()
 }
 
-func (e *Executor) BootPerformers(ctx context.Context) error {
-	// Boot the performers
-	return e.performerPoolManager.BootPerformers(ctx)
-}
-
 func (e *Executor) Start(ctx context.Context) error {
 	e.logger.Info("Executor is starting",
 		zap.String("version", "1.0.0"),

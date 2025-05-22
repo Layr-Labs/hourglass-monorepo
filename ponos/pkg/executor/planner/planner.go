@@ -5,6 +5,7 @@ type ArtifactVersion struct {
 	AvsAddress    string
 	OperatorSetId string
 	Digest        string
+	RegistryUrl   string
 	PublishedAt   uint64 // Block number
 }
 

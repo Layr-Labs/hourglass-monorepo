@@ -131,10 +131,6 @@ var runCmd = &cobra.Command{
 
 		ctx, cancel := context.WithCancel(context.Background())
 
-		if err := exec.BootPerformers(ctx); err != nil {
-			l.Sugar().Fatalw("Failed to boot performers", zap.Error(err))
-		}
-
 		go func() {
 			if err := exec.Start(ctx); err != nil {
 				l.Sugar().Fatal("Failed to run executor", zap.Error(err))

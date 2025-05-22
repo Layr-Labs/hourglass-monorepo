@@ -64,22 +64,10 @@ func (p *PerformerPoolManager) Initialize() error {
 	for _, avsConfig := range p.config.AvsPerformers {
 		avsAddress := strings.ToLower(avsConfig.AvsAddress)
 
-		// Skip if unsupported type
-		if avsConfig.ProcessType != string(avsPerformer.AvsProcessTypeServer) {
-			p.logger.Sugar().Warnw("Unsupported AVS performer process type, skipping",
-				zap.String("avsAddress", avsAddress),
-				zap.String("processType", avsConfig.ProcessType),
-			)
-			continue
-		}
-
-		// Register with capacity planner
-		p.planner.RegisterAVS(avsAddress, avsConfig)
-
 		// Create pool
 		pool := NewPerformerPool(
-			avsConfig,
 			p.config.PerformerNetworkName,
+			avsConfig,
 			p.dockerClient,
 			p.logger,
 			p.peeringFetcher,
@@ -91,20 +79,9 @@ func (p *PerformerPoolManager) Initialize() error {
 	return nil
 }
 
-// BootPerformers starts all performer pools and begins lifecycle management
-func (p *PerformerPoolManager) BootPerformers(ctx context.Context) error {
-	p.logger.Sugar().Infow("Booting AVS performers")
-
-	// Initialize pools with primary performer
-	for avsAddress, pool := range p.pools {
-		if err := pool.createPerformer(ctx, "primary"); err != nil {
-			p.logger.Sugar().Errorw("Failed to initialize performer pool",
-				zap.String("avsAddress", avsAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to initialize performer pool for %s: %v", avsAddress, err)
-		}
-	}
+// Start starts all performer pools and begins lifecycle management
+func (p *PerformerPoolManager) Start(ctx context.Context) error {
+	p.logger.Sugar().Infow("Starting performer pool manager")
 
 	// Start lifecycle management in background
 	go p.startLifecycleManagement(ctx)
@@ -137,12 +114,12 @@ func (p *PerformerPoolManager) startLifecycleManagement(ctx context.Context) {
 	defer ticker.Stop()
 
 	// Initial check immediately
-	p.performLifecycleCheck(ctx)
+	p.performLifecycleManagement(ctx)
 
 	for {
 		select {
 		case <-ticker.C:
-			p.performLifecycleCheck(ctx)
+			p.performLifecycleManagement(ctx)
 		case <-ctx.Done():
 			p.logger.Sugar().Info("Context done, stopping performer lifecycle management")
 			return
@@ -150,8 +127,8 @@ func (p *PerformerPoolManager) startLifecycleManagement(ctx context.Context) {
 	}
 }
 
-// performLifecycleCheck checks all performers and maintains desired state
-func (p *PerformerPoolManager) performLifecycleCheck(ctx context.Context) {
+// performLifecycleManagement checks all performers and maintains desired state
+func (p *PerformerPoolManager) performLifecycleManagement(ctx context.Context) {
 	p.logger.Sugar().Debugw("Performing performer lifecycle check")
 
 	// Check and update each pool
@@ -161,7 +138,7 @@ func (p *PerformerPoolManager) performLifecycleCheck(ctx context.Context) {
 	for avsAddress, pool := range p.pools {
 		// Get capacity plan for this AVS
 		plan, err := p.planner.GetCapacityPlan(avsAddress)
-		// TODO: if the plan is not found, we should tear down the pool
+		// TODO: if the plan is not found, we should tear down the pool by passing a targetCount 0 plan.
 		if err != nil {
 			p.logger.Sugar().Warnw("Failed to get capacity plan for AVS, skipping lifecycle check",
 				zap.String("avsAddress", avsAddress),

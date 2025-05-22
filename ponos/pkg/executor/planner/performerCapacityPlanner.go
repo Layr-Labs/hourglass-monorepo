@@ -79,7 +79,7 @@ func (p *PerformerCapacityPlanner) Start(ctx context.Context) {
 	go p.processEvents(ctx)
 
 	// Start operator set discovery routine
-	go p.syncOperatorSets(ctx)
+	go p.discoverOperatorSets(ctx)
 }
 
 // processEvents continuously processes events from the chain events channel
@@ -134,7 +134,7 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 	logEvent := event.Log
 
 	// Extract relevant fields from the event
-	var avsAddress, operatorSetId, digest string
+	var avsAddress, operatorSetId, digest, registryUrl string
 
 	// Parse event arguments
 	for _, arg := range logEvent.Arguments {
@@ -150,13 +150,18 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 		}
 	}
 
-	// Extract artifact digest from newArtifact
+	// Extract artifact digest and registryUrl from newArtifact
 	for _, arg := range logEvent.Arguments {
 		if arg.Name == "newArtifact" {
 			if artifactMap, ok := arg.Value.(map[string]interface{}); ok {
 				if digestVal, ok := artifactMap["digest"]; ok {
 					if digestStr, ok := digestVal.(string); ok {
 						digest = digestStr
+					}
+				}
+				if registryUrlVal, ok := artifactMap["registryUrl"]; ok {
+					if registryUrlStr, ok := registryUrlVal.(string); ok {
+						registryUrl = registryUrlStr
 					}
 				}
 			}
@@ -196,6 +201,7 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 		AvsAddress:    avsAddress,
 		OperatorSetId: operatorSetId,
 		Digest:        digest,
+		RegistryUrl:   registryUrl,
 		PublishedAt:   event.Block.Number.Value(),
 	}
 
@@ -212,10 +218,11 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 			Digest:         digest,
 			LatestArtifact: artifactVersion,
 		}
+	} else {
+		// Update with the new artifact
+		plan.LatestArtifact = artifactVersion
+		plan.Digest = digest
 	}
-
-	// Update with the new artifact
-	plan.LatestArtifact = artifactVersion
 
 	// Store the updated plan
 	p.capacityPlans[avsAddress] = plan
@@ -224,6 +231,7 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 		zap.String("avsAddress", avsAddress),
 		zap.String("operatorSetId", operatorSetId),
 		zap.String("digest", digest),
+		zap.String("registryUrl", registryUrl),
 		zap.Uint64("blockNumber", event.Block.Number.Value()),
 	)
 
@@ -265,8 +273,8 @@ func (p *PerformerCapacityPlanner) isArtifactRelevantToOperator(avsAddress, oper
 	return false, nil
 }
 
-// syncOperatorSets periodically discovers and updates the operator sets this operator is registered with
-func (p *PerformerCapacityPlanner) syncOperatorSets(ctx context.Context) {
+// discoverOperatorSets periodically discovers and updates the operator sets this operator is registered with
+func (p *PerformerCapacityPlanner) discoverOperatorSets(ctx context.Context) {
 	if err := p.updateOperatorSets(); err != nil {
 		p.logger.Sugar().Errorw("Failed to discover operator sets", "error", err)
 	}
@@ -336,7 +344,7 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 
 		// Get the latest artifact for this AVS and operator set
 		operatorSetIdStr := fmt.Sprintf("%d", operatorSetId)
-		var artifactDigest string
+		var artifactDigest, registryUrl string
 
 		artifact, err := p.chainContractCaller.GetLatestArtifact(avsAddress, operatorSetIdStr)
 		if err != nil {
@@ -344,12 +352,22 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 				"avsAddress", avsAddress,
 				"operatorSetId", operatorSetId,
 				"error", err)
-			// Continue with empty digest
+			// Continue with empty values
 		} else {
 			// Extract digest from the artifact
 			artifactDigest = string(artifact.Digest)
+			registryUrl = string(artifact.RegistryUrl)
+
+			// Create artifact version
+			artifactVersion := &ArtifactVersion{
+				AvsAddress:    avsAddress,
+				OperatorSetId: operatorSetIdStr,
+				Digest:        artifactDigest,
+				RegistryUrl:   registryUrl,
+			}
+
 			// Update capacity plan for this AVS
-			p.updateCapacityPlan(avsAddress, operatorSetId, artifactDigest)
+			p.updateCapacityPlanWithArtifact(avsAddress, artifactDigest, artifactVersion)
 		}
 	}
 
@@ -369,28 +387,33 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 	return nil
 }
 
-// updateCapacityPlan updates or creates a capacity plan for the given AVS
-func (p *PerformerCapacityPlanner) updateCapacityPlan(avsAddress string, operatorSetId uint32, artifactDigest string) {
+// updateCapacityPlanWithArtifact updates a capacity plan with the given artifact
+func (p *PerformerCapacityPlanner) updateCapacityPlanWithArtifact(
+	avsAddress string,
+	digest string,
+	artifactVersion *ArtifactVersion,
+) {
 	p.planMutex.Lock()
 	defer p.planMutex.Unlock()
 
 	targetCount := 1
-	// Create artifact version
-	artifactVersion := &ArtifactVersion{
-		AvsAddress:    avsAddress,
-		OperatorSetId: fmt.Sprintf("%b", operatorSetId),
-		Digest:        artifactDigest,
+
+	// Check if we already have a plan, preserve the target count
+	if plan, exists := p.capacityPlans[avsAddress]; exists {
+		targetCount = plan.TargetCount
 	}
 
+	// Create or update the plan
 	p.capacityPlans[avsAddress] = &PerformerCapacityPlan{
 		TargetCount:    targetCount,
-		Digest:         artifactDigest,
+		Digest:         digest,
 		LatestArtifact: artifactVersion,
 	}
 
 	p.logger.Sugar().Infow("Updated capacity plan",
 		"avsAddress", avsAddress,
 		"targetCount", targetCount,
-		"digest", artifactDigest,
+		"digest", digest,
+		"registryUrl", artifactVersion.RegistryUrl,
 	)
 }
