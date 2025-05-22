@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/containerManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -24,8 +26,9 @@ type PerformerPoolManager struct {
 	dockerClient   *client.Client
 
 	// Components
-	pools   map[string]*PerformerPool
-	planner *planner.PerformerCapacityPlanner
+	pools        map[string]*PerformerPool
+	planner      *performerCapacityPlanner.PerformerCapacityPlanner
+	containerMgr containerManager.IContainerManager
 
 	// Lifecycle management
 	poolsMutex sync.RWMutex
@@ -36,7 +39,8 @@ func NewPerformerPoolManager(
 	config *executorConfig.ExecutorConfig,
 	logger *zap.Logger,
 	peeringFetcher peering.IPeeringDataFetcher,
-	planner *planner.PerformerCapacityPlanner,
+	planner *performerCapacityPlanner.PerformerCapacityPlanner,
+	containerMgr containerManager.IContainerManager,
 ) *PerformerPoolManager {
 	return &PerformerPoolManager{
 		logger:         logger,
@@ -44,6 +48,7 @@ func NewPerformerPoolManager(
 		peeringFetcher: peeringFetcher,
 		pools:          make(map[string]*PerformerPool),
 		planner:        planner,
+		containerMgr:   containerMgr,
 	}
 }
 
@@ -71,6 +76,7 @@ func (p *PerformerPoolManager) Initialize() error {
 			p.dockerClient,
 			p.logger,
 			p.peeringFetcher,
+			p.containerMgr,
 		)
 
 		p.pools[avsAddress] = pool
@@ -85,25 +91,6 @@ func (p *PerformerPoolManager) Start(ctx context.Context) error {
 
 	// Start lifecycle management in background
 	go p.startLifecycleManagement(ctx)
-
-	// Set up cleanup on context done
-	go func() {
-		<-ctx.Done()
-		p.logger.Sugar().Info("Shutting down performer pool manager")
-
-		// Shutdown all pools
-		p.poolsMutex.RLock()
-		defer p.poolsMutex.RUnlock()
-
-		for avsAddress, pool := range p.pools {
-			if err := pool.Shutdown(); err != nil {
-				p.logger.Sugar().Errorw("Failed to shutdown performer pool",
-					zap.String("avsAddress", avsAddress),
-					zap.Error(err),
-				)
-			}
-		}
-	}()
 
 	return nil
 }
@@ -121,7 +108,20 @@ func (p *PerformerPoolManager) startLifecycleManagement(ctx context.Context) {
 		case <-ticker.C:
 			p.performLifecycleManagement(ctx)
 		case <-ctx.Done():
-			p.logger.Sugar().Info("Context done, stopping performer lifecycle management")
+			p.logger.Sugar().Info("Shutting down performer pool manager")
+
+			// Shutdown all pools
+			p.poolsMutex.RLock()
+			defer p.poolsMutex.RUnlock()
+
+			for avsAddress, pool := range p.pools {
+				if err := pool.Shutdown(); err != nil {
+					p.logger.Sugar().Errorw("Failed to shutdown performer pool",
+						zap.String("avsAddress", avsAddress),
+						zap.Error(err),
+					)
+				}
+			}
 			return
 		}
 	}

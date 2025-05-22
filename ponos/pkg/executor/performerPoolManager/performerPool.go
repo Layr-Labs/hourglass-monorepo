@@ -9,7 +9,8 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/containerManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/docker/docker/client"
@@ -35,6 +36,7 @@ type PerformerPool struct {
 	performers     map[string]avsPerformer.IAvsPerformer
 	peeringFetcher peering.IPeeringDataFetcher
 	dockerClient   *client.Client
+	containerMgr   containerManager.IContainerManager
 
 	// Health tracking
 	healthStatus map[string]*PerformerHealth
@@ -48,6 +50,7 @@ func NewPerformerPool(
 	dockerClient *client.Client,
 	logger *zap.Logger,
 	peeringFetcher peering.IPeeringDataFetcher,
+	containerMgr containerManager.IContainerManager,
 ) *PerformerPool {
 	return &PerformerPool{
 		logger:         logger,
@@ -57,22 +60,57 @@ func NewPerformerPool(
 		performers:     make(map[string]avsPerformer.IAvsPerformer),
 		peeringFetcher: peeringFetcher,
 		dockerClient:   dockerClient,
+		containerMgr:   containerMgr,
 		healthStatus:   make(map[string]*PerformerHealth),
 	}
 }
 
 // createPerformer creates a new performer instance
-func (p *PerformerPool) createPerformer(ctx context.Context, performerId string, artifact *planner.ArtifactVersion) error {
+func (p *PerformerPool) createPerformer(ctx context.Context, performerId string, artifact *performerCapacityPlanner.ArtifactVersion) error {
 	// Check if performer already exists
 	if _, exists := p.performers[performerId]; exists {
 		return fmt.Errorf("performer with ID %s already exists", performerId)
+	}
+
+	// If we have a container manager and a valid artifact, pull the container first
+	var imageRegistry, imageDigest string
+
+	if artifact != nil && artifact.RegistryUrl != "" && artifact.Digest != "" {
+		p.logger.Sugar().Infow("Pulling container for performer",
+			"performerId", performerId,
+			"registryUrl", artifact.RegistryUrl,
+			"digest", artifact.Digest,
+		)
+
+		pullResult, err := p.containerMgr.PullContainer(ctx, artifact.RegistryUrl, artifact.Digest)
+		if err != nil {
+			p.logger.Sugar().Errorw("Failed to pull container for performer",
+				"performerId", performerId,
+				"registryUrl", artifact.RegistryUrl,
+				"digest", artifact.Digest,
+				"error", err,
+			)
+			return fmt.Errorf("failed to pull container: %w", err)
+		}
+
+		imageRegistry = artifact.RegistryUrl
+		imageDigest = artifact.Digest
+
+		p.logger.Sugar().Infow("Successfully pulled container for performer",
+			"performerId", performerId,
+			"imageId", pullResult.ImageID,
+		)
+	} else {
+		p.logger.Sugar().Warnw("No artifact information provided for performer, using empty image details",
+			"performerId", performerId,
+		)
 	}
 
 	performer, err := serverPerformer.NewAvsPerformerServer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:           p.avsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{Registry: artifact.RegistryUrl, Digest: artifact.Digest},
+			Image:                avsPerformer.PerformerImage{Registry: imageRegistry, Digest: imageDigest},
 			PerformerNetworkName: p.networkName,
 			SigningCurve:         p.signingCurve,
 		},
@@ -112,7 +150,7 @@ func (p *PerformerPool) createPerformer(ctx context.Context, performerId string,
 }
 
 // ExecutePlan executes a capacity plan for this AVS
-func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *planner.PerformerCapacityPlan) error {
+func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *performerCapacityPlanner.PerformerCapacityPlan) error {
 	p.logger.Sugar().Infow("Executing capacity plan",
 		zap.String("avsAddress", p.avsAddress),
 		zap.Int("targetCount", plan.TargetCount),
@@ -323,7 +361,7 @@ func (p *PerformerPool) recreatePerformer(ctx context.Context, performerId strin
 }
 
 // scaleUp creates new performers to reach the target count
-func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *planner.ArtifactVersion) error {
+func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *performerCapacityPlanner.ArtifactVersion) error {
 	p.logger.Sugar().Infow("Scaling up performers",
 		zap.String("avsAddress", p.avsAddress),
 		zap.Int("currentCount", len(p.performers)),

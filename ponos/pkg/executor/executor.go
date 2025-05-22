@@ -17,9 +17,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerPoolManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -39,7 +40,7 @@ type Executor struct {
 	inflightTasks *sync.Map
 
 	performerPoolManager *performerPoolManager.PerformerPoolManager
-	capacityPlanner      *planner.PerformerCapacityPlanner
+	capacityPlanner      *performerCapacityPlanner.PerformerCapacityPlanner
 	peeringFetcher       peering.IPeeringDataFetcher
 
 	// Chain events channel to be shared with pollers and planners
@@ -135,7 +136,7 @@ func (e *Executor) Initialize() error {
 
 	// Initialize capacity planner with contract callers
 	operatorAddress := e.config.Operator.Address
-	e.capacityPlanner = planner.NewPerformerCapacityPlanner(
+	e.capacityPlanner = performerCapacityPlanner.NewPerformerCapacityPlanner(
 		e.logger,
 		operatorAddress,
 		e.contractStore,
@@ -165,12 +166,19 @@ func (e *Executor) Initialize() error {
 		"pollingInterval", pollerConfig.PollingInterval,
 	)
 
+	// Initialize container manager
+	containerMgr, err := containerManager.NewDockerContainerManager(e.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize container manager: %w", err)
+	}
+
 	// Create the performer pool manager
 	e.performerPoolManager = performerPoolManager.NewPerformerPoolManager(
 		e.config,
 		e.logger,
 		e.peeringFetcher,
 		e.capacityPlanner,
+		containerMgr,
 	)
 
 	// Initialize the performer pool manager

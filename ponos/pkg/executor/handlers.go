@@ -21,7 +21,7 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 			"avsAddress", req.AvsAddress,
 			"error", err,
 		)
-		return nil, fmt.Errorf("Failed to handle received task: %w", err)
+		return nil, fmt.Errorf("failed to handle received task: %w", err)
 	}
 	return res, nil
 }

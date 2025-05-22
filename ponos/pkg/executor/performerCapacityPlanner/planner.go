@@ -1,4 +1,4 @@
-package planner
+package performerCapacityPlanner
 
 // ArtifactVersion represents a published artifact version for an AVS
 type ArtifactVersion struct {

@@ -3,6 +3,8 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -21,7 +23,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
-	"time"
 )
 
 type AggregatorConfig struct {
