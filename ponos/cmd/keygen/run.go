@@ -177,7 +177,7 @@ var infoCmd = &cobra.Command{
 			l.Sugar().Infow("Key Information",
 				"type", "keystore",
 				"curve", curveType,
-				"publicKey", storedKeys.PublicKey,
+				"publicKey", storedKeys.Pubkey,
 				"uuid", storedKeys.UUID,
 				"version", storedKeys.Version,
 			)
@@ -194,7 +194,7 @@ var infoCmd = &cobra.Command{
 
 			pubKey := privateSigningKey.Public()
 
-			if hex.EncodeToString(pubKey.Bytes()) == storedKeys.PublicKey {
+			if hex.EncodeToString(pubKey.Bytes()) == storedKeys.Pubkey {
 				l.Sugar().Infow("Public key matches keystore public key")
 			} else {
 				l.Sugar().Infow("Public key does not match keystore public key")
