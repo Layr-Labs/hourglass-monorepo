@@ -23,6 +23,7 @@ const (
 
 const (
 	AVSRegistrarSimulationAddress = "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+	// TODO: add AVSArtifactRegistrySimulationAddress
 )
 
 var EthereumSimulationContracts = CoreContractAddresses{

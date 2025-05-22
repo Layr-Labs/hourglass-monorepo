@@ -3,6 +3,7 @@ package performerPoolManager
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"strings"
 	"sync"
 	"time"
@@ -118,7 +119,7 @@ func (p *PerformerPool) createPerformer(ctx context.Context, performerId string)
 }
 
 // ExecutePlan executes a capacity plan for this AVS
-func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *PerformerCapacityPlan) error {
+func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *planner.PerformerCapacityPlan) error {
 	p.logger.Sugar().Infow("Executing capacity plan",
 		zap.String("avsAddress", p.avsAddress),
 		zap.Int("targetCount", plan.TargetCount),

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -24,7 +25,7 @@ type PerformerPoolManager struct {
 
 	// Components
 	pools   map[string]*PerformerPool
-	planner *PerformerCapacityPlanner
+	planner *planner.PerformerCapacityPlanner
 
 	// Lifecycle management
 	poolsMutex sync.RWMutex
@@ -35,7 +36,7 @@ func NewPerformerPoolManager(
 	config *executorConfig.ExecutorConfig,
 	logger *zap.Logger,
 	peeringFetcher peering.IPeeringDataFetcher,
-	planner *PerformerCapacityPlanner,
+	planner *planner.PerformerCapacityPlanner,
 ) *PerformerPoolManager {
 	return &PerformerPoolManager{
 		logger:         logger,
@@ -159,7 +160,15 @@ func (p *PerformerPoolManager) performLifecycleCheck(ctx context.Context) {
 
 	for avsAddress, pool := range p.pools {
 		// Get capacity plan for this AVS
-		plan := p.planner.GetCapacityPlan(avsAddress)
+		plan, err := p.planner.GetCapacityPlan(avsAddress)
+		// TODO: if the plan is not found, we should tear down the pool
+		if err != nil {
+			p.logger.Sugar().Warnw("Failed to get capacity plan for AVS, skipping lifecycle check",
+				zap.String("avsAddress", avsAddress),
+				zap.Error(err),
+			)
+			continue
+		}
 
 		// Execute plan
 		if err := pool.ExecutePlan(ctx, plan); err != nil {

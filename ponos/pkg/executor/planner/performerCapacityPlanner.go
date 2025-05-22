@@ -1,0 +1,446 @@
+package planner
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/ethereum/go-ethereum/common"
+	"go.uber.org/zap"
+)
+
+// PerformerCapacityPlanner determines the desired capacity for each AVS
+type PerformerCapacityPlanner struct {
+	logger          *zap.Logger
+	avsConfigs      map[string]*executorConfig.AvsPerformerConfig
+	mutex           sync.RWMutex
+	chainEventsChan chan *chainPoller.LogWithBlock
+
+	// Map of AVS address to capacity plan
+	capacityPlans map[string]*PerformerCapacityPlan
+
+	// Contract store for accessing contract addresses
+	contractStore contractStore.IContractStore
+
+	// Chain contract caller for interacting with contracts
+	chainContractCaller contractCaller.IContractCaller
+
+	// Operator address to determine which artifacts are relevant
+	operatorAddress string
+}
+
+// NewPerformerCapacityPlanner creates a new capacity planner
+func NewPerformerCapacityPlanner(
+	logger *zap.Logger,
+	operatorAddress string,
+	contractStore contractStore.IContractStore,
+	chainContractCaller contractCaller.IContractCaller,
+	eventsChan chan *chainPoller.LogWithBlock,
+) *PerformerCapacityPlanner {
+	return &PerformerCapacityPlanner{
+		logger:              logger,
+		avsConfigs:          make(map[string]*executorConfig.AvsPerformerConfig),
+		mutex:               sync.RWMutex{},
+		capacityPlans:       make(map[string]*PerformerCapacityPlan),
+		contractStore:       contractStore,
+		chainContractCaller: chainContractCaller,
+		operatorAddress:     operatorAddress,
+		chainEventsChan:     eventsChan,
+	}
+}
+
+// GetCapacityPlan returns a capacity plan for the given AVS
+func (p *PerformerCapacityPlanner) GetCapacityPlan(avsAddress string) (*PerformerCapacityPlan, error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	avsAddress = strings.ToLower(avsAddress)
+
+	// Check if we have a capacity plan for this AVS
+	if plan, exists := p.capacityPlans[avsAddress]; exists {
+		return plan, nil
+	}
+
+	// No plan exists, return error
+	p.logger.Sugar().Warnw("No capacity plan found for AVS",
+		zap.String("avsAddress", avsAddress))
+	return nil, fmt.Errorf("no capacity plan exists for AVS %s", avsAddress)
+}
+
+// RegisterAVS registers an AVS with the planner
+func (p *PerformerCapacityPlanner) RegisterAVS(
+	avsAddress string,
+	config *executorConfig.AvsPerformerConfig,
+) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	avsAddress = strings.ToLower(avsAddress)
+	p.avsConfigs[avsAddress] = config
+
+	p.logger.Sugar().Infow("Registered AVS with planner",
+		"avsAddress", avsAddress,
+		"config", config,
+	)
+}
+
+// Start begins processing chain events in the background and periodically discovers operator sets
+func (p *PerformerCapacityPlanner) Start(ctx context.Context) {
+	p.logger.Sugar().Infow("Starting capacity planner event processor")
+
+	// Start event processor
+	go p.processEvents(ctx)
+
+	// Start operator set discovery routine
+	go p.syncOperatorSets(ctx)
+}
+
+// processEvents continuously processes events from the chain events channel
+func (p *PerformerCapacityPlanner) processEvents(ctx context.Context) {
+	if p.chainEventsChan == nil {
+		p.logger.Sugar().Warnw("Chain events channel not set, skipping event processing")
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			p.logger.Sugar().Infow("Context cancelled, stopping capacity planner event processor")
+			return
+		case event, ok := <-p.chainEventsChan:
+			if !ok {
+				p.logger.Sugar().Warnw("Chain events channel closed, stopping capacity planner event processor")
+				return
+			}
+
+			if err := p.processEvent(event); err != nil {
+				p.logger.Sugar().Errorw("Error processing event", "error", err)
+			}
+		}
+	}
+}
+
+// processEvent handles a single chain event
+func (p *PerformerCapacityPlanner) processEvent(event *chainPoller.LogWithBlock) error {
+	if event == nil || event.Log == nil {
+		return nil
+	}
+
+	logEvent := event.Log
+	p.logger.Sugar().Debugw("Processing AVS Artifact Registry event",
+		zap.String("eventName", logEvent.EventName),
+		zap.String("contractAddress", logEvent.Address),
+	)
+
+	// Process based on contract address
+	switch logEvent.EventName {
+	case "PublishedArtifact":
+		return p.handlePublishedArtifact(event)
+	default:
+		// Ignore logs for other events
+		return nil
+	}
+}
+
+// handlePublishedArtifact processes the PublishedArtifact event
+func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.LogWithBlock) error {
+	logEvent := event.Log
+
+	// Extract relevant fields from the event
+	var avsAddress, operatorSetId, digest string
+
+	// Parse event arguments
+	for _, arg := range logEvent.Arguments {
+		switch arg.Name {
+		case "avs":
+			if val, ok := arg.Value.(string); ok {
+				avsAddress = strings.ToLower(val)
+			}
+		case "operatorSetId":
+			if val, ok := arg.Value.(string); ok {
+				operatorSetId = val
+			}
+		}
+	}
+
+	// Extract artifact digest from newArtifact
+	for _, arg := range logEvent.Arguments {
+		if arg.Name == "newArtifact" {
+			if artifactMap, ok := arg.Value.(map[string]interface{}); ok {
+				if digestVal, ok := artifactMap["digest"]; ok {
+					if digestStr, ok := digestVal.(string); ok {
+						digest = digestStr
+					}
+				}
+			}
+		}
+	}
+
+	if avsAddress == "" || operatorSetId == "" || digest == "" {
+		p.logger.Sugar().Warnw("Invalid PublishedArtifact event, missing required fields",
+			zap.String("avsAddress", avsAddress),
+			zap.String("operatorSetId", operatorSetId),
+			zap.String("digest", digest),
+		)
+		return fmt.Errorf("invalid PublishedArtifact event")
+	}
+
+	// Check if this operator is part of the operator set
+	isRelevant, err := p.isArtifactRelevantToOperator(avsAddress, operatorSetId)
+	if err != nil {
+		p.logger.Sugar().Errorw("Failed to check if artifact is relevant",
+			zap.String("avsAddress", avsAddress),
+			zap.String("operatorSetId", operatorSetId),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	if !isRelevant {
+		p.logger.Sugar().Infow("Ignoring artifact for operator set we're not part of",
+			zap.String("avsAddress", avsAddress),
+			zap.String("operatorSetId", operatorSetId),
+		)
+		return nil
+	}
+
+	// Create artifact version
+	artifactVersion := &ArtifactVersion{
+		AvsAddress:    avsAddress,
+		OperatorSetId: operatorSetId,
+		Digest:        digest,
+		PublishedAt:   event.Block.Number.Value(),
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// Get existing capacity plan or create a default one
+	var plan *PerformerCapacityPlan
+	var exists bool
+	if plan, exists = p.capacityPlans[avsAddress]; !exists {
+		// Create a new plan with default values
+		plan = &PerformerCapacityPlan{
+			TargetCount: 1,
+			Digest:      digest,
+		}
+	}
+
+	// Update with the new artifact
+	plan.LatestArtifact = artifactVersion
+
+	// Update the digest to include the new artifact
+	if config, ok := p.avsConfigs[avsAddress]; ok {
+		// Get operator set size for more context
+		var operatorSetIdInt uint32
+		fmt.Sscanf(operatorSetId, "%d", &operatorSetIdInt)
+		members, err := p.chainContractCaller.GetOperatorSetMembers(avsAddress, operatorSetIdInt)
+		operatorSetSize := 0
+		if err == nil {
+			operatorSetSize = len(members)
+		}
+
+		plan.Digest = fmt.Sprintf("%s-ops%d-artifact-%s",
+			config.Image.Repository,
+			operatorSetSize,
+			digest)
+	} else {
+		plan.Digest = fmt.Sprintf("default-artifact-%s", digest)
+	}
+
+	// Store the updated plan
+	p.capacityPlans[avsAddress] = plan
+
+	p.logger.Sugar().Infow("Updated capacity plan with new artifact",
+		zap.String("avsAddress", avsAddress),
+		zap.String("operatorSetId", operatorSetId),
+		zap.String("digest", digest),
+		zap.Uint64("blockNumber", event.Block.Number.Value()),
+	)
+
+	return nil
+}
+
+// isArtifactRelevantToOperator checks if the artifact is for an operator set that includes this operator
+func (p *PerformerCapacityPlanner) isArtifactRelevantToOperator(avsAddress, operatorSetId string) (bool, error) {
+	// Convert operatorSetId from hex string to uint32 if necessary
+	var operatorSetIdInt uint32
+
+	// Try to parse as integer first
+	if _, err := fmt.Sscanf(operatorSetId, "%d", &operatorSetIdInt); err != nil {
+		// If that fails, assume it's a hex string and convert to bytes
+		operatorSetIdBytes := common.FromHex(operatorSetId)
+		// Only use the first 4 bytes for uint32
+		if len(operatorSetIdBytes) >= 4 {
+			operatorSetIdInt = uint32(operatorSetIdBytes[0])<<24 |
+				uint32(operatorSetIdBytes[1])<<16 |
+				uint32(operatorSetIdBytes[2])<<8 |
+				uint32(operatorSetIdBytes[3])
+		}
+	}
+
+	// Get the members of this operator set
+	members, err := p.chainContractCaller.GetOperatorSetMembers(avsAddress, operatorSetIdInt)
+	if err != nil {
+		return false, fmt.Errorf("failed to get operator set members: %w", err)
+	}
+
+	// Check if our operator address is in the set
+	for _, member := range members {
+		if strings.ToLower(member) == strings.ToLower(p.operatorAddress) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// syncOperatorSets periodically discovers and updates the operator sets this operator is registered with
+func (p *PerformerCapacityPlanner) syncOperatorSets(ctx context.Context) {
+	if err := p.updateOperatorSets(); err != nil {
+		p.logger.Sugar().Errorw("Failed to discover operator sets", "error", err)
+	}
+
+	// Then run periodically
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			p.logger.Sugar().Infow("Context cancelled, stopping operator set discovery")
+			return
+		case <-ticker.C:
+			if err := p.updateOperatorSets(); err != nil {
+				p.logger.Sugar().Errorw("Failed to discover operator sets", "error", err)
+			}
+		}
+	}
+}
+
+// updateOperatorSets discovers and updates the operator sets this operator is registered with
+func (p *PerformerCapacityPlanner) updateOperatorSets() error {
+	p.logger.Sugar().Infow("Discovering operator sets for operator",
+		"operatorAddress", p.operatorAddress)
+
+	// Get all operator sets from AllocationManager that this operator is registered to
+	operatorSets, err := p.chainContractCaller.GetRegisteredSets(p.operatorAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get registered operator sets for operator %s: %w", p.operatorAddress, err)
+	}
+
+	p.logger.Sugar().Infow("Found operator sets", "count", len(operatorSets))
+
+	// Track current AVSs to detect removals
+	currentAvs := make(map[string]bool)
+
+	// Process each operator set to identify relevant AVSs
+	for _, operatorSet := range operatorSets {
+		avsAddress := strings.ToLower(operatorSet.Avs.String())
+		operatorSetId := operatorSet.Id
+
+		p.logger.Sugar().Debugw("Checking operator set",
+			"avsAddress", avsAddress,
+			"operatorSetId", operatorSetId)
+
+		// Query the TaskMailbox to determine if this is a relevant AVS
+		avsConfig, err := p.chainContractCaller.GetAVSConfig(avsAddress)
+		if err != nil {
+			p.logger.Sugar().Warnw("Failed to get AVS config, skipping (might not be Hourglass AVS)",
+				"avsAddress", avsAddress,
+				"error", err)
+			continue
+		}
+
+		// Check if this operator set ID is an executor
+		isHourglassExecutorSet := false
+		for _, execOpSetId := range avsConfig.ExecutorOperatorSetIds {
+			if execOpSetId == operatorSetId {
+				isHourglassExecutorSet = true
+				break
+			}
+		}
+
+		if !isHourglassExecutorSet {
+			continue
+		}
+
+		// Mark this as a current AVS
+		currentAvs[avsAddress] = true
+
+		// Get the latest artifact for this AVS and operator set
+		operatorSetIdStr := fmt.Sprintf("%d", operatorSetId)
+		var artifactDigest string
+
+		artifact, err := p.chainContractCaller.GetLatestArtifact(avsAddress, operatorSetIdStr)
+		if err != nil {
+			p.logger.Sugar().Warnw("Failed to get latest artifact",
+				"avsAddress", avsAddress,
+				"operatorSetId", operatorSetId,
+				"error", err)
+			// Continue with empty digest
+		} else {
+			// Extract digest from the artifact
+			artifactDigest = string(artifact.Digest)
+		}
+
+		// Update capacity plan for this AVS
+		p.updateCapacityPlan(avsAddress, operatorSetId, artifactDigest)
+	}
+
+	// Remove capacity plans for AVSs that are no longer registered
+	p.mutex.Lock()
+	for avsAddress := range p.capacityPlans {
+		if !currentAvs[avsAddress] {
+			p.logger.Sugar().Infow("Operator no longer registered for AVS, removing capacity plan",
+				"avsAddress", avsAddress)
+			delete(p.capacityPlans, avsAddress)
+		}
+	}
+	p.mutex.Unlock()
+
+	p.logger.Sugar().Infow("Operator set discovery complete",
+		"registeredAvsCount", len(currentAvs))
+	return nil
+}
+
+// updateCapacityPlan updates or creates a capacity plan for the given AVS
+func (p *PerformerCapacityPlanner) updateCapacityPlan(avsAddress string, operatorSetId uint32, artifactDigest string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	// TODO: remove this and stop using configs in capacity planner. Stub AVSs using simulated structs.
+	// Get config for this AVS if available
+	config, ok := p.avsConfigs[avsAddress]
+
+	// Determine target count
+	targetCount := 1 // Default to 1
+	if ok && config.WorkerCount > 0 {
+		targetCount = config.WorkerCount
+	}
+
+	// Create artifact version
+	artifactVersion := &ArtifactVersion{
+		AvsAddress:    avsAddress,
+		OperatorSetId: fmt.Sprintf("%b", operatorSetId),
+		Digest:        artifactDigest,
+	}
+
+	p.capacityPlans[avsAddress] = &PerformerCapacityPlan{
+		TargetCount:    targetCount,
+		Digest:         artifactDigest,
+		LatestArtifact: artifactVersion,
+	}
+
+	p.logger.Sugar().Infow("Updated capacity plan",
+		"avsAddress", avsAddress,
+		"targetCount", targetCount,
+		"digest", artifactDigest,
+	)
+}

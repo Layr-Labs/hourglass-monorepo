@@ -283,6 +283,16 @@ func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId
 	return members, nil
 }
 
+func (cc *ContractCaller) GetRegisteredSets(operator string) ([]IAllocationManager.OperatorSet, error) {
+	operatorAddr := common.HexToAddress(operator)
+	return cc.allocationManagerCaller.GetRegisteredSets(&bind.CallOpts{}, operatorAddr)
+}
+
+func (cc *ContractCaller) GetLatestArtifact(avsAddress string, operatorSetId string) (AVSArtifactRegistry.AVSArtifactRegistryStorageArtifact, error) {
+	avsAddr := common.HexToAddress(avsAddress)
+	return cc.avsArtifactRegistryCaller.GetLatestArtifact0(&bind.CallOpts{}, avsAddr, []byte(operatorSetId))
+}
+
 func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	avsAddress string,
 	operatorSetId uint32,

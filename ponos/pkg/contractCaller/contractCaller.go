@@ -2,13 +2,16 @@ package contractCaller
 
 import (
 	"context"
+	"math/big"
+
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/AVSArtifactRegistry"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
-	"math/big"
 )
 
 type AVSConfig struct {
@@ -31,6 +34,10 @@ type IContractCaller interface {
 	SubmitTaskResult(ctx context.Context, task *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
 
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
+
+	GetRegisteredSets(operator string) ([]IAllocationManager.OperatorSet, error)
+
+	GetLatestArtifact(avsAddress string, operatorSetId string) (AVSArtifactRegistry.AVSArtifactRegistryStorageArtifact, error)
 
 	GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
 

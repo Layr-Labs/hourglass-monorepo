@@ -3,11 +3,14 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -16,15 +19,17 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerPoolManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/planner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"sync"
-	"time"
 )
+
+const avsArtifactRegistry = "AVSArtifactRegistry"
 
 type Executor struct {
 	logger        *zap.Logger
@@ -34,7 +39,7 @@ type Executor struct {
 	inflightTasks *sync.Map
 
 	performerPoolManager *performerPoolManager.PerformerPoolManager
-	capacityPlanner      *performerPoolManager.PerformerCapacityPlanner
+	capacityPlanner      *planner.PerformerCapacityPlanner
 	peeringFetcher       peering.IPeeringDataFetcher
 
 	// Chain events channel to be shared with pollers and planners
@@ -102,6 +107,19 @@ func (e *Executor) Initialize() error {
 
 	// Initialize transaction log parser
 	e.transactionLogParser = transactionLogParser.NewTransactionLogParser(e.contractStore, e.logger)
+	var avsArtifactRegistryAddress string
+	chain := e.config.Chain
+	if chain.Simulation != nil && chain.Simulation.Enabled {
+		avsArtifactRegistryAddress = e.config.AvsArtifactRegistry
+	} else {
+		avsArtifactRegistryContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
+			return strings.ToLower(c.Name) == strings.ToLower(avsArtifactRegistry)
+		})
+		avsArtifactRegistryAddress = avsArtifactRegistryContract.Address
+		if avsArtifactRegistryAddress == "" {
+			return fmt.Errorf("could not find avs artifact registry address")
+		}
+	}
 
 	// Initialize Ethereum clients
 	e.ethereumClient = ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -110,32 +128,27 @@ func (e *Executor) Initialize() error {
 	}, e.logger)
 
 	// Initialize contract callers
-	e.contractCaller, err = e.initializeContractCaller()
+	e.contractCaller, err = e.initializeContractCaller(avsArtifactRegistryAddress)
 	if err != nil {
 		return fmt.Errorf("failed to initialize contract callers: %w", err)
 	}
 
-	// Initialize capacity planner with contract callers but without chain poller responsibilities
+	// Initialize capacity planner with contract callers
 	operatorAddress := e.config.Operator.Address
-	e.capacityPlanner = performerPoolManager.NewPerformerCapacityPlanner(
+	e.capacityPlanner = planner.NewPerformerCapacityPlanner(
 		e.logger,
 		operatorAddress,
 		e.contractStore,
 		e.contractCaller,
+		e.chainEventsChan,
 	)
 
-	// Register AVS performers with the capacity planner
-	for _, performer := range e.config.AvsPerformers {
-		e.capacityPlanner.RegisterAVS(performer.AvsAddress, performer)
-	}
-
-	// Instead of using the planner to initialize chain pollers, do it directly here
 	chainId := e.config.Chain.ChainId
 	pollerConfig := &EVMChainPoller.EVMChainPollerConfig{
 		ChainId:                 chainId,
 		PollingInterval:         time.Duration(e.config.Chain.PollIntervalSeconds) * time.Second,
 		EigenLayerCoreContracts: e.contractStore.ListContractAddressesForChain(chainId),
-		InterestingContracts:    []string{e.config.AvsArtifactRegistry, e.config.AvsTaskRegistrar},
+		InterestingContracts:    []string{avsArtifactRegistryAddress},
 	}
 
 	// Create chain poller
@@ -161,12 +174,12 @@ func (e *Executor) Initialize() error {
 	)
 
 	// Initialize the performer pool manager
-	if err := e.performerPoolManager.Initialize(); err != nil {
+	if err = e.performerPoolManager.Initialize(); err != nil {
 		return fmt.Errorf("failed to initialize performer pool manager: %w", err)
 	}
 
 	// Register GRPC handlers
-	if err := e.registerHandlers(e.rpcServer.GetGrpcServer()); err != nil {
+	if err = e.registerHandlers(e.rpcServer.GetGrpcServer()); err != nil {
 		return fmt.Errorf("failed to register handlers: %w", err)
 	}
 
@@ -202,48 +215,11 @@ func (e *Executor) loadContracts() error {
 	return nil
 }
 
-func (e *Executor) initializeContractCaller() (*caller.ContractCaller, error) {
+func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (*caller.ContractCaller, error) {
 	e.logger.Sugar().Infow("Initializing contract caller...")
 
 	chain := e.config.Chain
 	// Get contract addresses
-	var (
-		avsRegistrarAddress     string
-		artifactRegistryAddress string
-	)
-
-	if chain.Simulation != nil && chain.Simulation.Enabled {
-		// Use simulation addresses
-		avsRegistrarAddress = config.AVSRegistrarSimulationAddress
-		artifactRegistryAddress = e.config.AvsArtifactRegistry // Use configured address
-	} else {
-		// Find contracts by name in contract store
-		for _, contract := range e.contractStore.ListContracts() {
-			if contract.ChainId == chain.ChainId {
-				switch contract.Name {
-				case "AVSDirectRegistrar":
-					avsRegistrarAddress = contract.Address
-				case "AVSArtifactRegistry":
-					artifactRegistryAddress = contract.Address
-				}
-			}
-		}
-
-		if avsRegistrarAddress == "" {
-			e.logger.Sugar().Errorw("AVS registrar contract not found",
-				zap.Uint64("chainId", uint64(chain.ChainId)),
-			)
-			return nil, fmt.Errorf("AVS registrar contract not found for chain %s", chain.Name)
-		}
-
-		if artifactRegistryAddress == "" {
-			e.logger.Sugar().Warnw("AVS artifact registry contract not found in store, using configured address",
-				zap.Uint64("chainId", uint64(chain.ChainId)),
-			)
-			artifactRegistryAddress = e.config.AvsArtifactRegistry
-		}
-	}
-
 	ethereumContractCaller, err := e.ethereumClient.GetEthereumContractCaller()
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to get ethereum contract caller", "error", err)
@@ -253,8 +229,7 @@ func (e *Executor) initializeContractCaller() (*caller.ContractCaller, error) {
 	// Create contract caller
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:                 e.config.Operator.OperatorPrivateKey,
-		AVSRegistrarAddress:        avsRegistrarAddress,
-		AVSArtifactRegistryAddress: artifactRegistryAddress,
+		AVSArtifactRegistryAddress: avsArtifactRegistryAddress,
 	}, ethereumContractCaller, e.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create contract caller: %w", err)

@@ -2,11 +2,12 @@ package executorConfig
 
 import (
 	"encoding/json"
+	"slices"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
-	"slices"
 )
 
 const (
@@ -17,24 +18,38 @@ const (
 	PerformerNetworkName = "performer-network-name"
 )
 
-type PerformerImage struct {
-	Repository string
-	Tag        string
+// ImageConfig contains configuration for container images
+type ImageConfig struct {
+	// Repository for the container image
+	Repository string `json:"repository"`
+
+	// Tag for the container image
+	Tag string `json:"tag"`
 }
 
+// AvsPerformerConfig contains configuration for an AVS performer
 type AvsPerformerConfig struct {
-	Image        *PerformerImage
-	ProcessType  string
-	AvsAddress   string
-	WorkerCount  int
-	SigningCurve string // bn254, bls381, etc
+	// Address of the AVS performer
+	AvsAddress string `json:"avsAddress"`
+
+	// Number of worker instances to run
+	WorkerCount int `json:"workerCount"`
+
+	// Container image configuration
+	Image *ImageConfig `json:"image"`
+
+	// Additional environment variables for the performer
+	Env map[string]string `json:"env,omitempty"`
+
+	// Signing curve for the performer
+	SigningCurve string `json:"signingCurve,omitempty"`
+
+	// Process type for the performer
+	ProcessType string `json:"processType,omitempty"`
 }
 
 func (ap *AvsPerformerConfig) Validate() error {
 	var allErrors field.ErrorList
-	if ap.AvsAddress == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("avsAddress"), "avsAddress is required"))
-	}
 	if ap.Image == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("image"), "image is required"))
 	} else {
@@ -71,6 +86,16 @@ type ExecutorConfig struct {
 	Operator             *config.OperatorConfig `json:"operator" yaml:"operator"`
 	AvsPerformers        []*AvsPerformerConfig  `json:"avsPerformers" yaml:"avsPerformers"`
 	Simulation           *SimulationConfig      `json:"simulation" yaml:"simulation"`
+
+	// Chains configuration
+	Chain *config.Chain `json:"chain" yaml:"chain"`
+
+	// Contract addresses for operator set and executor registration tracking
+	AvsArtifactRegistry string `json:"avsArtifactRegistry" yaml:"avsArtifactRegistry"`
+
+	// Contracts JSON data for runtime configuration
+	// TODO: double check why we need this configured here. Should be able to load from contracts.json
+	Contracts []byte `json:"contracts" yaml:"contracts"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
@@ -92,6 +117,11 @@ func (ec *ExecutorConfig) Validate() error {
 			}
 		}
 	}
+
+	if ec.Chain == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("chain"), "a chain is required for the executor"))
+	}
+
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
 	}
