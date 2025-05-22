@@ -10,7 +10,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -18,8 +17,7 @@ import (
 // PerformerCapacityPlanner determines the desired capacity for each AVS
 type PerformerCapacityPlanner struct {
 	logger          *zap.Logger
-	avsConfigs      map[string]*executorConfig.AvsPerformerConfig
-	mutex           sync.RWMutex
+	planMutex       sync.RWMutex
 	chainEventsChan chan *chainPoller.LogWithBlock
 
 	// Map of AVS address to capacity plan
@@ -45,8 +43,7 @@ func NewPerformerCapacityPlanner(
 ) *PerformerCapacityPlanner {
 	return &PerformerCapacityPlanner{
 		logger:              logger,
-		avsConfigs:          make(map[string]*executorConfig.AvsPerformerConfig),
-		mutex:               sync.RWMutex{},
+		planMutex:           sync.RWMutex{},
 		capacityPlans:       make(map[string]*PerformerCapacityPlan),
 		contractStore:       contractStore,
 		chainContractCaller: chainContractCaller,
@@ -57,8 +54,8 @@ func NewPerformerCapacityPlanner(
 
 // GetCapacityPlan returns a capacity plan for the given AVS
 func (p *PerformerCapacityPlanner) GetCapacityPlan(avsAddress string) (*PerformerCapacityPlan, error) {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
+	p.planMutex.RLock()
+	defer p.planMutex.RUnlock()
 
 	avsAddress = strings.ToLower(avsAddress)
 
@@ -68,26 +65,10 @@ func (p *PerformerCapacityPlanner) GetCapacityPlan(avsAddress string) (*Performe
 	}
 
 	// No plan exists, return error
+	// TODO: if no plan for the AVS, return a targetCount 0 plan with otherwise empty fields.
 	p.logger.Sugar().Warnw("No capacity plan found for AVS",
 		zap.String("avsAddress", avsAddress))
 	return nil, fmt.Errorf("no capacity plan exists for AVS %s", avsAddress)
-}
-
-// RegisterAVS registers an AVS with the planner
-func (p *PerformerCapacityPlanner) RegisterAVS(
-	avsAddress string,
-	config *executorConfig.AvsPerformerConfig,
-) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	avsAddress = strings.ToLower(avsAddress)
-	p.avsConfigs[avsAddress] = config
-
-	p.logger.Sugar().Infow("Registered AVS with planner",
-		"avsAddress", avsAddress,
-		"config", config,
-	)
 }
 
 // Start begins processing chain events in the background and periodically discovers operator sets
@@ -218,8 +199,8 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 		PublishedAt:   event.Block.Number.Value(),
 	}
 
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.planMutex.Lock()
+	defer p.planMutex.Unlock()
 
 	// Get existing capacity plan or create a default one
 	var plan *PerformerCapacityPlan
@@ -227,32 +208,14 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 	if plan, exists = p.capacityPlans[avsAddress]; !exists {
 		// Create a new plan with default values
 		plan = &PerformerCapacityPlan{
-			TargetCount: 1,
-			Digest:      digest,
+			TargetCount:    1,
+			Digest:         digest,
+			LatestArtifact: artifactVersion,
 		}
 	}
 
 	// Update with the new artifact
 	plan.LatestArtifact = artifactVersion
-
-	// Update the digest to include the new artifact
-	if config, ok := p.avsConfigs[avsAddress]; ok {
-		// Get operator set size for more context
-		var operatorSetIdInt uint32
-		fmt.Sscanf(operatorSetId, "%d", &operatorSetIdInt)
-		members, err := p.chainContractCaller.GetOperatorSetMembers(avsAddress, operatorSetIdInt)
-		operatorSetSize := 0
-		if err == nil {
-			operatorSetSize = len(members)
-		}
-
-		plan.Digest = fmt.Sprintf("%s-ops%d-artifact-%s",
-			config.Image.Repository,
-			operatorSetSize,
-			digest)
-	} else {
-		plan.Digest = fmt.Sprintf("default-artifact-%s", digest)
-	}
 
 	// Store the updated plan
 	p.capacityPlans[avsAddress] = plan
@@ -286,6 +249,7 @@ func (p *PerformerCapacityPlanner) isArtifactRelevantToOperator(avsAddress, oper
 	}
 
 	// Get the members of this operator set
+	// TODO: is there are race condition here? If I add an operator and immediately release an artifact, will this catch?
 	members, err := p.chainContractCaller.GetOperatorSetMembers(avsAddress, operatorSetIdInt)
 	if err != nil {
 		return false, fmt.Errorf("failed to get operator set members: %w", err)
@@ -345,10 +309,6 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 		avsAddress := strings.ToLower(operatorSet.Avs.String())
 		operatorSetId := operatorSet.Id
 
-		p.logger.Sugar().Debugw("Checking operator set",
-			"avsAddress", avsAddress,
-			"operatorSetId", operatorSetId)
-
 		// Query the TaskMailbox to determine if this is a relevant AVS
 		avsConfig, err := p.chainContractCaller.GetAVSConfig(avsAddress)
 		if err != nil {
@@ -359,15 +319,15 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 		}
 
 		// Check if this operator set ID is an executor
-		isHourglassExecutorSet := false
+		isExecutorSet := false
 		for _, execOpSetId := range avsConfig.ExecutorOperatorSetIds {
 			if execOpSetId == operatorSetId {
-				isHourglassExecutorSet = true
+				isExecutorSet = true
 				break
 			}
 		}
 
-		if !isHourglassExecutorSet {
+		if !isExecutorSet {
 			continue
 		}
 
@@ -380,7 +340,7 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 
 		artifact, err := p.chainContractCaller.GetLatestArtifact(avsAddress, operatorSetIdStr)
 		if err != nil {
-			p.logger.Sugar().Warnw("Failed to get latest artifact",
+			p.logger.Sugar().Warnw("No latest artifact in artifact registry",
 				"avsAddress", avsAddress,
 				"operatorSetId", operatorSetId,
 				"error", err)
@@ -388,14 +348,13 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 		} else {
 			// Extract digest from the artifact
 			artifactDigest = string(artifact.Digest)
+			// Update capacity plan for this AVS
+			p.updateCapacityPlan(avsAddress, operatorSetId, artifactDigest)
 		}
-
-		// Update capacity plan for this AVS
-		p.updateCapacityPlan(avsAddress, operatorSetId, artifactDigest)
 	}
 
 	// Remove capacity plans for AVSs that are no longer registered
-	p.mutex.Lock()
+	p.planMutex.Lock()
 	for avsAddress := range p.capacityPlans {
 		if !currentAvs[avsAddress] {
 			p.logger.Sugar().Infow("Operator no longer registered for AVS, removing capacity plan",
@@ -403,7 +362,7 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 			delete(p.capacityPlans, avsAddress)
 		}
 	}
-	p.mutex.Unlock()
+	p.planMutex.Unlock()
 
 	p.logger.Sugar().Infow("Operator set discovery complete",
 		"registeredAvsCount", len(currentAvs))
@@ -412,19 +371,10 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 
 // updateCapacityPlan updates or creates a capacity plan for the given AVS
 func (p *PerformerCapacityPlanner) updateCapacityPlan(avsAddress string, operatorSetId uint32, artifactDigest string) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.planMutex.Lock()
+	defer p.planMutex.Unlock()
 
-	// TODO: remove this and stop using configs in capacity planner. Stub AVSs using simulated structs.
-	// Get config for this AVS if available
-	config, ok := p.avsConfigs[avsAddress]
-
-	// Determine target count
-	targetCount := 1 // Default to 1
-	if ok && config.WorkerCount > 0 {
-		targetCount = config.WorkerCount
-	}
-
+	targetCount := 1
 	// Create artifact version
 	artifactVersion := &ArtifactVersion{
 		AvsAddress:    avsAddress,
