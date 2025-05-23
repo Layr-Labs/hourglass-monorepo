@@ -122,9 +122,23 @@ func (oc *OperatorConfig) Validate() error {
 	return nil
 }
 
+// SigningKey represents the signing key configuration for the operator.
+// Order of precedence for signing keys: keystore string, keystore file
 type SigningKey struct {
-	Keystore string `json:"keystore"`
-	Password string `json:"password"`
+	Keystore     string `json:"keystore"`
+	KeystoreFile string `json:"keystoreFile"`
+	Password     string `json:"password"`
+}
+
+func (sk *SigningKey) Validate() error {
+	var allErrors field.ErrorList
+	if sk.Keystore == "" && sk.KeystoreFile == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("keystore"), "keystore or keystoreFile is required"))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type SigningKeys struct {
@@ -135,6 +149,9 @@ func (sk *SigningKeys) Validate() error {
 	var allErrors field.ErrorList
 	if sk.BLS == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("bls"), "bls is required"))
+	}
+	if err := sk.BLS.Validate(); err != nil {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("bls"), sk.BLS, err.Error()))
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()

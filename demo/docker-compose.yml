@@ -19,6 +19,7 @@ services:
       - "custom-network"
     volumes:
       - .:/ponos-config
+      - ../ponos/testKeys:/ponos-config/testKeys
       - /var/run/docker.sock:/var/run/docker.sock # required for DinD
   aggregator:
     # image: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass:v0.1.0_a14a58e
@@ -37,6 +38,7 @@ services:
       - "/ponos-config/aggregator-chain.yaml"
     volumes:
       - .:/ponos-config
+      - ../ponos/testKeys:/ponos-config/testKeys
 networks:
   hourglass-demo:
     driver: bridge
