@@ -1,4 +1,4 @@
-.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config generate-bls-params register-operator create-task 
+.PHONY: deploy-task-mailbox deploy-artifact-registry deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config generate-bls-params register-operator create-task
 
 # Build
 build:
@@ -57,6 +57,7 @@ create-task:
 help:
 	@echo "Available commands:"
 	@echo "  make deploy-task-mailbox    - Deploy Task Mailbox"
+	@echo "  make deploy-avs-artifact-registry    - Deploy Artifact Registry"
 	@echo "  make deploy-avs-l1-contracts AVS_ADDRESS=0x... - Deploy AVS L1 Contracts"
 	@echo "  make setup-avs-l1 TASK_AVS_REGISTRAR_ADDRESS=0x... - Setup AVS on L1"
 	@echo "  make deploy-avs-l2-contracts - Deploy AVS L2 Contracts"

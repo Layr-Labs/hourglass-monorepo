@@ -225,14 +225,14 @@ func (a *Aggregator) initializePollers() error {
 }
 
 func InitializeContractCaller(
-	chain *aggregatorConfig.Chain,
+	chain *config.Chain,
 	privateKey string,
 	contractStore contractStore.IContractStore,
 	avsRegistrarAddress string,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
 	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   chain.RpcURL,
+		BaseUrl:   chain.RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, logger)
 

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
@@ -24,7 +26,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"time"
 )
 
 var runCmd = &cobra.Command{
@@ -80,14 +81,49 @@ var runCmd = &cobra.Command{
 		// Allow overriding contracts from the runtime config
 		if Config.OverrideContracts != nil {
 			if Config.OverrideContracts.TaskMailbox != nil && len(Config.OverrideContracts.TaskMailbox.Contract) > 0 {
+				l.Sugar().Infow("Processing TaskMailbox override",
+					zap.Any("chainIds", Config.OverrideContracts.TaskMailbox.ChainIds),
+				)
 				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.TaskMailbox.Contract)
 				if err != nil {
 					return fmt.Errorf("failed to load override contract: %w", err)
 				}
+				l.Sugar().Infow("Loaded override contract",
+					zap.String("name", overrideContract.Name),
+					zap.String("address", overrideContract.Address),
+				)
 				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.TaskMailbox.ChainIds, overrideContract); err != nil {
 					return fmt.Errorf("failed to override contract: %w", err)
 				}
 			}
+			if Config.OverrideContracts.AVSArtifactRegistry != nil && len(Config.OverrideContracts.AVSArtifactRegistry.Contract) > 0 {
+				l.Sugar().Infow("Processing AVSArtifactRegistry override",
+					zap.Any("chainIds", Config.OverrideContracts.AVSArtifactRegistry.ChainIds),
+				)
+				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.AVSArtifactRegistry.Contract)
+				if err != nil {
+					return fmt.Errorf("failed to load override contract: %w", err)
+				}
+				l.Sugar().Infow("Loaded override contract",
+					zap.String("name", overrideContract.Name),
+					zap.String("address", overrideContract.Address),
+				)
+				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.AVSArtifactRegistry.ChainIds, overrideContract); err != nil {
+					return fmt.Errorf("failed to override contract: %w", err)
+				}
+			}
+		} else {
+			l.Sugar().Infow("No override contracts config found")
+		}
+
+		// Log all contracts after overrides
+		l.Sugar().Infow("Listing all contracts after overrides:")
+		for _, c := range imContractStore.ListContracts() {
+			l.Sugar().Infow("Contract",
+				zap.String("name", c.Name),
+				zap.String("address", c.Address),
+				zap.Uint64("chainId", uint64(c.ChainId)),
+			)
 		}
 
 		var pdf peering.IPeeringDataFetcher
@@ -111,10 +147,18 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("task mailbox contract not found")
 			}
 
+			artifactRegistryContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
+				return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_ArtifactRegistry
+			})
+			if artifactRegistryContract == nil {
+				return fmt.Errorf("artifact registry contract not found")
+			}
+
 			cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-				PrivateKey:          "",
-				AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
-				TaskMailboxAddress:  mailboxContract.Address,
+				PrivateKey:                 "",
+				AVSRegistrarAddress:        Config.AvsPerformers[0].AVSRegistrarAddress,
+				AVSArtifactRegistryAddress: artifactRegistryContract.Address,
+				TaskMailboxAddress:         mailboxContract.Address,
 			}, ethereumClient, l)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)
@@ -123,7 +167,7 @@ var runCmd = &cobra.Command{
 			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf, imContractStore)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))

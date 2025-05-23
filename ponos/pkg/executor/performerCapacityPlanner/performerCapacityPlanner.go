@@ -46,11 +46,9 @@ func NewPerformerCapacityPlanner(
 	eventsChan chan *chainPoller.LogWithBlock,
 	avsPerformersConfig []*avsPerformer.AvsPerformerConfig,
 ) *PerformerCapacityPlanner {
-	// Create a map of AVS address to config for quick lookup
 	configMap := make(map[string]*avsPerformer.AvsPerformerConfig)
 	for _, config := range avsPerformersConfig {
-		avsAddress := strings.ToLower(config.AvsAddress)
-		configMap[avsAddress] = config
+		configMap[config.AvsAddress] = config
 	}
 
 	return &PerformerCapacityPlanner{
@@ -319,7 +317,8 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 
 	// Process each operator set to identify relevant AVSs
 	for _, operatorSet := range operatorSets {
-		avsAddress := strings.ToLower(operatorSet.Avs.String())
+		//avsAddress := strings.ToLower(operatorSet.Avs.String())
+		avsAddress := operatorSet.Avs.String()
 		operatorSetId := operatorSet.Id
 
 		// Query the TaskMailbox to determine if this is a relevant AVS

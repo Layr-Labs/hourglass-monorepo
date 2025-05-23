@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
@@ -14,9 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
@@ -68,6 +68,7 @@ func NewExecutorWithRpcServer(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	contractStore contractStore.IContractStore,
 ) (*Executor, error) {
 	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 		GrpcPort: port,
@@ -76,7 +77,7 @@ func NewExecutorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signer, peeringFetcher), nil
+	return NewExecutor(config, rpc, logger, signer, peeringFetcher, contractStore), nil
 }
 
 func NewExecutor(
@@ -85,6 +86,7 @@ func NewExecutor(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	contractStore contractStore.IContractStore,
 ) *Executor {
 	return &Executor{
 		logger:          logger,
@@ -93,6 +95,7 @@ func NewExecutor(
 		signer:          signer,
 		inflightTasks:   &sync.Map{},
 		peeringFetcher:  peeringFetcher,
+		contractStore:   contractStore,
 		chainEventsChan: make(chan *chainPoller.LogWithBlock, 10000),
 	}
 }
@@ -100,27 +103,16 @@ func NewExecutor(
 func (e *Executor) Initialize() error {
 	e.logger.Sugar().Infow("Initializing executor...")
 
-	// Load contracts
-	err := e.loadContracts()
-	if err != nil {
-		return err
-	}
-
 	// Initialize transaction log parser
 	e.transactionLogParser = transactionLogParser.NewTransactionLogParser(e.contractStore, e.logger)
 	var avsArtifactRegistryAddress string
-	chain := e.config.L1Chain
-	if chain.Simulation != nil && chain.Simulation.Enabled {
-		avsArtifactRegistryAddress = e.config.AvsArtifactRegistry
-	} else {
-		avsArtifactRegistryContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
-			return strings.ToLower(c.Name) == strings.ToLower(avsArtifactRegistry)
-		})
-		avsArtifactRegistryAddress = avsArtifactRegistryContract.Address
-		if avsArtifactRegistryAddress == "" {
-			return fmt.Errorf("could not find avs artifact registry address")
-		}
+	avsArtifactRegistryContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
+		return strings.ToLower(c.Name) == strings.ToLower(config.ContractName_ArtifactRegistry)
+	})
+	if avsArtifactRegistryContract == nil {
+		return fmt.Errorf("could not find avs artifact registry contract")
 	}
+	avsArtifactRegistryAddress = avsArtifactRegistryContract.Address
 
 	// Initialize Ethereum clients
 	e.ethereumClient = ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -129,6 +121,7 @@ func (e *Executor) Initialize() error {
 	}, e.logger)
 
 	// Initialize contract callers
+	var err error
 	e.contractCaller, err = e.initializeContractCaller(avsArtifactRegistryAddress)
 	if err != nil {
 		return fmt.Errorf("failed to initialize contract callers: %w", err)
@@ -196,38 +189,19 @@ func (e *Executor) Initialize() error {
 	return nil
 }
 
-func (e *Executor) loadContracts() error {
-	// Load the core contracts
-	var coreContracts []*contracts.Contract
-	var err error
-
-	if len(e.config.Contracts) > 0 {
-		e.logger.Sugar().Infow("Loading core contracts from runtime config")
-		coreContracts, err = eigenlayer.LoadContractsFromRuntime(string(e.config.Contracts))
-		if err != nil {
-			return fmt.Errorf("failed to load core contracts from runtime: %w", err)
-		}
-	} else {
-		e.logger.Sugar().Infow("Loading core contracts from embedded config")
-		coreContracts, err = eigenlayer.LoadContracts()
-		if err != nil {
-			return fmt.Errorf("failed to load core contracts: %w", err)
-		}
-	}
-
-	// Create the contract store
-	e.contractStore = inMemoryContractStore.NewInMemoryContractStore(coreContracts, e.logger)
-
-	// Create the transaction log parser
-	e.transactionLogParser = transactionLogParser.NewTransactionLogParser(e.contractStore, e.logger)
-
-	return nil
-}
-
 func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (*caller.ContractCaller, error) {
 	e.logger.Sugar().Infow("Initializing contract caller...")
 
 	chain := e.config.L1Chain
+
+	// Get TaskMailbox address from contract store
+	taskMailboxContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
+		return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
+	})
+	if taskMailboxContract == nil {
+		return nil, fmt.Errorf("TaskMailbox contract not found for chain %d", chain.ChainId)
+	}
+
 	// Get contract addresses
 	ethereumContractCaller, err := e.ethereumClient.GetEthereumContractCaller()
 	if err != nil {
@@ -238,7 +212,9 @@ func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (
 	// Create contract caller
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:                 e.config.Operator.OperatorPrivateKey,
+		AVSRegistrarAddress:        e.config.AvsPerformers[0].AVSRegistrarAddress, // Using first AVS performer's registrar
 		AVSArtifactRegistryAddress: avsArtifactRegistryAddress,
+		TaskMailboxAddress:         taskMailboxContract.Address,
 	}, ethereumContractCaller, e.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create contract caller: %w", err)
@@ -247,6 +223,8 @@ func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (
 	e.logger.Sugar().Infow("Initialized contract caller for chain",
 		"chainId", chain.ChainId,
 		"chainName", chain.Name,
+		"taskMailboxAddress", taskMailboxContract.Address,
+		"avsArtifactRegistryAddress", avsArtifactRegistryAddress,
 	)
 
 	return cc, nil

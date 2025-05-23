@@ -32,11 +32,6 @@ type ExecutorConfig struct {
 	// Chains configuration
 	L1Chain *config.Chain `json:"l1Chain" yaml:"l1Chain"`
 
-	// Contract addresses for artifact registry
-	AvsArtifactRegistry string `json:"avsArtifactRegistry" yaml:"avsArtifactRegistry"`
-	// Contract addresses for avs registrar
-	AvsRegistrarAddress string `json:"avsRegistrarAddress" yaml:"avsRegistrarAddress"`
-
 	Contracts         json.RawMessage           `json:"contracts" yaml:"contracts"`
 	OverrideContracts *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
 }

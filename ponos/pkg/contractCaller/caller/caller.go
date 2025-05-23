@@ -72,15 +72,16 @@ func NewContractCaller(
 	logger.Sugar().Infow("Creating contract caller",
 		zap.String("AVSRegistrarAddress", cfg.AVSRegistrarAddress),
 		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
+		zap.String("AVSArtifactRegistryAddress", cfg.AVSArtifactRegistryAddress),
 	)
 	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
 	}
 
-	avsArtifactRegistryCaller, err := AVSArtifactRegistry.NewAVSArtifactRegistryCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
+	avsArtifactRegistryCaller, err := AVSArtifactRegistry.NewAVSArtifactRegistryCaller(common.HexToAddress(cfg.AVSArtifactRegistryAddress), ethclient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
+		return nil, fmt.Errorf("failed to create AVSArtifactRegistry caller: %w", err)
 	}
 
 	taskMailboxCaller, err := ITaskMailbox.NewITaskMailboxCaller(common.HexToAddress(cfg.TaskMailboxAddress), ethclient)

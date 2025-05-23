@@ -44,7 +44,7 @@ func (ap *AvsPerformerConfig) Validate() error {
 	if ap.Image.Registry == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("image.repository"), "image.repository is required"))
 	}
-	if ap.Image.Digest == "" {
+	if ap.Image.Tag == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("image.tag"), "image.tag is required"))
 	}
 	if ap.SigningCurve == "" {

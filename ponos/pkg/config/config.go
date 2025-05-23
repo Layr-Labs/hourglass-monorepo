@@ -2,9 +2,10 @@ package config
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"slices"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 type ChainId uint
@@ -19,16 +20,17 @@ const (
 const (
 	ContractName_AllocationManager = "AllocationManager"
 	ContractName_TaskMailbox       = "TaskMailbox"
+	ContractName_ArtifactRegistry  = "ArtifactRegistry"
 )
 
 const (
 	AVSRegistrarSimulationAddress = "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-	// TODO: add AVSArtifactRegistrySimulationAddress
 )
 
 var EthereumSimulationContracts = CoreContractAddresses{
 	AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 	TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+	ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
 }
 
 func IsL1Chain(chainId ChainId) bool {
@@ -44,6 +46,7 @@ type CoreContractAddresses struct {
 	AllocationManager string
 	DelegationManager string
 	TaskMailbox       string
+	ArtifactRegistry  string
 }
 
 var (
@@ -52,21 +55,25 @@ var (
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+			ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
 		},
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
 			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
 			TaskMailbox:       "0xtaskMailbox",
+			ArtifactRegistry:  "0xartifactRegistry",
 		},
 		ChainId_EthereumHoodi: {
 			AllocationManager: "",
 			DelegationManager: "",
 			TaskMailbox:       "0xtaskMailbox",
+			ArtifactRegistry:  "0xartifactRegistry",
 		},
 		ChainId_EthereumAnvil: {
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+			ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
 		},
 	}
 )
@@ -199,5 +206,6 @@ type OverrideContract struct {
 }
 
 type OverrideContracts struct {
-	TaskMailbox *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
+	TaskMailbox         *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
+	AVSArtifactRegistry *OverrideContract `json:"avsArtifactRegistry" yaml:"avsArtifactRegistry"`
 }

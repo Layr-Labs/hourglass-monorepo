@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -103,16 +104,16 @@ var runCmd = &cobra.Command{
 				OperatorPeers: simulatedPeers,
 			}, log)
 		} else {
-			l1Chain := util.Find(Config.Chains, func(c *aggregatorConfig.Chain) bool {
+			l1Chain := util.Find(Config.Chains, func(c *config.Chain) bool {
 				return c.ChainId == Config.L1ChainId
 			})
 			if l1Chain == nil {
 				return fmt.Errorf("l1 chain not found in config")
 			}
 
-			cc, err := aggregator.InitializeContractCaller(&aggregatorConfig.Chain{
+			cc, err := aggregator.InitializeContractCaller(&config.Chain{
 				ChainId: l1Chain.ChainId,
-				RpcURL:  l1Chain.RpcUrl,
+				RpcUrl:  l1Chain.RpcUrl,
 			}, "", imContractStore, Config.Avss[0].AVSRegistrarAddress, log)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)
