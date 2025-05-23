@@ -45,6 +45,7 @@ type ChainConfig struct {
 	AppAccountPrivateKey       string `json:"appAccountPk"`
 	MailboxContractAddress     string `json:"mailboxContractAddress"`
 	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
+	ArtifactRegistryAddress    string `json:"artifactRegistryAddress"`
 	OperatorAccountPrivateKey  string `json:"operatorAccountPk"`
 	OperatorAccountAddress     string `json:"operatorAccountAddress"`
 	ExecOperatorAccountPk      string `json:"execOperatorAccountPk"`

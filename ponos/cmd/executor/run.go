@@ -96,11 +96,11 @@ var runCmd = &cobra.Command{
 					return fmt.Errorf("failed to override contract: %w", err)
 				}
 			}
-			if Config.OverrideContracts.AVSArtifactRegistry != nil && len(Config.OverrideContracts.AVSArtifactRegistry.Contract) > 0 {
-				l.Sugar().Infow("Processing AVSArtifactRegistry override",
-					zap.Any("chainIds", Config.OverrideContracts.AVSArtifactRegistry.ChainIds),
+			if Config.OverrideContracts.ArtifactRegistry != nil && len(Config.OverrideContracts.ArtifactRegistry.Contract) > 0 {
+				l.Sugar().Infow("Processing ArtifactRegistry override",
+					zap.Any("chainIds", Config.OverrideContracts.ArtifactRegistry.ChainIds),
 				)
-				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.AVSArtifactRegistry.Contract)
+				overrideContract, err := eigenlayer.LoadOverrideContract(Config.OverrideContracts.ArtifactRegistry.Contract)
 				if err != nil {
 					return fmt.Errorf("failed to load override contract: %w", err)
 				}
@@ -108,7 +108,7 @@ var runCmd = &cobra.Command{
 					zap.String("name", overrideContract.Name),
 					zap.String("address", overrideContract.Address),
 				)
-				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.AVSArtifactRegistry.ChainIds, overrideContract); err != nil {
+				if err := imContractStore.OverrideContract(overrideContract.Name, Config.OverrideContracts.ArtifactRegistry.ChainIds, overrideContract); err != nil {
 					return fmt.Errorf("failed to override contract: %w", err)
 				}
 			}
@@ -155,10 +155,10 @@ var runCmd = &cobra.Command{
 			}
 
 			cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-				PrivateKey:                 "",
-				AVSRegistrarAddress:        Config.AvsPerformers[0].AVSRegistrarAddress,
-				AVSArtifactRegistryAddress: artifactRegistryContract.Address,
-				TaskMailboxAddress:         mailboxContract.Address,
+				PrivateKey:              "",
+				AVSRegistrarAddress:     Config.AvsPerformers[0].AVSRegistrarAddress,
+				ArtifactRegistryAddress: artifactRegistryContract.Address,
+				TaskMailboxAddress:      mailboxContract.Address,
 			}, ethereumClient, l)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)

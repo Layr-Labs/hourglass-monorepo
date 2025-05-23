@@ -11,7 +11,7 @@ import (
 
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/AVSArtifactRegistry"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ArtifactRegistry"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -31,15 +31,15 @@ import (
 )
 
 type ContractCallerConfig struct {
-	PrivateKey                 string
-	AVSRegistrarAddress        string
-	TaskMailboxAddress         string
-	AVSArtifactRegistryAddress string
+	PrivateKey              string
+	AVSRegistrarAddress     string
+	TaskMailboxAddress      string
+	ArtifactRegistryAddress string
 }
 
 type ContractCaller struct {
 	avsRegistrarCaller          *ITaskAVSRegistrar.ITaskAVSRegistrarCaller
-	avsArtifactRegistryCaller   *AVSArtifactRegistry.AVSArtifactRegistryCaller
+	artifactRegistryCaller      *ArtifactRegistry.ArtifactRegistryCaller
 	taskMailboxCaller           *ITaskMailbox.ITaskMailboxCaller
 	taskMailboxTransactor       *ITaskMailbox.ITaskMailboxTransactor
 	allocationManagerCaller     *IAllocationManager.IAllocationManagerCaller
@@ -72,16 +72,16 @@ func NewContractCaller(
 	logger.Sugar().Infow("Creating contract caller",
 		zap.String("AVSRegistrarAddress", cfg.AVSRegistrarAddress),
 		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
-		zap.String("AVSArtifactRegistryAddress", cfg.AVSArtifactRegistryAddress),
+		zap.String("ArtifactRegistryAddress", cfg.ArtifactRegistryAddress),
 	)
 	avsRegistrarCaller, err := ITaskAVSRegistrar.NewITaskAVSRegistrarCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
 	}
 
-	avsArtifactRegistryCaller, err := AVSArtifactRegistry.NewAVSArtifactRegistryCaller(common.HexToAddress(cfg.AVSArtifactRegistryAddress), ethclient)
+	artifactRegistryCaller, err := ArtifactRegistry.NewArtifactRegistryCaller(common.HexToAddress(cfg.ArtifactRegistryAddress), ethclient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AVSArtifactRegistry caller: %w", err)
+		return nil, fmt.Errorf("failed to create ArtifactRegistry caller: %w", err)
 	}
 
 	taskMailboxCaller, err := ITaskMailbox.NewITaskMailboxCaller(common.HexToAddress(cfg.TaskMailboxAddress), ethclient)
@@ -120,7 +120,7 @@ func NewContractCaller(
 
 	return &ContractCaller{
 		avsRegistrarCaller:          avsRegistrarCaller,
-		avsArtifactRegistryCaller:   avsArtifactRegistryCaller,
+		artifactRegistryCaller:      artifactRegistryCaller,
 		taskMailboxCaller:           taskMailboxCaller,
 		taskMailboxTransactor:       taskMailboxTransactor,
 		allocationManagerCaller:     allocationManagerCaller,
@@ -289,9 +289,9 @@ func (cc *ContractCaller) GetRegisteredSets(operator string) ([]IAllocationManag
 	return cc.allocationManagerCaller.GetRegisteredSets(&bind.CallOpts{}, operatorAddr)
 }
 
-func (cc *ContractCaller) GetLatestArtifact(avsAddress string, operatorSetId string) (AVSArtifactRegistry.AVSArtifactRegistryStorageArtifact, error) {
+func (cc *ContractCaller) GetLatestArtifact(avsAddress string, operatorSetId string) (ArtifactRegistry.ArtifactRegistryStorageArtifact, error) {
 	avsAddr := common.HexToAddress(avsAddress)
-	return cc.avsArtifactRegistryCaller.GetLatestArtifact0(&bind.CallOpts{}, avsAddr, []byte(operatorSetId))
+	return cc.artifactRegistryCaller.GetLatestArtifact0(&bind.CallOpts{}, avsAddr, []byte(operatorSetId))
 }
 
 func (cc *ContractCaller) GetOperatorSetMembersWithPeering(

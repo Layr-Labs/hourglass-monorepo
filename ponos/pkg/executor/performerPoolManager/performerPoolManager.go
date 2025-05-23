@@ -3,7 +3,6 @@ package performerPoolManager
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,7 +66,7 @@ func (p *PerformerPoolManager) Initialize() error {
 
 	// Create performer pools for each AVS
 	for _, avsConfig := range p.config.AvsPerformers {
-		avsAddress := strings.ToLower(avsConfig.AvsAddress)
+		avsAddress := avsConfig.AvsAddress
 
 		// Create pool
 		pool := NewPerformerPool(

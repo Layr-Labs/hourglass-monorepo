@@ -3,9 +3,9 @@ pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {AVSArtifactRegistry} from "../../src/core/AVSArtifactRegistry.sol";
+import {ArtifactRegistry} from "../../src/core/ArtifactRegistry.sol";
 
-contract DeployAVSArtifactRegistry is Script {
+contract DeployArtifactRegistry is Script {
     function setUp() public {}
 
     function run() public {
@@ -13,12 +13,12 @@ contract DeployAVSArtifactRegistry is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOYER");
         address deployer = vm.addr(deployerPrivateKey);
 
-        // Deploy the AVSArtifactRegistry contract
+        // Deploy the ArtifactRegistry contract
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        AVSArtifactRegistry avsArtifactRegistry = new AVSArtifactRegistry();
-        console.log("AVSArtifactRegistry deployed to:", address(avsArtifactRegistry));
+        ArtifactRegistry artifactRegistry = new ArtifactRegistry();
+        console.log("ArtifactRegistry deployed to:", address(artifactRegistry));
 
         vm.stopBroadcast();
     }

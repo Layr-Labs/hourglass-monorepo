@@ -5,7 +5,7 @@ import (
 	"math/big"
 
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/AVSArtifactRegistry"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ArtifactRegistry"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
@@ -37,7 +37,7 @@ type IContractCaller interface {
 
 	GetRegisteredSets(operator string) ([]IAllocationManager.OperatorSet, error)
 
-	GetLatestArtifact(avsAddress string, operatorSetId string) (AVSArtifactRegistry.AVSArtifactRegistryStorageArtifact, error)
+	GetLatestArtifact(avsAddress string, operatorSetId string) (ArtifactRegistry.ArtifactRegistryStorageArtifact, error)
 
 	GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
 

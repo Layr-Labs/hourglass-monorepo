@@ -68,8 +68,6 @@ func (p *PerformerCapacityPlanner) GetCapacityPlan(avsAddress string) (*Performe
 	p.planMutex.RLock()
 	defer p.planMutex.RUnlock()
 
-	avsAddress = strings.ToLower(avsAddress)
-
 	// Check if we have a capacity plan for this AVS
 	if plan, exists := p.capacityPlans[avsAddress]; exists {
 		return plan, nil

@@ -18,7 +18,7 @@ deploy-task-mailbox:
 
 # Deploy Artifact Registry
 deploy-artifact-registry:
-	forge script script/local/DeployAVSArtifactRegistry.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
+	forge script script/local/DeployArtifactRegistry.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
 # Deploy AVS L1 Contracts
 deploy-avs-l1-contracts:

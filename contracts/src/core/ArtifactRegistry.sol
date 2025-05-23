@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {AVSArtifactRegistryStorage} from "./AVSArtifactRegistryStorage.sol";
+import {ArtifactRegistryStorage} from "./ArtifactRegistryStorage.sol";
 
-contract AVSArtifactRegistry is AVSArtifactRegistryStorage {
+contract ArtifactRegistry is ArtifactRegistryStorage {
     /// @notice Event emitted when a new artifact is published
     event PublishedArtifact(
         address indexed avs,

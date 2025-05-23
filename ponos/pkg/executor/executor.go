@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-const avsArtifactRegistry = "AVSArtifactRegistry"
+const artifactRegistry = "ArtifactRegistry"
 
 type Executor struct {
 	logger        *zap.Logger
@@ -105,14 +105,14 @@ func (e *Executor) Initialize() error {
 
 	// Initialize transaction log parser
 	e.transactionLogParser = transactionLogParser.NewTransactionLogParser(e.contractStore, e.logger)
-	var avsArtifactRegistryAddress string
-	avsArtifactRegistryContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
+	var artifactRegistryAddress string
+	artifactRegistryContract := util.Find(e.contractStore.ListContracts(), func(c *contracts.Contract) bool {
 		return strings.ToLower(c.Name) == strings.ToLower(config.ContractName_ArtifactRegistry)
 	})
-	if avsArtifactRegistryContract == nil {
+	if artifactRegistryContract == nil {
 		return fmt.Errorf("could not find avs artifact registry contract")
 	}
-	avsArtifactRegistryAddress = avsArtifactRegistryContract.Address
+	artifactRegistryAddress = artifactRegistryContract.Address
 
 	// Initialize Ethereum clients
 	e.ethereumClient = ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -122,7 +122,7 @@ func (e *Executor) Initialize() error {
 
 	// Initialize contract callers
 	var err error
-	e.contractCaller, err = e.initializeContractCaller(avsArtifactRegistryAddress)
+	e.contractCaller, err = e.initializeContractCaller(artifactRegistryAddress)
 	if err != nil {
 		return fmt.Errorf("failed to initialize contract callers: %w", err)
 	}
@@ -143,7 +143,7 @@ func (e *Executor) Initialize() error {
 		ChainId:                 chainId,
 		PollingInterval:         time.Duration(e.config.L1Chain.PollIntervalSeconds) * time.Second,
 		EigenLayerCoreContracts: e.contractStore.ListContractAddressesForChain(chainId),
-		InterestingContracts:    []string{avsArtifactRegistryAddress},
+		InterestingContracts:    []string{artifactRegistryAddress},
 	}
 
 	// Create chain poller
@@ -189,7 +189,7 @@ func (e *Executor) Initialize() error {
 	return nil
 }
 
-func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (*caller.ContractCaller, error) {
+func (e *Executor) initializeContractCaller(artifactRegistryAddress string) (*caller.ContractCaller, error) {
 	e.logger.Sugar().Infow("Initializing contract caller...")
 
 	chain := e.config.L1Chain
@@ -211,10 +211,10 @@ func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (
 
 	// Create contract caller
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:                 e.config.Operator.OperatorPrivateKey,
-		AVSRegistrarAddress:        e.config.AvsPerformers[0].AVSRegistrarAddress, // Using first AVS performer's registrar
-		AVSArtifactRegistryAddress: avsArtifactRegistryAddress,
-		TaskMailboxAddress:         taskMailboxContract.Address,
+		PrivateKey:              e.config.Operator.OperatorPrivateKey,
+		AVSRegistrarAddress:     e.config.AvsPerformers[0].AVSRegistrarAddress, // Using first AVS performer's registrar
+		ArtifactRegistryAddress: artifactRegistryAddress,
+		TaskMailboxAddress:      taskMailboxContract.Address,
 	}, ethereumContractCaller, e.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create contract caller: %w", err)
@@ -224,7 +224,7 @@ func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (
 		"chainId", chain.ChainId,
 		"chainName", chain.Name,
 		"taskMailboxAddress", taskMailboxContract.Address,
-		"avsArtifactRegistryAddress", avsArtifactRegistryAddress,
+		"artifactRegistryAddress", artifactRegistryAddress,
 	)
 
 	return cc, nil
@@ -247,6 +247,9 @@ func (e *Executor) Start(ctx context.Context) error {
 	)
 	// Start the capacity planner's event processor
 	e.capacityPlanner.Start(ctx)
+
+	// Start the pool manager to run performers
+	e.performerPoolManager.Start(ctx)
 
 	// Start chain poller
 	e.startChainPoller(ctx)

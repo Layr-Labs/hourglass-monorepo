@@ -206,6 +206,6 @@ type OverrideContract struct {
 }
 
 type OverrideContracts struct {
-	TaskMailbox         *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
-	AVSArtifactRegistry *OverrideContract `json:"avsArtifactRegistry" yaml:"avsArtifactRegistry"`
+	TaskMailbox      *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
+	ArtifactRegistry *OverrideContract `json:"artifactRegistry" yaml:"artifactRegistry"`
 }
