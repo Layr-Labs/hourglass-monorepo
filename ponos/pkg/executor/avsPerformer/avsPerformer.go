@@ -18,6 +18,7 @@ const (
 type PerformerImage struct {
 	Registry string
 	Digest   string
+	Tag      string
 }
 
 type AvsPerformerConfig struct {
@@ -27,6 +28,7 @@ type AvsPerformerConfig struct {
 	WorkerCount          int
 	PerformerNetworkName string
 	SigningCurve         string // bn254, bls381, etc
+	AVSRegistrarAddress  string
 }
 
 type IAvsPerformer interface {

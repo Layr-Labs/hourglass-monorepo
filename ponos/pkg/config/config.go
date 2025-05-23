@@ -98,7 +98,7 @@ type Chain struct {
 	Name                string           `json:"name" yaml:"name"`
 	Version             string           `json:"version" yaml:"version"`
 	ChainId             ChainId          `json:"chainId" yaml:"chainId"`
-	RpcURL              string           `json:"rpcUrl" yaml:"rpcUrl"`
+	RpcUrl              string           `json:"rpcUrl" yaml:"rpcUrl"`
 	PollIntervalSeconds int              `json:"pollIntervalSeconds" yaml:"pollIntervalSeconds"`
 	Simulation          *ChainSimulation `json:"simulation" yaml:"simulation"`
 }
@@ -114,14 +114,14 @@ func (c *Chain) Validate() field.ErrorList {
 	if !slices.Contains(SupportedChainIds, c.ChainId) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("chainId"), c.ChainId, "unsupported chainId"))
 	}
-	if c.RpcURL == "" {
+	if c.RpcUrl == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("rpcUrl"), "rpcUrl is required"))
 	}
 	return allErrors
 }
 
 func (c *Chain) IsAnvilRpc() bool {
-	return strings.Contains(c.RpcURL, "127.0.0.1:8545")
+	return strings.Contains(c.RpcUrl, "127.0.0.1:8545")
 }
 
 type ContractAddresses struct {

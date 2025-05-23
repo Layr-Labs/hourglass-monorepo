@@ -16,6 +16,10 @@ bindings:
 deploy-task-mailbox:
 	forge script script/local/DeployTaskMailbox.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
+# Deploy Artifact Registry
+deploy-artifact-registry:
+	forge script script/local/DeployAVSArtifactRegistry.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
+
 # Deploy AVS L1 Contracts
 deploy-avs-l1-contracts:
 	forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(AVS_ADDRESS) -vvvv

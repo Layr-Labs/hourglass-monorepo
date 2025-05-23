@@ -109,7 +109,7 @@ func (e *Executor) Initialize() error {
 	// Initialize transaction log parser
 	e.transactionLogParser = transactionLogParser.NewTransactionLogParser(e.contractStore, e.logger)
 	var avsArtifactRegistryAddress string
-	chain := e.config.Chain
+	chain := e.config.L1Chain
 	if chain.Simulation != nil && chain.Simulation.Enabled {
 		avsArtifactRegistryAddress = e.config.AvsArtifactRegistry
 	} else {
@@ -124,7 +124,7 @@ func (e *Executor) Initialize() error {
 
 	// Initialize Ethereum clients
 	e.ethereumClient = ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   e.config.Chain.RpcURL,
+		BaseUrl:   e.config.L1Chain.RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, e.logger)
 
@@ -142,12 +142,13 @@ func (e *Executor) Initialize() error {
 		e.contractStore,
 		e.contractCaller,
 		e.chainEventsChan,
+		e.config.AvsPerformers,
 	)
 
-	chainId := e.config.Chain.ChainId
+	chainId := e.config.L1Chain.ChainId
 	pollerConfig := &EVMChainPoller.EVMChainPollerConfig{
 		ChainId:                 chainId,
-		PollingInterval:         time.Duration(e.config.Chain.PollIntervalSeconds) * time.Second,
+		PollingInterval:         time.Duration(e.config.L1Chain.PollIntervalSeconds) * time.Second,
 		EigenLayerCoreContracts: e.contractStore.ListContractAddressesForChain(chainId),
 		InterestingContracts:    []string{avsArtifactRegistryAddress},
 	}
@@ -162,7 +163,7 @@ func (e *Executor) Initialize() error {
 	)
 
 	e.logger.Sugar().Infow("Created chain poller",
-		"chainId", e.config.Chain.ChainId,
+		"chainId", e.config.L1Chain.ChainId,
 		"pollingInterval", pollerConfig.PollingInterval,
 	)
 
@@ -226,7 +227,7 @@ func (e *Executor) loadContracts() error {
 func (e *Executor) initializeContractCaller(avsArtifactRegistryAddress string) (*caller.ContractCaller, error) {
 	e.logger.Sugar().Infow("Initializing contract caller...")
 
-	chain := e.config.Chain
+	chain := e.config.L1Chain
 	// Get contract addresses
 	ethereumContractCaller, err := e.ethereumClient.GetEthereumContractCaller()
 	if err != nil {

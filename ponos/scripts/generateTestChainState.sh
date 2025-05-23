@@ -89,6 +89,15 @@ mailboxContractAddress=$(cat ./broadcast/DeployTaskMailbox.s.sol/$chainId/run-la
 echo "Mailbox contract address: $mailboxContractAddress"
 
 # -----------------------------------------------------------------------------
+# Deploy AVSArtifactRegistry contract
+# -----------------------------------------------------------------------------
+echo "Deploying avs artifact registry contract..."
+forge script script/local/DeployAVSArtifactRegistry.s.sol --slow --rpc-url $RPC_URL --broadcast
+
+avsArtifactRegistryContractAddress=$(cat ./broadcast/AVSArtifactRegistry/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+echo "AVSArtifactRegistry contract address: $avsArtifactRegistryContractAddress"
+
+# -----------------------------------------------------------------------------
 # Deploy L1 avs contract
 # -----------------------------------------------------------------------------
 echo "Deploying L1 AVS contract..."
@@ -155,6 +164,7 @@ cat <<EOF > internal/testData/chain-config.json
   "execOperatorAccountPk": "$execOperatorAccountPk",
   "mailboxContractAddress": "$mailboxContractAddress",
   "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
+  "avsArtifactRegistryAddress": "$avsArtifactRegistryContractAddress",
   "taskHookAddress": "$taskHookAddress",
   "certificateVerifierAddress": "$certificateVerifierAddress",
   "destinationEnv": "anvil"

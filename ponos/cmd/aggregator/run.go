@@ -112,7 +112,7 @@ var runCmd = &cobra.Command{
 
 			cc, err := aggregator.InitializeContractCaller(&aggregatorConfig.Chain{
 				ChainId: l1Chain.ChainId,
-				RpcURL:  l1Chain.RpcURL,
+				RpcURL:  l1Chain.RpcUrl,
 			}, "", imContractStore, Config.Avss[0].AVSRegistrarAddress, log)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)

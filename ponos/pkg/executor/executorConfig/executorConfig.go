@@ -17,15 +17,6 @@ const (
 	PerformerNetworkName = "performer-network-name"
 )
 
-// ImageConfig contains configuration for container images
-type ImageConfig struct {
-	// Repository for the container image
-	Repository string `json:"repository"`
-
-	// Tag for the container image
-	Tag string `json:"tag"`
-}
-
 type SimulationConfig struct {
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
 }
@@ -39,14 +30,15 @@ type ExecutorConfig struct {
 	Simulation           *SimulationConfig                  `json:"simulation" yaml:"simulation"`
 
 	// Chains configuration
-	Chain *config.Chain `json:"chain" yaml:"chain"`
+	L1Chain *config.Chain `json:"l1Chain" yaml:"l1Chain"`
 
-	// Contract addresses for operator set and executor registration tracking
+	// Contract addresses for artifact registry
 	AvsArtifactRegistry string `json:"avsArtifactRegistry" yaml:"avsArtifactRegistry"`
+	// Contract addresses for avs registrar
+	AvsRegistrarAddress string `json:"avsRegistrarAddress" yaml:"avsRegistrarAddress"`
 
-	// Contracts JSON data for runtime configuration
-	// TODO: double check why we need this configured here. Should be able to load from contracts.json
-	Contracts []byte `json:"contracts" yaml:"contracts"`
+	Contracts         json.RawMessage           `json:"contracts" yaml:"contracts"`
+	OverrideContracts *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
@@ -69,7 +61,7 @@ func (ec *ExecutorConfig) Validate() error {
 		}
 	}
 
-	if ec.Chain == nil {
+	if ec.L1Chain == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("chain"), "a chain is required for the executor"))
 	}
 

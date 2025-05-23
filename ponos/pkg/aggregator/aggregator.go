@@ -179,7 +179,7 @@ func (a *Aggregator) initializePollers() error {
 			continue
 		}
 		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-			BaseUrl:   chain.RpcURL,
+			BaseUrl:   chain.RpcUrl,
 			BlockType: ethereum.BlockType_Latest,
 		}, a.logger)
 

@@ -41,6 +41,7 @@ avsPerformers:
   workerCount: 1
   signingCurve: "bn254"
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+  avsArtifactRegistry: "0x5fbdb2315678afecb367f032d93f642f64180aa3"
 simulation:
   simulatePeering:
     enabled: true
