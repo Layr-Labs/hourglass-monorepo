@@ -1,68 +1,96 @@
 #!/usr/bin/env bash
 
 # ethereum mainnet
-FORK_RPC_URL=https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/
+L1_FORK_RPC_URL=https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/
 
-# launc h anvil to generate accounts and dump them to a file
+anvilL1ChinId=31337
+anvilL1StartBlock=22396947
+anvilL1DumpStatePath=./anvil-l1.json
+anvilL1ConfigPath=./anvil-l1-config.json
+anvilL1RpcPort=8545
+anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
+
+
+# base mainnet
+L2_FORK_RPC_URL=https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/
+
+anvilL2ChinId=31338
+anvilL2StartBlock=30611001
+anvilL2DumpStatePath=./anvil-l2.json
+anvilL2ConfigPath=./anvil-l2-config.json
+anvilL2RpcPort=9545
+anvilL2RpcUrl="http://localhost:${anvilL2RpcPort}"
+
+seedAccounts=$(cat ./anvilConfig/accounts.json)
+
+# -----------------------------------------------------------------------------
+# Start Ethereum L1
+# -----------------------------------------------------------------------------
 anvil \
-    --fork-url $FORK_RPC_URL \
-    --dump-state ./anvil.json \
-    --config-out ./anvil-config.json \
-    --chain-id 31337 \
-    --fork-block-number 22396947 &
+    --fork-url $L1_FORK_RPC_URL \
+    --dump-state $anvilL1DumpStatePath \
+    --config-out $anvilL1DumpStatePath \
+    --chain-id $anvilL1ChinId \
+    --port $anvilL1RpcPort \
+    --block-time 2 \
+    --fork-block-number $anvilL1StartBlock &
 
-anvilPid=$!
+anvilL1Pid=$!
 sleep 3
-kill $anvilPid
 
-echo "Parsing accounts"
-# grab the first account from the anvil output
-anvilConfig=$(cat anvil-config.json | jq '.')
-anvilState=$(cat anvil.json | jq '.')
+# -----------------------------------------------------------------------------
+# Start Base L2
+# -----------------------------------------------------------------------------
+# anvil \
+#     --fork-url $L2_FORK_RPC_URL \
+#     --dump-state $anvilL2DumpStatePath \
+#     --config-out $anvilL2DumpStatePath \
+#     --chain-id $anvilL2ChinId \
+#     --fork-block-number $anvilL2StartBlock &
+# anvilL2Pid=$!
+# sleep 3
 
-cat anvil-config.json | jq '.'
+# loop over the seed accounts (json array) and fund the accounts
+numAccounts=$(echo $seedAccounts | jq '. | length')
+for i in $(seq 0 $numAccounts); do
+    account=$(echo $seedAccounts | jq -r ".[$i]")
+    address=$(echo $account | jq -r '.address')
+    echo "Funding account: $account"
+    cast rpc --rpc-url $anvilL1RpcUrl anvil_setBalance $address $(cast to-wei 10000) # 10,000 ETH
+done
 
+exit 0
 
-echo "re-loading anvil with state"
-anvil \
-    --fork-url $FORK_RPC_URL \
-    --dump-state ./anvil-final.json \
-    --config-out ./anvil-config-final.json \
-    --chain-id 31337 \
-    --fork-block-number 22396947 &
-anvilPid=$!
-
-sleep 3
 
 # deployer account
-deployAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[0]')
-deployAccountPk=$(echo $anvilConfig | jq -r '.private_keys[0]')
+deployAccountAddress=$(echo $anvilL1Config | jq -r '.available_accounts[0]')
+deployAccountPk=$(echo $anvilL1Config | jq -r '.private_keys[0]')
 export PRIVATE_KEY_DEPLOYER=$deployAccountPk
 echo "Deploy account: $deployAccountAddress"
 echo "Deploy account private key: $deployAccountPk"
 
 # avs account
-avsAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[1]')
-avsAccountPk=$(echo $anvilConfig | jq -r '.private_keys[1]')
+avsAccountAddress=$(echo $anvilL1Config | jq -r '.available_accounts[1]')
+avsAccountPk=$(echo $anvilL1Config | jq -r '.private_keys[1]')
 export PRIVATE_KEY_AVS=$avsAccountPk
 echo "AVS account: $avsAccountAddress"
 echo "AVS account private key: $avsAccountPk"
 
 # app account
-appAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[2]')
-appAccountPk=$(echo $anvilConfig | jq -r '.private_keys[2]')
+appAccountAddress=$(echo $anvilL1Config | jq -r '.available_accounts[2]')
+appAccountPk=$(echo $anvilL1Config | jq -r '.private_keys[2]')
 export PRIVATE_KEY_APP=$appAccountPk
 echo "App account: $appAccountAddress"
 echo "App account private key: $appAccountPk"
 
-operatorAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[3]')
-operatorAccountPk=$(echo $anvilConfig | jq -r '.private_keys[3]')
+operatorAccountAddress=$(echo $anvilL1Config | jq -r '.available_accounts[3]')
+operatorAccountPk=$(echo $anvilL1Config | jq -r '.private_keys[3]')
 export PRIVATE_KEY_OPERATOR=$operatorAccountPk
 echo "Operator account: $operatorAccountAddress"
 echo "Operator account private key: $operatorAccountPk"
 
-execOperatorAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[4]')
-execOperatorAccountPk=$(echo $anvilConfig | jq -r '.private_keys[4]')
+execOperatorAccountAddress=$(echo $anvilL1Config | jq -r '.available_accounts[4]')
+execOperatorAccountPk=$(echo $anvilL1Config | jq -r '.private_keys[4]')
 export PRIVATE_KEY_EXEC_OPERATOR=$appAccountPk
 echo "Exec Operator account: $execOperatorAccountAddress"
 echo "Exec Operator account private key: $execOperatorAccountPk"
@@ -122,7 +150,7 @@ forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_
 # -----------------------------------------------------------------------------
 # forge script script/CreateTask.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddress $avsAccountAddress
 
-kill $anvilPid
+kill $anvilL1Pid
 sleep 3
 
 cd ../ponos
