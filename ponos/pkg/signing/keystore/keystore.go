@@ -48,8 +48,8 @@ type Module struct {
 	Message  string                 `json:"message"`
 }
 
-// Keystore represents a BLS private key encrypted using EIP-2335 format
-type Keystore struct {
+// EIP2335Keystore represents a BLS private key encrypted using EIP-2335 format
+type EIP2335Keystore struct {
 	Crypto struct {
 		KDF      Module `json:"kdf"`
 		Checksum Module `json:"checksum"`
@@ -220,7 +220,7 @@ func decryptSecret(decryptionKey []byte, cipher Module) ([]byte, error) {
 }
 
 // GetPrivateKey decrypts and returns the private key from the keystore
-func (k *Keystore) GetPrivateKey(password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
+func (k *EIP2335Keystore) GetPrivateKey(password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
 	if k == nil {
 		return nil, fmt.Errorf("keystore data cannot be nil")
 	}
@@ -315,7 +315,7 @@ func getLegacyPrivateKey(k *LegacyKeystore, password string, scheme signing.Sign
 }
 
 // GetBN254PrivateKey gets a BN254 private key from the keystore
-func (k *Keystore) GetBN254PrivateKey(password string) (*bn254.PrivateKey, error) {
+func (k *EIP2335Keystore) GetBN254PrivateKey(password string) (*bn254.PrivateKey, error) {
 	if k == nil {
 		return nil, fmt.Errorf("keystore data cannot be nil")
 	}
@@ -353,7 +353,7 @@ func (k *Keystore) GetBN254PrivateKey(password string) (*bn254.PrivateKey, error
 }
 
 // GetBLS381PrivateKey gets a BLS381 private key from the keystore
-func (k *Keystore) GetBLS381PrivateKey(password string) (*bls381.PrivateKey, error) {
+func (k *EIP2335Keystore) GetBLS381PrivateKey(password string) (*bls381.PrivateKey, error) {
 	if k == nil {
 		return nil, fmt.Errorf("keystore data cannot be nil")
 	}
@@ -426,14 +426,14 @@ func Light() *Options {
 	}
 }
 
-// ParseKeystoreJSON takes a string representation of the keystore JSON and returns the Keystore struct
-func ParseKeystoreJSON(keystoreJSON string) (*Keystore, error) {
+// ParseKeystoreJSON takes a string representation of the keystore JSON and returns the EIP2335Keystore struct
+func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 	// Check for empty or whitespace-only input
 	if strings.TrimSpace(keystoreJSON) == "" || strings.TrimSpace(keystoreJSON) == "{}" {
 		return nil, ErrInvalidKeystoreFile
 	}
 
-	var ks Keystore
+	var ks EIP2335Keystore
 	if err := json.Unmarshal([]byte(keystoreJSON), &ks); err != nil {
 		// Try parsing as legacy format
 		var legacyKs LegacyKeystore
@@ -467,9 +467,9 @@ func ParseKeystoreJSON(keystoreJSON string) (*Keystore, error) {
 
 // convertLegacyKeystore converts a legacy keystore to the new EIP-2335 format
 // Note: This is a best-effort conversion and may not be perfect
-func convertLegacyKeystore(legacyKs *LegacyKeystore) (*Keystore, error) {
+func convertLegacyKeystore(legacyKs *LegacyKeystore) (*EIP2335Keystore, error) {
 	// Create a new keystore
-	var ks Keystore
+	var ks EIP2335Keystore
 
 	// Preserve UUID and version
 	ks.UUID = legacyKs.UUID
@@ -669,7 +669,7 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 	}
 
 	// Create the keystore structure
-	keystore := Keystore{
+	keystore := EIP2335Keystore{
 		Pubkey:      pubkeyHex,
 		UUID:        id.String(),
 		Version:     4,
@@ -707,8 +707,8 @@ func GetSigningSchemeForCurveType(curveType string) (signing.SigningScheme, erro
 	}
 }
 
-// LoadKeystoreFile loads a keystore from a file and returns the parsed Keystore struct
-func LoadKeystoreFile(filePath string) (*Keystore, error) {
+// LoadKeystoreFile loads a keystore from a file and returns the parsed EIP2335Keystore struct
+func LoadKeystoreFile(filePath string) (*EIP2335Keystore, error) {
 	// Read keystore file
 	content, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
@@ -783,7 +783,7 @@ func GenerateRandomPassword(length int) (string, error) {
 }
 
 // IsLegacyKeystore returns true if the keystore is in the legacy format
-func (k *Keystore) IsLegacyKeystore() bool {
+func (k *EIP2335Keystore) IsLegacyKeystore() bool {
 	// Check if the keystore is using legacy format
 	return k.Crypto.KDF.Function == "" ||
 		k.Crypto.KDF.Function == "legacy" ||

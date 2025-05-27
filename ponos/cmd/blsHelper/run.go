@@ -33,8 +33,8 @@ var generateOperatorData = &cobra.Command{
 		}
 
 		if ks == nil {
-			l.Sugar().Errorw("Keystore is nil", "keyfile", cfg.KeyfilePath)
-			return fmt.Errorf("Keystore is nil")
+			l.Sugar().Errorw("EIP2335Keystore is nil", "keyfile", cfg.KeyfilePath)
+			return fmt.Errorf("EIP2335Keystore is nil")
 		}
 
 		if ks.CurveType != "bn254" {

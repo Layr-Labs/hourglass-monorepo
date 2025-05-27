@@ -326,7 +326,7 @@ var testCmd = &cobra.Command{
 			curveTypeStr = Config.CurveType
 		}
 
-		l.Sugar().Infow("Keystore test successful",
+		l.Sugar().Infow("EIP2335Keystore test successful",
 			"curve", curveTypeStr,
 			"file", keyFile,
 		)

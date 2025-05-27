@@ -318,7 +318,7 @@ func TestInvalidKeystore(t *testing.T) {
 	assert.Error(t, err)
 
 	// Test with nil keystore
-	var nilKeystore *Keystore
+	var nilKeystore *EIP2335Keystore
 	_, err = nilKeystore.GetPrivateKey("password", bn254.NewScheme())
 	assert.Error(t, err)
 }
