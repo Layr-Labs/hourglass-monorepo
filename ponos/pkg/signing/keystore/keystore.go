@@ -426,6 +426,16 @@ func Light() *Options {
 	}
 }
 
+func ParseLegacyKeystoreToEIP2335Keystore(legacyJSON string) (*EIP2335Keystore, error) {
+	var legacyKs LegacyKeystore
+	if err := json.Unmarshal([]byte(legacyJSON), &legacyKs); err != nil {
+		return nil, fmt.Errorf("failed to parse legacy keystore JSON: %w", err)
+	}
+
+	// Convert legacy format to EIP-2335 format
+	return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
+}
+
 // ParseKeystoreJSON takes a string representation of the keystore JSON and returns the EIP2335Keystore struct
 func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 	// Check for empty or whitespace-only input
@@ -439,7 +449,7 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 		var legacyKs LegacyKeystore
 		if err2 := json.Unmarshal([]byte(keystoreJSON), &legacyKs); err2 == nil {
 			// Convert legacy format to new format
-			return convertLegacyKeystore(&legacyKs)
+			return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
 		}
 		return nil, fmt.Errorf("failed to parse keystore JSON: %w", err)
 	}
@@ -450,7 +460,7 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 		var legacyKs LegacyKeystore
 		if err := json.Unmarshal([]byte(keystoreJSON), &legacyKs); err == nil {
 			// Convert legacy format to new format
-			return convertLegacyKeystore(&legacyKs)
+			return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
 		}
 	}
 
@@ -465,9 +475,9 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 	return &ks, nil
 }
 
-// convertLegacyKeystore converts a legacy keystore to the new EIP-2335 format
+// convertLegacyKeystoreToEIP2335Keystore converts a legacy keystore to the new EIP-2335 format
 // Note: This is a best-effort conversion and may not be perfect
-func convertLegacyKeystore(legacyKs *LegacyKeystore) (*EIP2335Keystore, error) {
+func convertLegacyKeystoreToEIP2335Keystore(legacyKs *LegacyKeystore) (*EIP2335Keystore, error) {
 	// Create a new keystore
 	var ks EIP2335Keystore
 
