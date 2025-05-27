@@ -375,3 +375,364 @@ func Test_ParseLegacyKeystoreToEIP2335Keystore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, pk)
 }
+
+func TestDeriveKeyFromPasswordValidation(t *testing.T) {
+	password := "testpassword"
+	validSalt := hex.EncodeToString(make([]byte, 32)) // 32 bytes = 64 hex chars
+
+	t.Run("PBKDF2 Parameter Validation", func(t *testing.T) {
+		// Test valid PBKDF2 parameters
+		t.Run("Valid Parameters", func(t *testing.T) {
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"c":     float64(262144), // EIP-2335 reference value
+					"dklen": float64(32),
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.NoError(t, err)
+		})
+
+		// Test salt validation
+		t.Run("Salt Too Short", func(t *testing.T) {
+			shortSalt := hex.EncodeToString(make([]byte, 15)) // 15 bytes < 16 minimum
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  shortSalt,
+					"c":     float64(262144),
+					"dklen": float64(32),
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "salt too short")
+		})
+
+		t.Run("Salt Too Long", func(t *testing.T) {
+			longSalt := hex.EncodeToString(make([]byte, 65)) // 65 bytes > 64 maximum
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  longSalt,
+					"c":     float64(262144),
+					"dklen": float64(32),
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "salt too long")
+		})
+
+		// Test iteration count validation
+		t.Run("Iteration Count Too Low", func(t *testing.T) {
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"c":     float64(999), // < 1000 minimum
+					"dklen": float64(32),
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "iteration count too low")
+		})
+
+		t.Run("Iteration Count Too High", func(t *testing.T) {
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"c":     float64(10000001), // > 10000000 maximum
+					"dklen": float64(32),
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "iteration count too high")
+		})
+
+		// Test dklen validation
+		t.Run("Invalid dklen", func(t *testing.T) {
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"c":     float64(262144),
+					"dklen": float64(16), // Must be 32 for EIP-2335
+					"prf":   "hmac-sha256",
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid dklen: EIP-2335 requires 32 bytes")
+		})
+
+		// Test invalid PRF
+		t.Run("Invalid PRF", func(t *testing.T) {
+			kdf := Module{
+				Function: "pbkdf2",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"c":     float64(262144),
+					"dklen": float64(32),
+					"prf":   "sha256", // Invalid PRF
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "unsupported PRF")
+		})
+	})
+
+	t.Run("Scrypt Parameter Validation", func(t *testing.T) {
+		// Test valid scrypt parameters
+		t.Run("Valid Parameters", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144), // EIP-2335 reference value
+					"r":     float64(8),      // EIP-2335 reference value
+					"p":     float64(1),      // EIP-2335 reference value
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.NoError(t, err)
+		})
+
+		// Test salt validation (same as PBKDF2)
+		t.Run("Salt Too Short", func(t *testing.T) {
+			shortSalt := hex.EncodeToString(make([]byte, 15))
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  shortSalt,
+					"n":     float64(262144),
+					"r":     float64(8),
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "salt too short")
+		})
+
+		// Test N parameter validation
+		t.Run("N Parameter Too Low", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(1023), // < 1024 minimum
+					"r":     float64(8),
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "N parameter too low")
+		})
+
+		t.Run("N Parameter Too High", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(1048577), // > 1048576 maximum
+					"r":     float64(8),
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "N parameter too high")
+		})
+
+		t.Run("N Parameter Not Power of 2", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262143), // Not a power of 2
+					"r":     float64(8),
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "N parameter must be a power of 2")
+		})
+
+		// Test r parameter validation
+		t.Run("r Parameter Too Low", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144),
+					"r":     float64(0), // < 1 minimum
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "r parameter too low")
+		})
+
+		t.Run("r Parameter Too High", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144),
+					"r":     float64(33), // > 32 maximum
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "r parameter too high")
+		})
+
+		// Test p parameter validation
+		t.Run("p Parameter Too Low", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144),
+					"r":     float64(8),
+					"p":     float64(0), // < 1 minimum
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "p parameter too low")
+		})
+
+		t.Run("p Parameter Too High", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144),
+					"r":     float64(8),
+					"p":     float64(17), // > 16 maximum
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "p parameter too high")
+		})
+
+		// Test dklen validation
+		t.Run("Invalid dklen", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(262144),
+					"r":     float64(8),
+					"p":     float64(1),
+					"dklen": float64(16), // Must be 32 for EIP-2335
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid dklen: EIP-2335 requires 32 bytes")
+		})
+
+		// Test memory usage validation
+		t.Run("Excessive Memory Usage", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(1048576), // 2^20
+					"r":     float64(32),      // Max r
+					"p":     float64(1),
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "scrypt parameters would require too much memory")
+		})
+
+		// Test valid edge cases
+		t.Run("Valid Minimum Parameters", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(1024), // Minimum N
+					"r":     float64(1),    // Minimum r
+					"p":     float64(1),    // Minimum p
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.NoError(t, err)
+		})
+
+		t.Run("Valid Maximum Parameters (within memory limit)", func(t *testing.T) {
+			kdf := Module{
+				Function: "scrypt",
+				Params: map[string]interface{}{
+					"salt":  validSalt,
+					"n":     float64(65536), // 2^16, reasonable size
+					"r":     float64(8),     // Standard r
+					"p":     float64(1),     // Standard p
+					"dklen": float64(32),
+				},
+			}
+			_, err := deriveKeyFromPassword(password, kdf)
+			assert.NoError(t, err)
+		})
+	})
+
+	t.Run("Invalid KDF Function", func(t *testing.T) {
+		kdf := Module{
+			Function: "invalid-kdf",
+			Params: map[string]interface{}{
+				"salt": validSalt,
+			},
+		}
+		_, err := deriveKeyFromPassword(password, kdf)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported KDF function")
+	})
+
+	t.Run("Invalid Salt Hex", func(t *testing.T) {
+		kdf := Module{
+			Function: "pbkdf2",
+			Params: map[string]interface{}{
+				"salt":  "invalid-hex-string",
+				"c":     float64(262144),
+				"dklen": float64(32),
+				"prf":   "hmac-sha256",
+			},
+		}
+		_, err := deriveKeyFromPassword(password, kdf)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid salt")
+	})
+}

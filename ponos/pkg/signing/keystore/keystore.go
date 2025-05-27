@@ -9,11 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore/legacy"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore/legacy"
 
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
@@ -121,6 +122,27 @@ func deriveKeyFromPassword(password string, kdf Module) ([]byte, error) {
 			return nil, fmt.Errorf("unsupported PRF: %v", prf)
 		}
 
+		// EIP-2335 parameter validation for PBKDF2
+		if len(salt) < 16 {
+			return nil, fmt.Errorf("salt too short: must be at least 16 bytes, got %d", len(salt))
+		}
+		if len(salt) > 64 {
+			return nil, fmt.Errorf("salt too long: must be at most 64 bytes, got %d", len(salt))
+		}
+
+		// Iteration count validation - EIP-2335 reference value is 262144
+		if int(c) < 1000 {
+			return nil, fmt.Errorf("iteration count too low: must be at least 1000, got %d", int(c))
+		}
+		if int(c) > 10000000 {
+			return nil, fmt.Errorf("iteration count too high: must be at most 10000000, got %d", int(c))
+		}
+
+		// Derived key length validation
+		if int(dklen) != 32 {
+			return nil, fmt.Errorf("invalid dklen: EIP-2335 requires 32 bytes, got %d", int(dklen))
+		}
+
 		return pbkdf2.Key(processedPassword, salt, int(c), int(dklen), sha256.New), nil
 
 	case "scrypt":
@@ -148,6 +170,56 @@ func deriveKeyFromPassword(password string, kdf Module) ([]byte, error) {
 		dklen, ok := kdf.Params["dklen"].(float64)
 		if !ok {
 			return nil, fmt.Errorf("invalid dklen")
+		}
+
+		// EIP-2335 parameter validation for scrypt
+		if len(salt) < 16 {
+			return nil, fmt.Errorf("salt too short: must be at least 16 bytes, got %d", len(salt))
+		}
+		if len(salt) > 64 {
+			return nil, fmt.Errorf("salt too long: must be at most 64 bytes, got %d", len(salt))
+		}
+
+		// N parameter validation - must be a power of 2
+		nInt := int(n)
+		if nInt < 1024 {
+			return nil, fmt.Errorf("N parameter too low: must be at least 1024, got %d", nInt)
+		}
+		if nInt > 1048576 { // 2^20, reasonable upper bound
+			return nil, fmt.Errorf("N parameter too high: must be at most 1048576, got %d", nInt)
+		}
+		if nInt&(nInt-1) != 0 {
+			return nil, fmt.Errorf("N parameter must be a power of 2, got %d", nInt)
+		}
+
+		// r parameter validation - EIP-2335 reference value is 8
+		rInt := int(r)
+		if rInt < 1 {
+			return nil, fmt.Errorf("r parameter too low: must be at least 1, got %d", rInt)
+		}
+		if rInt > 32 {
+			return nil, fmt.Errorf("r parameter too high: must be at most 32, got %d", rInt)
+		}
+
+		// p parameter validation - EIP-2335 reference value is 1
+		pInt := int(p)
+		if pInt < 1 {
+			return nil, fmt.Errorf("p parameter too low: must be at least 1, got %d", pInt)
+		}
+		if pInt > 16 {
+			return nil, fmt.Errorf("p parameter too high: must be at most 16, got %d", pInt)
+		}
+
+		// Derived key length validation
+		if int(dklen) != 32 {
+			return nil, fmt.Errorf("invalid dklen: EIP-2335 requires 32 bytes, got %d", int(dklen))
+		}
+
+		// Memory usage validation - prevent excessive memory consumption
+		// Memory usage is approximately 128 * N * r bytes
+		memoryUsage := 128 * nInt * rInt
+		if memoryUsage > 1024*1024*1024 { // 1GB limit
+			return nil, fmt.Errorf("scrypt parameters would require too much memory: %d bytes (max 1GB)", memoryUsage)
 		}
 
 		return scrypt.Key(processedPassword, salt, int(n), int(r), int(p), int(dklen))
@@ -402,54 +474,6 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 	if ks.Pubkey == "" || ks.Crypto.KDF.Function == "" {
 		return nil, ErrInvalidKeystoreFile
 	}
-
-	return &ks, nil
-}
-
-// convertLegacyKeystoreToEIP2335Keystore converts a legacy keystore to the new EIP-2335 format
-// Note: This is a best-effort conversion and may not be perfect
-func convertLegacyKeystoreToEIP2335Keystore(legacyKs *legacy.LegacyKeystore) (*EIP2335Keystore, error) {
-	// Create a new keystore
-	var ks EIP2335Keystore
-
-	// Preserve UUID and version
-	ks.UUID = legacyKs.UUID
-	ks.Version = 4 // EIP-2335 uses version 4
-
-	// Preserve curve type
-	ks.CurveType = legacyKs.CurveType
-
-	// Set pubkey from PublicKey field
-	ks.Pubkey = legacyKs.PublicKey
-
-	// Set path (empty for legacy conversions)
-	ks.Path = ""
-
-	// Set description
-	ks.Description = "Converted from legacy keystore format"
-
-	// The following is a best-effort conversion and not guaranteed to work
-	// since we don't have access to the original password to decrypt and re-encrypt
-	// This will not be functional, but at least preserves the structure
-
-	// Set KDF
-	ks.Crypto.KDF.Function = "legacy"
-	ks.Crypto.KDF.Params = map[string]interface{}{
-		"legacy": true,
-	}
-	ks.Crypto.KDF.Message = ""
-
-	// Set Checksum
-	ks.Crypto.Checksum.Function = "legacy"
-	ks.Crypto.Checksum.Params = map[string]interface{}{}
-	ks.Crypto.Checksum.Message = "legacy"
-
-	// Set Cipher
-	ks.Crypto.Cipher.Function = "legacy"
-	ks.Crypto.Cipher.Params = map[string]interface{}{
-		"legacy": true,
-	}
-	ks.Crypto.Cipher.Message = "legacy"
 
 	return &ks, nil
 }
