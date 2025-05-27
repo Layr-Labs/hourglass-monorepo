@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore/legacy"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,7 +22,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bls381"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/google/uuid"
 )
 
@@ -64,13 +64,13 @@ type EIP2335Keystore struct {
 }
 
 // LegacyKeystore represents the old keystore format
-type LegacyKeystore struct {
-	PublicKey string              `json:"publicKey"`
-	Crypto    keystore.CryptoJSON `json:"crypto"`
-	UUID      string              `json:"uuid"`
-	Version   int                 `json:"version"`
-	CurveType string              `json:"curveType"`
-}
+// type LegacyKeystore struct {
+// 	PublicKey string              `json:"publicKey"`
+// 	Crypto    keystore.CryptoJSON `json:"crypto"`
+// 	UUID      string              `json:"uuid"`
+// 	Version   int                 `json:"version"`
+// 	CurveType string              `json:"curveType"`
+// }
 
 // processPassword prepares a password according to EIP-2335:
 // 1. Convert to NFKD representation
@@ -225,22 +225,6 @@ func (k *EIP2335Keystore) GetPrivateKey(password string, scheme signing.SigningS
 		return nil, fmt.Errorf("keystore data cannot be nil")
 	}
 
-	// If legacy format is detected, use legacy decryption
-	if k.IsLegacyKeystore() {
-		// Convert to legacy format
-		legacyKs := &LegacyKeystore{}
-		jsonData, err := json.Marshal(k)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal keystore: %w", err)
-		}
-
-		if err := json.Unmarshal(jsonData, legacyKs); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal legacy keystore: %w", err)
-		}
-
-		return getLegacyPrivateKey(legacyKs, password, scheme)
-	}
-
 	// Derive decryption key from password
 	decryptionKey, err := deriveKeyFromPassword(password, k.Crypto.KDF)
 	if err != nil {
@@ -263,36 +247,6 @@ func (k *EIP2335Keystore) GetPrivateKey(password string, scheme signing.SigningS
 	}
 
 	// If scheme is nil, try to determine the scheme from the curve type in the keystore
-	if scheme == nil && k.CurveType != "" {
-		scheme, err = GetSigningSchemeForCurveType(k.CurveType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine signing scheme: %w", err)
-		}
-	}
-
-	// If scheme is still nil, we can't proceed
-	if scheme == nil {
-		return nil, fmt.Errorf("no signing scheme provided and unable to determine from keystore")
-	}
-
-	// Recreate the private key using the provided scheme
-	privateKey, err := scheme.NewPrivateKeyFromBytes(keyBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create private key from decrypted data: %w", err)
-	}
-
-	return privateKey, nil
-}
-
-// getLegacyPrivateKey handles the old keystore format for backward compatibility
-func getLegacyPrivateKey(k *LegacyKeystore, password string, scheme signing.SigningScheme) (signing.PrivateKey, error) {
-	// Decrypt the private key using the legacy method
-	keyBytes, err := keystore.DecryptDataV3(k.Crypto, password)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
-	}
-
-	// If scheme is nil, try to determine the scheme from the curve type
 	if scheme == nil && k.CurveType != "" {
 		scheme, err = GetSigningSchemeForCurveType(k.CurveType)
 		if err != nil {
@@ -426,14 +380,18 @@ func Light() *Options {
 	}
 }
 
-func ParseLegacyKeystoreToEIP2335Keystore(legacyJSON string) (*EIP2335Keystore, error) {
-	var legacyKs LegacyKeystore
-	if err := json.Unmarshal([]byte(legacyJSON), &legacyKs); err != nil {
-		return nil, fmt.Errorf("failed to parse legacy keystore JSON: %w", err)
+func ParseLegacyKeystoreToEIP2335Keystore(legacyJSON string, password string, scheme signing.SigningScheme) (*EIP2335Keystore, error) {
+	lks, err := legacy.ParseKeystoreJSON(legacyJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse legacy keystore: %w", err)
+	}
+	pk, err := lks.GetPrivateKey(password, scheme)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get private key from legacy keystore: %w", err)
 	}
 
 	// Convert legacy format to EIP-2335 format
-	return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
+	return GenerateKeystore(pk, password, lks.CurveType, Default())
 }
 
 // ParseKeystoreJSON takes a string representation of the keystore JSON and returns the EIP2335Keystore struct
@@ -445,80 +403,16 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 
 	var ks EIP2335Keystore
 	if err := json.Unmarshal([]byte(keystoreJSON), &ks); err != nil {
-		// Try parsing as legacy format
-		var legacyKs LegacyKeystore
-		if err2 := json.Unmarshal([]byte(keystoreJSON), &legacyKs); err2 == nil {
-			// Convert legacy format to new format
-			return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
-		}
 		return nil, fmt.Errorf("failed to parse keystore JSON: %w", err)
-	}
-
-	// Check if it's a legacy format that got partially parsed as the new format
-	if ks.IsLegacyKeystore() {
-		// Try parsing as legacy format
-		var legacyKs LegacyKeystore
-		if err := json.Unmarshal([]byte(keystoreJSON), &legacyKs); err == nil {
-			// Convert legacy format to new format
-			return convertLegacyKeystoreToEIP2335Keystore(&legacyKs)
-		}
 	}
 
 	// Verify it's a valid keystore by checking required fields
 	// An EIP-2335 compliant keystore must have either:
 	// 1. A valid pubkey field (non-empty)
 	// 2. A valid crypto object with proper KDF function
-	if ks.Pubkey == "" || (ks.Crypto.KDF.Function == "" && !ks.IsLegacyKeystore()) {
+	if ks.Pubkey == "" || ks.Crypto.KDF.Function == "" {
 		return nil, ErrInvalidKeystoreFile
 	}
-
-	return &ks, nil
-}
-
-// convertLegacyKeystoreToEIP2335Keystore converts a legacy keystore to the new EIP-2335 format
-// Note: This is a best-effort conversion and may not be perfect
-func convertLegacyKeystoreToEIP2335Keystore(legacyKs *LegacyKeystore) (*EIP2335Keystore, error) {
-	// Create a new keystore
-	var ks EIP2335Keystore
-
-	// Preserve UUID and version
-	ks.UUID = legacyKs.UUID
-	ks.Version = 4 // EIP-2335 uses version 4
-
-	// Preserve curve type
-	ks.CurveType = legacyKs.CurveType
-
-	// Set pubkey from PublicKey field
-	ks.Pubkey = legacyKs.PublicKey
-
-	// Set path (empty for legacy conversions)
-	ks.Path = ""
-
-	// Set description
-	ks.Description = "Converted from legacy keystore format"
-
-	// The following is a best-effort conversion and not guaranteed to work
-	// since we don't have access to the original password to decrypt and re-encrypt
-	// This will not be functional, but at least preserves the structure
-
-	// Set KDF
-	ks.Crypto.KDF.Function = "legacy"
-	ks.Crypto.KDF.Params = map[string]interface{}{
-		"legacy": true,
-	}
-	ks.Crypto.KDF.Message = ""
-
-	// Set Checksum
-	ks.Crypto.Checksum.Function = "legacy"
-	ks.Crypto.Checksum.Params = map[string]interface{}{}
-	ks.Crypto.Checksum.Message = "legacy"
-
-	// Set Cipher
-	ks.Crypto.Cipher.Function = "legacy"
-	ks.Crypto.Cipher.Params = map[string]interface{}{
-		"legacy": true,
-	}
-	ks.Crypto.Cipher.Message = "legacy"
 
 	return &ks, nil
 }
@@ -555,9 +449,7 @@ func generateRandomSalt() ([]byte, error) {
 	return salt, nil
 }
 
-// SaveToKeystoreWithCurveType saves a private key to a keystore file using the EIP-2335 format
-// and includes the curve type in the keystore file
-func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, password, curveType string, opts *Options) error {
+func GenerateKeystore(privateKey signing.PrivateKey, password, curveType string, opts *Options) (*EIP2335Keystore, error) {
 	if opts == nil {
 		opts = Default()
 	}
@@ -565,34 +457,28 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 	// Generate UUID
 	id, err := uuid.NewRandom()
 	if err != nil {
-		return fmt.Errorf("failed to generate UUID: %w", err)
+		return nil, fmt.Errorf("failed to generate UUID: %w", err)
 	}
 
 	// Get the public key
 	publicKey := privateKey.Public()
 	pubkeyHex := hex.EncodeToString(publicKey.Bytes())
 
-	// Create the directory if it doesn't exist
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
 	// Validate the curve type
 	curveType = DetermineCurveType(curveType)
 	if curveType == "" {
-		return fmt.Errorf("invalid curve type")
+		return nil, fmt.Errorf("invalid curve type")
 	}
 
 	// Generate salt and IV
 	salt, err := generateRandomSalt()
 	if err != nil {
-		return fmt.Errorf("failed to generate salt: %w", err)
+		return nil, fmt.Errorf("failed to generate salt: %w", err)
 	}
 
 	iv, err := generateRandomIV()
 	if err != nil {
-		return fmt.Errorf("failed to generate IV: %w", err)
+		return nil, fmt.Errorf("failed to generate IV: %w", err)
 	}
 
 	// Process password
@@ -630,7 +516,7 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 		}
 		decryptionKey, err = scrypt.Key(processedPassword, salt, opts.ScryptN, opts.ScryptR, opts.ScryptP, 32)
 		if err != nil {
-			return fmt.Errorf("failed to derive key: %w", err)
+			return nil, fmt.Errorf("failed to derive key: %w", err)
 		}
 	}
 
@@ -639,7 +525,7 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 	key := decryptionKey[:16]
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return fmt.Errorf("failed to create AES cipher: %w", err)
+		return nil, fmt.Errorf("failed to create AES cipher: %w", err)
 	}
 
 	// Encrypt the private key
@@ -678,8 +564,8 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 		path = "m/1/0/0" // Simple path for BN254 (non-standard)
 	}
 
-	// Create the keystore structure
-	keystore := EIP2335Keystore{
+	// Create the ks structure
+	ks := &EIP2335Keystore{
 		Pubkey:      pubkeyHex,
 		UUID:        id.String(),
 		Version:     4,
@@ -687,12 +573,29 @@ func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, passwo
 		Path:        path,
 		Description: opts.Description,
 	}
-	keystore.Crypto.KDF = kdfModule
-	keystore.Crypto.Checksum = checksumModule
-	keystore.Crypto.Cipher = cipherModule
+	ks.Crypto.KDF = kdfModule
+	ks.Crypto.Checksum = checksumModule
+	ks.Crypto.Cipher = cipherModule
+
+	return ks, nil
+}
+
+// SaveToKeystoreWithCurveType saves a private key to a keystore file using the EIP-2335 format
+// and includes the curve type in the keystore file
+func SaveToKeystoreWithCurveType(privateKey signing.PrivateKey, filePath, password, curveType string, opts *Options) error {
+	ks, err := GenerateKeystore(privateKey, password, curveType, opts)
+	if err != nil {
+		return fmt.Errorf("failed to generate keystore: %w", err)
+	}
+
+	// Create the directory if it doesn't exist
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
 
 	// Marshal to JSON
-	content, err := json.MarshalIndent(keystore, "", "  ")
+	content, err := json.MarshalIndent(ks, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal keystore: %w", err)
 	}
@@ -790,12 +693,4 @@ func GenerateRandomPassword(length int) (string, error) {
 	}
 
 	return string(bytes), nil
-}
-
-// IsLegacyKeystore returns true if the keystore is in the legacy format
-func (k *EIP2335Keystore) IsLegacyKeystore() bool {
-	// Check if the keystore is using legacy format
-	return k.Crypto.KDF.Function == "" ||
-		k.Crypto.KDF.Function == "legacy" ||
-		(k.Pubkey == "" && k.Crypto.Cipher.Function == "")
 }

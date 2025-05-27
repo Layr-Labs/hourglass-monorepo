@@ -122,22 +122,9 @@ func TestLegacyKeystoreBackwardCompatibility(t *testing.T) {
 	err = os.WriteFile(keyPath, []byte(legacyFormat), 0600)
 	require.NoError(t, err)
 
-	// Load the legacy keystore
-	ks, err := LoadKeystoreFile(keyPath)
-	require.NoError(t, err)
-
-	// Validate it got converted to the new format
-	assert.Equal(t, 4, ks.Version)
-	assert.Equal(t, "bn254", ks.CurveType)
-	assert.Equal(t, pubKeyHex, ks.Pubkey)
-
-	// Verify the legacy indicator fields are set
-	assert.Equal(t, "legacy", ks.Crypto.KDF.Function)
-	assert.Equal(t, "legacy", ks.Crypto.Checksum.Function)
-	assert.Equal(t, "legacy", ks.Crypto.Cipher.Function)
-
-	// Verify a description was added
-	assert.Contains(t, ks.Description, "legacy")
+	// Should throw an error when trying to parse a legacy keystore with the new format
+	_, err = LoadKeystoreFile(keyPath)
+	assert.NotNil(t, err)
 }
 
 func TestPasswordProcessing(t *testing.T) {
@@ -380,7 +367,7 @@ func Test_ParseLegacyKeystoreToEIP2335Keystore(t *testing.T) {
     "curveType": "bn254"
   }
 `
-	ks, err := ParseLegacyKeystoreToEIP2335Keystore(legacyJson)
+	ks, err := ParseLegacyKeystoreToEIP2335Keystore(legacyJson, "testpass", bn254.NewScheme())
 	assert.Nil(t, err)
 	assert.NotNil(t, ks)
 
