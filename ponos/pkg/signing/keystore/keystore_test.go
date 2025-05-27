@@ -34,7 +34,7 @@ func testKeystoreWithScheme(t *testing.T, scheme signing.SigningScheme, curveTyp
 	require.NoError(t, err)
 
 	// Save key to keystore
-	err = SaveToKeystoreWithCurveType(privKey, keyPath, password, curveType, Light())
+	err = SaveToKeystoreWithCurveType(privKey, keyPath, password, curveType, Default())
 	require.NoError(t, err)
 
 	// Load keystore
@@ -174,7 +174,7 @@ func TestKeystoreBN254(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save the private key to keystore file
-	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bn254", Light())
+	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bn254", Default())
 	require.NoError(t, err)
 
 	// Load the keystore file
@@ -221,7 +221,7 @@ func TestKeystoreBLS381(t *testing.T) {
 	password := "test-password"
 
 	// Save to keystore with curve type
-	err = SaveToKeystoreWithCurveType(privateKey, keystorePath, password, "bls381", Light())
+	err = SaveToKeystoreWithCurveType(privateKey, keystorePath, password, "bls381", Default())
 	require.NoError(t, err)
 
 	// Verify the file exists
@@ -265,7 +265,7 @@ func TestKeystoreBLS381Helper(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save the private key to keystore file
-	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bls381", Light())
+	err = SaveToKeystoreWithCurveType(privateKey, keyPath, "testpassword", "bls381", Default())
 	require.NoError(t, err)
 
 	// Load the keystore file

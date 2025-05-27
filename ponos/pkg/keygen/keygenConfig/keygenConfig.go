@@ -51,7 +51,6 @@ type KeygenConfig struct {
 	Password          string `mapstructure:"password" yaml:"password" json:"password"`
 	UseKeystore       bool   `mapstructure:"use_keystore" yaml:"useKeystore" json:"useKeystore"`
 	UseRandomPassword bool   `mapstructure:"use_random_password" yaml:"useRandomPassword" json:"useRandomPassword"`
-	LightEncryption   bool   `mapstructure:"light_encryption" yaml:"lightEncryption" json:"lightEncryption"`
 }
 
 // Validate validates the config required for key generation
@@ -135,7 +134,6 @@ func NewKeygenConfig() *KeygenConfig {
 		Password:          viper.GetString(config.NormalizeFlagName(Password)),
 		UseKeystore:       viper.GetBool(config.NormalizeFlagName(UseKeystore)),
 		UseRandomPassword: viper.GetBool(config.NormalizeFlagName(UseRandomPassword)),
-		LightEncryption:   viper.GetBool(config.NormalizeFlagName(LightEncryption)),
 	}
 }
 

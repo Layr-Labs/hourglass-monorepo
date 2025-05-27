@@ -369,17 +369,6 @@ func Default() *Options {
 	}
 }
 
-// Light returns light options for keystore operations (faster but less secure)
-func Light() *Options {
-	return &Options{
-		ScryptN:     4096, // Lighter value for testing
-		ScryptP:     1,
-		ScryptR:     8,
-		KDFType:     "scrypt",
-		Description: "Light security keystore for testing",
-	}
-}
-
 func ParseLegacyKeystoreToEIP2335Keystore(legacyJSON string, password string, scheme signing.SigningScheme) (*EIP2335Keystore, error) {
 	lks, err := legacy.ParseKeystoreJSON(legacyJSON)
 	if err != nil {
@@ -413,6 +402,54 @@ func ParseKeystoreJSON(keystoreJSON string) (*EIP2335Keystore, error) {
 	if ks.Pubkey == "" || ks.Crypto.KDF.Function == "" {
 		return nil, ErrInvalidKeystoreFile
 	}
+
+	return &ks, nil
+}
+
+// convertLegacyKeystoreToEIP2335Keystore converts a legacy keystore to the new EIP-2335 format
+// Note: This is a best-effort conversion and may not be perfect
+func convertLegacyKeystoreToEIP2335Keystore(legacyKs *legacy.LegacyKeystore) (*EIP2335Keystore, error) {
+	// Create a new keystore
+	var ks EIP2335Keystore
+
+	// Preserve UUID and version
+	ks.UUID = legacyKs.UUID
+	ks.Version = 4 // EIP-2335 uses version 4
+
+	// Preserve curve type
+	ks.CurveType = legacyKs.CurveType
+
+	// Set pubkey from PublicKey field
+	ks.Pubkey = legacyKs.PublicKey
+
+	// Set path (empty for legacy conversions)
+	ks.Path = ""
+
+	// Set description
+	ks.Description = "Converted from legacy keystore format"
+
+	// The following is a best-effort conversion and not guaranteed to work
+	// since we don't have access to the original password to decrypt and re-encrypt
+	// This will not be functional, but at least preserves the structure
+
+	// Set KDF
+	ks.Crypto.KDF.Function = "legacy"
+	ks.Crypto.KDF.Params = map[string]interface{}{
+		"legacy": true,
+	}
+	ks.Crypto.KDF.Message = ""
+
+	// Set Checksum
+	ks.Crypto.Checksum.Function = "legacy"
+	ks.Crypto.Checksum.Params = map[string]interface{}{}
+	ks.Crypto.Checksum.Message = "legacy"
+
+	// Set Cipher
+	ks.Crypto.Cipher.Function = "legacy"
+	ks.Crypto.Cipher.Params = map[string]interface{}{
+		"legacy": true,
+	}
+	ks.Crypto.Cipher.Message = "legacy"
 
 	return &ks, nil
 }

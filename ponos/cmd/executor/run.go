@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -41,8 +42,9 @@ var runCmd = &cobra.Command{
 
 		l.Sugar().Infow("executor run")
 
+		// Load up the keystore
 		var err error
-		var storedKeys *keystore.Keystore
+		var storedKeys *keystore.EIP2335Keystore
 		if Config.Operator.SigningKeys.BLS.Keystore != "" {
 			storedKeys, err = keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
 			if err != nil {
