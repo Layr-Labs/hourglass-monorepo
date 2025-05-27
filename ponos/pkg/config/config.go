@@ -13,6 +13,7 @@ const (
 	ChainId_EthereumHolesky ChainId = 17000
 	ChainId_EthereumHoodi   ChainId = 560048
 	ChainId_EthereumAnvil   ChainId = 31337
+	ChainId_BaseAnvil       ChainId = 31338
 )
 
 const (
@@ -66,6 +67,9 @@ var (
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
+		ChainId_BaseAnvil: {
+			TaskMailbox: "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
+		},
 	}
 )
 
@@ -83,6 +87,7 @@ var (
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
 		ChainId_EthereumAnvil,
+		ChainId_BaseAnvil,
 	}
 )
 

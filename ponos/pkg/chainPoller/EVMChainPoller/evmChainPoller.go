@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,10 +16,9 @@ import (
 )
 
 type EVMChainPollerConfig struct {
-	ChainId                 config.ChainId
-	PollingInterval         time.Duration
-	EigenLayerCoreContracts []string
-	InterestingContracts    []string
+	ChainId              config.ChainId
+	PollingInterval      time.Duration
+	InterestingContracts []string
 }
 
 type EVMChainPoller struct {
@@ -32,13 +30,6 @@ type EVMChainPoller struct {
 	logger            *zap.Logger
 }
 
-func NewEVMChainPollerDefaultConfig(chainId config.ChainId, inboxAddr string) *EVMChainPollerConfig {
-	return &EVMChainPollerConfig{
-		ChainId:         chainId,
-		PollingInterval: 10 * time.Millisecond,
-	}
-}
-
 func NewEVMChainPoller(
 	ethClient *ethereum.Client,
 	chainEventsChan chan *chainPoller.LogWithBlock,
@@ -46,12 +37,15 @@ func NewEVMChainPoller(
 	config *EVMChainPollerConfig,
 	logger *zap.Logger,
 ) *EVMChainPoller {
-	for i, contract := range config.EigenLayerCoreContracts {
-		logger.Sugar().Infof("EigenLayerCoreContract %d: %s\n", i, contract)
+	for i, contract := range config.InterestingContracts {
+		logger.Sugar().Infof("InterestingContracts %d: %s\n", i, contract)
 	}
+	pollerLogger := logger.With(
+		zap.Uint("chainId", uint(config.ChainId)),
+	)
 	return &EVMChainPoller{
 		ethClient:       ethClient,
-		logger:          logger,
+		logger:          pollerLogger,
 		chainEventsChan: chainEventsChan,
 		logParser:       logParser,
 		config:          config,
@@ -94,11 +88,10 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
 func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {
 	logAddr := strings.ToLower(log.Address.Value())
-	if slices.Contains(ecp.config.InterestingContracts, logAddr) {
-		return true
-	}
-	if config.IsL1Chain(ecp.config.ChainId) && slices.Contains(ecp.config.EigenLayerCoreContracts, logAddr) {
-		return true
+	for _, ic := range ecp.config.InterestingContracts {
+		if strings.EqualFold(ic, logAddr) {
+			return true
+		}
 	}
 	return false
 }
@@ -197,6 +190,9 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 
 	for _, log := range logs {
 		if !ecp.isInterestingLog(log) {
+			ecp.logger.Sugar().Debugw("Skipping log as it is not interesting",
+				zap.String("transactionHash", log.TransactionHash.Value()),
+			)
 			continue
 		}
 
@@ -242,11 +238,6 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
 	contracts := make([]string, 0)
 	for _, contract := range ecp.config.InterestingContracts {
-		if contract != "" {
-			contracts = append(contracts, strings.ToLower(contract))
-		}
-	}
-	for _, contract := range ecp.config.EigenLayerCoreContracts {
 		if contract != "" {
 			contracts = append(contracts, strings.ToLower(contract))
 		}
@@ -318,7 +309,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	for contractLogs := range logResultsChan {
 		allLogs = append(allLogs, contractLogs...)
 	}
-	ecp.logger.Sugar().Debugw("All logs fetched for contracts",
+	ecp.logger.Sugar().Infow("All logs fetched for contracts",
 		zap.Uint64("blockNumber", blockNumber),
 		zap.Int("logCount", len(allLogs)),
 	)

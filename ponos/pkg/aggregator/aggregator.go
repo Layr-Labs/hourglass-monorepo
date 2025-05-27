@@ -179,10 +179,9 @@ func (a *Aggregator) initializePollers() error {
 		}, a.logger)
 
 		pCfg := &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:                 chain.ChainId,
-			PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
-			EigenLayerCoreContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
-			InterestingContracts:    []string{},
+			ChainId:              chain.ChainId,
+			PollingInterval:      time.Duration(chain.PollIntervalSeconds) * time.Second,
+			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 		}
 
 		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
@@ -305,6 +304,10 @@ func (a *Aggregator) processEventsChan(ctx context.Context) error {
 }
 
 func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
+	a.logger.Sugar().Debugw("Processing log",
+		zap.String("eventName", lwb.Log.EventName),
+		zap.Any("lwb", lwb),
+	)
 	for _, avs := range a.avsExecutionManagers {
 		if err := avs.HandleLog(lwb); err != nil {
 			a.logger.Error("Error processing log in AVS Execution Manager", zap.Error(err))

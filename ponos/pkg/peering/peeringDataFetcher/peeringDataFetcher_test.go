@@ -67,7 +67,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			l.Sugar().Fatalf("failed to get Ethereum contract caller: %v", err)
 		}
 
-		anvil, err := testUtils.StartAnvil(root, ctx)
+		anvil, err := testUtils.StartL1Anvil(root, ctx)
 		if err != nil {
 			t.Fatalf("Failed to start Anvil: %v", err)
 		}
@@ -105,7 +105,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				PrivateKey:          tc.privateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddress,
+				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 			}, ethClient, l)
 			if err != nil {
 				l.Sugar().Fatalf("failed to create contract caller: %v", err)

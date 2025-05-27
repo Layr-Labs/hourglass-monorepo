@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"net/http"
 	"os"
 	"os/exec"
@@ -43,12 +47,13 @@ type ChainConfig struct {
 	AVSAccountPrivateKey       string `json:"avsAccountPk"`
 	AppAccountAddress          string `json:"appAccountAddress"`
 	AppAccountPrivateKey       string `json:"appAccountPk"`
-	MailboxContractAddress     string `json:"mailboxContractAddress"`
-	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
 	OperatorAccountPrivateKey  string `json:"operatorAccountPk"`
 	OperatorAccountAddress     string `json:"operatorAccountAddress"`
 	ExecOperatorAccountPk      string `json:"execOperatorAccountPk"`
 	ExecOperatorAccountAddress string `json:"execOperatorAccountAddress"`
+	MailboxContractAddressL1   string `json:"mailboxContractAddressL1"`
+	MailboxContractAddressL2   string `json:"mailboxContractAddressL2"`
+	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
@@ -83,9 +88,14 @@ func ReadTenderlyChainConfig(projectRoot string) (*ChainConfig, error) {
 	return cf, nil
 }
 
-func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	// exec anvil command to start the anvil node
-	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-state.json", projectRoot))
+func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
+	forkUrl := "https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/"
+	portNumber := "8545"
+	blockTime := "2"
+	forkBlockNumber := "22396947"
+	chainId := "31337"
+
+	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
@@ -98,11 +108,64 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("path is a directory: %s", fullPath)
 	}
 
+	return StartAnvil(projectRoot, ctx, &AnvilConfig{
+		ForkUrl:         forkUrl,
+		ForkBlockNumber: forkBlockNumber,
+		BlockTime:       blockTime,
+		PortNumber:      portNumber,
+		StateFilePath:   fullPath,
+		ChainId:         chainId,
+	})
+}
+
+func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
+	forkUrl := "https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/"
+	portNumber := "9545"
+	blockTime := "2"
+	forkBlockNumber := "30611001"
+	chainId := "31338"
+
+	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if stat.IsDir() {
+		return nil, fmt.Errorf("path is a directory: %s", fullPath)
+	}
+
+	return StartAnvil(projectRoot, ctx, &AnvilConfig{
+		ForkUrl:         forkUrl,
+		ForkBlockNumber: forkBlockNumber,
+		BlockTime:       blockTime,
+		PortNumber:      portNumber,
+		StateFilePath:   fullPath,
+		ChainId:         chainId,
+	})
+}
+
+type AnvilConfig struct {
+	ForkUrl         string `json:"forkUrl"`
+	ForkBlockNumber string `json:"forkBlockNumber"`
+	BlockTime       string `json:"blockTime"`
+	PortNumber      string `json:"portNumber"`
+	StateFilePath   string `json:"stateFilePath"`
+	ChainId         string `json:"chainId"`
+}
+
+func StartAnvil(projectRoot string, ctx context.Context, cfg *AnvilConfig) (*exec.Cmd, error) {
+	// exec anvil command to start the anvil node
 	args := []string{
-		"--fork-url", "https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/",
-		"--fork-block-number", "22396947",
-		"--load-state", fullPath,
-		"--block-time", "2",
+		"--fork-url", cfg.ForkUrl,
+		"--load-state", cfg.StateFilePath,
+		"--chain-id", cfg.ChainId,
+		"--port", cfg.PortNumber,
+		"--block-time", cfg.BlockTime,
+		"--fork-block-number", cfg.ForkBlockNumber,
 		"-vvv",
 	}
 	cmd := exec.CommandContext(ctx, "anvil", args...)
@@ -113,13 +176,15 @@ func StartAnvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 		cmd.Stdout = os.Stdout
 	}
 
-	err = cmd.Start()
+	err := cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start anvil: %w", err)
 	}
 
+	rpcUrl := fmt.Sprintf("http://localhost:%s", cfg.PortNumber)
+
 	for i := 1; i < 10; i++ {
-		res, err := http.Post("http://localhost:8545", "application/json", nil)
+		res, err := http.Post(rpcUrl, "application/json", nil)
 		if err == nil && res.StatusCode == 200 {
 			fmt.Println("Anvil is up and running")
 			return cmd, nil
@@ -152,4 +217,34 @@ func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {
 	}
 
 	return abiFileData.Abi, nil
+}
+
+func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chainConfig *ChainConfig) error {
+	allContracts := cs.ListContracts()
+	existingL1MailboxContract := util.Find(allContracts, func(c *contracts.Contract) bool {
+		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_EthereumAnvil
+	})
+	if existingL1MailboxContract == nil {
+		return fmt.Errorf("existing mailbox contract not found for chain ID %d", config.ChainId_EthereumAnvil)
+	}
+	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_EthereumAnvil}, &contracts.Contract{
+		Address:     chainConfig.MailboxContractAddressL1,
+		AbiVersions: existingL1MailboxContract.AbiVersions,
+	}); err != nil {
+		return fmt.Errorf("failed to override mailbox contract: %w", err)
+	}
+
+	existingL2MailboxContract := util.Find(allContracts, func(c *contracts.Contract) bool {
+		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_BaseAnvil
+	})
+	if existingL2MailboxContract == nil {
+		return fmt.Errorf("existing mailbox contract not found for chain ID %d", config.ChainId_EthereumAnvil)
+	}
+	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_BaseAnvil}, &contracts.Contract{
+		Address:     chainConfig.MailboxContractAddressL2,
+		AbiVersions: existingL1MailboxContract.AbiVersions,
+	}); err != nil {
+		return fmt.Errorf("failed to override mailbox contract: %w", err)
+	}
+	return nil
 }
