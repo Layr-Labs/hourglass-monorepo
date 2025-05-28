@@ -45,7 +45,7 @@ func (ics *InMemoryContractStore) ListContractAddressesForChain(chainId config.C
 		return acc
 	}, make(map[string]*contracts.Contract))
 	addresses := make([]string, 0, len(chainContracts))
-	for a, _ := range chainContracts {
+	for a := range chainContracts {
 		addresses = append(addresses, a)
 	}
 	return addresses

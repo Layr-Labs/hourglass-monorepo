@@ -45,9 +45,18 @@ var runCmd = &cobra.Command{
 		}
 
 		// Load up the keystore
-		storedKeys, err := keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
-		if err != nil {
-			return fmt.Errorf("failed to parse keystore JSON: %w", err)
+		var err error
+		var storedKeys *keystore.Keystore
+		if Config.Operator.SigningKeys.BLS.Keystore != "" {
+			storedKeys, err = keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
+			if err != nil {
+				return fmt.Errorf("failed to parse keystore JSON: %w", err)
+			}
+		} else {
+			storedKeys, err = keystore.LoadKeystoreFile(Config.Operator.SigningKeys.BLS.KeystoreFile)
+			if err != nil {
+				return fmt.Errorf("failed to load keystore file: '%s' %w", Config.Operator.SigningKeys.BLS.KeystoreFile, err)
+			}
 		}
 
 		privateSigningKey, err := storedKeys.GetBN254PrivateKey(Config.Operator.SigningKeys.BLS.Password)
