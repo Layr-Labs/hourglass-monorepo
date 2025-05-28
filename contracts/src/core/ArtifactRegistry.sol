@@ -18,11 +18,11 @@ contract ArtifactRegistry is ArtifactRegistryStorage {
     /// @param digest The digest of the artifact
     function publishArtifact(
         address avs,
+        bytes calldata registryUrl,
         bytes calldata operatorSetId,
         bytes calldata digest
     ) external {
         // For this implementation, we're using a fixed registry URL
-        bytes memory registryUrl = bytes("default-registry-url");
         string memory operatorSetIdString = string(operatorSetId);
         
         // Create new artifact

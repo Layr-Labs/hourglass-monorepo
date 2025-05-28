@@ -7,11 +7,14 @@
   "appAccountPk": "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a",
   "operatorAccountAddress": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
   "operatorAccountPk": "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
+  "operatorBlsKey": "1766930458945848712261100273509802061464209929831258636215918933584086057547",
   "execOperatorAccountAddress": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
   "execOperatorAccountPk": "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
+  "execOperatorBlsKey": "11181868485052343850101585058238639890078705255150158532720870467649526122760",
   "mailboxContractAddress": "0x7306a649b451ae08781108445425bd4e8acf1e00",
-  "avsTaskRegistrarAddress": "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
-  "taskHookAddress": "0x934a389cabfb84cdb3f0260b2a4fd575b8b345a3",
-  "certificateVerifierAddress": "0xc91b651f770ed996a223a16da9ccd6f7df56c987",
+  "avsTaskRegistrarAddress": "0x934a389cabfb84cdb3f0260b2a4fd575b8b345a3",
+  "artifactRegistryAddress": "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
+  "taskHookAddress": "0xc91b651f770ed996a223a16da9ccd6f7df56c987",
+  "certificateVerifierAddress": "0xb90acf57c3bfe8e0e8215defc282b5f48b3edc74",
   "destinationEnv": "anvil"
 }

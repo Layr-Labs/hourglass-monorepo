@@ -16,6 +16,7 @@ type ArtifactVersion struct {
 	AvsAddress    string
 	OperatorSetId string
 	Digest        string
+	Tag           string
 	RegistryUrl   string
 	PublishedAt   uint64 // Block number
 }
@@ -25,9 +26,6 @@ type PerformerCapacityPlan struct {
 	// The desired number of performers
 	TargetCount int
 
-	// The digest/version this capacity plan applies to (optional)
-	Digest string
-
 	// The latest artifact version for this AVS
-	LatestArtifact *ArtifactVersion
+	Artifact *ArtifactVersion
 }

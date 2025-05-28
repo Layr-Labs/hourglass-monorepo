@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
@@ -34,16 +36,31 @@ func NewDockerContainerManager(logger *zap.Logger) (*DockerContainerManager, err
 // PullContainer pulls a container image from the specified registry
 func (m *DockerContainerManager) PullContainer(
 	ctx context.Context,
-	registryUrl string,
-	digest string,
+	artifact *performerCapacityPlanner.ArtifactVersion,
 ) (*PullResult, error) {
+	if artifact == nil {
+		return nil, fmt.Errorf("artifact cannot be nil")
+	}
+
+	// Determine what to use for pulling - prefer digest over tag
+	var identifier string
+	if artifact.Digest != "" {
+		identifier = artifact.Digest
+	} else if artifact.Tag != "" {
+		identifier = artifact.Tag
+	} else {
+		return nil, fmt.Errorf("artifact must have either digest or tag")
+	}
+
 	m.logger.Sugar().Infow("Pulling container",
-		"registryUrl", registryUrl,
-		"requestedDigest", digest,
+		"registryUrl", artifact.RegistryUrl,
+		"digest", artifact.Digest,
+		"tag", artifact.Tag,
+		"identifier", identifier,
 	)
 
 	// Format image reference
-	imageRef := formatImageReference(registryUrl, digest)
+	imageRef := formatImageReference(artifact.RegistryUrl, identifier)
 
 	// Get current OS and architecture for platform-specific pulling
 	os := runtime.GOOS
@@ -85,7 +102,7 @@ func (m *DockerContainerManager) PullContainer(
 	result := &PullResult{
 		ImageID:         inspectResult.ID,
 		Tag:             imageRef,
-		RequestedDigest: digest,
+		RequestedDigest: identifier,
 		RepoDigests:     inspectResult.RepoDigests,
 		Platform:        platformStr,
 	}
@@ -93,7 +110,7 @@ func (m *DockerContainerManager) PullContainer(
 	m.logger.Sugar().Infow("Successfully pulled container",
 		"imageId", result.ImageID,
 		"tag", result.Tag,
-		"requestedDigest", result.RequestedDigest,
+		"requestedIdentifier", result.RequestedDigest,
 		"repoDigests", result.RepoDigests,
 		"platform", result.Platform,
 	)
@@ -103,5 +120,10 @@ func (m *DockerContainerManager) PullContainer(
 
 // formatImageReference formats the registry URL and digest into a Docker image reference
 func formatImageReference(registryUrl, digest string) string {
-	return fmt.Sprintf("%s@%s", registryUrl, digest)
+	// If digest contains '@', it's already in digest format
+	if strings.Contains(digest, "@") {
+		return fmt.Sprintf("%s%s", registryUrl, digest)
+	}
+	// Otherwise, treat it as a tag
+	return fmt.Sprintf("%s:%s", registryUrl, digest)
 }

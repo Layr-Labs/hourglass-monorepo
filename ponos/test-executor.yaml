@@ -1,8 +1,8 @@
 ---
 grpcPort: 9090
 operator:
-  address: "0xexecutor123..."
-  operatorPrivateKey: "..."
+  address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+  operatorPrivateKey: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
   signingKeys:
     bls:
       keystore: |
@@ -32,16 +32,23 @@ operator:
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 31337
+  pollIntervalSeconds: 5
+#contracts:
+#  - chainId: 31337
+#    name: "TaskMailbox"
+#    address: "0x7306a649b451ae08781108445425bd4e8acf1e00"
+#  - chainId: 31337
+#    name: "ArtifactRegistry"
+#    address: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 avsPerformers:
 - image:
-    repository: "hello-performer"
-    tag: "latest"
+    registry: "ghcr.io/bdchatham/avs-release-demo"
+    tag: "4.0"
   processType: "server"
-  avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  avsAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
   workerCount: 1
   signingCurve: "bn254"
-  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-  artifactRegistry: "0x5fbdb2315678afecb367f032d93f642f64180aa3"
+  avsRegistrarAddress: "0x934a389cabfb84cdb3f0260b2a4fd575b8b345a3"
 simulation:
   simulatePeering:
     enabled: true

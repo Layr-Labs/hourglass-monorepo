@@ -136,7 +136,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 
 	containerConfg := &container.Config{
 		Hostname: hostname,
-		Image:    fmt.Sprintf("%s:%s", aps.config.Image.Registry, aps.config.Image.Digest),
+		Image:    aps.getImageReference(),
 		ExposedPorts: nat.PortSet{
 			containerPortProto: struct{}{},
 		},
@@ -398,4 +398,17 @@ func (aps *AvsPerformerServer) GetLastHealthCheckTime() time.Time {
 	aps.healthMutex.Lock()
 	defer aps.healthMutex.Unlock()
 	return aps.lastHealthCheck
+}
+
+func (aps *AvsPerformerServer) getImageReference() string {
+	if aps.config.Image.Digest != "" {
+		// If digest contains '@', it's already in digest format
+		if strings.Contains(aps.config.Image.Digest, "@") {
+			return fmt.Sprintf("%s%s", aps.config.Image.Registry, aps.config.Image.Digest)
+		}
+		// Otherwise it's a tag
+		return fmt.Sprintf("%s:%s", aps.config.Image.Registry, aps.config.Image.Digest)
+	}
+	// Fall back to tag
+	return fmt.Sprintf("%s:%s", aps.config.Image.Registry, aps.config.Image.Tag)
 }

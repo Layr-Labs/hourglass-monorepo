@@ -63,7 +63,7 @@ echo "Operator account private key: $operatorAccountPk"
 
 execOperatorAccountAddress=$(echo $anvilConfig | jq -r '.available_accounts[4]')
 execOperatorAccountPk=$(echo $anvilConfig | jq -r '.private_keys[4]')
-export PRIVATE_KEY_EXEC_OPERATOR=$appAccountPk
+export PRIVATE_KEY_EXEC_OPERATOR=$execOperatorAccountPk
 echo "Exec Operator account: $execOperatorAccountAddress"
 echo "Exec Operator account private key: $execOperatorAccountPk"
 
@@ -94,8 +94,16 @@ echo "Mailbox contract address: $mailboxContractAddress"
 echo "Deploying avs artifact registry contract..."
 forge script script/local/DeployArtifactRegistry.s.sol --slow --rpc-url $RPC_URL --broadcast
 
-artifactRegistryContractAddress=$(cat ./broadcast/ArtifactRegistry/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+artifactRegistryContractAddress=$(cat ./broadcast/DeployArtifactRegistry.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "ArtifactRegistry contract address: $artifactRegistryContractAddress"
+
+# -----------------------------------------------------------------------------
+# Publish test artifact to ArtifactRegistry
+# -----------------------------------------------------------------------------
+echo "Publishing test artifact to ArtifactRegistry..."
+TEST_IMAGE_REF="localhost:5000/latest"
+forge script script/local/PublishArtifact.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address,address,string)" "$avsAccountAddress" "$artifactRegistryContractAddress" "$TEST_IMAGE_REF"
+echo "Published test artifact: $TEST_IMAGE_REF"
 
 # -----------------------------------------------------------------------------
 # Deploy L1 avs contract
@@ -111,6 +119,37 @@ echo "L1 AVS contract address: $l1ContractAddress"
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
 forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
+
+# -----------------------------------------------------------------------------
+# Generate BLS parameters and register operators
+# -----------------------------------------------------------------------------
+echo "Generating BLS parameters for operators..."
+
+# Generate BLS params for operator (executor role)
+echo "Generating BLS params for executor operator..."
+BLS_OUTPUT=$(cd script/common/utils && go run generate_bls_params.go $operatorAccountAddress 31337 $avsTaskRegistrarAddress $(cast call $avsTaskRegistrarAddress "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $operatorAccountAddress --rpc-url $RPC_URL | head -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]') $(cast call $avsTaskRegistrarAddress "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $operatorAccountAddress --rpc-url $RPC_URL | tail -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'))
+OPERATOR_BLS_PARAMS=$(echo "$BLS_OUTPUT" | grep "PUBKEY_REGISTRATION_PARAMS=" | cut -d'=' -f2 | tr -d ' ')
+OPERATOR_BLS_KEY=$(echo "$BLS_OUTPUT" | grep "Private Key" | cut -d':' -f2 | tr -d ' ')
+
+echo "Operator BLS params: $OPERATOR_BLS_PARAMS"
+echo "Operator BLS private key: $OPERATOR_BLS_KEY"
+
+# Register operator for executor operator set (operatorSetId = 1)
+echo "Registering executor operator..."
+forge script script/local/RegisterOperator.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(bytes32,uint32,string,address,uint32,string,bytes)" "$operatorAccountPk" 7200 "ExecutorOperator" "$avsAccountAddress" 1 "127.0.0.1:8556" "$OPERATOR_BLS_PARAMS"
+
+# Generate BLS params for exec operator (aggregator role)
+echo "Generating BLS params for aggregator operator..."
+BLS_OUTPUT=$(cd script/common/utils && go run generate_bls_params.go $execOperatorAccountAddress 31337 $avsTaskRegistrarAddress $(cast call $avsTaskRegistrarAddress "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $execOperatorAccountAddress --rpc-url $RPC_URL | head -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]') $(cast call $avsTaskRegistrarAddress "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $execOperatorAccountAddress --rpc-url $RPC_URL | tail -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'))
+EXEC_OPERATOR_BLS_PARAMS=$(echo "$BLS_OUTPUT" | grep "PUBKEY_REGISTRATION_PARAMS=" | cut -d'=' -f2 | tr -d ' ')
+EXEC_OPERATOR_BLS_KEY=$(echo "$BLS_OUTPUT" | grep "Private Key" | cut -d':' -f2 | tr -d ' ')
+
+echo "Exec Operator BLS params: $EXEC_OPERATOR_BLS_PARAMS"
+echo "Exec Operator BLS private key: $EXEC_OPERATOR_BLS_KEY"
+
+# Register exec operator for aggregator operator set (operatorSetId = 0)
+echo "Registering aggregator operator..."
+forge script script/local/RegisterOperator.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(bytes32,uint32,string,address,uint32,string,bytes)" "$execOperatorAccountPk" 7200 "AggregatorOperator" "$avsAccountAddress" 0 "127.0.0.1:8555" "$EXEC_OPERATOR_BLS_PARAMS"
 
 # -----------------------------------------------------------------------------
 # Deploy L2
@@ -160,8 +199,10 @@ cat <<EOF > internal/testData/chain-config.json
   "appAccountPk": "$appAccountPk",
   "operatorAccountAddress": "$operatorAccountAddress",
   "operatorAccountPk": "$operatorAccountPk",
+  "operatorBlsKey": "$OPERATOR_BLS_KEY",
   "execOperatorAccountAddress": "$execOperatorAccountAddress",
   "execOperatorAccountPk": "$execOperatorAccountPk",
+  "execOperatorBlsKey": "$EXEC_OPERATOR_BLS_KEY",
   "mailboxContractAddress": "$mailboxContractAddress",
   "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
   "artifactRegistryAddress": "$artifactRegistryContractAddress",
@@ -169,3 +210,4 @@ cat <<EOF > internal/testData/chain-config.json
   "certificateVerifierAddress": "$certificateVerifierAddress",
   "destinationEnv": "anvil"
 }
+EOF

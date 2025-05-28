@@ -30,7 +30,7 @@ const (
 var EthereumSimulationContracts = CoreContractAddresses{
 	AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 	TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
-	ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
+	ArtifactRegistry:  "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
 }
 
 func IsL1Chain(chainId ChainId) bool {
@@ -55,7 +55,7 @@ var (
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
-			ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
+			ArtifactRegistry:  "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
 		},
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
@@ -73,7 +73,7 @@ var (
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
-			ArtifactRegistry:  "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
+			ArtifactRegistry:  "0xf4c5c29b14f0237131f7510a51684c8191f98e06",
 		},
 	}
 )

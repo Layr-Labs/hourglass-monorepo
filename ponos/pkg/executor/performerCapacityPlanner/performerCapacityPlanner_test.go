@@ -47,8 +47,7 @@ func (m *MockPerformerCapacityPlanner) GetCapacityPlan(avsAddress string) (*Perf
 	// Return a default empty plan
 	return &PerformerCapacityPlan{
 		TargetCount: 0,
-		Digest:      "",
-		LatestArtifact: &ArtifactVersion{
+		Artifact: &ArtifactVersion{
 			AvsAddress:    avsAddress,
 			OperatorSetId: "0",
 			Digest:        "",

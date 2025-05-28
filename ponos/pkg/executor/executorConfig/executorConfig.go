@@ -2,6 +2,7 @@ package executorConfig
 
 import (
 	"encoding/json"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/spf13/viper"

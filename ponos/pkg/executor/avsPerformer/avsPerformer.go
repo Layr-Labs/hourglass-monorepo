@@ -2,8 +2,9 @@ package avsPerformer
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"slices"
+
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
@@ -17,8 +18,8 @@ const (
 
 type PerformerImage struct {
 	Registry string
-	Digest   string
 	Tag      string
+	Digest   string
 }
 
 type AvsPerformerConfig struct {

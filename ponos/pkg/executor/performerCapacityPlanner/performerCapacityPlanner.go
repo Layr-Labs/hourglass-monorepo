@@ -150,7 +150,7 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 		switch arg.Name {
 		case "avs":
 			if val, ok := arg.Value.(string); ok {
-				avsAddress = strings.ToLower(val)
+				avsAddress = val
 			}
 		case "operatorSetId":
 			if val, ok := arg.Value.(string); ok {
@@ -226,7 +226,7 @@ func (p *PerformerCapacityPlanner) handlePublishedArtifact(event *chainPoller.Lo
 	}
 
 	// Update capacity plan with the new artifact and config
-	p.updateCapacityPlanWithArtifact(avsAddress, digest, artifactVersion, performerConfig)
+	p.updateCapacityPlanWithArtifact(avsAddress, artifactVersion, performerConfig)
 
 	p.logger.Sugar().Infow("Updated capacity plan with new artifact",
 		"avsAddress", avsAddress,
@@ -315,14 +315,13 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 
 	// Process each operator set to identify relevant AVSs
 	for _, operatorSet := range operatorSets {
-		//avsAddress := strings.ToLower(operatorSet.Avs.String())
 		avsAddress := operatorSet.Avs.String()
 		operatorSetId := operatorSet.Id
 
 		// Query the TaskMailbox to determine if this is a relevant AVS
 		avsConfig, err := p.chainContractCaller.GetAVSConfig(avsAddress)
 		if err != nil {
-			p.logger.Sugar().Warnw("Failed to get AVS config, skipping (might not be Hourglass AVS)",
+			p.logger.Sugar().Warnw("Failed to get AVS config, skipping",
 				"avsAddress", avsAddress,
 				"error", err)
 			continue
@@ -350,36 +349,41 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 			p.logger.Sugar().Infow("Ignoring AVS without configuration",
 				"avsAddress", avsAddress,
 				"operatorSetId", operatorSetId)
-			// TODO: add a metric
 			continue
 		}
 
 		// Get the latest artifact for this AVS and operator set
 		operatorSetIdStr := fmt.Sprintf("%d", operatorSetId)
-		var artifactDigest, registryUrl string
-
 		artifact, err := p.chainContractCaller.GetLatestArtifact(avsAddress, operatorSetIdStr)
 		if err != nil {
-			p.logger.Sugar().Warnw("No latest artifact in artifact registry",
+			p.logger.Sugar().Warnw("No latest artifact in artifact registry, using startup config",
 				"avsAddress", avsAddress,
 				"operatorSetId", operatorSetId,
-				"error", err)
-			// Continue with empty values
-		} else {
-			// Extract digest from the artifact
-			artifactDigest = string(artifact.Digest)
-			registryUrl = string(artifact.RegistryUrl)
+				"error", err,
+			)
 
+			// Create artifact version with config values
+			artifactVersion := &ArtifactVersion{
+				AvsAddress:    avsAddress,
+				OperatorSetId: operatorSetIdStr,
+				Digest:        performerConfig.Image.Digest,
+				Tag:           performerConfig.Image.Tag,
+				RegistryUrl:   performerConfig.Image.Registry,
+			}
+
+			// Update capacity plan with config-based artifact
+			p.updateCapacityPlanWithArtifact(avsAddress, artifactVersion, performerConfig)
+		} else {
 			// Create artifact version
 			artifactVersion := &ArtifactVersion{
 				AvsAddress:    avsAddress,
 				OperatorSetId: operatorSetIdStr,
-				Digest:        artifactDigest,
-				RegistryUrl:   registryUrl,
+				Digest:        string(artifact.Digest),
+				RegistryUrl:   string(artifact.RegistryUrl),
 			}
 
 			// Update capacity plan for this AVS
-			p.updateCapacityPlanWithArtifact(avsAddress, artifactDigest, artifactVersion, performerConfig)
+			p.updateCapacityPlanWithArtifact(avsAddress, artifactVersion, performerConfig)
 		}
 	}
 
@@ -402,7 +406,6 @@ func (p *PerformerCapacityPlanner) updateOperatorSets() error {
 // updateCapacityPlanWithArtifact updates a capacity plan with the given artifact
 func (p *PerformerCapacityPlanner) updateCapacityPlanWithArtifact(
 	avsAddress string,
-	digest string,
 	artifactVersion *ArtifactVersion,
 	performerConfig *avsPerformer.AvsPerformerConfig,
 ) {
@@ -411,16 +414,15 @@ func (p *PerformerCapacityPlanner) updateCapacityPlanWithArtifact(
 
 	// Create or update the plan
 	p.capacityPlans[avsAddress] = &PerformerCapacityPlan{
-		TargetCount:    1,
-		Digest:         digest,
-		LatestArtifact: artifactVersion,
+		TargetCount: 1,
+		Artifact:    artifactVersion,
 	}
 
 	p.logger.Sugar().Infow("Updated capacity plan",
 		"avsAddress", avsAddress,
 		"targetCount", 1,
-		"digest", digest,
+		"digest", artifactVersion.Digest,
+		"tag", performerConfig.Image.Tag,
 		"registryUrl", artifactVersion.RegistryUrl,
-		"image", fmt.Sprintf("%s:%s", performerConfig.Image.Registry, performerConfig.Image.Tag),
 	)
 }

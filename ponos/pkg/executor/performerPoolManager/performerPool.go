@@ -3,7 +3,7 @@ package performerPoolManager
 import (
 	"context"
 	"fmt"
-	"strings"
+	"slices"
 	"sync"
 	"time"
 
@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"go.uber.org/zap"
 )
@@ -28,15 +29,13 @@ type PerformerHealth struct {
 
 // PerformerPool manages the performers for a specific AVS
 type PerformerPool struct {
-	logger      *zap.Logger
-	networkName string
-	// TODO: likely use config for avsAddress and signingCurve
-	avsAddress     string
-	signingCurve   string
+	logger         *zap.Logger
+	networkName    string
 	performers     map[string]avsPerformer.IAvsPerformer
 	peeringFetcher peering.IPeeringDataFetcher
 	dockerClient   *client.Client
 	containerMgr   containerManager.IContainerManager
+	avsConfig      *avsPerformer.AvsPerformerConfig
 
 	// Health tracking
 	healthStatus map[string]*PerformerHealth
@@ -55,71 +54,109 @@ func NewPerformerPool(
 	return &PerformerPool{
 		logger:         logger,
 		networkName:    networkName,
-		avsAddress:     strings.ToLower(avsConfig.AvsAddress),
-		signingCurve:   avsConfig.SigningCurve,
 		performers:     make(map[string]avsPerformer.IAvsPerformer),
 		peeringFetcher: peeringFetcher,
 		dockerClient:   dockerClient,
 		containerMgr:   containerMgr,
+		avsConfig:      avsConfig,
 		healthStatus:   make(map[string]*PerformerHealth),
 	}
 }
 
+// ExecutePlan executes a capacity plan for this AVS
+func (p *PerformerPool) ExecutePlan(
+	ctx context.Context,
+	plan *performerCapacityPlanner.PerformerCapacityPlan,
+) error {
+	p.logger.Sugar().Infow("Executing capacity plan",
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
+		zap.Int("targetCount", plan.TargetCount),
+	)
+
+	healthyCount, err := p.CheckHealth(ctx)
+	if err != nil {
+		p.logger.Sugar().Errorw("Error checking health of performers",
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
+			zap.Error(err),
+		)
+	}
+
+	// Calculate the difference between healthy count and target
+	diff := plan.TargetCount - healthyCount
+
+	if diff > 0 {
+		// Need to scale up
+		return p.scaleUp(ctx, diff, plan.Artifact)
+	} else if diff < 0 {
+		// Need to scale down
+		return p.scaleDown(ctx, -diff)
+	}
+
+	// No changes needed
+	return nil
+}
+
 // createPerformer creates a new performer instance
-func (p *PerformerPool) createPerformer(ctx context.Context, performerId string, artifact *performerCapacityPlanner.ArtifactVersion) error {
+func (p *PerformerPool) createPerformer(
+	ctx context.Context,
+	performerId string,
+	artifact *performerCapacityPlanner.ArtifactVersion,
+) error {
 	// Check if performer already exists
 	if _, exists := p.performers[performerId]; exists {
 		return fmt.Errorf("performer with ID %s already exists", performerId)
 	}
 
 	// If we have a container manager and a valid artifact, pull the container first
-	var imageRegistry, imageDigest string
+	imageRegistry := p.avsConfig.Image.Registry
+	imageTag := p.avsConfig.Image.Tag
+	imageDigest := p.avsConfig.Image.Digest
 
-	if artifact != nil && artifact.RegistryUrl != "" && artifact.Digest != "" {
+	if artifact != nil && artifact.RegistryUrl != "" && (artifact.Digest != "" || artifact.Tag != "") {
 		p.logger.Sugar().Infow("Pulling container for performer",
 			"performerId", performerId,
 			"registryUrl", artifact.RegistryUrl,
 			"digest", artifact.Digest,
+			"tag", artifact.Tag,
 		)
 
-		pullResult, err := p.containerMgr.PullContainer(ctx, artifact.RegistryUrl, artifact.Digest)
+		pullResult, err := p.containerMgr.PullContainer(ctx, artifact)
 		if err != nil {
 			p.logger.Sugar().Errorw("Failed to pull container for performer",
 				"performerId", performerId,
 				"registryUrl", artifact.RegistryUrl,
 				"digest", artifact.Digest,
+				"tag", artifact.Tag,
 				"error", err,
 			)
 			return fmt.Errorf("failed to pull container: %w", err)
 		}
 
-		imageRegistry = artifact.RegistryUrl
-		imageDigest = artifact.Digest
+		// If artifact has a tag, use it; otherwise fall back to config
+		if artifact.Tag != "" {
+			imageTag = artifact.Tag
+		}
 
 		p.logger.Sugar().Infow("Successfully pulled container for performer",
 			"performerId", performerId,
 			"imageId", pullResult.ImageID,
 		)
-	} else {
-		p.logger.Sugar().Warnw("No artifact information provided for performer, using empty image details",
-			"performerId", performerId,
-		)
 	}
 
 	performer, err := serverPerformer.NewAvsPerformerServer(
 		&avsPerformer.AvsPerformerConfig{
-			AvsAddress:           p.avsAddress,
+			AvsAddress:           p.avsConfig.AvsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{Registry: imageRegistry, Digest: imageDigest},
+			Image:                avsPerformer.PerformerImage{Registry: imageRegistry, Tag: imageTag, Digest: imageDigest},
 			PerformerNetworkName: p.networkName,
-			SigningCurve:         p.signingCurve,
+			SigningCurve:         p.avsConfig.SigningCurve,
 		},
 		p.peeringFetcher,
 		p.logger,
 	)
 	if err != nil {
 		p.logger.Sugar().Errorw("Failed to create AVS performer server",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("performerId", performerId),
 			zap.Error(err),
 		)
@@ -128,7 +165,7 @@ func (p *PerformerPool) createPerformer(ctx context.Context, performerId string,
 
 	if err := performer.Initialize(ctx); err != nil {
 		p.logger.Sugar().Errorw("Failed to initialize performer",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("performerId", performerId),
 			zap.Error(err),
 		)
@@ -137,7 +174,7 @@ func (p *PerformerPool) createPerformer(ctx context.Context, performerId string,
 
 	p.performers[performerId] = performer
 
-	// Store performer health status with container ID
+	// Store performer health status with performer Id
 	p.statusMutex.Lock()
 	p.healthStatus[performerId] = &PerformerHealth{
 		ContainerId: performer.GetContainerId(),
@@ -149,53 +186,23 @@ func (p *PerformerPool) createPerformer(ctx context.Context, performerId string,
 	return nil
 }
 
-// ExecutePlan executes a capacity plan for this AVS
-func (p *PerformerPool) ExecutePlan(ctx context.Context, plan *performerCapacityPlanner.PerformerCapacityPlan) error {
-	p.logger.Sugar().Infow("Executing capacity plan",
-		zap.String("avsAddress", p.avsAddress),
-		zap.Int("targetCount", plan.TargetCount),
-		zap.String("digest", plan.Digest),
-	)
-
-	// First check health of all performers
-	healthyCount, err := p.CheckHealth(ctx)
-	if err != nil {
-		p.logger.Sugar().Errorw("Error checking health of performers",
-			zap.String("avsAddress", p.avsAddress),
-			zap.Error(err),
-		)
-		// TODO: double click on this.
-	}
-
-	// Calculate the difference between healthy count and target
-	diff := plan.TargetCount - healthyCount
-
-	if diff > 0 {
-		// Need to scale up
-		return p.scaleUp(ctx, diff, plan.LatestArtifact)
-	} else if diff < 0 {
-		// Need to scale down
-		return p.scaleDown(ctx, -diff)
-	}
-
-	// No changes needed
-	return nil
-}
-
 // CheckHealth checks health of all performers in the pool and returns the count of healthy performers
 func (p *PerformerPool) CheckHealth(ctx context.Context) (int, error) {
 	p.logger.Sugar().Debugw("Checking health of performers",
-		zap.String("avsAddress", p.avsAddress),
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
 		zap.Int("performerCount", len(p.performers)),
 	)
 
-	// Track performers that need to be recreated
-	var performersToRecreate []string
+	// Track performers that need to be removed
+	var performersToRemove []string
 	healthyCount := 0
 
 	// Check health of all existing performers
 	for id, performer := range p.performers {
-		healthy, err := p.checkPerformerHealth(ctx, id, performer)
+		// First check Docker container health
+		dockerHealthy, dockerFailingStreak := p.getDockerHealthStatus(ctx, id)
+
+		performerHealthy, err := p.checkPerformerHealth(ctx, id, performer)
 
 		p.statusMutex.Lock()
 		health := p.healthStatus[id]
@@ -205,6 +212,9 @@ func (p *PerformerPool) CheckHealth(ctx context.Context) (int, error) {
 		}
 
 		health.LastChecked = time.Now()
+
+		// Consider both Docker health and performer health
+		healthy := dockerHealthy && performerHealthy
 		health.Healthy = healthy
 
 		if healthy {
@@ -215,67 +225,94 @@ func (p *PerformerPool) CheckHealth(ctx context.Context) (int, error) {
 			health.FailureCount++
 			health.LastError = err
 			p.logger.Sugar().Warnw("Performer unhealthy",
-				zap.String("avsAddress", p.avsAddress),
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
 				zap.String("performerId", id),
 				zap.Int("failureCount", health.FailureCount),
+				zap.Int("dockerFailingStreak", dockerFailingStreak),
+				zap.Bool("dockerHealthy", dockerHealthy),
+				zap.Bool("performerHealthy", performerHealthy),
 				zap.Error(err),
 			)
 
-			// Mark for recreation if failed too many times
+			// Mark for removal if failed too many times
+			// Consider both our failure count and Docker's failing streak
 			// Hard limit of 3 failures for now, could be configurable in the future
-			if health.FailureCount >= 3 {
-				p.logger.Sugar().Warnw("Marking performer for recreation due to repeated failures",
-					zap.String("avsAddress", p.avsAddress),
+			if health.FailureCount >= 3 || dockerFailingStreak >= 3 {
+				p.logger.Sugar().Warnw("Marking performer for removal due to repeated failures",
+					zap.String("avsAddress", p.avsConfig.AvsAddress),
 					zap.String("performerId", id),
 					zap.Int("failureCount", health.FailureCount),
+					zap.Int("dockerFailingStreak", dockerFailingStreak),
 				)
-				performersToRecreate = append(performersToRecreate, id)
+				performersToRemove = append(performersToRemove, id)
 			}
 		}
 		p.statusMutex.Unlock()
 	}
 
-	// Recreate unhealthy performers
-	for _, id := range performersToRecreate {
-		// Don't count the performers we're going to recreate in the healthy count,
-		// since we'll remove them first before creating new ones
-		if err := p.recreatePerformer(ctx, id); err != nil {
-			p.logger.Sugar().Errorw("Failed to recreate unhealthy performer",
-				zap.String("avsAddress", p.avsAddress),
+	// Remove unhealthy performers
+	for _, id := range performersToRemove {
+		if err := p.removePerformer(id); err != nil {
+			p.logger.Sugar().Errorw("Failed to remove unhealthy performer",
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
 				zap.String("performerId", id),
 				zap.Error(err),
 			)
-		} else {
-			// If recreation was successful, count it as healthy
-			// It's a new performer, so we add it to the healthy count
-			healthyCount++
+			// Continue with other removals even if this one failed
 		}
 	}
 
 	return healthyCount, nil
 }
 
-// checkPerformerHealth checks if a specific performer is healthy
-func (p *PerformerPool) checkPerformerHealth(ctx context.Context, performerId string, performer avsPerformer.IAvsPerformer) (bool, error) {
-	// First check if the Docker container is still running
+// getDockerHealthStatus checks Docker container health and returns health status and failing streak
+func (p *PerformerPool) getDockerHealthStatus(ctx context.Context, performerId string) (bool, int) {
 	p.statusMutex.RLock()
 	health, ok := p.healthStatus[performerId]
 	p.statusMutex.RUnlock()
 
-	if ok && health.ContainerId != "" {
-		// Check container health via Docker API
-		if !p.isContainerHealthy(ctx, health.ContainerId) {
-			return false, fmt.Errorf("container is not running or healthy")
-		}
+	if !ok || health.ContainerId == "" {
+		return false, 0
 	}
 
-	// Then check via the performer's health check (RunTask)
+	if p.dockerClient == nil {
+		return false, 0
+	}
+
+	inspection, err := p.dockerClient.ContainerInspect(ctx, health.ContainerId)
+	if err != nil {
+		p.logger.Sugar().Warnw("Failed to inspect container for health status",
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
+			zap.String("performerId", performerId),
+			zap.String("containerId", health.ContainerId),
+			zap.Error(err),
+		)
+		return false, 0
+	}
+
+	if !inspection.State.Running {
+		return false, 0
+	}
+
+	if inspection.State.Health != nil {
+		healthy := inspection.State.Health.Status == container.Healthy ||
+			inspection.State.Health.Status == container.Starting
+		return healthy, inspection.State.Health.FailingStreak
+	}
+
+	// No health check configured, consider it healthy if running
+	return true, 0
+}
+
+// checkPerformerHealth checks if a specific performer is healthy via gRPC
+func (p *PerformerPool) checkPerformerHealth(ctx context.Context, performerId string, performer avsPerformer.IAvsPerformer) (bool, error) {
+	// Check via the performer's health check (RunTask)
 	taskCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	dummyTask := &performerTask.PerformerTask{
 		TaskID:  "health-check",
-		Avs:     p.avsAddress,
+		Avs:     p.avsConfig.AvsAddress,
 		Payload: []byte("health-check"),
 	}
 
@@ -296,18 +333,19 @@ func (p *PerformerPool) isContainerHealthy(ctx context.Context, containerId stri
 	inspection, err := p.dockerClient.ContainerInspect(ctx, containerId)
 	if err != nil {
 		p.logger.Sugar().Warnw("Failed to inspect container",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("containerId", containerId),
 			zap.Error(err),
 		)
 		return false
 	}
 
+	// First check if container is running
 	if !inspection.State.Running {
 		p.logger.Sugar().Warnw("Container is not running",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("containerId", containerId),
-			zap.Any("state", inspection.State.Status),
+			zap.String("state", inspection.State.Status),
 		)
 		return false
 	}
@@ -315,58 +353,49 @@ func (p *PerformerPool) isContainerHealthy(ctx context.Context, containerId stri
 	// Check health status if available
 	if inspection.State.Health != nil {
 		p.logger.Sugar().Debugw("Container health status",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("containerId", containerId),
-			zap.String("health", inspection.State.Health.Status),
+			zap.String("healthStatus", inspection.State.Health.Status),
+			zap.Int("failingStreak", inspection.State.Health.FailingStreak),
 		)
 
-		return inspection.State.Health.Status == "healthy"
+		switch inspection.State.Health.Status {
+		case container.Healthy:
+			return true
+		case container.Starting:
+			// Container is still starting, consider it healthy for now
+			p.logger.Sugar().Debugw("Container is still starting",
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
+				zap.String("containerId", containerId),
+			)
+			return true
+		case container.Unhealthy:
+			p.logger.Sugar().Warnw("Container is unhealthy",
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
+				zap.String("containerId", containerId),
+				zap.Int("failingStreak", inspection.State.Health.FailingStreak),
+			)
+			return false
+		default:
+			// Unknown health status, log and consider unhealthy
+			p.logger.Sugar().Warnw("Unknown container health status",
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
+				zap.String("containerId", containerId),
+				zap.String("healthStatus", inspection.State.Health.Status),
+			)
+			return false
+		}
 	}
 
-	// If no health check configured, just ensure it's running
-	return inspection.State.Running
-}
-
-// recreatePerformer recreates a failed performer instance
-func (p *PerformerPool) recreatePerformer(ctx context.Context, performerId string) error {
-	p.logger.Sugar().Infow("Recreating performer",
-		zap.String("avsAddress", p.avsAddress),
-		zap.String("performerId", performerId),
-	)
-
-	// Get the performer to shut down
-	performer, exists := p.performers[performerId]
-	if !exists {
-		return fmt.Errorf("performer %s does not exist", performerId)
-	}
-
-	// Shutdown the performer
-	if err := performer.Shutdown(); err != nil {
-		p.logger.Sugar().Errorw("Failed to shutdown unhealthy performer",
-			zap.String("avsAddress", p.avsAddress),
-			zap.String("performerId", performerId),
-			zap.Error(err),
-		)
-		// Continue with recreation even if shutdown failed
-	}
-
-	// Remove from maps
-	delete(p.performers, performerId)
-	p.statusMutex.Lock()
-	delete(p.healthStatus, performerId)
-	p.statusMutex.Unlock()
-
-	// Create a new performer with the same ID
-	return p.createPerformer(ctx, performerId, nil)
+	return true
 }
 
 // scaleUp creates new performers to reach the target count
 func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *performerCapacityPlanner.ArtifactVersion) error {
 	p.logger.Sugar().Infow("Scaling up performers",
-		zap.String("avsAddress", p.avsAddress),
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
 		zap.Int("currentCount", len(p.performers)),
 		zap.Int("countToAdd", countToAdd),
-		zap.String("artifact", artifact.Digest),
 	)
 
 	// Create the required number of performers
@@ -376,7 +405,7 @@ func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *p
 		// TODO: make this async as pulling a container can block other callers.
 		if err := p.createPerformer(ctx, performerId, artifact); err != nil {
 			p.logger.Sugar().Errorw("Failed to create performer during scale up",
-				zap.String("avsAddress", p.avsAddress),
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
 				zap.String("performerId", performerId),
 				zap.Error(err),
 			)
@@ -384,7 +413,7 @@ func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *p
 		}
 
 		p.logger.Sugar().Infow("Created new performer",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("performerId", performerId),
 		)
 	}
@@ -395,7 +424,7 @@ func (p *PerformerPool) scaleUp(ctx context.Context, countToAdd int, artifact *p
 // scaleDown removes performers to reach the target count
 func (p *PerformerPool) scaleDown(ctx context.Context, countToRemove int) error {
 	p.logger.Sugar().Infow("Scaling down performers",
-		zap.String("avsAddress", p.avsAddress),
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
 		zap.Int("currentCount", len(p.performers)),
 		zap.Int("countToRemove", countToRemove),
 	)
@@ -405,9 +434,9 @@ func (p *PerformerPool) scaleDown(ctx context.Context, countToRemove int) error 
 
 	// Remove the identified performers
 	for _, id := range performersToRemove {
-		if err := p.removePerformer(ctx, id); err != nil {
+		if err := p.removePerformer(id); err != nil {
 			p.logger.Sugar().Errorw("Failed to remove performer",
-				zap.String("avsAddress", p.avsAddress),
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
 				zap.String("performerId", id),
 				zap.Error(err),
 			)
@@ -434,8 +463,7 @@ func (p *PerformerPool) selectPerformersToRemove(count int) []string {
 	// If we still need to remove more, add the remaining performers
 	if len(performersToRemove) < count {
 		for id := range p.performers {
-			// Skip if already marked for removal
-			if containsString(performersToRemove, id) {
+			if slices.Contains(performersToRemove, id) {
 				continue
 			}
 
@@ -451,9 +479,9 @@ func (p *PerformerPool) selectPerformersToRemove(count int) []string {
 }
 
 // removePerformer shuts down and removes a performer
-func (p *PerformerPool) removePerformer(ctx context.Context, performerId string) error {
+func (p *PerformerPool) removePerformer(performerId string) error {
 	p.logger.Sugar().Infow("Removing performer",
-		zap.String("avsAddress", p.avsAddress),
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
 		zap.String("performerId", performerId),
 	)
 
@@ -464,7 +492,7 @@ func (p *PerformerPool) removePerformer(ctx context.Context, performerId string)
 
 	if err := performer.Shutdown(); err != nil {
 		p.logger.Sugar().Errorw("Failed to shutdown performer",
-			zap.String("avsAddress", p.avsAddress),
+			zap.String("avsAddress", p.avsConfig.AvsAddress),
 			zap.String("performerId", performerId),
 			zap.Error(err),
 		)
@@ -482,7 +510,7 @@ func (p *PerformerPool) removePerformer(ctx context.Context, performerId string)
 // Shutdown shuts down all performers in the pool
 func (p *PerformerPool) Shutdown() error {
 	p.logger.Sugar().Infow("Shutting down performer pool",
-		zap.String("avsAddress", p.avsAddress),
+		zap.String("avsAddress", p.avsConfig.AvsAddress),
 		zap.Int("performerCount", len(p.performers)),
 	)
 
@@ -490,7 +518,7 @@ func (p *PerformerPool) Shutdown() error {
 	for id, performer := range p.performers {
 		if err := performer.Shutdown(); err != nil {
 			p.logger.Sugar().Errorw("Failed to shutdown performer",
-				zap.String("avsAddress", p.avsAddress),
+				zap.String("avsAddress", p.avsConfig.AvsAddress),
 				zap.String("performerId", id),
 				zap.Error(err),
 			)
@@ -507,7 +535,6 @@ func (p *PerformerPool) GetHealthyPerformer() (avsPerformer.IAvsPerformer, bool)
 	p.statusMutex.RLock()
 	defer p.statusMutex.RUnlock()
 
-	// Simple strategy: return the first healthy performer
 	for id, performer := range p.performers {
 		health, ok := p.healthStatus[id]
 		if ok && health.Healthy {
@@ -515,7 +542,7 @@ func (p *PerformerPool) GetHealthyPerformer() (avsPerformer.IAvsPerformer, bool)
 		}
 	}
 
-	// If no healthy performers, return the first one (if any)
+	// TODO: return an error if no healthy performers are available
 	if len(p.performers) > 0 {
 		for _, performer := range p.performers {
 			return performer, false
@@ -532,15 +559,5 @@ func (p *PerformerPool) GetPerformerCount() int {
 
 // GetAvsAddress returns the AVS address for this pool
 func (p *PerformerPool) GetAvsAddress() string {
-	return p.avsAddress
-}
-
-// containsString checks if a string is in a slice
-func containsString(slice []string, str string) bool {
-	for _, item := range slice {
-		if item == str {
-			return true
-		}
-	}
-	return false
+	return p.avsConfig.AvsAddress
 }

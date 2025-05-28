@@ -2,6 +2,8 @@ package containerManager
 
 import (
 	"context"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/performerCapacityPlanner"
 )
 
 // PullResult contains information about a pulled container
@@ -25,8 +27,7 @@ type PullResult struct {
 // IContainerManager defines the interface for container management operations
 type IContainerManager interface {
 	// PullContainer pulls a container image from the specified registry
-	// registryUrl: The URL of the registry where the image is located
-	// digest: The digest of the image to pull
+	// artifact: The artifact version containing registry URL, digest, and/or tag
 	// Returns a PullResult with information about the pulled image or an error
-	PullContainer(ctx context.Context, registryUrl string, digest string) (*PullResult, error)
+	PullContainer(ctx context.Context, artifact *performerCapacityPlanner.ArtifactVersion) (*PullResult, error)
 }

@@ -24,12 +24,10 @@ type PerformerPoolManager struct {
 	peeringFetcher peering.IPeeringDataFetcher
 	dockerClient   *client.Client
 
-	// Components
 	pools        map[string]*PerformerPool
 	planner      *performerCapacityPlanner.PerformerCapacityPlanner
 	containerMgr containerManager.IContainerManager
 
-	// Lifecycle management
 	poolsMutex sync.RWMutex
 }
 
