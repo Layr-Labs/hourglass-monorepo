@@ -115,7 +115,8 @@ interface ITaskAVSRegistrarEvents is ITaskAVSRegistrarTypes {
 
 /**
  * @title ITaskAVSRegistrar
- * @notice Interface for the TaskAVSRegistrar contract that handles operator registration and BLS pubkey management
+ * @author Layr Labs, Inc.
+ * @notice Interface for the TaskAVSRegistrarBase contract.
  */
 interface ITaskAVSRegistrar is ITaskAVSRegistrarErrors, ITaskAVSRegistrarEvents, IAVSRegistrar {
     /**

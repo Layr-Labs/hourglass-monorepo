@@ -8,13 +8,11 @@ import {ITaskAVSRegistrar} from "../interfaces/avs/l1/ITaskAVSRegistrar.sol";
 
 /**
  * @title TaskAVSRegistrarBaseStorage
- * @notice Storage contract for the TaskAVSRegistrar system
- * @dev Contains all state variables used by the TaskAVSRegistrar contract
+ * @author Layr Labs, Inc.
+ * @notice Storage contract for the TaskAVSRegistrarBase contract.
  */
 abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
-    /// @notice The avs address for this AVS (used for UAM integration in EigenLayer)
-    /// @dev NOTE: Updating this value will break existing OperatorSets and UAM integration.
-    /// This value should only be set once.
+    /// @notice The avs address for this AVS 
     address public immutable AVS;
 
     /// @notice Returns the hash of the zero pubkey aka BN254.G1Point(0,0)

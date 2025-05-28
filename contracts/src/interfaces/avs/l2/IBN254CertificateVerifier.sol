@@ -5,6 +5,7 @@ import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 
 /**
  * @title IBN254CertificateVerifier
+ * @author Layr Labs, Inc.
  * @notice Interface for verifying BN254 certificates with operator proofs
  */
 interface IBN254CertificateVerifier {

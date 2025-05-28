@@ -5,11 +5,11 @@ import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 
 /**
  * @title TaskMailboxStorage
- * @notice Storage contract for the TaskMailbox system
- * @dev Contains all state variables used by the TaskMailbox contract
+ * @author Layr Labs, Inc.
+ * @notice Storage contract for the TaskMailbox contract.
  */
 abstract contract TaskMailboxStorage is ITaskMailbox {
-    /// @notice Global counter for tasks created across the system
+    /// @notice Global counter for tasks created across the TaskMailbox
     uint256 internal globalTaskCount;
 
     /// @notice Mapping from task hash to task details
@@ -24,6 +24,6 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     /// @notice Mapping to track registered executor operator sets by their keys
     mapping(bytes32 operatorSetKey => bool isRegistered) public isExecutorOperatorSetRegistered;
 
-    /// @notice Mapping from operator set key to its task configuration
+    /// @notice Mapping from executor operator set key to its task configuration
     mapping(bytes32 operatorSetKey => ExecutorOperatorSetTaskConfig config) public executorOperatorSetTaskConfigs;
 }

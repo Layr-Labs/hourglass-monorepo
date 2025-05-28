@@ -13,26 +13,30 @@ import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol
  */
 interface ITaskMailboxTypes {
     /**
-     * @notice Configuration for an AVS (Autonomous Validation Service)
+     * @notice Configuration for an AVS
      * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
      * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
      */
     struct AvsConfig {
+        // TODO: Pack storage efficiently.
         uint32 aggregatorOperatorSetId; // TODO: Add avs address too: Any AVS can be an aggregator.
         uint32[] executorOperatorSetIds;
     }
 
     /**
-     * @notice Configuration for a task to be executed by an operator set
+     * @notice Configuration for the executor operator set
      * @param certificateVerifier Address of the certificate verifier contract
-     * @param taskHook Interface for AVS-specific task validation hooks
+     * @param taskHook Address of the AVS task hook contract
      * @param feeToken ERC20 token used for task fees
-     * @param feeCollector Address that collects fees
+     * @param feeCollector Address to receive AVS fees
      * @param taskSLA Time (in seconds) within which the task must be completed
-     * @param stakeProportionThreshold Minimum proportion of stake required for task verification (in basis points)
+     * @param stakeProportionThreshold Minimum proportion of executor operator set stake required to certify task execution (in basis points)
      * @param taskMetadata Additional metadata for task execution
      */
     struct ExecutorOperatorSetTaskConfig {
+        // TODO: Pack storage efficiently.
+        // TODO: We need to support proportional, nominal, none and custom verifications.
+        // TODO: We also need to support BN254, ECDSA, BLS and custom curves.
         address certificateVerifier;
         IAVSTaskHook taskHook;
         IERC20 feeToken;
@@ -47,7 +51,7 @@ interface ITaskMailboxTypes {
      * @param refundCollector Address to receive refunds if task is not completed
      * @param avsFee Fee paid to the AVS for processing the task
      * @param executorOperatorSet The operator set that will execute the task
-     * @param payload Task-specific data
+     * @param payload Task payload
      */
     struct TaskParams {
         address refundCollector;
@@ -58,9 +62,9 @@ interface ITaskMailboxTypes {
 
     /**
      * @notice Status of a task in the system
-     * @dev Created status cannot be enum value 0 since that is the default value
      */
     enum TaskStatus {
+        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
         Created,
         Canceled,
         Verified,
@@ -77,12 +81,13 @@ interface ITaskMailboxTypes {
      * @param aggregatorOperatorSetId ID of the operator set aggregating results
      * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
-     * @param feeSplit Percentage split of fees between participants
-     * @param executorOperatorSetTaskConfig Configuration for task execution
-     * @param payload Task-specific data
-     * @param result Result data after task execution
+     * @param feeSplit Percentage split of fees taken by the TaskMailbox
+     * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
+     * @param payload Task payload
+     * @param result Task execution result data
      */
     struct Task {
+        // TODO: Pack storage efficiently.
         address creator;
         uint96 creationTime;
         TaskStatus status;
@@ -189,7 +194,7 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
      * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
      * @param taskDeadline Timestamp by which the task must be completed
-     * @param payload Task-specific data
+     * @param payload Task payload
      */
     event TaskCreated(
         address indexed creator,
@@ -232,7 +237,8 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
 
 /**
  * @title ITaskMailbox
- * @notice Main interface for the TaskMailbox system that handles task creation, execution, and verification
+ * @author Layr Labs, Inc.
+ * @notice Interface for the TaskMailbox contract.
  */
 interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     /**
@@ -283,7 +289,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     ) external;
 
     /**
-     * @notice Submits a verified result for a task
+     * @notice Submits the result of a task execution
      * @param taskHash Unique identifier of the task
      * @param cert Certificate proving the validity of the result
      * @param result Task execution result data

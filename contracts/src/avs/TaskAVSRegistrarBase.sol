@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {IAVSRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IAVSRegistrar.sol";
 import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
@@ -11,8 +12,9 @@ import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
 
 /**
  * @title TaskAVSRegistrarBase
- * @notice Base contract for registering operators and managing BLS public keys for AVS tasks
- * @dev Extends EIP712 for signature validation and TaskAVSRegistrarBaseStorage for state variables
+ * @author Layr Labs, Inc.
+ * @notice Minimal AVS Registrar contract for task-based AVSs.
+ * @dev Provides functionality for managing BLS keys and sockets for the AVS.
  */
 abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
@@ -41,14 +43,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *
      */
 
-    /**
-     * @notice Registers an operator with the AVS
-     * @param operator The address of the operator to register
-     * @param avs The AVS address the operator is registering with
-     * @param operatorSetIds The IDs of the operator sets to register the operator with
-     * @param data Encoded registration parameters including pubkey and socket
-     * @dev Only callable by the AllocationManager
-     */
+    /// @inheritdoc IAVSRegistrar
     function registerOperator(
         address operator,
         address avs,
@@ -77,13 +72,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
         );
     }
 
-    /**
-     * @notice Deregisters an operator from the AVS
-     * @param operator The address of the operator to deregister
-     * @param avs The AVS address the operator is deregistering from
-     * @param operatorSetIds The IDs of the operator sets to deregister the operator from
-     * @dev Only callable by the AllocationManager
-     */
+    /// @inheritdoc IAVSRegistrar
     function deregisterOperator(
         address operator,
         address avs,
@@ -213,11 +202,7 @@ abstract contract TaskAVSRegistrarBase is EIP712, TaskAVSRegistrarBaseStorage {
      *
      */
 
-    /**
-     * @notice Checks if the contract supports a specific AVS
-     * @param avs The address of the AVS to check
-     * @return True if the AVS is supported, false otherwise
-     */
+    /// @inheritdoc IAVSRegistrar
     function supportsAVS(
         address avs
     ) public view returns (bool) {
