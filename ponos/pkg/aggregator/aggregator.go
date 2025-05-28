@@ -7,8 +7,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/manualPushChainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/simulatedChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
@@ -25,12 +23,11 @@ import (
 )
 
 type AggregatorConfig struct {
-	Address           string
-	AggregatorUrl     string
-	PrivateKey        string
-	WriteDelaySeconds time.Duration
-	AVSs              []*aggregatorConfig.AggregatorAvs
-	Chains            []*aggregatorConfig.Chain
+	Address       string
+	AggregatorUrl string
+	PrivateKey    string
+	AVSs          []*aggregatorConfig.AggregatorAvs
+	Chains        []*aggregatorConfig.Chain
 }
 
 type Aggregator struct {
@@ -154,7 +151,6 @@ func (a *Aggregator) Initialize() error {
 				return acc
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
-			WriteDelaySeconds: a.config.WriteDelaySeconds,
 		},
 			a.chainContractCallers,
 			a.signer,
@@ -182,43 +178,14 @@ func (a *Aggregator) initializePollers() error {
 			BlockType: ethereum.BlockType_Latest,
 		}, a.logger)
 
-		var poller chainPoller.IChainPoller
-		if chain.Simulation != nil && chain.Simulation.Enabled {
-			if chain.Simulation.AutomaticPoller {
-				listenerConfig := &simulatedChainPoller.SimulatedChainPollerConfig{
-					ChainId:      &chain.ChainId,
-					Port:         chain.Simulation.Port,
-					TaskInterval: 250 * time.Millisecond,
-				}
-
-				poller = simulatedChainPoller.NewSimulatedChainPoller(
-					a.chainEventsChan,
-					listenerConfig,
-					a.logger,
-				)
-			} else {
-				listenerConfig := &manualPushChainPoller.ManualPushChainPollerConfig{
-					ChainId: &chain.ChainId,
-					Port:    chain.Simulation.Port,
-				}
-
-				poller = manualPushChainPoller.NewManualPushChainPoller(
-					a.chainEventsChan,
-					listenerConfig,
-					a.logger,
-				)
-			}
-		} else {
-			pCfg := &EVMChainPoller.EVMChainPollerConfig{
-				ChainId:                 chain.ChainId,
-				PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
-				EigenLayerCoreContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
-				InterestingContracts:    []string{},
-			}
-			poller = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
+		pCfg := &EVMChainPoller.EVMChainPollerConfig{
+			ChainId:                 chain.ChainId,
+			PollingInterval:         time.Duration(chain.PollIntervalSeconds) * time.Second,
+			EigenLayerCoreContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
+			InterestingContracts:    []string{},
 		}
 
-		a.chainPollers[chain.ChainId] = poller
+		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
 	}
 	return nil
 }
@@ -235,21 +202,16 @@ func InitializeContractCaller(
 		BlockType: ethereum.BlockType_Latest,
 	}, logger)
 
-	var mailboxContractAddress string
-	if chain.Simulation != nil && chain.Simulation.Enabled {
-		mailboxContractAddress = config.EthereumSimulationContracts.TaskMailbox
-	} else {
-		mailboxContract := util.Find(contractStore.ListContracts(), func(c *contracts.Contract) bool {
-			return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
-		})
-		if mailboxContract == nil {
-			logger.Sugar().Errorw("Mailbox contract not found",
-				zap.Uint64("chainId", uint64(chain.ChainId)),
-			)
-			return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
-		}
-		mailboxContractAddress = mailboxContract.Address
+	mailboxContract := util.Find(contractStore.ListContracts(), func(c *contracts.Contract) bool {
+		return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
+	})
+	if mailboxContract == nil {
+		logger.Sugar().Errorw("Mailbox contract not found",
+			zap.Uint64("chainId", uint64(chain.ChainId)),
+		)
+		return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
 	}
+	mailboxContractAddress := mailboxContract.Address
 
 	ethereumContractCaller, err := ec.GetEthereumContractCaller()
 	if err != nil {

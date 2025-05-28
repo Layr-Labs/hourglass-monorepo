@@ -16,19 +16,12 @@ const (
 	Debug = "debug"
 )
 
-type ChainSimulation struct {
-	Enabled         bool `json:"enabled" yaml:"enabled"`
-	Port            int  `json:"port" yaml:"port"`
-	AutomaticPoller bool `json:"automaticPoller" yaml:"automaticPoller"`
-}
-
 type Chain struct {
-	Name                string           `json:"name" yaml:"name"`
-	Version             string           `json:"version" yaml:"version"`
-	ChainId             config.ChainId   `json:"chainId" yaml:"chainId"`
-	RpcURL              string           `json:"rpcUrl" yaml:"rpcUrl"`
-	PollIntervalSeconds int              `json:"pollIntervalSeconds" yaml:"pollIntervalSeconds"`
-	Simulation          *ChainSimulation `json:"simulation" yaml:"simulation"`
+	Name                string         `json:"name" yaml:"name"`
+	Version             string         `json:"version" yaml:"version"`
+	ChainId             config.ChainId `json:"chainId" yaml:"chainId"`
+	RpcURL              string         `json:"rpcUrl" yaml:"rpcUrl"`
+	PollIntervalSeconds int            `json:"pollIntervalSeconds" yaml:"pollIntervalSeconds"`
 }
 
 func (c *Chain) Validate() field.ErrorList {
@@ -86,23 +79,13 @@ type ExecutorPeerConfig struct {
 }
 
 type SimulationConfig struct {
-	// Enabled indicates whether the simulation mode is enabled
-	Enabled bool `json:"enabled" yaml:"enabled"`
-
-	// SimulateExecutors generates a number of fake executors to simulate the behavior of real executors
-	SimulateExecutors bool `json:"simulateExecutors" yaml:"simulateExecutors"`
-
 	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
 	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
-
-	// WriteDelaySeconds is used to slow the aggregator's submission to meet TaskMailbox validation requirements.
-	WriteDelaySeconds int64 `json:"writeDelaySeconds" yaml:"writeDelaySeconds"`
 }
 
 type ServerConfig struct {
-	Port             int    `json:"port" yaml:"port"`
-	SecureConnection bool   `json:"secureConnection" yaml:"secureConnection"`
-	AggregatorUrl    string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
+	Port          int    `json:"port" yaml:"port"`
+	AggregatorUrl string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
 }
 
 type AggregatorConfig struct {
@@ -192,9 +175,7 @@ func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
 
 func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
-		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
-		SimulationConfig: &SimulationConfig{
-			Enabled: viper.GetBool("enabled"),
-		},
+		Debug:            viper.GetBool(config.NormalizeFlagName(Debug)),
+		SimulationConfig: &SimulationConfig{},
 	}
 }

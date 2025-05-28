@@ -16,7 +16,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 )
 
 type AvsExecutionManagerConfig struct {
@@ -25,7 +24,6 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	AggregatorUrl            string
-	WriteDelaySeconds        time.Duration
 }
 
 type operatorSetRegistrationData struct {

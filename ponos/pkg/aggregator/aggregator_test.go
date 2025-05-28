@@ -207,20 +207,14 @@ func Test_Aggregator(t *testing.T) {
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(aggCc, l)
 
-	simulationDelay := time.Second
-	if aggConfig.SimulationConfig != nil {
-		simulationDelay = time.Duration(aggConfig.SimulationConfig.WriteDelaySeconds) * time.Second
-	}
-
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
 		&AggregatorConfig{
-			AVSs:              aggConfig.Avss,
-			Chains:            aggConfig.Chains,
-			Address:           aggConfig.Operator.Address,
-			PrivateKey:        aggConfig.Operator.OperatorPrivateKey,
-			AggregatorUrl:     aggConfig.ServerConfig.AggregatorUrl,
-			WriteDelaySeconds: simulationDelay,
+			AVSs:          aggConfig.Avss,
+			Chains:        aggConfig.Chains,
+			Address:       aggConfig.Operator.Address,
+			PrivateKey:    aggConfig.Operator.OperatorPrivateKey,
+			AggregatorUrl: aggConfig.ServerConfig.AggregatorUrl,
 		},
 		imContractStore,
 		tlp,

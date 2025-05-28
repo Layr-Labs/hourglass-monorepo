@@ -1,9 +1,6 @@
 ---
 debug: false
 simulationConfig:
-  enabled: true
-  secureConnection: false
-  simulateExecutors: false
   simulatePeering:
     enabled: true
     operatorPeers:
@@ -15,7 +12,6 @@ simulationConfig:
 
 serverConfig:
   port: 9000
-  secureConnection: false
   aggregatorUrl: "aggregator:9000"
 
 operator:
@@ -34,10 +30,6 @@ chains:
     chainId: 31337
     rpcUrl: "http://host.docker.internal:8545"
     pollIntervalSeconds: 10
-    simulation:
-      enabled: false
-      port: 8081
-      automaticPoller: false
 
 avss:
   - address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
