@@ -9,8 +9,14 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
 import {IBN254CertificateVerifier} from "../interfaces/avs/l2/IBN254CertificateVerifier.sol";
+import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
 
+/**
+ * @title TaskMailbox
+ * @author Layr Labs, Inc.
+ * @notice Contract for managing the lifecycle of tasks that are executed by operator sets of task-based AVSs.
+ */
 contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
 
@@ -22,6 +28,8 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         EXTERNAL FUNCTIONS
      *
      */
+
+    /// @inheritdoc ITaskMailbox
     function registerAvs(address avs, bool isRegistered) external {
         // TODO: require checks - Figure out what checks are needed.
         // 1. AVS is valid
@@ -29,6 +37,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         _registerAvs(avs, isRegistered);
     }
 
+    /// @inheritdoc ITaskMailbox
     function setAvsConfig(address avs, AvsConfig memory config) external {
         // TODO: require checks - Figure out what checks are needed.
         // 1. OperatorSets are valid
@@ -58,6 +67,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit AvsConfigSet(msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
     }
 
+    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
@@ -77,6 +87,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
     }
 
+    /// @inheritdoc ITaskMailbox
     function createTask(
         TaskParams memory taskParams
     ) external nonReentrant returns (bytes32) {
@@ -146,6 +157,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return taskHash;
     }
 
+    /// @inheritdoc ITaskMailbox
     function cancelTask(
         bytes32 taskHash
     ) external {
@@ -161,6 +173,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         emit TaskCanceled(msg.sender, taskHash, task.avs, task.executorOperatorSetId);
     }
 
+    /// @inheritdoc ITaskMailbox
     function submitResult(
         bytes32 taskHash,
         IBN254CertificateVerifier.BN254Certificate memory cert,
@@ -197,6 +210,12 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         INTERNAL FUNCTIONS
      *
      */
+
+    /**
+     * @notice Gets the current status of a task
+     * @param task The task to get the status for
+     * @return The current status of the task, considering expiration
+     */
     function _getTaskStatus(
         Task memory task
     ) internal view returns (TaskStatus) {
@@ -209,6 +228,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return task.status;
     }
 
+    /**
+     * @notice Registers or deregisters an AVS
+     * @param avs The AVS address to register or deregister
+     * @param isRegistered Whether to register (true) or deregister (false) the AVS
+     */
     function _registerAvs(address avs, bool isRegistered) internal {
         isAvsRegistered[avs] = isRegistered;
         emit AvsRegistered(msg.sender, avs, isRegistered);
@@ -219,18 +243,22 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      *                         VIEW FUNCTIONS
      *
      */
+
+    /// @inheritdoc ITaskMailbox
     function getAvsConfig(
         address avs
     ) external view returns (AvsConfig memory) {
         return avsConfigs[avs];
     }
 
+    /// @inheritdoc ITaskMailbox
     function getExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet
     ) external view returns (ExecutorOperatorSetTaskConfig memory) {
         return executorOperatorSetTaskConfigs[operatorSet.key()];
     }
 
+    /// @inheritdoc ITaskMailbox
     function getTaskInfo(
         bytes32 taskHash
     ) external view returns (Task memory) {
@@ -251,6 +279,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         );
     }
 
+    /// @inheritdoc ITaskMailbox
     function getTaskStatus(
         bytes32 taskHash
     ) external view returns (TaskStatus) {
@@ -258,6 +287,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         return _getTaskStatus(task);
     }
 
+    /// @inheritdoc ITaskMailbox
     function getTaskResult(
         bytes32 taskHash
     ) external view returns (bytes memory) {

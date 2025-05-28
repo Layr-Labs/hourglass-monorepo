@@ -2,7 +2,7 @@
 
 # Build
 build:
-	forge build
+	forge clean && forge build && make bindings
 
 # Test
 test:
