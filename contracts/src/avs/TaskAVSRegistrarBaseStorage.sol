@@ -12,7 +12,7 @@ import {ITaskAVSRegistrar} from "../interfaces/avs/l1/ITaskAVSRegistrar.sol";
  * @notice Storage contract for the TaskAVSRegistrarBase contract.
  */
 abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrar {
-    /// @notice The avs address for this AVS 
+    /// @notice The avs address for this AVS
     address public immutable AVS;
 
     /// @notice Returns the hash of the zero pubkey aka BN254.G1Point(0,0)
