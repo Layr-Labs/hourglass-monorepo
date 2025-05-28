@@ -52,10 +52,11 @@ func Test_Aggregator(t *testing.T) {
 	root := testUtils.GetProjectRootPath()
 	t.Logf("Project root path: %s", root)
 
-	chainConfig, err := testUtils.ReadChainConfig(root)
+	multiChainConfig, err := testUtils.ReadChainConfig(root)
 	if err != nil {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
+	chainConfig := multiChainConfig.L1
 	_ = chainConfig
 
 	// ------------------------------------------------------------------------
@@ -68,6 +69,10 @@ func Test_Aggregator(t *testing.T) {
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
+
+	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
+	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
+	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
 	storedKeys, err := keystore.ParseKeystoreJSON(execConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
@@ -90,6 +95,10 @@ func Test_Aggregator(t *testing.T) {
 	if err := aggConfig.Validate(); err != nil {
 		t.Fatalf("Failed to validate aggregator config: %v", err)
 	}
+
+	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
+	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
+	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 
 	aggStoredKeys, err := keystore.ParseKeystoreJSON(aggConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
@@ -115,7 +124,7 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
-	anvil, err := testUtils.StartAnvil(root, ctx)
+	anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
@@ -203,6 +212,10 @@ func Test_Aggregator(t *testing.T) {
 	}
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
+
+	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
+		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
+	}
 
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(aggCc, l)
@@ -342,7 +355,7 @@ func Test_Aggregator(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
-	case <-time.After(60 * time.Second):
+	case <-time.After(90 * time.Second):
 		t.Logf("Timeout after 60 seconds")
 		cancel()
 	}
