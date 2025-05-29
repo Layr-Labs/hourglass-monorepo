@@ -32,4 +32,4 @@ contract MockBN254CertificateVerifierFailure is IBN254CertificateVerifier {
     ) external pure returns (bool) {
         return false; // Always fail
     }
-} 
+}

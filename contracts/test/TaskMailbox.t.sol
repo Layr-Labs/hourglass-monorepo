@@ -7,7 +7,12 @@ import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TaskMailbox} from "../src/core/TaskMailbox.sol";
-import {ITaskMailbox, ITaskMailboxTypes, ITaskMailboxErrors, ITaskMailboxEvents} from "../src/interfaces/core/ITaskMailbox.sol";
+import {
+    ITaskMailbox,
+    ITaskMailboxTypes,
+    ITaskMailboxErrors,
+    ITaskMailboxEvents
+} from "../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {IBN254CertificateVerifier} from "../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
@@ -33,14 +38,14 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     address public aggregator = address(0x6);
 
     // Test operator set IDs
-    uint32 public aggregatorOperatorSetId = 1;
-    uint32 public executorOperatorSetId = 2;
-    uint32 public executorOperatorSetId2 = 3;
+    uint32 public aggregatorOperatorSetId = 0;
+    uint32 public executorOperatorSetId = 1;
+    uint32 public executorOperatorSetId2 = 2;
 
     // Test config values
-    uint96 public taskSLA = 1 hours;
+    uint96 public taskSLA = 60 seconds;
     uint16 public stakeProportionThreshold = 6667; // 66.67%
-    uint96 public avsFee = 100 ether;
+    uint96 public avsFee = 1 ether;
 
     function setUp() public virtual {
         // Deploy mock contracts
@@ -88,11 +93,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
         });
     }
 
-    function _createValidExecutorOperatorSetTaskConfig()
-        internal
-        view
-        returns (ExecutorOperatorSetTaskConfig memory)
-    {
+    function _createValidExecutorOperatorSetTaskConfig() internal view returns (ExecutorOperatorSetTaskConfig memory) {
         return ExecutorOperatorSetTaskConfig({
             certificateVerifier: address(mockCertificateVerifier),
             taskHook: IAVSTaskHook(address(mockTaskHook)),
@@ -155,8 +156,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Verify config was set
-        ExecutorOperatorSetTaskConfig memory retrievedConfig =
-            taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        ExecutorOperatorSetTaskConfig memory retrievedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
 
         assertEq(retrievedConfig.certificateVerifier, fuzzCertificateVerifier);
         assertEq(address(retrievedConfig.taskHook), fuzzTaskHook);
@@ -373,13 +373,7 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
 
         // Try to cancel again
         vm.prank(creator);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidTaskStatus.selector,
-                TaskStatus.Created,
-                TaskStatus.Canceled
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
         taskMailbox.cancelTask(taskHash);
     }
 
@@ -403,13 +397,7 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
         vm.warp(block.timestamp + taskSLA + 1);
 
         vm.prank(creator);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidTaskStatus.selector,
-                TaskStatus.Created,
-                TaskStatus.Expired
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
         taskMailbox.cancelTask(taskHash);
     }
 }
@@ -468,13 +456,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
 
         vm.prank(aggregator);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidTaskStatus.selector,
-                TaskStatus.Created,
-                TaskStatus.Canceled
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
     }
 
@@ -494,13 +476,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
 
         vm.prank(aggregator);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidTaskStatus.selector,
-                TaskStatus.Created,
-                TaskStatus.Expired
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
     }
 
