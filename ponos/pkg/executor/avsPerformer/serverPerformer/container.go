@@ -17,7 +17,7 @@ func (aps *AvsPerformerServer) waitForRunning(
 	containerId string,
 	containerPort nat.Port,
 ) (bool, error) {
-	for attempts := 0; attempts < 10; attempts++ {
+	for attempts := 0; attempts < 15; attempts++ {
 		info, err := dockerClient.ContainerInspect(ctx, containerId)
 		if err != nil {
 			return false, err
