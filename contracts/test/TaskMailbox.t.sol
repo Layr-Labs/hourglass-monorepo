@@ -12,54 +12,8 @@ import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {IBN254CertificateVerifier} from "../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
 import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
-
-// Simple ERC20Mock for testing
-contract ERC20Mock is IERC20 {
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
-
-    function mint(address to, uint256 amount) public {
-        _totalSupply += amount;
-        _balances[to] += amount;
-        emit Transfer(address(0), to, amount);
-    }
-
-    function totalSupply() public view override returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(
-        address account
-    ) public view override returns (uint256) {
-        return _balances[account];
-    }
-
-    function transfer(address to, uint256 amount) public override returns (bool) {
-        _balances[msg.sender] -= amount;
-        _balances[to] += amount;
-        emit Transfer(msg.sender, to, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _allowances[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
-        _allowances[from][msg.sender] -= amount;
-        _balances[from] -= amount;
-        _balances[to] += amount;
-        emit Transfer(from, to, amount);
-        return true;
-    }
-}
+import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract TaskMailboxUnitTests is Test {
     using OperatorSetLib for OperatorSet;
@@ -68,7 +22,7 @@ contract TaskMailboxUnitTests is Test {
     TaskMailbox public taskMailbox;
     MockAVSTaskHook public mockTaskHook;
     MockBN254CertificateVerifier public mockCertificateVerifier;
-    ERC20Mock public mockToken;
+    MockERC20 public mockToken;
 
     // Test addresses
     address public avs = address(0x1);
@@ -124,7 +78,7 @@ contract TaskMailboxUnitTests is Test {
         // Deploy mock contracts
         mockTaskHook = new MockAVSTaskHook();
         mockCertificateVerifier = new MockBN254CertificateVerifier();
-        mockToken = new ERC20Mock();
+        mockToken = new MockERC20();
 
         // Deploy TaskMailbox
         taskMailbox = new TaskMailbox();
@@ -607,32 +561,5 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert(ITaskMailboxErrors.CertificateVerificationFailed.selector);
         taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
-    }
-}
-
-// Mock certificate verifier that always returns false
-contract MockBN254CertificateVerifierFailure is IBN254CertificateVerifier {
-    function maxOperatorTableStaleness() external pure returns (uint32) {
-        return 86_400;
-    }
-
-    function verifyCertificate(
-        BN254Certificate memory /*cert*/
-    ) external pure returns (uint96[] memory signedStakes) {
-        return new uint96[](0);
-    }
-
-    function verifyCertificateProportion(
-        BN254Certificate memory, /*cert*/
-        uint16[] memory /*totalStakeProportionThresholds*/
-    ) external pure returns (bool) {
-        return false; // Always fail
-    }
-
-    function verifyCertificateNominal(
-        BN254Certificate memory, /*cert*/
-        uint96[] memory /*totalStakeNominalThresholds*/
-    ) external pure returns (bool) {
-        return false; // Always fail
     }
 }
