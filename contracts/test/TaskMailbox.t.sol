@@ -7,7 +7,7 @@ import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TaskMailbox} from "../src/core/TaskMailbox.sol";
-import {ITaskMailbox, ITaskMailboxTypes, ITaskMailboxErrors} from "../src/interfaces/core/ITaskMailbox.sol";
+import {ITaskMailbox, ITaskMailboxTypes, ITaskMailboxErrors, ITaskMailboxEvents} from "../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {IBN254CertificateVerifier} from "../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
@@ -15,7 +15,7 @@ import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier
 import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
-contract TaskMailboxUnitTests is Test {
+contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     using OperatorSetLib for OperatorSet;
 
     // Contracts
@@ -41,38 +41,6 @@ contract TaskMailboxUnitTests is Test {
     uint96 public taskSLA = 1 hours;
     uint16 public stakeProportionThreshold = 6667; // 66.67%
     uint96 public avsFee = 100 ether;
-
-    // Events from ITaskMailbox
-    event AvsRegistered(address indexed caller, address indexed avs, bool isRegistered);
-    event AvsConfigSet(
-        address indexed caller, address indexed avs, uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
-    );
-    event ExecutorOperatorSetTaskConfigSet(
-        address indexed caller,
-        address indexed avs,
-        uint32 indexed executorOperatorSetId,
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig config
-    );
-    event TaskCreated(
-        address indexed creator,
-        bytes32 indexed taskHash,
-        address indexed avs,
-        uint32 executorOperatorSetId,
-        address refundCollector,
-        uint96 avsFee,
-        uint256 taskDeadline,
-        bytes payload
-    );
-    event TaskCanceled(
-        address indexed creator, bytes32 indexed taskHash, address indexed avs, uint32 executorOperatorSetId
-    );
-    event TaskVerified(
-        address indexed aggregator,
-        bytes32 indexed taskHash,
-        address indexed avs,
-        uint32 executorOperatorSetId,
-        bytes result
-    );
 
     function setUp() public virtual {
         // Deploy mock contracts
@@ -102,7 +70,7 @@ contract TaskMailboxUnitTests is Test {
         executorOperatorSetIds[0] = executorOperatorSetId;
         executorOperatorSetIds[1] = executorOperatorSetId2;
 
-        ITaskMailboxTypes.AvsConfig memory avsConfig = ITaskMailboxTypes.AvsConfig({
+        AvsConfig memory avsConfig = AvsConfig({
             aggregatorOperatorSetId: aggregatorOperatorSetId,
             executorOperatorSetIds: executorOperatorSetIds
         });
@@ -111,8 +79,8 @@ contract TaskMailboxUnitTests is Test {
         taskMailbox.setAvsConfig(avs, avsConfig);
     }
 
-    function _createValidTaskParams() internal view returns (ITaskMailboxTypes.TaskParams memory) {
-        return ITaskMailboxTypes.TaskParams({
+    function _createValidTaskParams() internal view returns (TaskParams memory) {
+        return TaskParams({
             refundCollector: refundCollector,
             avsFee: avsFee,
             executorOperatorSet: OperatorSet(avs, executorOperatorSetId),
@@ -123,9 +91,9 @@ contract TaskMailboxUnitTests is Test {
     function _createValidExecutorOperatorSetTaskConfig()
         internal
         view
-        returns (ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory)
+        returns (ExecutorOperatorSetTaskConfig memory)
     {
-        return ITaskMailboxTypes.ExecutorOperatorSetTaskConfig({
+        return ExecutorOperatorSetTaskConfig({
             certificateVerifier: address(mockCertificateVerifier),
             taskHook: IAVSTaskHook(address(mockTaskHook)),
             feeToken: IERC20(address(mockToken)),
@@ -168,7 +136,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
 
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = ITaskMailboxTypes.ExecutorOperatorSetTaskConfig({
+        ExecutorOperatorSetTaskConfig memory config = ExecutorOperatorSetTaskConfig({
             certificateVerifier: fuzzCertificateVerifier,
             taskHook: IAVSTaskHook(fuzzTaskHook),
             feeToken: IERC20(fuzzFeeToken),
@@ -187,7 +155,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Verify config was set
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory retrievedConfig =
+        ExecutorOperatorSetTaskConfig memory retrievedConfig =
             taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
 
         assertEq(retrievedConfig.certificateVerifier, fuzzCertificateVerifier);
@@ -207,40 +175,40 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         );
 
         OperatorSet memory unregisteredOperatorSet = OperatorSet(avs, unregisteredOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
 
         vm.prank(avs);
-        vm.expectRevert(ITaskMailboxErrors.ExecutorOperatorSetNotRegistered.selector);
+        vm.expectRevert(ExecutorOperatorSetNotRegistered.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(unregisteredOperatorSet, config);
     }
 
     function test_Revert_WhenCertificateVerifierIsZero() public {
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
         config.certificateVerifier = address(0);
 
         vm.prank(avs);
-        vm.expectRevert(ITaskMailboxErrors.InvalidAddressZero.selector);
+        vm.expectRevert(InvalidAddressZero.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
     }
 
     function test_Revert_WhenTaskHookIsZero() public {
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
         config.taskHook = IAVSTaskHook(address(0));
 
         vm.prank(avs);
-        vm.expectRevert(ITaskMailboxErrors.InvalidAddressZero.selector);
+        vm.expectRevert(InvalidAddressZero.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
     }
 
     function test_Revert_WhenTaskSLAIsZero() public {
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
         config.taskSLA = 0;
 
         vm.prank(avs);
-        vm.expectRevert(ITaskMailboxErrors.TaskSLAIsZero.selector);
+        vm.expectRevert(TaskSLAIsZero.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
     }
 }
@@ -252,7 +220,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
 
         // Set up executor operator set task config
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
 
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
@@ -263,7 +231,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.assume(fuzzPayload.length > 0);
         vm.assume(fuzzAvsFee <= mockToken.balanceOf(creator));
 
-        ITaskMailboxTypes.TaskParams memory taskParams = ITaskMailboxTypes.TaskParams({
+        TaskParams memory taskParams = TaskParams({
             refundCollector: fuzzRefundCollector,
             avsFee: fuzzAvsFee,
             executorOperatorSet: OperatorSet(avs, executorOperatorSetId),
@@ -288,10 +256,10 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         bytes32 taskHash = taskMailbox.createTask(taskParams);
 
         // Verify task was created
-        ITaskMailboxTypes.Task memory task = taskMailbox.getTaskInfo(taskHash);
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
         assertEq(task.creator, creator);
         assertEq(task.creationTime, block.timestamp);
-        assertEq(uint8(task.status), uint8(ITaskMailboxTypes.TaskStatus.Created));
+        assertEq(uint8(task.status), uint8(TaskStatus.Created));
         assertEq(task.avs, avs);
         assertEq(task.executorOperatorSetId, executorOperatorSetId);
         assertEq(task.refundCollector, fuzzRefundCollector);
@@ -305,11 +273,11 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     }
 
     function test_Revert_WhenAvsNotRegistered() public {
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         taskParams.executorOperatorSet.avs = address(0x999); // Unregistered AVS
 
         vm.prank(creator);
-        vm.expectRevert(ITaskMailboxErrors.AvsNotRegistered.selector);
+        vm.expectRevert(AvsNotRegistered.selector);
         taskMailbox.createTask(taskParams);
     }
 
@@ -320,20 +288,20 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
             unregisteredOperatorSetId != executorOperatorSetId && unregisteredOperatorSetId != executorOperatorSetId2
         );
 
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         taskParams.executorOperatorSet.id = unregisteredOperatorSetId;
 
         vm.prank(creator);
-        vm.expectRevert(ITaskMailboxErrors.ExecutorOperatorSetNotRegistered.selector);
+        vm.expectRevert(ExecutorOperatorSetNotRegistered.selector);
         taskMailbox.createTask(taskParams);
     }
 
     function test_Revert_WhenPayloadIsEmpty() public {
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         taskParams.payload = bytes("");
 
         vm.prank(creator);
-        vm.expectRevert(ITaskMailboxErrors.PayloadIsEmpty.selector);
+        vm.expectRevert(PayloadIsEmpty.selector);
         taskMailbox.createTask(taskParams);
     }
 
@@ -343,7 +311,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         uint32[] memory executorOperatorSetIds = new uint32[](1);
         executorOperatorSetIds[0] = newExecutorOperatorSetId;
 
-        ITaskMailboxTypes.AvsConfig memory avsConfig = ITaskMailboxTypes.AvsConfig({
+        AvsConfig memory avsConfig = AvsConfig({
             aggregatorOperatorSetId: aggregatorOperatorSetId,
             executorOperatorSetIds: executorOperatorSetIds
         });
@@ -351,11 +319,11 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.prank(avs);
         taskMailbox.setAvsConfig(avs, avsConfig);
 
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         taskParams.executorOperatorSet.id = newExecutorOperatorSetId;
 
         vm.prank(creator);
-        vm.expectRevert(ITaskMailboxErrors.ExecutorOperatorSetTaskConfigNotSet.selector);
+        vm.expectRevert(ExecutorOperatorSetTaskConfigNotSet.selector);
         taskMailbox.createTask(taskParams);
     }
 }
@@ -369,13 +337,13 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
 
         // Set up executor operator set task config
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
 
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Create a task
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         vm.prank(creator);
         taskHash = taskMailbox.createTask(taskParams);
     }
@@ -393,8 +361,8 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
         taskMailbox.cancelTask(taskHash);
 
         // Verify task was canceled
-        ITaskMailboxTypes.TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(ITaskMailboxTypes.TaskStatus.Canceled));
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Canceled));
     }
 
     function test_Revert_WhenInvalidTaskStatus() public {
@@ -407,9 +375,9 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
         vm.prank(creator);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ITaskMailboxErrors.InvalidTaskStatus.selector,
-                ITaskMailboxTypes.TaskStatus.Created,
-                ITaskMailboxTypes.TaskStatus.Canceled
+                InvalidTaskStatus.selector,
+                TaskStatus.Created,
+                TaskStatus.Canceled
             )
         );
         taskMailbox.cancelTask(taskHash);
@@ -419,14 +387,14 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
         vm.warp(block.timestamp + 1);
 
         vm.prank(address(0x999)); // Different address
-        vm.expectRevert(ITaskMailboxErrors.InvalidTaskCreator.selector);
+        vm.expectRevert(InvalidTaskCreator.selector);
         taskMailbox.cancelTask(taskHash);
     }
 
     function test_Revert_WhenTimestampAtCreation() public {
         // Don't advance time
         vm.prank(creator);
-        vm.expectRevert(ITaskMailboxErrors.TimestampAtCreation.selector);
+        vm.expectRevert(TimestampAtCreation.selector);
         taskMailbox.cancelTask(taskHash);
     }
 
@@ -437,9 +405,9 @@ contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
         vm.prank(creator);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ITaskMailboxErrors.InvalidTaskStatus.selector,
-                ITaskMailboxTypes.TaskStatus.Created,
-                ITaskMailboxTypes.TaskStatus.Expired
+                InvalidTaskStatus.selector,
+                TaskStatus.Created,
+                TaskStatus.Expired
             )
         );
         taskMailbox.cancelTask(taskHash);
@@ -455,13 +423,13 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Set up executor operator set task config
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
 
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Create a task
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         vm.prank(creator);
         taskHash = taskMailbox.createTask(taskParams);
     }
@@ -483,8 +451,8 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         taskMailbox.submitResult(taskHash, cert, fuzzResult);
 
         // Verify task was verified
-        ITaskMailboxTypes.TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(ITaskMailboxTypes.TaskStatus.Verified));
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Verified));
 
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(taskHash);
@@ -502,9 +470,9 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ITaskMailboxErrors.InvalidTaskStatus.selector,
-                ITaskMailboxTypes.TaskStatus.Created,
-                ITaskMailboxTypes.TaskStatus.Canceled
+                InvalidTaskStatus.selector,
+                TaskStatus.Created,
+                TaskStatus.Canceled
             )
         );
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
@@ -515,7 +483,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Don't advance time
         vm.prank(aggregator);
-        vm.expectRevert(ITaskMailboxErrors.TimestampAtCreation.selector);
+        vm.expectRevert(TimestampAtCreation.selector);
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
     }
 
@@ -528,9 +496,9 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ITaskMailboxErrors.InvalidTaskStatus.selector,
-                ITaskMailboxTypes.TaskStatus.Created,
-                ITaskMailboxTypes.TaskStatus.Expired
+                InvalidTaskStatus.selector,
+                TaskStatus.Created,
+                TaskStatus.Expired
             )
         );
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
@@ -542,14 +510,14 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Update the config with failing verifier
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
         config.certificateVerifier = address(mockFailingVerifier);
 
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Create new task with this config
-        ITaskMailboxTypes.TaskParams memory taskParams = _createValidTaskParams();
+        TaskParams memory taskParams = _createValidTaskParams();
         vm.prank(creator);
         bytes32 newTaskHash = taskMailbox.createTask(taskParams);
 
@@ -559,7 +527,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(newTaskHash);
 
         vm.prank(aggregator);
-        vm.expectRevert(ITaskMailboxErrors.CertificateVerificationFailed.selector);
+        vm.expectRevert(CertificateVerificationFailed.selector);
         taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
     }
 }
