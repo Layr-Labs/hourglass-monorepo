@@ -46,7 +46,7 @@ var runCmd = &cobra.Command{
 
 		// Load up the keystore
 		var err error
-		var storedKeys *keystore.Keystore
+		var storedKeys *keystore.EIP2335Keystore
 		if Config.Operator.SigningKeys.BLS.Keystore != "" {
 			storedKeys, err = keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
 			if err != nil {

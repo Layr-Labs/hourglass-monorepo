@@ -101,15 +101,6 @@ var generateCmd = &cobra.Command{
 			password = Config.Password
 		}
 
-		// Determine keystore options
-		var keystoreOpts *keystore.Options
-		if Config.LightEncryption {
-			keystoreOpts = keystore.Light()
-			l.Sugar().Warn("Using light encryption - this is less secure but faster")
-		} else {
-			keystoreOpts = keystore.Default()
-		}
-
 		// Curve type determines the file naming
 		curveStr := strings.ToLower(Config.CurveType)
 
@@ -117,7 +108,7 @@ var generateCmd = &cobra.Command{
 		if Config.UseKeystore {
 			// Save using Web3 Secret Storage format with curve type information
 			keystorePath := filepath.Join(Config.OutputDir, fmt.Sprintf("%s_%s.json", Config.FilePrefix, curveStr))
-			if err := keystore.SaveToKeystoreWithCurveType(privateKey, keystorePath, password, curveStr, keystoreOpts); err != nil {
+			if err := keystore.SaveToKeystoreWithCurveType(privateKey, keystorePath, password, curveStr, keystore.Default()); err != nil {
 				return fmt.Errorf("failed to save keystore: %w", err)
 			}
 			l.Sugar().Infow(fmt.Sprintf("Generated %s keys in keystore format", strings.ToUpper(curveStr)),
@@ -177,7 +168,7 @@ var infoCmd = &cobra.Command{
 			l.Sugar().Infow("Key Information",
 				"type", "keystore",
 				"curve", curveType,
-				"publicKey", storedKeys.PublicKey,
+				"publicKey", storedKeys.Pubkey,
 				"uuid", storedKeys.UUID,
 				"version", storedKeys.Version,
 			)
@@ -194,7 +185,7 @@ var infoCmd = &cobra.Command{
 
 			pubKey := privateSigningKey.Public()
 
-			if hex.EncodeToString(pubKey.Bytes()) == storedKeys.PublicKey {
+			if hex.EncodeToString(pubKey.Bytes()) == storedKeys.Pubkey {
 				l.Sugar().Infow("Public key matches keystore public key")
 			} else {
 				l.Sugar().Infow("Public key does not match keystore public key")
@@ -326,7 +317,7 @@ var testCmd = &cobra.Command{
 			curveTypeStr = Config.CurveType
 		}
 
-		l.Sugar().Infow("Keystore test successful",
+		l.Sugar().Infow("EIP2335Keystore test successful",
 			"curve", curveTypeStr,
 			"file", keyFile,
 		)

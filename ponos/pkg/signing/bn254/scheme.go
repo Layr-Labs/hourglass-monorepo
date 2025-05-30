@@ -168,6 +168,11 @@ func (a *privateKeyAdapter) Bytes() []byte {
 	return a.pk.Bytes()
 }
 
+// UnwrapPrivateKey returns the wrapped PrivateKey
+func (a *privateKeyAdapter) UnwrapPrivateKey() *PrivateKey {
+	return a.pk
+}
+
 // publicKeyAdapter adapts the BN254 public key to the generic interface
 type publicKeyAdapter struct {
 	pk *PublicKey
