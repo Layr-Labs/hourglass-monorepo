@@ -11,19 +11,14 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/lifecycle/runnable"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/executor/service"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -130,41 +125,14 @@ var runCmd = &cobra.Command{
 			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, log)
 		}
 
-		if Config.SimulationConfig != nil && Config.SimulationConfig.SimulateExecutors {
-			log.Sugar().Infow("Loading simulated executors from runtime config")
-			c := &aggregatorConfig.AggregatorConfig{
-				Avss:             Config.Avss,
-				Chains:           Config.Chains,
-				Operator:         Config.Operator,
-				ServerConfig:     Config.ServerConfig,
-				SimulationConfig: Config.SimulationConfig,
-				L1ChainId:        Config.L1ChainId,
-			}
-			executors, err := buildSimulatedExecutors(context.Background(), c, log)
-			if err != nil {
-				return fmt.Errorf("failed to build executors: %w", err)
-			}
-			for _, executor := range executors {
-				err := executor.Start(context.Background())
-				if err != nil {
-					return err
-				}
-			}
-		}
-		simulationDelay := time.Second
-		if Config.SimulationConfig != nil {
-			simulationDelay = time.Duration(Config.SimulationConfig.WriteDelaySeconds) * time.Second
-		}
-
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
-				AVSs:              Config.Avss,
-				Chains:            Config.Chains,
-				Address:           Config.Operator.Address,
-				PrivateKey:        Config.Operator.OperatorPrivateKey,
-				AggregatorUrl:     Config.ServerConfig.AggregatorUrl,
-				WriteDelaySeconds: simulationDelay,
+				AVSs:          Config.Avss,
+				Chains:        Config.Chains,
+				Address:       Config.Operator.Address,
+				PrivateKey:    Config.Operator.OperatorPrivateKey,
+				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
 			},
 			imContractStore,
 			tlp,
@@ -208,39 +176,4 @@ func initRunCmd(cmd *cobra.Command) {
 			fmt.Printf("Failed to bind env '%s': %+v\n", f.Name, err)
 		}
 	})
-}
-
-func buildSimulatedExecutors(ctx context.Context, cfg *aggregatorConfig.AggregatorConfig, logger *zap.Logger) ([]runnable.IRunnable, error) {
-	var executors []runnable.IRunnable
-	var allocatedPorts []int
-
-	for _, peer := range cfg.SimulationConfig.SimulatePeering.OperatorPeers {
-		addrParts := strings.Split(peer.NetworkAddress, ":")
-		if len(addrParts) < 2 {
-			return nil, fmt.Errorf("invalid network address format: %s", peer.NetworkAddress)
-		}
-		port, err := strconv.Atoi(addrParts[len(addrParts)-1])
-		if err != nil {
-			return nil, fmt.Errorf("invalid port number: %s", addrParts[len(addrParts)-1])
-		}
-		if slices.Contains(allocatedPorts, port) {
-			return nil, fmt.Errorf("port %d is already allocated", port)
-		}
-
-		exe, err := service.NewSimulatedExecutorWithRpcServer(port, logger, peer.OperatorAddress)
-		if err != nil {
-			logger.Sugar().Fatalw("Failed to create simulated executor", "error", err)
-			return nil, err
-		}
-
-		executors = append(executors, exe)
-		allocatedPorts = append(allocatedPorts, port)
-
-		logger.Sugar().Infow("Created simulated executor",
-			zap.String("publicKey", peer.PublicKey),
-			zap.Int("port", port),
-		)
-	}
-
-	return executors, nil
 }
