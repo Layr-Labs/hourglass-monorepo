@@ -5,56 +5,72 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
-	"strings"
+	"sync"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/artifactMonitor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/runtime"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
+	"go.uber.org/zap"
 )
 
 type AvsPerformerServer struct {
 	config          *avsPerformer.AvsPerformerConfig
 	logger          *zap.Logger
 	containerId     string
-	dockerClient    *client.Client
 	performerClient performerV1.PerformerServiceClient
+
+	// Container runtime controller
+	containerController runtime.IContainerRuntimeController
 
 	peeringFetcher peering.IPeeringDataFetcher
 
 	aggregatorPeers []*peering.OperatorPeerInfo
+
+	// Artifact monitoring
+	artifactMonitor    *artifactMonitor.PerformerArtifactMonitor
+	artifactContainers map[string]*ArtifactContainer
+	artifactsMutex     sync.RWMutex
+
+	// Context for health checks
+	healthCheckCancel context.CancelFunc
+}
+
+// ArtifactContainer represents a running container for a specific artifact
+type ArtifactContainer struct {
+	Artifact        *artifactMonitor.PerformerArtifact
+	ContainerID     string
+	PerformerClient performerV1.PerformerServiceClient
+	CreatedAt       time.Time
+	CancelFunc      context.CancelFunc // To cancel individual health checks
 }
 
 func NewAvsPerformerServer(
 	config *avsPerformer.AvsPerformerConfig,
 	peeringFetcher peering.IPeeringDataFetcher,
+	artifactMonitor *artifactMonitor.PerformerArtifactMonitor,
+	containerController runtime.IContainerRuntimeController,
 	logger *zap.Logger,
 ) (*AvsPerformerServer, error) {
 	return &AvsPerformerServer{
-		config:         config,
-		logger:         logger,
-		peeringFetcher: peeringFetcher,
+		config:              config,
+		logger:              logger,
+		containerController: containerController,
+		peeringFetcher:      peeringFetcher,
+		artifactMonitor:     artifactMonitor,
+		artifactContainers:  make(map[string]*ArtifactContainer),
 	}, nil
 }
 
-const containerPort = 8080
+const artifactCheckInterval = 30 * time.Second
 
-// take a sha shash of the avs address and return the first 6 chars
+// take a sha hash of the avs address and return the first 6 chars
 func hashAvsAddress(avsAddress string) string {
 	hasher := sha256.New()
-
 	hasher.Write([]byte(avsAddress))
 	hashBytes := hasher.Sum(nil)
-
 	return hex.EncodeToString(hashBytes)[0:6]
 }
 
@@ -83,8 +99,7 @@ func (aps *AvsPerformerServer) fetchAggregatorPeerInfo(ctx context.Context) ([]*
 }
 
 func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
-	containerPortProto := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
-
+	// Fetch aggregator peers
 	aggregatorPeers, err := aps.fetchAggregatorPeerInfo(ctx)
 	if err != nil {
 		return err
@@ -95,25 +110,9 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		zap.Any("aggregatorPeers", aps.aggregatorPeers),
 	)
 
-	dockerClient, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create Docker perfClient for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	dockerClient.NegotiateAPIVersion(ctx)
-	aps.dockerClient = dockerClient
-
-	hostname := fmt.Sprintf("avs-performer-%s", hashAvsAddress(aps.config.AvsAddress))
-
-	aps.logger.Sugar().Infow("Using hostname",
-		zap.String("hostname", hostname),
-	)
-
+	// Create network if needed
 	if aps.config.PerformerNetworkName != "" {
-		if err := aps.createNetworkIfNotExists(ctx, dockerClient, aps.config.PerformerNetworkName); err != nil {
+		if err := aps.containerController.CreateNetworkIfNotExists(ctx, aps.config.PerformerNetworkName); err != nil {
 			aps.logger.Sugar().Errorw("Failed to create Docker network for performer",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.Error(err),
@@ -122,242 +121,249 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		}
 	}
 
-	containerConfg := &container.Config{
-		Hostname: hostname,
-		Image:    fmt.Sprintf("%s:%s", aps.config.Image.Repository, aps.config.Image.Tag),
-		ExposedPorts: nat.PortSet{
-			containerPortProto: struct{}{},
+	// Create default container
+	hostname := fmt.Sprintf("avs-performer-%s", hashAvsAddress(aps.config.AvsAddress))
+	containerConfig := &runtime.ContainerConfig{
+		Name:        hostname,
+		Image:       fmt.Sprintf("%s:%s", aps.config.Image.Repository, aps.config.Image.Tag),
+		NetworkName: aps.config.PerformerNetworkName,
+		Labels: map[string]string{
+			"avs.address": aps.config.AvsAddress,
 		},
+		Logger: aps.logger,
 	}
 
-	hostConfig := &container.HostConfig{
-		AutoRemove: true,
-		PortBindings: nat.PortMap{
-			containerPortProto: []nat.PortBinding{
-				{
-					HostIP: "0.0.0.0",
-
-					// leave this blank to let Docker handle creating a random port
-					HostPort: "",
-				},
-			},
-		},
-	}
-
-	var netConfig *network.NetworkingConfig
-	if aps.config.PerformerNetworkName != "" {
-		netConfig = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				aps.config.PerformerNetworkName: {},
-			},
-		}
-	}
-
-	res, err := dockerClient.ContainerCreate(
-		ctx,
-		containerConfg,
-		hostConfig,
-		netConfig,
-		nil,
-		hostname,
-	)
+	result, err := aps.containerController.CreateAndStartContainer(ctx, containerConfig)
 	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create Docker container for performer",
+		aps.logger.Sugar().Errorw("Failed to create default performer container",
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.Error(err),
 		)
 		return err
 	}
-	aps.containerId = res.ID
 
-	if err := dockerClient.ContainerStart(ctx, res.ID, container.StartOptions{}); err != nil {
-		aps.logger.Sugar().Errorw("Failed to start Docker container for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		shutdownErr := aps.Shutdown()
-		if shutdownErr != nil {
-			err = errors.Wrap(err, "failed to shutdown Docker container")
-		}
-		return err
-	}
-	aps.logger.Sugar().Infow("Started Docker container for performer",
+	aps.containerId = result.ContainerID
+	aps.performerClient = result.PerformerClient
+
+	aps.logger.Sugar().Infow("Initialized default performer",
 		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.String("containerID", res.ID),
+		zap.String("containerID", result.ContainerID),
+		zap.String("exposedPort", result.ExposedPort),
 	)
 
-	running, err := aps.waitForRunning(ctx, dockerClient, res.ID, containerPortProto)
-	if err != nil || !running {
-		aps.logger.Sugar().Errorw("Failed to wait for Docker container to be running",
+	// Start health check for default container
+	healthCtx, cancel := context.WithCancel(ctx)
+	aps.healthCheckCancel = cancel
+
+	go aps.containerController.StartHealthCheck(healthCtx, &runtime.HealthCheckConfig{
+		Client:      aps.performerClient,
+		Identifier:  "default",
+		ContainerID: aps.config.AvsAddress,
+	})
+
+	return nil
+}
+
+// Start begins monitoring for new artifacts and creating containers
+func (aps *AvsPerformerServer) Start(ctx context.Context) {
+	aps.logger.Sugar().Infow("Starting artifact monitoring for AVS performer",
+		zap.String("avsAddress", aps.config.AvsAddress),
+	)
+
+	go aps.monitorArtifacts(ctx)
+}
+
+// monitorArtifacts periodically checks for new artifacts and creates containers
+func (aps *AvsPerformerServer) monitorArtifacts(ctx context.Context) {
+	ticker := time.NewTicker(artifactCheckInterval)
+	defer ticker.Stop()
+
+	// Check immediately on startup
+	aps.updateServerPool(ctx)
+
+	for {
+		select {
+		case <-ctx.Done():
+			aps.logger.Sugar().Infow("Stopping artifact monitoring",
+				zap.String("avsAddress", aps.config.AvsAddress),
+			)
+			return
+		case <-ticker.C:
+			aps.updateServerPool(ctx)
+		}
+	}
+}
+
+// updateServerPool checks for new artifacts and creates containers for them
+func (aps *AvsPerformerServer) updateServerPool(ctx context.Context) {
+	artifacts, err := aps.artifactMonitor.GetArtifacts(aps.config.AvsAddress)
+	if err != nil {
+		aps.logger.Sugar().Debugw("No artifacts found for AVS",
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.Error(err),
 		)
-		shutdownErr := aps.Shutdown()
-		if shutdownErr != nil {
-			err = errors.Wrap(err, "failed to shutdown Docker container")
-		}
-		return err
+		return
 	}
 
-	containerInfo, err := dockerClient.ContainerInspect(ctx, res.ID)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to inspect Docker container for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		shutdownErr := aps.Shutdown()
-		if shutdownErr != nil {
-			err = errors.Wrap(err, "failed to shutdown Docker container")
-		}
-		return err
+	aps.artifactsMutex.RLock()
+	currentArtifacts := make(map[string]bool)
+	for digest := range aps.artifactContainers {
+		currentArtifacts[digest] = true
 	}
-	var exposedPort string
-	if portMap, ok := containerInfo.NetworkSettings.Ports[containerPortProto]; !ok {
-		aps.logger.Sugar().Errorw("Failed to get exposed port from Docker container",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		shutdownErr := aps.Shutdown()
-		if shutdownErr != nil {
-			err = errors.Wrap(err, "failed to shutdown Docker container")
+	aps.artifactsMutex.RUnlock()
+
+	// Find new artifacts
+	for _, artifact := range artifacts {
+		if _, exists := currentArtifacts[artifact.Digest]; !exists {
+			aps.logger.Sugar().Infow("Found new artifact to deploy",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.String("digest", artifact.Digest),
+				zap.String("operatorSetId", artifact.OperatorSetId),
+				zap.String("registryUrl", artifact.RegistryUrl),
+			)
+
+			if err := aps.createArtifactContainer(ctx, artifact); err != nil {
+				aps.logger.Sugar().Errorw("Failed to create container for artifact",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.String("digest", artifact.Digest),
+					zap.Error(err),
+				)
+			}
 		}
-		return err
-	} else if len(portMap) == 0 {
-		aps.logger.Sugar().Errorw("No exposed ports found in Docker container",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
+	}
+}
+
+// createArtifactContainer creates a new container for the given artifact
+func (aps *AvsPerformerServer) createArtifactContainer(ctx context.Context, artifact *artifactMonitor.PerformerArtifact) error {
+	// Generate unique container name based on AVS address and digest
+	// TODO: add a uuid for this to be unique
+	containerName := fmt.Sprintf("avs-performer-%s-%s",
+		hashAvsAddress(aps.config.AvsAddress),
+		artifact.Digest)
+
+	// Determine image to use
+	var image string
+	if artifact.Digest != "" {
+		// Use the registry URL from the artifact
+		image = artifact.RegistryUrl
 	} else {
-		exposedPort = portMap[0].HostPort
+		// Fall back to config image with digest as tag
+		image = fmt.Sprintf("%s:%s", aps.config.Image.Repository, artifact.Digest)
 	}
 
-	containerHost := "localhost"
-	if aps.config.PerformerNetworkName != "" {
-		containerHost = hostname
-		exposedPort = fmt.Sprintf("%d", containerPort)
-		aps.logger.Sugar().Infow("Custom network provided, using container hostname and container port",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("containerHost", containerHost),
-			zap.String("exposedPort", exposedPort),
-			zap.String("containerID", res.ID),
-		)
+	aps.logger.Sugar().Infow("Creating container for artifact",
+		zap.String("containerName", containerName),
+		zap.String("image", image),
+		zap.String("digest", artifact.Digest),
+	)
+
+	containerConfig := &runtime.ContainerConfig{
+		Name:        containerName,
+		Image:       image,
+		NetworkName: aps.config.PerformerNetworkName,
+		Labels: map[string]string{
+			"avs.address":     aps.config.AvsAddress,
+			"artifact.digest": artifact.Digest,
+			"operator.set.id": artifact.OperatorSetId,
+			"type":            "artifact",
+		},
+		Logger: aps.logger,
 	}
 
-	perfClient, err := avsPerformerClient.NewAvsPerformerClient(fmt.Sprintf("%s:%s", containerHost, exposedPort), true)
+	result, err := aps.containerController.CreateAndStartContainer(ctx, containerConfig)
 	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create performer perfClient",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		shutdownErr := aps.Shutdown()
-		if shutdownErr != nil {
-			err = errors.Wrap(err, "failed to shutdown Docker container")
-		}
-		return err
+		return fmt.Errorf("failed to create artifact container: %w", err)
 	}
-	aps.performerClient = perfClient
 
-	go aps.startHealthCheck(ctx)
+	// Create health check context for this container
+	healthCtx, cancel := context.WithCancel(ctx)
+
+	// Store the artifact container
+	artifactContainer := &ArtifactContainer{
+		Artifact:        artifact,
+		ContainerID:     result.ContainerID,
+		PerformerClient: result.PerformerClient,
+		CreatedAt:       time.Now(),
+		CancelFunc:      cancel,
+	}
+
+	aps.artifactsMutex.Lock()
+	aps.artifactContainers[artifact.Digest] = artifactContainer
+	aps.artifactsMutex.Unlock()
+
+	aps.logger.Sugar().Infow("Successfully created container for artifact",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("digest", artifact.Digest),
+		zap.String("containerID", result.ContainerID),
+		zap.String("exposedPort", result.ExposedPort),
+	)
+
+	// Start health check for this container
+	go aps.containerController.StartHealthCheck(healthCtx, &runtime.HealthCheckConfig{
+		Client:      result.PerformerClient,
+		Identifier:  artifact.Digest,
+		ContainerID: result.ContainerID,
+	})
 
 	return nil
-}
-
-func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
-	sig, err := bn254.NewSignatureFromBytes(t.Signature)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create signature from bytes",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	peer := util.Find(aps.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
-		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
-	})
-	if peer == nil {
-		aps.logger.Sugar().Errorw("Failed to find peer for task",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-		)
-		return fmt.Errorf("failed to find peer for task")
-	}
-
-	verfied, err := sig.Verify(peer.PublicKey, t.Payload)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to verify signature",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	if !verfied {
-		aps.logger.Sugar().Errorw("Failed to verify signature",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("publicKey", string(peer.PublicKey.Bytes())),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to verify signature")
-	}
-
-	return nil
-}
-
-func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
-	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
-
-	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
-		TaskId:  []byte(task.TaskID),
-		Payload: task.Payload,
-	})
-	if err != nil {
-		aps.logger.Sugar().Errorw("Performer failed to handle task",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	return performerTask.NewTaskResultFromResultProto(res), nil
 }
 
 func (aps *AvsPerformerServer) Shutdown() error {
+	// Cancel default container health check
+	if aps.healthCheckCancel != nil {
+		aps.healthCheckCancel()
+	}
+
+	// Shutdown all artifact containers
+	aps.artifactsMutex.Lock()
+	for digest, ac := range aps.artifactContainers {
+		aps.logger.Sugar().Infow("Stopping artifact container",
+			zap.String("digest", digest),
+			zap.String("containerID", ac.ContainerID),
+		)
+
+		// Cancel health check
+		if ac.CancelFunc != nil {
+			ac.CancelFunc()
+		}
+
+		// Stop and remove container
+		aps.containerController.StopAndRemoveContainer(ac.ContainerID)
+	}
+	aps.artifactContainers = make(map[string]*ArtifactContainer)
+	aps.artifactsMutex.Unlock()
+
+	// Shutdown the default container
 	if len(aps.containerId) == 0 {
 		return nil
 	}
-	if aps.dockerClient == nil {
-		return nil
+
+	aps.logger.Sugar().Infow("Stopping default Docker container",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("containerID", aps.containerId),
+	)
+
+	aps.containerController.StopAndRemoveContainer(aps.containerId)
+
+	return nil
+}
+
+// GetPerformerClient returns the appropriate performer client based on the artifact digest
+func (aps *AvsPerformerServer) GetPerformerClient(artifactDigest string) performerV1.PerformerServiceClient {
+	if artifactDigest == "" {
+		return aps.performerClient
 	}
 
-	aps.logger.Sugar().Infow("Stopping Docker container for performer",
-		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.String("containerID", aps.containerId),
-	)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := aps.dockerClient.ContainerStop(ctx, aps.containerId, container.StopOptions{}); err != nil {
-		aps.logger.Sugar().Errorw("Failed to stop Docker container for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-	} else {
-		aps.logger.Sugar().Infow("Stopped Docker container for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("containerID", aps.containerId),
-		)
+	aps.artifactsMutex.RLock()
+	defer aps.artifactsMutex.RUnlock()
+
+	if ac, exists := aps.artifactContainers[artifactDigest]; exists {
+		return ac.PerformerClient
 	}
-	aps.logger.Sugar().Infow("Removing Docker container for performer",
-		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.String("containerID", aps.containerId),
+
+	// Fall back to default performer if artifact not found
+	aps.logger.Sugar().Warnw("Artifact container not found, using default performer",
+		zap.String("artifactDigest", artifactDigest),
 	)
-	if err := aps.dockerClient.ContainerRemove(context.Background(), aps.containerId, container.RemoveOptions{
-		Force: true,
-	}); err != nil {
-		aps.logger.Sugar().Errorw("Failed to remove Docker container for performer",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-	return nil
+	return aps.performerClient
 }

@@ -28,7 +28,7 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run the aggregator",
+	Short: "Start the aggregator",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
 		log, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})

@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/artifactMonitor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/runtime"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
@@ -17,15 +20,18 @@ import (
 )
 
 type Executor struct {
-	logger        *zap.Logger
-	config        *executorConfig.ExecutorConfig
-	avsPerformers map[string]avsPerformer.IAvsPerformer
-	rpcServer     *rpcServer.RpcServer
-	signer        signer.ISigner
+	logger            *zap.Logger
+	config            *executorConfig.ExecutorConfig
+	avsPerformers     map[string]avsPerformer.IAvsPerformer
+	runtimeController runtime.IContainerRuntimeController
+	rpcServer         *rpcServer.RpcServer
+	signer            signer.ISigner
 
 	inflightTasks *sync.Map
 
-	peeringFetcher peering.IPeeringDataFetcher
+	peeringFetcher  peering.IPeeringDataFetcher
+	artifactMonitor *artifactMonitor.PerformerArtifactMonitor
+	poller          chainPoller.IChainPoller
 }
 
 func NewExecutorWithRpcServer(
@@ -34,6 +40,8 @@ func NewExecutorWithRpcServer(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	runtimeController runtime.IContainerRuntimeController,
+	artifactMonitor *artifactMonitor.PerformerArtifactMonitor,
 ) (*Executor, error) {
 	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 		GrpcPort: port,
@@ -42,7 +50,7 @@ func NewExecutorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signer, peeringFetcher), nil
+	return NewExecutor(config, rpc, logger, signer, peeringFetcher, runtimeController, artifactMonitor, nil), nil
 }
 
 func NewExecutor(
@@ -51,15 +59,21 @@ func NewExecutor(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	runtimeController runtime.IContainerRuntimeController,
+	artifactMonitor *artifactMonitor.PerformerArtifactMonitor,
+	poller chainPoller.IChainPoller,
 ) *Executor {
 	return &Executor{
-		logger:         logger,
-		config:         config,
-		avsPerformers:  make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:      rpcServer,
-		signer:         signer,
-		inflightTasks:  &sync.Map{},
-		peeringFetcher: peeringFetcher,
+		logger:            logger,
+		config:            config,
+		avsPerformers:     make(map[string]avsPerformer.IAvsPerformer),
+		rpcServer:         rpcServer,
+		signer:            signer,
+		inflightTasks:     &sync.Map{},
+		peeringFetcher:    peeringFetcher,
+		runtimeController: runtimeController,
+		artifactMonitor:   artifactMonitor,
+		poller:            poller,
 	}
 }
 
@@ -87,6 +101,8 @@ func (e *Executor) Initialize() error {
 					SigningCurve:         avs.SigningCurve,
 				},
 				e.peeringFetcher,
+				e.artifactMonitor,
+				e.runtimeController,
 				e.logger,
 			)
 			if err != nil {
@@ -127,7 +143,9 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 			)
 			return fmt.Errorf("failed to initialize AVS performer: %v", err)
 		}
+		performer.Start(ctx)
 	}
+
 	go func() {
 		<-ctx.Done()
 		e.logger.Sugar().Info("Shutting down AVS performers")
@@ -143,12 +161,19 @@ func (e *Executor) BootPerformers(ctx context.Context) error {
 	return nil
 }
 
-func (e *Executor) Run(ctx context.Context) error {
+func (e *Executor) Start(ctx context.Context) error {
 	e.logger.Info("Executor is running",
 		zap.String("version", "1.0.0"),
 		zap.String("operatorAddress", e.config.Operator.Address),
 	)
-	if err := e.rpcServer.Start(ctx); err != nil {
+
+	e.artifactMonitor.Start(ctx)
+	err := e.poller.Start(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err = e.rpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start RPC server: %v", err)
 	}
 	return nil

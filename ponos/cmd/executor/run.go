@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
@@ -10,16 +12,18 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/artifactMonitor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/runtime"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/docker/docker/client"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -29,7 +33,7 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run the executor",
+	Short: "Start the executor",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
 
@@ -101,52 +105,64 @@ var runCmd = &cobra.Command{
 		}
 
 		var pdf peering.IPeeringDataFetcher
-		if Config.Simulation != nil && Config.Simulation.SimulatePeering != nil && Config.Simulation.SimulatePeering.Enabled {
-			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.Simulation.SimulatePeering.AggregatorPeers)
-			if err != nil {
-				l.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
-			}
-			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-				AggregatorPeers: simulatedPeers,
-			}, l)
-		} else {
-			ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-				BaseUrl: Config.L1Chain.RpcUrl,
-			}, l)
+		ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+			BaseUrl: Config.L1Chain.RpcUrl,
+		}, l)
 
-			mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
-				return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
-			})
-			if mailboxContract == nil {
-				return fmt.Errorf("task mailbox contract not found")
-			}
-
-			cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-				PrivateKey:          "",
-				AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
-				TaskMailboxAddress:  mailboxContract.Address,
-			}, ethereumClient, l)
-			if err != nil {
-				return fmt.Errorf("failed to initialize contract caller: %w", err)
-			}
-
-			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
+		mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
+			return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
+		})
+		if mailboxContract == nil {
+			return fmt.Errorf("task mailbox contract not found")
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
+		cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
+			PrivateKey:          "",
+			AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
+			TaskMailboxAddress:  mailboxContract.Address,
+		}, ethereumClient, l)
+		if err != nil {
+			return fmt.Errorf("failed to initialize contract caller: %w", err)
+		}
+
+		pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
+		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
+		logsChan := make(chan *chainPoller.LogWithBlock)
+		poller := EVMChainPoller.NewEVMChainPoller(ethereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
+			ChainId:                 config.ChainId_EthereumAnvil,
+			PollingInterval:         time.Duration(10) * time.Second,
+			EigenLayerCoreContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
+			InterestingContracts:    []string{},
+		}, l)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		dockerClient, err := client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			l.Sugar().Errorw("Failed to create Docker client for performer", zap.Error(err))
+			cancel()
+			return err
+		}
+		dockerClient.NegotiateAPIVersion(ctx)
+		runtimeController := runtime.NewDockerRuntimeController(l, dockerClient)
+		artifactMonitor := artifactMonitor.NewPerformerArtifactMonitor(
+			l,
+			imContractStore,
+			logsChan,
+			Config.AvsPerformers,
+		)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf, runtimeController, artifactMonitor, poller)
 
 		if err := exec.Initialize(); err != nil {
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
 		}
-
-		ctx, cancel := context.WithCancel(context.Background())
 
 		if err := exec.BootPerformers(ctx); err != nil {
 			l.Sugar().Fatalw("Failed to boot performers", zap.Error(err))
 		}
 
 		go func() {
-			if err := exec.Run(ctx); err != nil {
+			if err := exec.Start(ctx); err != nil {
 				l.Sugar().Fatal("Failed to run executor", zap.Error(err))
 			}
 		}()
