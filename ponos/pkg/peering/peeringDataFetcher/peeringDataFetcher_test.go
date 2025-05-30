@@ -36,10 +36,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		root := testUtils.GetProjectRootPath()
 		t.Logf("Project root path: %s", root)
 
-		chainConfig, err := testUtils.ReadChainConfig(root)
+		multiChainConfig, err := testUtils.ReadChainConfig(root)
 		if err != nil {
 			t.Fatalf("Failed to read chain config: %v", err)
 		}
+		chainConfig := multiChainConfig.L1
 
 		ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 			BaseUrl:   RPCUrl,
@@ -67,7 +68,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			l.Sugar().Fatalf("failed to get Ethereum contract caller: %v", err)
 		}
 
-		anvil, err := testUtils.StartAnvil(root, ctx)
+		anvil, err := testUtils.StartL1Anvil(root, ctx)
 		if err != nil {
 			t.Fatalf("Failed to start Anvil: %v", err)
 		}

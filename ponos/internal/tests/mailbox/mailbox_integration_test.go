@@ -40,10 +40,11 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	root := testUtils.GetProjectRootPath()
 	t.Logf("Project root path: %s", root)
 
-	chainConfig, err := testUtils.ReadChainConfig(root)
+	multiChainConfig, err := testUtils.ReadChainConfig(root)
 	if err != nil {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
+	chainConfig := multiChainConfig.L1
 
 	coreContracts, err := eigenlayer.LoadContracts()
 	if err != nil {
@@ -51,6 +52,10 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	}
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
+
+	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
+		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
+	}
 
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 
@@ -76,7 +81,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	anvil, err := testUtils.StartAnvil(root, ctx)
+	anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
@@ -122,7 +127,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 			if logWithBlock.Log.EventName != "TaskCreated" {
 				continue
 			}
-
+			t.Logf("Found created task log: %+v", logWithBlock.Log)
 			assert.Equal(t, "TaskCreated", logWithBlock.Log.EventName)
 
 			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, chainConfig.MailboxContractAddress)
