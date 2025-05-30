@@ -43,23 +43,26 @@ sleep 3
 # -----------------------------------------------------------------------------
 # Start Base L2
 # -----------------------------------------------------------------------------
-# anvil \
-#     --fork-url $L2_FORK_RPC_URL \
-#     --dump-state $anvilL2DumpStatePath \
-#     --config-out $anvilL2DumpStatePath \
-#     --chain-id $anvilL2ChinId \
-#     --fork-block-number $anvilL2StartBlock &
-# anvilL2Pid=$!
-# sleep 3
+anvil \
+    --fork-url $L2_FORK_RPC_URL \
+    --dump-state $anvilL2DumpStatePath \
+    --config-out $anvilL2ConfigPath \
+    --chain-id $anvilL2ChinId \
+    --port $anvilL2RpcPort \
+    --fork-block-number $anvilL2StartBlock &
+anvilL2Pid=$!
+sleep 3
 
 # loop over the seed accounts (json array) and fund the accounts
 numAccounts=$(echo $seedAccounts | jq '. | length - 1')
 for i in $(seq 0 $numAccounts); do
     account=$(echo $seedAccounts | jq -r ".[$i]")
     address=$(echo $account | jq -r '.address')
-    echo "Funding address $address"
+    echo "Funding address $address on L1"
     cast rpc --rpc-url $anvilL1RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
-    echo "Account $address funded with 10,000 ETH"
+
+    echo "Funding address $address on L2"
+    cast rpc --rpc-url $anvilL2RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
 done
 
 
@@ -99,59 +102,68 @@ echo "Exec Operator account private key: $execOperatorAccountPk"
 echo $deployAccount
 echo $deployAccountPk
 
-# Get the ChainID from the anvil fork
-chainId=$(curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' http://localhost:8545  | jq -r '.result' | xargs printf "%d\n")
-
-echo "Chain ID: $chainId"
-
 cd ../contracts
 
-export RPC_URL="http://localhost:8545"
+export L1_RPC_URL="http://localhost:${anvilL1RpcPort}"
+export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 
 # -----------------------------------------------------------------------------
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
-echo "Deploying mailbox contract..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $RPC_URL --broadcast
+echo "Deploying mailbox contract to L1..."
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
+mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+echo "Mailbox contract address: $mailboxContractAddressL1"
 
-mailboxContractAddress=$(cat ./broadcast/DeployTaskMailbox.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
-echo "Mailbox contract address: $mailboxContractAddress"
+echo "Deploying mailbox contract to L2..."
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
+mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+echo "Mailbox contract address: $mailboxContractAddressL2"
 
 # -----------------------------------------------------------------------------
 # Deploy L1 avs contract
 # -----------------------------------------------------------------------------
 echo "Deploying L1 AVS contract..."
-forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
+forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
 
-avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "L1 AVS contract address: $l1ContractAddress"
 
 # -----------------------------------------------------------------------------
 # Setup L1 AVS
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
+forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
 
 # -----------------------------------------------------------------------------
 # Deploy L2
 # -----------------------------------------------------------------------------
-echo "Deploying L2 contracts..."
-forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $RPC_URL --broadcast
-taskHookAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
-certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[1].contractAddress')
+echo "Deploying L2 contracts on L1..."
+forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
+taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+certificateVerifierAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[1].contractAddress')
+
+echo "Deploying L2 contracts on L2..."
+forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
+taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+certificateVerifierAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
 # -----------------------------------------------------------------------------
 # Setup L1 task mailbox config
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddressL1 $certificateVerifierAddressL1 $taskHookAddressL1
+
+echo "Setting up L2 AVS..."
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddressL2 $certificateVerifierAddressL2 $taskHookAddressL2
 
 # -----------------------------------------------------------------------------
 # Create test task
 # -----------------------------------------------------------------------------
-# forge script script/CreateTask.s.sol --rpc-url $RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddress $avsAccountAddress
+# forge script script/CreateTask.s.sol --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL1 $avsAccountAddress
 
 kill $anvilL1Pid
+kill $anvilL2Pid
 sleep 3
 
 cd ../ponos
@@ -160,6 +172,8 @@ rm -rf ./internal/testData/anvil*.json
 
 cp -R $anvilL1DumpStatePath internal/testData/anvil-l1-state.json
 cp -R $anvilL1ConfigPath internal/testData/anvil-l1-config.json
+cp -R $anvilL2DumpStatePath internal/testData/anvil-l2-state.json
+cp -R $anvilL2ConfigPath internal/testData/anvil-l2-config.json
 
 # make the files read-only since anvil likes to overwrite things
 chmod 444 internal/testData/anvil*
@@ -181,10 +195,13 @@ cat <<EOF > internal/testData/chain-config.json
       "operatorAccountPk": "$operatorAccountPk",
       "execOperatorAccountAddress": "$execOperatorAccountAddress",
       "execOperatorAccountPk": "$execOperatorAccountPk",
-      "mailboxContractAddress": "$mailboxContractAddress",
+      "mailboxContractAddressL1": "$mailboxContractAddressL1",
+      "mailboxContractAddressL2": "$mailboxContractAddressL2",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
-      "taskHookAddress": "$taskHookAddress",
-      "certificateVerifierAddress": "$certificateVerifierAddress",
+      "taskHookAddressL1": "$taskHookAddressL1",
+      "taskHookAddressL2": "$taskHookAddressL2",
+      "certificateVerifierAddressL1": "$certificateVerifierAddressL1",
+      "certificateVerifierAddressL2": "$certificateVerifierAddressL2",
       "destinationEnv": "anvil"
   }
 }
