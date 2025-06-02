@@ -3,6 +3,11 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
@@ -15,10 +20,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func Test_Executor(t *testing.T) {
@@ -75,7 +76,8 @@ func Test_Executor(t *testing.T) {
 		},
 	}, l)
 
-	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf)
+	// TODO: fix nil inputs
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf, nil, nil)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}

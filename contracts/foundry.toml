@@ -12,13 +12,14 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@eigenlayer-middleware/=lib/eigenlayer-middleware/",
     "@eigenlayer-contracts/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/",
-    "@openzeppelin/=lib/eigenlayer-middleware/lib/openzeppelin-contracts/"
+    "@openzeppelin/=lib/eigenlayer-middleware/lib/openzeppelin-contracts/",
+    "@openzeppelin-upgradeable/=lib/eigenlayer-middleware/lib/openzeppelin-contracts-upgradeable/"
 ]
 
 # Specifies the exact version of Solidity to use, overriding auto-detection.
 solc_version = '0.8.27'
 # If set to true, changes compilation pipeline to go through the new IR optimizer.
-via_ir = false
+via_ir = true
 # Whether or not to enable the Solidity optimizer.
 optimizer = true
 # The number of runs specifies roughly how often each opcode of the deployed code will be executed 
