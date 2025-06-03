@@ -19,16 +19,15 @@ func HashAvsAddress(avsAddress string) string {
 // CreateDefaultContainerConfig creates a default container configuration for AVS performers
 func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag string, containerPort int, networkName string) *ContainerConfig {
 	hostname := fmt.Sprintf("avs-performer-%s", HashAvsAddress(avsAddress))
-	containerPortProto := nat.Port(fmt.Sprintf("%d/tcp", containerPort))
 
 	return &ContainerConfig{
 		Hostname: hostname,
 		Image:    fmt.Sprintf("%s:%s", imageRepo, imageTag),
 		ExposedPorts: nat.PortSet{
-			containerPortProto: struct{}{},
+			nat.Port(fmt.Sprintf("%d/tcp", containerPort)): struct{}{},
 		},
 		PortBindings: nat.PortMap{
-			containerPortProto: []nat.PortBinding{
+			nat.Port(fmt.Sprintf("%d/tcp", containerPort)): []nat.PortBinding{
 				{
 					HostIP:   "0.0.0.0",
 					HostPort: "", // Let Docker assign a random port

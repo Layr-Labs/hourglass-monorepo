@@ -3,10 +3,8 @@ package serverPerformer
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
@@ -15,6 +13,8 @@ import (
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"strings"
+	"time"
 )
 
 type AvsPerformerServer struct {
@@ -23,7 +23,6 @@ type AvsPerformerServer struct {
 	containerManager containerManager.ContainerManager
 	containerInfo    *containerManager.ContainerInfo
 	performerClient  performerV1.PerformerServiceClient
-	healthChan       <-chan bool
 
 	peeringFetcher peering.IPeeringDataFetcher
 
@@ -174,13 +173,42 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	}
 	aps.performerClient = perfClient
 
-	// Start health checking
-	healthChan, err := aps.containerManager.StartHealthCheck(ctx, containerInfo.ID, nil)
+	// Start liveness monitoring with auto-restart capabilities
+	livenessConfig := &containerManager.LivenessConfig{
+		HealthCheckConfig: containerManager.HealthCheckConfig{
+			Enabled:          true,
+			Interval:         5 * time.Second,
+			Timeout:          2 * time.Second,
+			Retries:          3,
+			StartPeriod:      10 * time.Second,
+			FailureThreshold: 3,
+		},
+		RestartPolicy: containerManager.RestartPolicy{
+			Enabled:            true,
+			MaxRestarts:        5,
+			RestartDelay:       2 * time.Second,
+			BackoffMultiplier:  2.0,
+			MaxBackoffDelay:    30 * time.Second,
+			RestartTimeout:     60 * time.Second,
+			RestartOnCrash:     true,
+			RestartOnOOM:       true,
+			RestartOnUnhealthy: false, // Let application decide via TriggerRestart
+		},
+		ResourceThresholds: containerManager.ResourceThresholds{
+			CPUThreshold:    90.0,
+			MemoryThreshold: 90.0,
+			RestartOnCPU:    false, // Log warnings but don't auto-restart
+			RestartOnMemory: false, // Log warnings but don't auto-restart
+		},
+		ResourceMonitoring:    true,
+		ResourceCheckInterval: 30 * time.Second,
+	}
+
+	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, containerInfo.ID, livenessConfig)
 	if err != nil {
-		aps.logger.Warn("Failed to start health check", zap.Error(err))
+		aps.logger.Warn("Failed to start liveness monitoring", zap.Error(err))
 	} else {
-		aps.healthChan = healthChan
-		go aps.monitorHealth(ctx)
+		go aps.monitorContainerEvents(ctx, eventChan)
 	}
 
 	// Start application-level health checking
@@ -189,40 +217,168 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// monitorHealth monitors the health check channel and logs health status changes
-func (aps *AvsPerformerServer) monitorHealth(ctx context.Context) {
-	if aps.healthChan == nil {
-		return
-	}
-
+// monitorContainerEvents monitors container lifecycle events and handles them appropriately
+func (aps *AvsPerformerServer) monitorContainerEvents(ctx context.Context, eventChan <-chan containerManager.ContainerEvent) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case healthy, ok := <-aps.healthChan:
+		case event, ok := <-eventChan:
 			if !ok {
-				aps.logger.Info("Health check channel closed")
+				aps.logger.Info("Container event channel closed")
 				return
 			}
-			if healthy {
-				aps.logger.Debug("Container health check passed",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", aps.containerInfo.ID),
-				)
-			} else {
-				aps.logger.Error("Container health check failed",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", aps.containerInfo.ID),
-				)
-			}
+			aps.handleContainerEvent(ctx, event)
 		}
 	}
 }
 
+// handleContainerEvent processes individual container events
+func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event containerManager.ContainerEvent) {
+	aps.logger.Info("Container event received",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("containerID", event.ContainerID),
+		zap.String("eventType", string(event.Type)),
+		zap.String("message", event.Message),
+		zap.Int("restartCount", event.State.RestartCount),
+	)
+
+	switch event.Type {
+	case containerManager.EventStarted:
+		aps.logger.Info("Container started successfully",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+		)
+
+	case containerManager.EventCrashed:
+		aps.logger.Error("Container crashed",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.Int("exitCode", event.State.ExitCode),
+			zap.Int("restartCount", event.State.RestartCount),
+			zap.String("error", event.State.Error),
+		)
+		// Auto-restart is handled by containerManager based on RestartPolicy
+
+	case containerManager.EventOOMKilled:
+		aps.logger.Error("Container killed due to OOM",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.Int("restartCount", event.State.RestartCount),
+		)
+		// Auto-restart is handled by containerManager
+
+	case containerManager.EventRestarted:
+		aps.logger.Info("Container restarted successfully",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.Int("restartCount", event.State.RestartCount),
+		)
+		// Recreate performer client connection after restart
+		go aps.recreatePerformerClient(ctx)
+
+	case containerManager.EventRestartFailed:
+		aps.logger.Error("Container restart failed",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.String("error", event.Message),
+			zap.Int("restartCount", event.State.RestartCount),
+		)
+		// Could potentially signal the executor to take additional action
+
+	case containerManager.EventHealthy:
+		aps.logger.Debug("Container health recovered",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+		)
+
+	case containerManager.EventUnhealthy:
+		aps.logger.Warn("Container is unhealthy",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.String("reason", event.Message),
+		)
+		// The container manager will handle auto-restart based on policy
+		// Application can decide to trigger manual restart if needed
+
+	case containerManager.EventRestarting:
+		aps.logger.Info("Container is being restarted",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", event.ContainerID),
+			zap.String("reason", event.Message),
+		)
+	}
+}
+
+// recreatePerformerClient recreates the performer client connection after container restart
+func (aps *AvsPerformerServer) recreatePerformerClient(ctx context.Context) {
+	// Wait a moment for the container to fully start
+	time.Sleep(2 * time.Second)
+
+	// Get updated container information
+	updatedInfo, err := aps.containerManager.Inspect(ctx, aps.containerInfo.ID)
+	if err != nil {
+		aps.logger.Error("Failed to inspect container after restart",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return
+	}
+	aps.containerInfo = updatedInfo
+
+	// Get the new container endpoint
+	endpoint, err := containerManager.GetContainerEndpoint(updatedInfo, containerPort, aps.config.PerformerNetworkName)
+	if err != nil {
+		aps.logger.Error("Failed to get container endpoint after restart",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Create new performer client
+	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, true)
+	if err != nil {
+		aps.logger.Error("Failed to recreate performer client after restart",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return
+	}
+
+	aps.performerClient = perfClient
+	aps.logger.Info("Performer client recreated successfully after container restart",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("endpoint", endpoint),
+	)
+}
+
+// TriggerContainerRestart allows the application to manually trigger a container restart
+func (aps *AvsPerformerServer) TriggerContainerRestart(reason string) error {
+	if aps.containerManager == nil || aps.containerInfo == nil {
+		return fmt.Errorf("container manager or container info not available")
+	}
+
+	aps.logger.Info("Triggering manual container restart",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("containerID", aps.containerInfo.ID),
+		zap.String("reason", reason),
+	)
+
+	return aps.containerManager.TriggerRestart(aps.containerInfo.ID, reason)
+}
+
 // startApplicationHealthCheck performs application-level health checks via gRPC
 func (aps *AvsPerformerServer) startApplicationHealthCheck(ctx context.Context) {
+	aps.logger.Sugar().Infow("Starting application health check",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("containerId", aps.containerInfo.ID),
+	)
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	consecutiveFailures := 0
+	const maxConsecutiveFailures = 3
 
 	for {
 		select {
@@ -235,12 +391,42 @@ func (aps *AvsPerformerServer) startApplicationHealthCheck(ctx context.Context) 
 
 			res, err := aps.performerClient.HealthCheck(ctx, &performerV1.HealthCheckRequest{})
 			if err != nil {
+				consecutiveFailures++
 				aps.logger.Sugar().Errorw("Failed to get health from performer",
 					zap.String("avsAddress", aps.config.AvsAddress),
 					zap.Error(err),
+					zap.Int("consecutiveFailures", consecutiveFailures),
 				)
+
+				// Trigger container restart if we've had too many consecutive failures
+				if consecutiveFailures >= maxConsecutiveFailures {
+					aps.logger.Error("Application health check failed multiple times, triggering container restart",
+						zap.String("avsAddress", aps.config.AvsAddress),
+						zap.Int("consecutiveFailures", consecutiveFailures),
+					)
+
+					if err := aps.TriggerContainerRestart(fmt.Sprintf("application health check failed %d consecutive times", consecutiveFailures)); err != nil {
+						aps.logger.Error("Failed to trigger container restart",
+							zap.String("avsAddress", aps.config.AvsAddress),
+							zap.Error(err),
+						)
+					}
+
+					// Reset counter after triggering restart
+					consecutiveFailures = 0
+				}
 				continue
 			}
+
+			// Reset failure counter on successful health check
+			if consecutiveFailures > 0 {
+				aps.logger.Info("Application health check recovered",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.Int("previousFailures", consecutiveFailures),
+				)
+				consecutiveFailures = 0
+			}
+
 			aps.logger.Sugar().Debugw("Got health response",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("status", res.Status.String()),
