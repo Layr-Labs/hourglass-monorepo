@@ -293,7 +293,7 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	dcm.logger.Debug("Waiting for container to be running", 
+	dcm.logger.Debug("Waiting for container to be running",
 		zap.String("containerID", containerID),
 		zap.Duration("timeout", timeout),
 	)
@@ -314,14 +314,14 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 		case <-ticker.C:
 			running, err := dcm.IsRunning(ctx, containerID)
 			if err != nil {
-				dcm.logger.Debug("Failed to check container status", 
+				dcm.logger.Debug("Failed to check container status",
 					zap.String("containerID", containerID),
 					zap.Error(err),
 				)
 				return errors.Wrap(err, "failed to check container status")
 			}
 
-			dcm.logger.Debug("Container status check", 
+			dcm.logger.Debug("Container status check",
 				zap.String("containerID", containerID),
 				zap.Bool("running", running),
 			)
@@ -333,7 +333,7 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 					return errors.Wrap(err, "failed to inspect container")
 				}
 
-				dcm.logger.Debug("Container port inspection", 
+				dcm.logger.Debug("Container port inspection",
 					zap.String("containerID", containerID),
 					zap.Int("portCount", len(info.Ports)),
 					zap.Any("ports", info.Ports),
@@ -345,7 +345,7 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 					// Check if container is on a custom network
 					for networkName := range info.Networks {
 						if networkName != "bridge" && networkName != "host" && networkName != "none" {
-							dcm.logger.Info("Container is running on custom network", 
+							dcm.logger.Info("Container is running on custom network",
 								zap.String("containerID", containerID),
 								zap.String("network", networkName),
 							)
@@ -356,7 +356,7 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 
 				// For bridge network, check if ports are exposed
 				if len(info.Ports) > 0 {
-					dcm.logger.Info("Container is running with ports exposed", 
+					dcm.logger.Info("Container is running with ports exposed",
 						zap.String("containerID", containerID),
 						zap.Any("ports", info.Ports),
 					)
@@ -364,7 +364,7 @@ func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, container
 				}
 
 				// If no ports but container is running, log warning and continue waiting
-				dcm.logger.Warn("Container is running but no ports are exposed", 
+				dcm.logger.Warn("Container is running but no ports are exposed",
 					zap.String("containerID", containerID),
 				)
 			}
@@ -531,7 +531,7 @@ func (dcm *DockerContainerManager) Shutdown(ctx context.Context) error {
 	for containerID, monitor := range dcm.livenessMonitors {
 		monitor.cancelFunc()
 		dcm.logger.Debug("Stopped liveness monitor during shutdown", zap.String("containerID", containerID))
-		
+
 		// Close channels in a goroutine to avoid blocking
 		go func(ch chan ContainerEvent) {
 			time.Sleep(10 * time.Millisecond)
@@ -745,7 +745,7 @@ func (dcm *DockerContainerManager) GetResourceUsage(ctx context.Context, contain
 	memoryPercent := float64(0)
 	memoryUsage := int64(0)
 	memoryLimit := int64(0)
-	
+
 	if memoryStats, ok := stat["memory_stats"].(map[string]interface{}); ok {
 		if usage, ok := memoryStats["usage"].(float64); ok {
 			memoryUsage = int64(usage)
@@ -1017,9 +1017,9 @@ func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageN
 
 	// Image not found locally, pull it
 	dcm.logger.Info("Pulling image", zap.String("image", imageName))
-	
+
 	pullOptions := image.PullOptions{}
-	
+
 	// Pull the image
 	pullResponse, err := dcm.client.ImagePull(ctx, imageName, pullOptions)
 	if err != nil {

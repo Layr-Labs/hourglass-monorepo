@@ -23,7 +23,7 @@ type ContainerManagerTestSuite struct {
 func (suite *ContainerManagerTestSuite) SetupSuite() {
 	suite.logger = zaptest.NewLogger(suite.T())
 	suite.ctx = context.Background()
-	
+
 	var err error
 	suite.dcm, err = NewDockerContainerManager(nil, suite.logger)
 	suite.Require().NoError(err)
@@ -68,7 +68,7 @@ func (suite *ContainerManagerTestSuite) TestBasicFunctionality() {
 // TestMonitoringFunctionality tests monitoring capabilities
 func (suite *ContainerManagerTestSuite) TestMonitoringFunctionality() {
 	containerID := "test-container-monitoring"
-	
+
 	suite.T().Run("start liveness monitoring", func(t *testing.T) {
 		config := &LivenessConfig{
 			HealthCheckConfig: HealthCheckConfig{
@@ -92,7 +92,7 @@ func (suite *ContainerManagerTestSuite) TestMonitoringFunctionality() {
 		suite.dcm.mu.RLock()
 		monitor, exists := suite.dcm.livenessMonitors[containerID]
 		suite.dcm.mu.RUnlock()
-		
+
 		suite.True(exists)
 		suite.Equal(containerID, monitor.containerID)
 		suite.Equal(0, monitor.restartCount)
@@ -105,12 +105,12 @@ func (suite *ContainerManagerTestSuite) TestMonitoringFunctionality() {
 
 	suite.T().Run("stop liveness monitoring", func(t *testing.T) {
 		suite.dcm.StopLivenessMonitoring(containerID)
-		
+
 		// Verify monitor was removed
 		suite.dcm.mu.RLock()
 		_, exists := suite.dcm.livenessMonitors[containerID]
 		suite.dcm.mu.RUnlock()
-		
+
 		suite.False(exists)
 	})
 }
@@ -118,7 +118,7 @@ func (suite *ContainerManagerTestSuite) TestMonitoringFunctionality() {
 // TestHealthCheckFunctionality tests health check capabilities
 func (suite *ContainerManagerTestSuite) TestHealthCheckFunctionality() {
 	containerID := "test-container-health"
-	
+
 	suite.T().Run("start and stop health check", func(t *testing.T) {
 		config := &HealthCheckConfig{
 			Enabled:          true,
@@ -138,7 +138,7 @@ func (suite *ContainerManagerTestSuite) TestHealthCheckFunctionality() {
 
 		// Stop health check
 		suite.dcm.StopHealthCheck(containerID)
-		
+
 		// Verify health check was removed
 		suite.dcm.mu.RLock()
 		_, exists = suite.dcm.healthChecks[containerID]
@@ -154,7 +154,7 @@ func (suite *ContainerManagerTestSuite) TestUtilityFunctions() {
 		hash := HashAvsAddress(address)
 		suite.Len(hash, 6)
 		suite.NotEmpty(hash)
-		
+
 		// Same input should produce same output
 		hash2 := HashAvsAddress(address)
 		suite.Equal(hash, hash2)
@@ -168,7 +168,7 @@ func (suite *ContainerManagerTestSuite) TestUtilityFunctions() {
 		networkName := "test-network"
 
 		config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
-		
+
 		suite.Equal("avs-performer-"+HashAvsAddress(avsAddress), config.Hostname)
 		suite.Equal("test/app:v1.0.0", config.Image)
 		suite.Equal("test-network", config.NetworkName)
@@ -214,17 +214,17 @@ func (suite *ContainerManagerTestSuite) TestConcurrency() {
 		for i := 0; i < numGoroutines; i++ {
 			go func(id int) {
 				containerID := suite.T().Name() + string(rune('a'+id))
-				
+
 				eventChan, err := suite.dcm.StartLivenessMonitoring(suite.ctx, containerID, config)
 				suite.NoError(err)
 				suite.NotNil(eventChan)
-				
+
 				// Let it run briefly
 				time.Sleep(50 * time.Millisecond)
-				
+
 				// Stop monitoring
 				suite.dcm.StopLivenessMonitoring(containerID)
-				
+
 				done <- true
 			}(i)
 		}
@@ -285,18 +285,18 @@ func TestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test suite in short mode")
 	}
-	
+
 	suite.Run(t, new(ContainerManagerTestSuite))
 }
 
 // TestMain provides setup and teardown for the entire test package
 func TestMain(m *testing.M) {
 	// Setup code here if needed
-	
+
 	// Run tests
 	code := m.Run()
-	
+
 	// Teardown code here if needed
-	
+
 	os.Exit(code)
 }

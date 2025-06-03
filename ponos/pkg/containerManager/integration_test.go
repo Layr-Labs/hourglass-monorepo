@@ -20,14 +20,14 @@ func isDockerAvailable(t *testing.T) bool {
 		t.Logf("Docker command not found: %v", err)
 		return false
 	}
-	
+
 	// Check if Docker daemon is running
 	cmd := exec.Command("docker", "info")
 	if err := cmd.Run(); err != nil {
 		t.Logf("Docker daemon not running: %v", err)
 		return false
 	}
-	
+
 	return true
 }
 
@@ -39,12 +39,12 @@ func isTestContainerAvailable(t *testing.T) bool {
 		t.Logf("Failed to check for test container image: %v", err)
 		return false
 	}
-	
+
 	if !strings.Contains(string(output), "ponos-test-container:latest") {
 		t.Logf("Test container image not found. Run 'make build/test-container' to build it.")
 		return false
 	}
-	
+
 	return true
 }
 
@@ -55,17 +55,12 @@ func TestDockerContainerManager_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	// Skip if Docker is not available
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping integration tests")
 	}
-	
-	if !isTestContainerAvailable(t) {
-		t.Skip("Test container image not available, skipping integration tests. Run 'make build/test-container' to build it.")
-	}
-	
-	// Skip if test container is not available
+
 	if !isTestContainerAvailable(t) {
 		t.Skip("Test container image not available, skipping integration tests. Run 'make build/test-container' to build it.")
 	}
@@ -79,10 +74,10 @@ func TestDockerContainerManager_Integration(t *testing.T) {
 
 	// Test with our test container
 	config := &ContainerConfig{
-		Hostname:     "test-ponos",
-		Image:        "ponos-test-container:latest",
-		NetworkName:  "test-network",
-		AutoRemove:   true,
+		Hostname:    "test-ponos",
+		Image:       "ponos-test-container:latest",
+		NetworkName: "test-network",
+		AutoRemove:  true,
 		ExposedPorts: nat.PortSet{
 			"8080/tcp": struct{}{},
 		},
@@ -145,11 +140,11 @@ func TestDockerContainerManager_LivenessMonitoring_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping integration tests")
 	}
-	
+
 	if !isTestContainerAvailable(t) {
 		t.Skip("Test container image not available, skipping integration tests. Run 'make build/test-container' to build it.")
 	}
@@ -163,10 +158,10 @@ func TestDockerContainerManager_LivenessMonitoring_Integration(t *testing.T) {
 
 	// Use test container with HTTP server
 	config := &ContainerConfig{
-		Hostname:     "test-monitoring",
-		Image:        "ponos-test-container:latest",
-		Env:          []string{},
-		AutoRemove:   true,
+		Hostname:   "test-monitoring",
+		Image:      "ponos-test-container:latest",
+		Env:        []string{},
+		AutoRemove: true,
 		ExposedPorts: nat.PortSet{
 			"8080/tcp": struct{}{},
 		},
@@ -176,7 +171,7 @@ func TestDockerContainerManager_LivenessMonitoring_Integration(t *testing.T) {
 		// Create and start container
 		containerInfo, err := dcm.Create(ctx, config)
 		require.NoError(t, err)
-		
+
 		err = dcm.Start(ctx, containerInfo.ID)
 		require.NoError(t, err)
 
@@ -221,7 +216,7 @@ func TestDockerContainerManager_LivenessMonitoring_Integration(t *testing.T) {
 		// Create and start container
 		containerInfo, err := dcm.Create(ctx, config)
 		require.NoError(t, err)
-		
+
 		err = dcm.Start(ctx, containerInfo.ID)
 		require.NoError(t, err)
 
@@ -271,11 +266,11 @@ func TestDockerContainerManager_HealthCheck_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping integration tests")
 	}
-	
+
 	if !isTestContainerAvailable(t) {
 		t.Skip("Test container image not available, skipping integration tests. Run 'make build/test-container' to build it.")
 	}
@@ -288,9 +283,9 @@ func TestDockerContainerManager_HealthCheck_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	config := &ContainerConfig{
-		Hostname:     "test-health",
-		Image:        "ponos-test-container:latest",
-		AutoRemove:   true,
+		Hostname:   "test-health",
+		Image:      "ponos-test-container:latest",
+		AutoRemove: true,
 		ExposedPorts: nat.PortSet{
 			"8080/tcp": struct{}{},
 		},
@@ -300,7 +295,7 @@ func TestDockerContainerManager_HealthCheck_Integration(t *testing.T) {
 		// Create and start container
 		containerInfo, err := dcm.Create(ctx, config)
 		require.NoError(t, err)
-		
+
 		err = dcm.Start(ctx, containerInfo.ID)
 		require.NoError(t, err)
 
@@ -336,11 +331,11 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping integration tests")
 	}
-	
+
 	if !isTestContainerAvailable(t) {
 		t.Skip("Test container image not available, skipping integration tests. Run 'make build/test-container' to build it.")
 	}
@@ -366,7 +361,7 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 		containerInfo, err := dcm.Create(ctx, config)
 		require.NoError(t, err)
 		assert.NotEmpty(t, containerInfo.ID)
-		
+
 		// Verify hostname was set correctly
 		expectedHostname := "avs-performer-" + HashAvsAddress(avsAddress)
 		assert.Equal(t, expectedHostname, containerInfo.Hostname)
@@ -383,7 +378,7 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 		// Clean up
 		_ = dcm.Stop(ctx, containerInfo.ID, 5*time.Second)
 		_ = dcm.Remove(ctx, containerInfo.ID, true)
-		
+
 		// Clean up network
 		if !strings.Contains(networkName, "bridge") {
 			_ = dcm.RemoveNetwork(ctx, networkName)

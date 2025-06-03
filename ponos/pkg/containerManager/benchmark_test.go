@@ -10,7 +10,7 @@ import (
 
 func BenchmarkHashAvsAddress(b *testing.B) {
 	address := "0x1234567890abcdef1234567890abcdef12345678"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = HashAvsAddress(address)
@@ -23,7 +23,7 @@ func BenchmarkCreateDefaultContainerConfig(b *testing.B) {
 	imageTag := "v1.0.0"
 	containerPort := 8080
 	networkName := "avs-network"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
@@ -36,7 +36,7 @@ func BenchmarkContainerManagerCreation(b *testing.B) {
 		DefaultStartTimeout: 30 * time.Second,
 		DefaultStopTimeout:  10 * time.Second,
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		dcm, err := NewDockerContainerManager(config, logger)
@@ -58,7 +58,7 @@ func BenchmarkLivenessMonitoringSetup(b *testing.B) {
 
 	ctx := context.Background()
 	containerID := "benchmark-container"
-	
+
 	config := &LivenessConfig{
 		HealthCheckConfig: HealthCheckConfig{
 			Enabled:          true,
@@ -79,10 +79,10 @@ func BenchmarkLivenessMonitoringSetup(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Clean up
 		dcm.StopLivenessMonitoring(containerID)
-		
+
 		// Drain channel if needed
 		select {
 		case <-eventChan:
@@ -101,7 +101,7 @@ func BenchmarkTriggerRestart(b *testing.B) {
 
 	ctx := context.Background()
 	containerID := "benchmark-container"
-	
+
 	config := &LivenessConfig{
 		HealthCheckConfig: HealthCheckConfig{
 			Enabled:          true,
@@ -126,21 +126,21 @@ func BenchmarkTriggerRestart(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Drain event channel
 		select {
 		case <-eventChan:
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	
+
 	// Clean up
 	dcm.StopLivenessMonitoring(containerID)
 }
 
 func BenchmarkContainerStateCreation(b *testing.B) {
 	now := time.Now()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = &ContainerState{
@@ -163,7 +163,7 @@ func BenchmarkContainerEventCreation(b *testing.B) {
 		StartedAt:    now,
 		RestartCount: 0,
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = ContainerEvent{
@@ -186,7 +186,7 @@ func BenchmarkConcurrentMonitoring(b *testing.B) {
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	
+
 	config := &LivenessConfig{
 		HealthCheckConfig: HealthCheckConfig{
 			Enabled:          true,
@@ -196,12 +196,12 @@ func BenchmarkConcurrentMonitoring(b *testing.B) {
 		RestartPolicy: RestartPolicy{
 			Enabled: false, // Disable to avoid restart overhead
 		},
-		ResourceMonitoring:    false, // Disable to focus on core monitoring
+		ResourceMonitoring: false, // Disable to focus on core monitoring
 	}
 
 	// Number of concurrent monitors
 	numMonitors := 10
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Start multiple monitors concurrently
@@ -214,15 +214,15 @@ func BenchmarkConcurrentMonitoring(b *testing.B) {
 			}
 			eventChans[j] = eventChan
 		}
-		
+
 		// Let monitors run briefly
 		time.Sleep(10 * time.Millisecond)
-		
+
 		// Stop all monitors
 		for j := 0; j < numMonitors; j++ {
 			containerID := string(rune('a' + j))
 			dcm.StopLivenessMonitoring(containerID)
-			
+
 			// Drain event channels
 			select {
 			case <-eventChans[j]:
@@ -235,16 +235,16 @@ func BenchmarkConcurrentMonitoring(b *testing.B) {
 // BenchmarkMemoryUsage tests memory efficiency
 func BenchmarkMemoryUsage(b *testing.B) {
 	logger := zap.NewNop()
-	
+
 	b.ResetTimer()
 	b.ReportAllocs()
-	
+
 	for i := 0; i < b.N; i++ {
 		dcm, err := NewDockerContainerManager(nil, logger)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Create some monitoring
 		ctx := context.Background()
 		config := &LivenessConfig{
@@ -256,12 +256,12 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			RestartPolicy:      RestartPolicy{Enabled: false},
 			ResourceMonitoring: false,
 		}
-		
+
 		_, err = dcm.StartLivenessMonitoring(ctx, "test", config)
 		if err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Clean up
 		_ = dcm.Shutdown(context.Background())
 	}

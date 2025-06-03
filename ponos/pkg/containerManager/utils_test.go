@@ -32,11 +32,11 @@ func TestHashAvsAddress(t *testing.T) {
 			result := HashAvsAddress(tt.address)
 			assert.Len(t, result, 6)
 			assert.NotEmpty(t, result)
-			
+
 			// Same input should produce same output
 			hash2 := HashAvsAddress(tt.address)
 			assert.Equal(t, result, hash2)
-			
+
 			// Verify it's a valid hex string
 			assert.Regexp(t, "^[a-f0-9]{6}$", result)
 		})
@@ -91,7 +91,7 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 			// Verify port configuration
 			expectedPort := nat.Port(fmt.Sprintf("%d/tcp", tt.containerPort))
 			assert.Contains(t, config.ExposedPorts, expectedPort)
-			
+
 			portBindings, exists := config.PortBindings[expectedPort]
 			assert.True(t, exists)
 			assert.Len(t, portBindings, 1)
@@ -114,12 +114,12 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 
 func TestGetContainerEndpoint(t *testing.T) {
 	tests := []struct {
-		name          string
-		containerInfo *ContainerInfo
-		containerPort int
-		networkName   string
+		name             string
+		containerInfo    *ContainerInfo
+		containerPort    int
+		networkName      string
 		expectedEndpoint string
-		expectError   bool
+		expectError      bool
 	}{
 		{
 			name: "custom network endpoint",
@@ -127,10 +127,10 @@ func TestGetContainerEndpoint(t *testing.T) {
 				Hostname: "test-container",
 				Ports:    nat.PortMap{},
 			},
-			containerPort: 8080,
-			networkName:   "custom-network",
+			containerPort:    8080,
+			networkName:      "custom-network",
 			expectedEndpoint: "test-container:8080",
-			expectError:   false,
+			expectError:      false,
 		},
 		{
 			name: "bridge network with port mapping",
@@ -142,10 +142,10 @@ func TestGetContainerEndpoint(t *testing.T) {
 					},
 				},
 			},
-			containerPort: 8080,
-			networkName:   "", // Empty means bridge network
+			containerPort:    8080,
+			networkName:      "", // Empty means bridge network
 			expectedEndpoint: "localhost:32000",
-			expectError:   false,
+			expectError:      false,
 		},
 		{
 			name: "bridge network without port mapping",
@@ -153,10 +153,10 @@ func TestGetContainerEndpoint(t *testing.T) {
 				Hostname: "test-container",
 				Ports:    nat.PortMap{},
 			},
-			containerPort: 8080,
-			networkName:   "", // Empty means bridge network
+			containerPort:    8080,
+			networkName:      "", // Empty means bridge network
 			expectedEndpoint: "",
-			expectError:   true,
+			expectError:      true,
 		},
 		{
 			name: "bridge network with wrong port",
@@ -168,10 +168,10 @@ func TestGetContainerEndpoint(t *testing.T) {
 					},
 				},
 			},
-			containerPort: 8080,
-			networkName:   "", // Empty means bridge network
+			containerPort:    8080,
+			networkName:      "", // Empty means bridge network
 			expectedEndpoint: "",
-			expectError:   true,
+			expectError:      true,
 		},
 	}
 

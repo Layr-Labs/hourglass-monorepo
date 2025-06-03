@@ -36,19 +36,19 @@ func main() {
 	}
 
 	hostname, _ := os.Hostname()
-	
+
 	// Health endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		env := make(map[string]string)
 		for _, e := range os.Environ() {
 			if len(e) > 0 && e[0] != '_' { // Skip internal vars
 				env[e[:min(len(e), 50)]] = "..." // Truncate for brevity
 			}
 		}
-		
+
 		response := HealthResponse{
 			Status:    "healthy",
 			Timestamp: time.Now(),
@@ -56,30 +56,30 @@ func main() {
 			Hostname:  hostname,
 			Env:       env,
 		}
-		
-		json.NewEncoder(w).Encode(response)
+
+		_ = json.NewEncoder(w).Encode(response)
 	})
-	
+
 	// Info endpoint
 	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		response := InfoResponse{
 			Name:        "ponos-test-container",
 			Version:     "1.0.0",
 			Description: "Test container for ponos containerManager integration tests",
 			Port:        port,
 		}
-		
-		json.NewEncoder(w).Encode(response)
+
+		_ = json.NewEncoder(w).Encode(response)
 	})
-	
+
 	// Root endpoint
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		
+
 		response := map[string]interface{}{
 			"message":   "ponos test container is running",
 			"timestamp": time.Now(),
@@ -87,14 +87,14 @@ func main() {
 			"hostname":  hostname,
 			"endpoints": []string{"/", "/health", "/info"},
 		}
-		
-		json.NewEncoder(w).Encode(response)
+
+		_ = json.NewEncoder(w).Encode(response)
 	})
-	
+
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Test container starting on %s", addr)
 	log.Printf("Endpoints available: /, /health, /info")
-	
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}

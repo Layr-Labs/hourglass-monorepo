@@ -50,7 +50,7 @@ func TestContainerConfig_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Basic validation that config can be created
 			assert.NotNil(t, tt.config)
-			
+
 			if tt.valid {
 				assert.NotEmpty(t, tt.config.Hostname)
 				assert.NotEmpty(t, tt.config.Image)
@@ -125,7 +125,7 @@ func TestRestartPolicy_Configuration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			policy := tt.policy
-			
+
 			if policy.Enabled {
 				assert.Greater(t, policy.MaxRestarts, -1) // -1 means unlimited
 				assert.Greater(t, policy.RestartDelay, time.Duration(0))
@@ -231,7 +231,7 @@ func TestContainerEventType_Constants(t *testing.T) {
 
 func TestContainerEvent_Creation(t *testing.T) {
 	now := time.Now()
-	
+
 	event := ContainerEvent{
 		ContainerID: "container123",
 		Type:        EventStarted,
@@ -257,11 +257,11 @@ func TestContainerEvent_Creation(t *testing.T) {
 func TestResourceUsage_Calculation(t *testing.T) {
 	usage := &ResourceUsage{
 		CPUPercent:    45.5,
-		MemoryUsage:   512 * 1024 * 1024, // 512MB
+		MemoryUsage:   512 * 1024 * 1024,  // 512MB
 		MemoryLimit:   1024 * 1024 * 1024, // 1GB
 		MemoryPercent: 50.0,
-		NetworkRx:     1024 * 1024, // 1MB
-		NetworkTx:     2 * 1024 * 1024, // 2MB
+		NetworkRx:     1024 * 1024,       // 1MB
+		NetworkTx:     2 * 1024 * 1024,   // 2MB
 		DiskRead:      100 * 1024 * 1024, // 100MB
 		DiskWrite:     50 * 1024 * 1024,  // 50MB
 		Timestamp:     time.Now(),

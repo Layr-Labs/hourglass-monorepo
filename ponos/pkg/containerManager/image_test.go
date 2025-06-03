@@ -13,7 +13,7 @@ func TestDockerContainerManager_ImagePulling(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping image pulling test in short mode")
 	}
-	
+
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping image pulling tests")
 	}
@@ -49,7 +49,7 @@ func TestDockerContainerManager_CreateWithImagePull(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping image pulling integration test in short mode")
 	}
-	
+
 	if !isDockerAvailable(t) {
 		t.Skip("Docker is not available, skipping image pulling tests")
 	}
