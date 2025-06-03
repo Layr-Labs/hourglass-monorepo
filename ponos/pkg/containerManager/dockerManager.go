@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/pkg/errors"
@@ -108,6 +111,11 @@ func (dcm *DockerContainerManager) Create(ctx context.Context, config *Container
 
 	// Negotiate API version
 	dcm.client.NegotiateAPIVersion(ctx)
+
+	// Pull image if not present locally
+	if err := dcm.ensureImageExists(ctx, config.Image); err != nil {
+		return nil, errors.Wrap(err, "failed to ensure image exists")
+	}
 
 	// Create network if specified
 	if config.NetworkName != "" {
@@ -230,6 +238,16 @@ func (dcm *DockerContainerManager) Remove(ctx context.Context, containerID strin
 	}
 
 	if err := dcm.client.ContainerRemove(ctx, containerID, removeOptions); err != nil {
+		// Handle the case where container is already being removed (AutoRemove=true)
+		if strings.Contains(err.Error(), "removal of container") && strings.Contains(err.Error(), "is already in progress") {
+			dcm.logger.Debug("Container removal already in progress (likely AutoRemove)", zap.String("containerID", containerID))
+			return nil
+		}
+		// Handle the case where container doesn't exist (already removed)
+		if strings.Contains(err.Error(), "No such container") {
+			dcm.logger.Debug("Container already removed", zap.String("containerID", containerID))
+			return nil
+		}
 		return errors.Wrap(err, "failed to remove container")
 	}
 
@@ -402,6 +420,17 @@ func (dcm *DockerContainerManager) RemoveNetwork(ctx context.Context, networkNam
 func (dcm *DockerContainerManager) StartHealthCheck(ctx context.Context, containerID string, config *HealthCheckConfig) (<-chan bool, error) {
 	if config == nil {
 		config = dcm.config.DefaultHealthCheckConfig
+	} else {
+		// Merge with defaults for any zero values
+		if config.Interval == 0 {
+			config.Interval = dcm.config.DefaultHealthCheckConfig.Interval
+		}
+		if config.FailureThreshold == 0 {
+			config.FailureThreshold = dcm.config.DefaultHealthCheckConfig.FailureThreshold
+		}
+		if config.Timeout == 0 {
+			config.Timeout = dcm.config.DefaultHealthCheckConfig.Timeout
+		}
 	}
 
 	if !config.Enabled {
@@ -501,8 +530,13 @@ func (dcm *DockerContainerManager) Shutdown(ctx context.Context) error {
 	// Stop all liveness monitors
 	for containerID, monitor := range dcm.livenessMonitors {
 		monitor.cancelFunc()
-		close(monitor.eventChan)
 		dcm.logger.Debug("Stopped liveness monitor during shutdown", zap.String("containerID", containerID))
+		
+		// Close channels in a goroutine to avoid blocking
+		go func(ch chan ContainerEvent) {
+			time.Sleep(10 * time.Millisecond)
+			close(ch)
+		}(monitor.eventChan)
 	}
 	dcm.livenessMonitors = make(map[string]*containerMonitor)
 
@@ -521,6 +555,17 @@ func (dcm *DockerContainerManager) Shutdown(ctx context.Context) error {
 func (dcm *DockerContainerManager) StartLivenessMonitoring(ctx context.Context, containerID string, config *LivenessConfig) (<-chan ContainerEvent, error) {
 	if config == nil {
 		config = dcm.config.DefaultLivenessConfig
+	} else {
+		// Merge with defaults for any zero values
+		if config.HealthCheckConfig.Interval == 0 {
+			config.HealthCheckConfig.Interval = dcm.config.DefaultLivenessConfig.HealthCheckConfig.Interval
+		}
+		if config.HealthCheckConfig.FailureThreshold == 0 {
+			config.HealthCheckConfig.FailureThreshold = dcm.config.DefaultLivenessConfig.HealthCheckConfig.FailureThreshold
+		}
+		if config.ResourceCheckInterval == 0 {
+			config.ResourceCheckInterval = dcm.config.DefaultLivenessConfig.ResourceCheckInterval
+		}
 	}
 
 	dcm.mu.Lock()
@@ -577,8 +622,14 @@ func (dcm *DockerContainerManager) StopLivenessMonitoring(containerID string) {
 
 	if monitor, exists := dcm.livenessMonitors[containerID]; exists {
 		monitor.cancelFunc()
-		close(monitor.eventChan)
 		delete(dcm.livenessMonitors, containerID)
+
+		// Close the channel in a goroutine to avoid blocking
+		go func() {
+			// Give some time for monitoring goroutines to exit
+			time.Sleep(10 * time.Millisecond)
+			close(monitor.eventChan)
+		}()
 
 		// TODO: Emit metric for liveness monitor stopped
 		dcm.logger.Debug("Stopped liveness monitoring", zap.String("containerID", containerID))
@@ -824,6 +875,8 @@ func (dcm *DockerContainerManager) monitorContainerLiveness(ctx context.Context,
 
 					select {
 					case monitor.eventChan <- event:
+					case <-ctx.Done():
+						return
 					default:
 					}
 
@@ -908,6 +961,8 @@ func (dcm *DockerContainerManager) monitorContainerResources(ctx context.Context
 
 					select {
 					case monitor.eventChan <- event:
+					case <-ctx.Done():
+						return
 					default:
 					}
 				}
@@ -932,10 +987,52 @@ func (dcm *DockerContainerManager) monitorContainerResources(ctx context.Context
 
 					select {
 					case monitor.eventChan <- event:
+					case <-ctx.Done():
+						return
 					default:
 					}
 				}
 			}
 		}
 	}
+}
+
+// ensureImageExists checks if an image exists locally and pulls it if not
+func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageName string) error {
+	// Check if image exists locally
+	images, err := dcm.client.ImageList(ctx, image.ListOptions{})
+	if err != nil {
+		return errors.Wrap(err, "failed to list images")
+	}
+
+	// Check if the image is already present
+	for _, img := range images {
+		for _, tag := range img.RepoTags {
+			if tag == imageName {
+				dcm.logger.Debug("Image already exists locally", zap.String("image", imageName))
+				return nil
+			}
+		}
+	}
+
+	// Image not found locally, pull it
+	dcm.logger.Info("Pulling image", zap.String("image", imageName))
+	
+	pullOptions := image.PullOptions{}
+	
+	// Pull the image
+	pullResponse, err := dcm.client.ImagePull(ctx, imageName, pullOptions)
+	if err != nil {
+		return errors.Wrap(err, "failed to pull image")
+	}
+	defer pullResponse.Close()
+
+	// Read the pull response to completion (required for the pull to actually complete)
+	_, err = io.Copy(io.Discard, pullResponse)
+	if err != nil {
+		return errors.Wrap(err, "failed to read pull response")
+	}
+
+	dcm.logger.Info("Image pulled successfully", zap.String("image", imageName))
+	return nil
 }
