@@ -327,6 +327,11 @@ func (cc *ContractCaller) GetMembersForAllOperatorSets(avsAddress string) (map[u
 
 func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
 	avsAddr := common.HexToAddress(avsAddress)
+	cc.logger.Sugar().Infow("Getting AVS config",
+		zap.String("avsAddress", avsAddress),
+		zap.String("avsRegistrar", cc.config.AVSRegistrarAddress),
+	)
+
 	avsConfig, err := cc.taskMailboxCaller.GetAvsConfig(&bind.CallOpts{}, avsAddr)
 	if err != nil {
 		return nil, err
