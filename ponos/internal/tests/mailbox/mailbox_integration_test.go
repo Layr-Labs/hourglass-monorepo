@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	RPCUrl = "http://127.0.0.1:8545"
+	L1RpcUrl = "http://127.0.0.1:8545"
+	L2RpcUrl = "http://127.0.0.1:9545"
 )
 
 func Test_EVMChainPollerIntegration(t *testing.T) {
@@ -52,23 +53,41 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
 
+	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
+		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
+	}
+
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 
-	ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   RPCUrl,
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RpcUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+
+	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L2RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
 	logsChan := make(chan *chainPoller2.LogWithBlock)
 
-	poller := EVMChainPoller.NewEVMChainPoller(ethereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
-		ChainId:                 config.ChainId_EthereumAnvil,
-		PollingInterval:         time.Duration(10) * time.Second,
-		EigenLayerCoreContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
-		InterestingContracts:    []string{},
+	l1Poller := EVMChainPoller.NewEVMChainPoller(l1EthereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
+		ChainId:              config.ChainId_EthereumAnvil,
+		PollingInterval:      time.Duration(10) * time.Second,
+		InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
 	}, l)
 
-	ethClient, err := ethereumClient.GetEthereumContractCaller()
+	l2Poller := EVMChainPoller.NewEVMChainPoller(l2EthereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
+		ChainId:              config.ChainId_EthereumAnvil,
+		PollingInterval:      time.Duration(10) * time.Second,
+		InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
+	}, l)
+
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
 	if err != nil {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
@@ -76,9 +95,14 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	anvil, err := testUtils.StartAnvil(root, ctx)
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
-		t.Fatalf("Failed to start Anvil: %v", err)
+		t.Fatalf("Failed to start L1 Anvil: %v", err)
+	}
+
+	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L2 Anvil: %v", err)
 	}
 
 	if os.Getenv("CI") == "" {
@@ -88,26 +112,36 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 		fmt.Printf("Sleeping for 30 seconds\n\n")
 		time.Sleep(30 * time.Second)
 	}
-	fmt.Println("Checking if anvil is up and running...")
+	fmt.Println("Checking if l1Anvil is up and running...")
 
-	// goes after anvil since it has to get the chain ID
-	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l2CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddress,
-	}, ethClient, l)
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create contract caller: %v", err)
+		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
 
-	chainId, err := ethClient.ChainID(ctx)
+	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
-		t.Fatalf("Failed to get chain ID: %v", err)
+		t.Fatalf("Failed to get L1 chain ID: %v", err)
 	}
+	t.Logf("L1 Chain ID: %s", l1ChainId.String())
 
-	if err := poller.Start(ctx); err != nil {
+	l2ChainId, err := l2EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L2 chain ID: %v", err)
+	}
+	t.Logf("L2 Chain ID: %s", l2ChainId.String())
+
+	if err := l1Poller.Start(ctx); err != nil {
 		cancel()
 		t.Fatalf("Failed to start EVM L1Chain Poller: %v", err)
+	}
+	if err := l2Poller.Start(ctx); err != nil {
+		cancel()
+		t.Fatalf("Failed to start EVM L2Chain Poller: %v", err)
 	}
 
 	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
@@ -122,10 +156,10 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 			if logWithBlock.Log.EventName != "TaskCreated" {
 				continue
 			}
-
+			t.Logf("Found created task log: %+v", logWithBlock.Log)
 			assert.Equal(t, "TaskCreated", logWithBlock.Log.EventName)
 
-			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, chainConfig.MailboxContractAddress)
+			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, chainConfig.MailboxContractAddressL1)
 			assert.Nil(t, err)
 
 			assert.Equal(t, common.HexToAddress(chainConfig.AVSAccountAddress), common.HexToAddress(task.AVSAddress))
@@ -181,7 +215,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 				CallbackAddr:    chainConfig.AVSAccountAddress,
 				OperatorSetId:   1,
 				Output:          outputResult,
-				ChainId:         config.ChainId(chainId.Uint64()),
+				ChainId:         config.ChainId(l2ChainId.Uint64()),
 				BlockNumber:     task.BlockNumber,
 				BlockHash:       task.BlockHash,
 				OperatorAddress: chainConfig.ExecOperatorAccountAddress,
@@ -208,8 +242,8 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				PrivateKey:          chainConfig.AVSAccountPrivateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddress,
-			}, ethClient, l)
+				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+			}, l2EthClient, l)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to create contract caller: %v", err)
@@ -234,7 +268,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 
 	// submit a task
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	task, err := cc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
+	task, err := l2CC.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to publish message to inbox: %v", err)
 	}
@@ -248,6 +282,7 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 		t.Logf("Test completed")
 	}
 
-	_ = anvil.Process.Kill()
+	_ = l1Anvil.Process.Kill()
+	_ = l2Anvil.Process.Kill()
 	assert.False(t, hasErrors)
 }

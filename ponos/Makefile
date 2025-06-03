@@ -168,10 +168,21 @@ fmtcheck:
 	fi
 
 .PHONY: anvil/start
-anvil/start:
+anvil/start/l1:
 	anvil \
 		--fork-url https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/ \
 		--fork-block-number 22396947 \
-		--load-state ./internal/testData/anvil-state.json \
+		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
-		--block-time 5
+		--block-time 2
+
+.PHONY: anvil/start
+anvil/start/l2:
+	anvil \
+		--fork-url https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/ \
+		--fork-block-number 30611001 \
+		--load-state ./internal/testData/anvil-l2-state.json \
+		--chain-id 31338 \
+		--port 9545 \
+		--block-time 2
+

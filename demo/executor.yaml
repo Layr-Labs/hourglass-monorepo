@@ -2,8 +2,8 @@
 grpcPort: 9090
 performerNetworkName: demo_hourglass-demo
 operator:
-  address: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
-  operatorPrivateKey: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
+  address: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
+  operatorPrivateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
   signingKeys:
     bls:
       keystoreFile: "/ponos-config/testKeys/executor/key_bn254.json"
@@ -17,15 +17,15 @@ avsPerformers:
       repository: "hello-performer"
       tag: "latest"
     processType: "server"
-    avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
     workerCount: 1
     signingCurve: "bn254"
-    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
 simulation:
   simulatePeering:
     enabled: true
     aggregatorPeers:
       - networkAddress: "localhost:9999"
-        operatorAddress: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+        operatorAddress: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
         operatorSetId: 0
         publicKey: "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169"

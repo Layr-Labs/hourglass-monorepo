@@ -28,7 +28,7 @@ func main() {
 	_ = chainConfig
 
 	client := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   "http://localhost:8545",
+		BaseUrl:   "http://localhost:9545",
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
@@ -38,16 +38,16 @@ func main() {
 	}
 
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
-		AVSRegistrarAddress: "0x99aA73dA6309b8eC484eF2C95e96C131C1BBF7a0",
-		TaskMailboxAddress:  "0x4B7099FD879435a087C364aD2f9E7B3f94d20bBe",
+		PrivateKey:          "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214",
+		AVSRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357",
+		TaskMailboxAddress:  "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
 	}, ethCaller, l)
 	if err != nil {
 		panic(err)
 	}
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	receipt, err := cc.PublishMessageToInbox(context.Background(), "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 1, payloadJsonBytes)
+	receipt, err := cc.PublishMessageToInbox(context.Background(), "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4", 1, payloadJsonBytes)
 	if err != nil {
 		panic(err)
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -30,7 +31,9 @@ import (
 )
 
 const (
-	RPCUrl = "http://127.0.0.1:8545"
+	L1RPCUrl = "http://127.0.0.1:8545"
+	L2RPCUrl = "http://127.0.0.1:9545"
+	L2WSUrl  = "ws://127.0.0.1:9545"
 )
 
 // Test_Aggregator is an integration test for the Aggregator component of the system.
@@ -56,7 +59,6 @@ func Test_Aggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
-	_ = chainConfig
 
 	// ------------------------------------------------------------------------
 	// Executor setup
@@ -68,6 +70,10 @@ func Test_Aggregator(t *testing.T) {
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
+
+	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
+	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
+	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
 	storedKeys, err := keystore.ParseKeystoreJSON(execConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
@@ -91,6 +97,13 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to validate aggregator config: %v", err)
 	}
 
+	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
+	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
+	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
+
+	// run the AVS on the L2 (base)
+	aggConfig.Avss[0].ChainIds = []uint{uint(config.ChainId_BaseAnvil)}
+
 	aggStoredKeys, err := keystore.ParseKeystoreJSON(aggConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
 		t.Fatalf("failed to parse keystore JSON: %v", err)
@@ -103,19 +116,19 @@ func Test_Aggregator(t *testing.T) {
 	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
 
 	// ------------------------------------------------------------------------
-	// L1Chain & anvil setup
+	// L1Chain & l1Anvil setup
 	// ------------------------------------------------------------------------
-	ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   RPCUrl,
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RPCUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
-	ethClient, err := ethereumClient.GetEthereumContractCaller()
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
-	anvil, err := testUtils.StartAnvil(root, ctx)
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
@@ -127,23 +140,50 @@ func Test_Aggregator(t *testing.T) {
 		fmt.Printf("Sleeping for 30 seconds\n\n")
 		time.Sleep(30 * time.Second)
 	}
-	fmt.Println("Checking if anvil is up and running...")
+	fmt.Println("Checking if l1Anvil is up and running...")
+
+	// ------------------------------------------------------------------------
+	// L2Chain & l1Anvil setup
+	// ------------------------------------------------------------------------
+	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L2RPCUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+
+	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+
+	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L2 Anvil: %v", err)
+	}
+
+	if os.Getenv("CI") == "" {
+		fmt.Printf("Sleeping for 10 seconds\n\n")
+		time.Sleep(10 * time.Second)
+	} else {
+		fmt.Printf("Sleeping for 30 seconds\n\n")
+		time.Sleep(30 * time.Second)
+	}
+	fmt.Println("Checking if l2Anvil is up and running...")
 
 	// ------------------------------------------------------------------------
 	// register peering data
 	// ------------------------------------------------------------------------
-	aggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddress,
-	}, ethClient, l)
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Registering avs peering data")
 	_, err = operator.RegisterOperatorToOperatorSets(
 		ctx,
-		aggCc,
+		l1AggCc,
 		common.HexToAddress(aggConfig.Operator.Address),
 		common.HexToAddress(aggConfig.Avss[0].Address),
 		[]uint32{0},
@@ -158,18 +198,18 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("failed to register aggregator operator to operator sets: %v", err)
 	}
 
-	execCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddress,
-	}, ethClient, l)
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Registering operator peering data")
 	_, err = operator.RegisterOperatorToOperatorSets(
 		ctx,
-		execCc,
+		l1ExecCc,
 		common.HexToAddress(execConfig.Operator.Address),
 		common.HexToAddress(execConfig.AvsPerformers[0].AvsAddress),
 		[]uint32{1},
@@ -187,7 +227,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Setup the executor
 	// ------------------------------------------------------------------------
-	execPdf := peeringDataFetcher.NewPeeringDataFetcher(execCc, l)
+	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
 	exec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
@@ -204,8 +244,12 @@ func Test_Aggregator(t *testing.T) {
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
 
+	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
+		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
+	}
+
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
-	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(aggCc, l)
+	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(l1AggCc, l)
 
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
@@ -259,17 +303,17 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
-	appCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddress,
-	}, ethClient, l)
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	task, err := appCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
+	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to publish message to inbox: %v", err)
 	}
@@ -278,7 +322,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Listen for TaskVerified event to know that the test is done
 	// ------------------------------------------------------------------------
-	wsEthClient, err := ethereumClient.GetWebsocketConnection("ws://localhost:8545")
+	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
 	if err != nil {
 		t.Fatalf("Failed to get websocket connection: %v", err)
 	}
@@ -287,7 +331,7 @@ func Test_Aggregator(t *testing.T) {
 
 	eventsChan := make(chan types.Log)
 	sub, err := wsEthClient.SubscribeFilterLogs(ctx, goEthereum.FilterQuery{
-		Addresses: []common.Address{common.HexToAddress(chainConfig.MailboxContractAddress)},
+		Addresses: []common.Address{common.HexToAddress(chainConfig.MailboxContractAddressL2)},
 	}, eventsChan)
 	if err != nil {
 		t.Fatalf("Failed to subscribe to events: %v", err)
@@ -336,13 +380,18 @@ func Test_Aggregator(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
-	case <-time.After(60 * time.Second):
+	case <-time.After(90 * time.Second):
 		t.Logf("Timeout after 60 seconds")
 		cancel()
 	}
 	fmt.Printf("Test completed\n")
 
-	_ = anvil.Process.Kill()
+	t.Cleanup(func() {
+		_ = l1Anvil.Process.Kill()
+		_ = l2Anvil.Process.Kill()
+		cancel()
+	})
+
 	time.Sleep(5 * time.Second)
 	assert.True(t, taskVerified)
 }
@@ -413,6 +462,11 @@ chains:
     chainId: 31337
     rpcUrl: http://localhost:8545
     pollIntervalSeconds: 10
+  - name: base
+    network: mainnet
+    chainId: 31338
+    rpcUrl: http://localhost:9545
+    pollIntervalSeconds: 2
 operator:
   address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
   operatorPrivateKey: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
