@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -118,6 +119,8 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// L1Chain & l1Anvil setup
 	// ------------------------------------------------------------------------
+	anvilWg := &sync.WaitGroup{}
+
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   L1RPCUrl,
 		BlockType: ethereum.BlockType_Latest,
@@ -128,23 +131,28 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
+	anvilWg.Add(1)
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
 
-	if os.Getenv("CI") == "" {
-		fmt.Printf("Sleeping for 10 seconds\n\n")
-		time.Sleep(10 * time.Second)
-	} else {
-		fmt.Printf("Sleeping for 30 seconds\n\n")
-		time.Sleep(30 * time.Second)
-	}
-	fmt.Println("Checking if l1Anvil is up and running...")
+	go func() {
+		defer anvilWg.Done()
+		if os.Getenv("CI") == "" {
+			fmt.Printf("Sleeping for 10 seconds\n\n")
+			time.Sleep(10 * time.Second)
+		} else {
+			fmt.Printf("Sleeping for 30 seconds\n\n")
+			time.Sleep(30 * time.Second)
+		}
+		fmt.Println("Checking if l1Anvil is up and running...")
+	}()
 
 	// ------------------------------------------------------------------------
 	// L2Chain & l1Anvil setup
 	// ------------------------------------------------------------------------
+	anvilWg.Add(1)
 	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   L2RPCUrl,
 		BlockType: ethereum.BlockType_Latest,
@@ -159,15 +167,18 @@ func Test_Aggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start L2 Anvil: %v", err)
 	}
-
-	if os.Getenv("CI") == "" {
-		fmt.Printf("Sleeping for 10 seconds\n\n")
-		time.Sleep(10 * time.Second)
-	} else {
-		fmt.Printf("Sleeping for 30 seconds\n\n")
-		time.Sleep(30 * time.Second)
-	}
-	fmt.Println("Checking if l2Anvil is up and running...")
+	go func() {
+		defer anvilWg.Done()
+		if os.Getenv("CI") == "" {
+			fmt.Printf("Sleeping for 10 seconds\n\n")
+			time.Sleep(10 * time.Second)
+		} else {
+			fmt.Printf("Sleeping for 30 seconds\n\n")
+			time.Sleep(30 * time.Second)
+		}
+		fmt.Println("Checking if l2Anvil is up and running...")
+	}()
+	anvilWg.Wait()
 
 	// ------------------------------------------------------------------------
 	// register peering data
