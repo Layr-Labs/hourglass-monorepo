@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifier} from "../../src/interfaces/avs/l2/IECDSACertificateVerifier.sol";
 
 contract MockAVSTaskHook is IAVSTaskHook {
     function validatePreTaskCreation(
@@ -23,7 +23,7 @@ contract MockAVSTaskHook is IAVSTaskHook {
 
     function validateTaskResultSubmission(
         bytes32, /*taskHash*/
-        IBN254CertificateVerifier.BN254Certificate memory /*cert*/
+        IECDSACertificateVerifier.ECDSACertificate memory /*cert*/
     ) external {
         //TODO: Implement
     }

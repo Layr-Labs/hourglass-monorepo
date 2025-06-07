@@ -6,7 +6,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
 import {MockAVSTaskHook} from "../../test/mocks/MockAVSTaskHook.sol";
-import {MockBN254CertificateVerifier} from "../../test/mocks/MockBN254CertificateVerifier.sol";
+import {MockECDSACertificateVerifier} from "../../test/mocks/MockECDSACertificateVerifier.sol";
 
 contract DeployAVSL2Contracts is Script {
     function setUp() public {}
@@ -23,8 +23,8 @@ contract DeployAVSL2Contracts is Script {
         MockAVSTaskHook avsTaskHook = new MockAVSTaskHook();
         console.log("AVSTaskHook deployed to:", address(avsTaskHook));
 
-        MockBN254CertificateVerifier bn254CertificateVerifier = new MockBN254CertificateVerifier();
-        console.log("BN254CertificateVerifier deployed to:", address(bn254CertificateVerifier));
+        MockECDSACertificateVerifier ecdsaCertificateVerifier = new MockECDSACertificateVerifier();
+        console.log("ECDSACertificateVerifier deployed to:", address(ecdsaCertificateVerifier));
 
         vm.stopBroadcast();
     }

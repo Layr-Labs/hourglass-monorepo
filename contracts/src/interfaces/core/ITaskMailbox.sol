@@ -5,7 +5,7 @@ import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/l
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifier} from "../avs/l2/IECDSACertificateVerifier.sol";
 
 /**
  * @title ITaskMailboxTypes
@@ -296,7 +296,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
     function submitResult(
         bytes32 taskHash,
-        IBN254CertificateVerifier.BN254Certificate memory cert,
+        IECDSACertificateVerifier.ECDSACertificate memory cert,
         bytes memory result
     ) external;
 

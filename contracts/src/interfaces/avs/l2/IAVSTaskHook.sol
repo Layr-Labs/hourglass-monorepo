@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
-import {IBN254CertificateVerifier} from "./IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifier} from "./IECDSACertificateVerifier.sol";
 import {ITaskMailboxTypes} from "../../core/ITaskMailbox.sol";
 
 /**
@@ -45,6 +45,6 @@ interface IAVSTaskHook {
      */
     function validateTaskResultSubmission(
         bytes32 taskHash,
-        IBN254CertificateVerifier.BN254Certificate memory cert
+        IECDSACertificateVerifier.ECDSACertificate memory cert
     ) external;
 }

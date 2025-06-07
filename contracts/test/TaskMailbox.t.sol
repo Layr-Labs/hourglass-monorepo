@@ -3,7 +3,6 @@ pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TaskMailbox} from "../src/core/TaskMailbox.sol";
@@ -14,10 +13,10 @@ import {
     ITaskMailboxEvents
 } from "../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifier} from "../src/interfaces/avs/l2/IECDSACertificateVerifier.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
-import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
-import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
+import {MockECDSACertificateVerifier} from "./mocks/MockECDSACertificateVerifier.sol";
+import {MockECDSACertificateVerifierFailure} from "./mocks/MockECDSACertificateVerifierFailure.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 
 contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
@@ -26,7 +25,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     // Contracts
     TaskMailbox public taskMailbox;
     MockAVSTaskHook public mockTaskHook;
-    MockBN254CertificateVerifier public mockCertificateVerifier;
+    MockECDSACertificateVerifier public mockCertificateVerifier;
     MockERC20 public mockToken;
 
     // Test addresses
@@ -50,7 +49,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     function setUp() public virtual {
         // Deploy mock contracts
         mockTaskHook = new MockAVSTaskHook();
-        mockCertificateVerifier = new MockBN254CertificateVerifier();
+        mockCertificateVerifier = new MockECDSACertificateVerifier();
         mockToken = new MockERC20();
 
         // Deploy TaskMailbox
@@ -105,16 +104,13 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
         });
     }
 
-    function _createValidBN254Certificate(
+    function _createValidECDSACertificate(
         bytes32 messageHash
-    ) internal view returns (IBN254CertificateVerifier.BN254Certificate memory) {
-        return IBN254CertificateVerifier.BN254Certificate({
+    ) internal view returns (IECDSACertificateVerifier.ECDSACertificate memory) {
+        return IECDSACertificateVerifier.ECDSACertificate({
             referenceTimestamp: uint32(block.timestamp),
             messageHash: messageHash,
-            sig: BN254.G1Point(0, 0),
-            apk: BN254.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)]),
-            nonsignerIndices: new uint32[](0),
-            nonSignerWitnesses: new IBN254CertificateVerifier.BN254OperatorInfoWitness[](0)
+            sig: new bytes(65)
         });
     }
 }
@@ -428,7 +424,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Advance time by 1 second to pass TimestampAtCreation check
         vm.warp(block.timestamp + 1);
 
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        IECDSACertificateVerifier.ECDSACertificate memory cert = _createValidECDSACertificate(taskHash);
 
         // Expect event
         vm.expectEmit(true, true, true, true, address(taskMailbox));
@@ -453,7 +449,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(creator);
         taskMailbox.cancelTask(taskHash);
 
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        IECDSACertificateVerifier.ECDSACertificate memory cert = _createValidECDSACertificate(taskHash);
 
         vm.prank(aggregator);
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
@@ -461,7 +457,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
     }
 
     function test_Revert_WhenTimestampAtCreation() public {
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        IECDSACertificateVerifier.ECDSACertificate memory cert = _createValidECDSACertificate(taskHash);
 
         // Don't advance time
         vm.prank(aggregator);
@@ -473,7 +469,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Advance time past task SLA
         vm.warp(block.timestamp + taskSLA + 1);
 
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        IECDSACertificateVerifier.ECDSACertificate memory cert = _createValidECDSACertificate(taskHash);
 
         vm.prank(aggregator);
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
@@ -482,7 +478,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
     function test_Revert_WhenCertificateVerificationFailed() public {
         // Create a custom mock that returns false for certificate verification
-        MockBN254CertificateVerifierFailure mockFailingVerifier = new MockBN254CertificateVerifierFailure();
+        MockECDSACertificateVerifierFailure mockFailingVerifier = new MockECDSACertificateVerifierFailure();
 
         // Update the config with failing verifier
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
@@ -500,7 +496,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Advance time
         vm.warp(block.timestamp + 1);
 
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(newTaskHash);
+        IECDSACertificateVerifier.ECDSACertificate memory cert = _createValidECDSACertificate(newTaskHash);
 
         vm.prank(aggregator);
         vm.expectRevert(CertificateVerificationFailed.selector);

@@ -8,7 +8,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../interfaces/avs/l2/IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifier} from "../interfaces/avs/l2/IECDSACertificateVerifier.sol";
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
 
@@ -176,7 +176,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     /// @inheritdoc ITaskMailbox
     function submitResult(
         bytes32 taskHash,
-        IBN254CertificateVerifier.BN254Certificate memory cert,
+        IECDSACertificateVerifier.ECDSACertificate memory cert,
         bytes memory result
     ) external nonReentrant {
         // TODO: Do we need a gasless version of this function?
@@ -188,7 +188,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
 
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
-        bool isCertificateValid = IBN254CertificateVerifier(task.executorOperatorSetTaskConfig.certificateVerifier)
+        bool isCertificateValid = IECDSACertificateVerifier(task.executorOperatorSetTaskConfig.certificateVerifier)
             .verifyCertificateProportion(cert, totalStakeProportionThresholds);
 
         require(isCertificateValid, CertificateVerificationFailed());
