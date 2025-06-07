@@ -9,7 +9,7 @@ Hourglass is a framework for building EigenLayer AVSs (Actively Validated Servic
 ### Core Components
 
 **contracts/**: Solidity smart contracts using Foundry
-- Core: TaskMailbox contract for cross-chain task coordination 
+- Core: TaskMailbox contract for cross-chain task coordination
 - AVS: TaskAVSRegistrarBase for AVS registration and management
 - Built on EigenLayer middleware for operator registration and slashing
 
@@ -84,7 +84,7 @@ npm install                  # Install commitlint
 The system enables AVSs to operate across L1/L2 with coordinated execution:
 
 1. **Task Creation**: AVS creates tasks via TaskMailbox on either L1 or L2
-2. **Aggregator Monitoring**: Ponos aggregator watches both chains for TaskCreated events  
+2. **Aggregator Monitoring**: Ponos aggregator watches both chains for TaskCreated events
 3. **Task Distribution**: Aggregator distributes tasks to registered executors
 4. **Execution**: Executors run AVS-specific Docker containers with task payload
 5. **Response Aggregation**: Aggregator collects and verifies responses using BLS signatures

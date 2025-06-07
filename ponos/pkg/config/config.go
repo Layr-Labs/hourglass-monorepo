@@ -65,7 +65,7 @@ var (
 		ChainId_EthereumAnvil: {
 			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
 			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
-			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
+			TaskMailbox:       "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
 		},
 		ChainId_BaseAnvil: {
 			TaskMailbox: "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
