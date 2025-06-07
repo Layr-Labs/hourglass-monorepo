@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
@@ -600,17 +603,16 @@ func (dcm *DockerContainerManager) StartLivenessMonitoring(ctx context.Context, 
 		zap.Bool("resourceMonitoring", config.ResourceMonitoring),
 	)
 
-	// Docker event monitoring is disabled as it provides no additional value
-	// over health check polling and adds complexity. Container restarts are
-	// handled by health check failures and application-level monitoring.
-	_ = config.MonitorEvents // Ignore this setting
-
 	// Start monitoring goroutines
 	go dcm.monitorContainerLiveness(monitorCtx, monitor)
 
 	if config.ResourceMonitoring {
 		go dcm.monitorContainerResources(monitorCtx, monitor)
 	}
+
+	// Start Docker event monitoring to detect crashes and OOM kills
+	// This is essential for detecting container failures that won't show up in health checks
+	go dcm.monitorDockerEvents(monitorCtx, monitor)
 
 	return eventChan, nil
 }
@@ -813,6 +815,10 @@ func (dcm *DockerContainerManager) TriggerRestart(containerID string, reason str
 	dcm.mu.RUnlock()
 
 	if !exists {
+		dcm.logger.Warn("No liveness monitor found for container, ignoring restart request",
+			zap.String("containerID", containerID),
+			zap.String("reason", reason),
+		)
 		return fmt.Errorf("no liveness monitor found for container %s", containerID)
 	}
 
@@ -820,7 +826,12 @@ func (dcm *DockerContainerManager) TriggerRestart(containerID string, reason str
 		return fmt.Errorf("restart policy is disabled for container %s", containerID)
 	}
 
-	// Send restart event to monitor
+	dcm.logger.Info("Manual restart triggered",
+		zap.String("containerID", containerID),
+		zap.String("reason", reason),
+	)
+
+	// Send restart event to monitor (safely handle closed channel)
 	event := ContainerEvent{
 		ContainerID: containerID,
 		Type:        EventUnhealthy,
@@ -830,14 +841,15 @@ func (dcm *DockerContainerManager) TriggerRestart(containerID string, reason str
 
 	select {
 	case monitor.eventChan <- event:
-		dcm.logger.Info("Manual restart triggered",
-			zap.String("containerID", containerID),
-			zap.String("reason", reason),
-		)
-		return nil
 	default:
-		return fmt.Errorf("failed to send restart event for container %s", containerID)
+		// Channel might be closed, that's ok
 	}
+
+	// Actually perform the restart directly
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return dcm.attemptRestart(ctx, monitor, reason)
 }
 
 // monitorContainerLiveness monitors container health and triggers events
@@ -854,12 +866,22 @@ func (dcm *DockerContainerManager) monitorContainerLiveness(ctx context.Context,
 		case <-ticker.C:
 			running, err := dcm.IsRunning(ctx, monitor.containerID)
 			if err != nil {
-				// TODO: Emit metric for health check error
-				dcm.logger.Error("Health check failed",
-					zap.String("containerID", monitor.containerID),
-					zap.Error(err),
-				)
-				failures++
+				// Check if container doesn't exist (was killed/removed)
+				if strings.Contains(err.Error(), "No such container") {
+					dcm.logger.Warn("Container no longer exists (likely killed)",
+						zap.String("containerID", monitor.containerID),
+						zap.Error(err),
+					)
+					// Treat missing container as a crash that needs restart
+					failures = monitor.config.HealthCheckConfig.FailureThreshold
+				} else {
+					// TODO: Emit metric for health check error
+					dcm.logger.Error("Health check failed",
+						zap.String("containerID", monitor.containerID),
+						zap.Error(err),
+					)
+					failures++
+				}
 			} else if !running {
 				dcm.logger.Warn("Container is not running", zap.String("containerID", monitor.containerID))
 				failures++
@@ -906,6 +928,17 @@ func (dcm *DockerContainerManager) monitorContainerLiveness(ctx context.Context,
 					zap.Int("failures", failures),
 					zap.Int("threshold", monitor.config.HealthCheckConfig.FailureThreshold),
 				)
+
+				// Trigger restart if policy allows and we haven't hit the limit
+				if monitor.restartPolicy.Enabled && monitor.restartPolicy.RestartOnUnhealthy {
+					if err := dcm.attemptRestart(ctx, monitor, "health check failures"); err != nil {
+						dcm.logger.Error("Failed to restart unhealthy container",
+							zap.String("containerID", monitor.containerID),
+							zap.Error(err),
+						)
+					}
+				}
+
 				failures = 0 // Reset to avoid spam
 			}
 		}
@@ -965,6 +998,13 @@ func (dcm *DockerContainerManager) monitorContainerResources(ctx context.Context
 						return
 					default:
 					}
+
+					if err := dcm.attemptRestart(ctx, monitor, fmt.Sprintf("CPU usage %.1f%% exceeded threshold %.1f%%", usage.CPUPercent, thresholds.CPUThreshold)); err != nil {
+						dcm.logger.Error("Failed to restart container due to CPU threshold",
+							zap.String("containerID", monitor.containerID),
+							zap.Error(err),
+						)
+					}
 				}
 			}
 
@@ -991,8 +1031,312 @@ func (dcm *DockerContainerManager) monitorContainerResources(ctx context.Context
 						return
 					default:
 					}
+
+					if err := dcm.attemptRestart(ctx, monitor, fmt.Sprintf("Memory usage %.1f%% exceeded threshold %.1f%%", usage.MemoryPercent, thresholds.MemoryThreshold)); err != nil {
+						dcm.logger.Error("Failed to restart container due to memory threshold",
+							zap.String("containerID", monitor.containerID),
+							zap.Error(err),
+						)
+					}
 				}
 			}
+		}
+	}
+}
+
+// attemptRestart attempts to restart a container if restart policy allows
+func (dcm *DockerContainerManager) attemptRestart(ctx context.Context, monitor *containerMonitor, reason string) error {
+	// Check if we've exceeded the maximum restart count
+	if monitor.restartPolicy.MaxRestarts > 0 && monitor.restartCount >= monitor.restartPolicy.MaxRestarts {
+		dcm.logger.Warn("Container restart limit reached",
+			zap.String("containerID", monitor.containerID),
+			zap.Int("restartCount", monitor.restartCount),
+			zap.Int("maxRestarts", monitor.restartPolicy.MaxRestarts),
+			zap.String("reason", reason),
+		)
+
+		// Send restart failed event
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventRestartFailed,
+			Timestamp:   time.Now(),
+			Message:     fmt.Sprintf("Restart limit reached (%d/%d): %s", monitor.restartCount, monitor.restartPolicy.MaxRestarts, reason),
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
+		}
+
+		return fmt.Errorf("restart limit reached: %d/%d", monitor.restartCount, monitor.restartPolicy.MaxRestarts)
+	}
+
+	// Apply restart delay with backoff
+	delay := dcm.calculateRestartDelay(monitor)
+	if delay > 0 {
+		dcm.logger.Info("Applying restart delay",
+			zap.String("containerID", monitor.containerID),
+			zap.Duration("delay", delay),
+			zap.Int("restartCount", monitor.restartCount),
+		)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+
+	// Send restarting event (safely handle closed channel)
+	event := ContainerEvent{
+		ContainerID: monitor.containerID,
+		Type:        EventRestarting,
+		Timestamp:   time.Now(),
+		Message:     fmt.Sprintf("Restarting container (attempt %d/%d): %s", monitor.restartCount+1, monitor.restartPolicy.MaxRestarts, reason),
+	}
+
+	select {
+	case monitor.eventChan <- event:
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		// Channel might be closed, that's ok
+	}
+
+	// Create restart context with timeout
+	restartCtx := ctx
+	if monitor.restartPolicy.RestartTimeout > 0 {
+		var cancel context.CancelFunc
+		restartCtx, cancel = context.WithTimeout(ctx, monitor.restartPolicy.RestartTimeout)
+		defer cancel()
+	}
+
+	// Perform the restart
+	if err := dcm.RestartContainer(restartCtx, monitor.containerID, dcm.config.DefaultStopTimeout); err != nil {
+		// Check if container doesn't exist, in which case we need to recreate it
+		if strings.Contains(err.Error(), "No such container") {
+			dcm.logger.Info("Container doesn't exist, recreation needed but not supported yet",
+				zap.String("containerID", monitor.containerID),
+				zap.String("reason", reason),
+			)
+
+			// Send restart failed event for now since we don't have recreation logic
+			failEvent := ContainerEvent{
+				ContainerID: monitor.containerID,
+				Type:        EventRestartFailed,
+				Timestamp:   time.Now(),
+				Message:     fmt.Sprintf("Container recreation needed but not implemented (attempt %d): %s", monitor.restartCount+1, err.Error()),
+			}
+
+			select {
+			case monitor.eventChan <- failEvent:
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				// Channel might be closed, that's ok
+			}
+
+			return fmt.Errorf("container recreation needed but not implemented: %w", err)
+		}
+
+		// Send restart failed event for other errors
+		failEvent := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventRestartFailed,
+			Timestamp:   time.Now(),
+			Message:     fmt.Sprintf("Restart failed (attempt %d): %s", monitor.restartCount+1, err.Error()),
+		}
+
+		select {
+		case monitor.eventChan <- failEvent:
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			// Channel might be closed, that's ok
+		}
+
+		return err
+	}
+
+	// Send restart success event (safely handle closed channel)
+	successEvent := ContainerEvent{
+		ContainerID: monitor.containerID,
+		Type:        EventRestarted,
+		Timestamp:   time.Now(),
+		Message:     fmt.Sprintf("Container restarted successfully (attempt %d)", monitor.restartCount),
+	}
+
+	select {
+	case monitor.eventChan <- successEvent:
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		// Channel might be closed, that's ok
+	}
+
+	dcm.logger.Info("Container restarted successfully",
+		zap.String("containerID", monitor.containerID),
+		zap.String("reason", reason),
+		zap.Int("restartCount", monitor.restartCount),
+	)
+
+	return nil
+}
+
+// calculateRestartDelay calculates the delay before attempting a restart based on backoff policy
+func (dcm *DockerContainerManager) calculateRestartDelay(monitor *containerMonitor) time.Duration {
+	if monitor.restartCount == 0 {
+		return monitor.restartPolicy.RestartDelay
+	}
+
+	// Apply exponential backoff
+	delay := monitor.restartPolicy.RestartDelay
+	for i := 0; i < monitor.restartCount && delay < monitor.restartPolicy.MaxBackoffDelay; i++ {
+		delay = time.Duration(float64(delay) * monitor.restartPolicy.BackoffMultiplier)
+	}
+
+	// Cap at max backoff delay
+	if delay > monitor.restartPolicy.MaxBackoffDelay {
+		delay = monitor.restartPolicy.MaxBackoffDelay
+	}
+
+	return delay
+}
+
+// monitorDockerEvents monitors Docker events for container crashes and OOM kills
+func (dcm *DockerContainerManager) monitorDockerEvents(ctx context.Context, monitor *containerMonitor) {
+	// Create event filters for this specific container
+	eventOptions := events.ListOptions{
+		Filters: filters.NewArgs(
+			filters.Arg("container", monitor.containerID),
+			filters.Arg("event", "die"),
+			filters.Arg("event", "oom"),
+		),
+	}
+
+	eventChan, errChan := dcm.client.Events(ctx, eventOptions)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errChan:
+			if err != nil {
+				dcm.logger.Error("Docker event monitoring error",
+					zap.String("containerID", monitor.containerID),
+					zap.Error(err),
+				)
+				// Try to reconnect after a delay
+				time.Sleep(5 * time.Second)
+				eventChan, errChan = dcm.client.Events(ctx, eventOptions)
+			}
+		case event := <-eventChan:
+			dcm.handleDockerEvent(ctx, monitor, event)
+		}
+	}
+}
+
+// handleDockerEvent processes Docker events and triggers appropriate actions
+func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monitor *containerMonitor, dockerEvent events.Message) {
+	dcm.logger.Debug("Docker event received",
+		zap.String("containerID", monitor.containerID),
+		zap.String("action", string(dockerEvent.Action)),
+		zap.String("status", dockerEvent.Status),
+		zap.Any("attributes", dockerEvent.Actor.Attributes),
+	)
+
+	switch string(dockerEvent.Action) {
+	case "die":
+		// Container crashed or was stopped
+		exitCode := 0
+		if exitCodeStr, exists := dockerEvent.Actor.Attributes["exitCode"]; exists {
+			if parsedCode, err := strconv.Atoi(exitCodeStr); err == nil {
+				exitCode = parsedCode
+			}
+		}
+
+		isOOM := false
+		if oomKilled, exists := dockerEvent.Actor.Attributes["oomKilled"]; exists {
+			isOOM = oomKilled == "true"
+		}
+
+		var eventType ContainerEventType
+		var message string
+
+		if isOOM {
+			eventType = EventOOMKilled
+			message = "Container was killed due to OOM"
+		} else if exitCode != 0 {
+			eventType = EventCrashed
+			message = fmt.Sprintf("Container crashed with exit code %d", exitCode)
+		} else {
+			// Normal shutdown, no action needed
+			eventType = EventStopped
+			message = "Container stopped normally"
+		}
+
+		// Send event
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        eventType,
+			Timestamp:   time.Now(),
+			Message:     message,
+			State: ContainerState{
+				ExitCode:     exitCode,
+				OOMKilled:    isOOM,
+				RestartCount: monitor.restartCount,
+			},
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
+		}
+
+		// Trigger restart if policy allows
+		if monitor.restartPolicy.Enabled {
+			shouldRestart := false
+			reason := ""
+
+			if isOOM && monitor.restartPolicy.RestartOnOOM {
+				shouldRestart = true
+				reason = "OOM kill detected"
+			} else if exitCode != 0 && monitor.restartPolicy.RestartOnCrash {
+				shouldRestart = true
+				reason = fmt.Sprintf("crash detected (exit code %d)", exitCode)
+			}
+
+			if shouldRestart {
+				if err := dcm.attemptRestart(ctx, monitor, reason); err != nil {
+					dcm.logger.Error("Failed to restart container after Docker event",
+						zap.String("containerID", monitor.containerID),
+						zap.String("reason", reason),
+						zap.Error(err),
+					)
+				}
+			}
+		}
+
+	case "oom":
+		// OOM event (may come before die event)
+		dcm.logger.Warn("Container OOM event detected",
+			zap.String("containerID", monitor.containerID),
+		)
+
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventOOMKilled,
+			Timestamp:   time.Now(),
+			Message:     "Container received OOM signal",
+			State: ContainerState{
+				OOMKilled:    true,
+				RestartCount: monitor.restartCount,
+			},
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
 		}
 	}
 }
