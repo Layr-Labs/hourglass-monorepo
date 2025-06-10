@@ -20,6 +20,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -160,7 +161,10 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggrega
 	}
 	var taskId [32]byte
 	copy(taskId[:], aggCert.TaskId)
-	cc.logger.Sugar().Infow("submitting task result", "taskId", taskId)
+	cc.logger.Sugar().Infow("submitting task result",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+	)
 
 	// Convert signature to G1 point in precompile format
 	g1Point := &bn254.G1Point{

@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -131,6 +130,8 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
+	startErrorsChan := make(chan error, 2)
+
 	anvilWg.Add(1)
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
@@ -139,14 +140,24 @@ func Test_Aggregator(t *testing.T) {
 
 	go func() {
 		defer anvilWg.Done()
-		if os.Getenv("CI") == "" {
-			fmt.Printf("Sleeping for 10 seconds\n\n")
-			time.Sleep(10 * time.Second)
-		} else {
-			fmt.Printf("Sleeping for 30 seconds\n\n")
-			time.Sleep(30 * time.Second)
+
+		for {
+			select {
+			// timeout of 60 seconds
+			case <-ctx.Done():
+				t.Logf("Failed to start l1Anvil: %v", ctx.Err())
+				return
+			case <-time.After(2 * time.Second):
+				t.Logf("Checking if l1Anvil is up and running...")
+				block, err := l1EthereumClient.GetLatestBlock(ctx)
+				if err != nil {
+					t.Logf("Failed to get latest block, will retry: %v", err)
+					continue
+				}
+				t.Logf("L1 Anvil is up and running, latest block: %v", block)
+				return
+			}
 		}
-		fmt.Println("Checking if l1Anvil is up and running...")
 	}()
 
 	// ------------------------------------------------------------------------
@@ -169,16 +180,33 @@ func Test_Aggregator(t *testing.T) {
 	}
 	go func() {
 		defer anvilWg.Done()
-		if os.Getenv("CI") == "" {
-			fmt.Printf("Sleeping for 10 seconds\n\n")
-			time.Sleep(10 * time.Second)
-		} else {
-			fmt.Printf("Sleeping for 30 seconds\n\n")
-			time.Sleep(30 * time.Second)
+
+		for {
+			select {
+			// timeout of 60 seconds
+			case <-ctx.Done():
+				t.Logf("Failed to start l2Anvil: %v", ctx.Err())
+				return
+			case <-time.After(2 * time.Second):
+				t.Logf("Checking if l2Anvil is up and running...")
+				block, err := l2EthereumClient.GetLatestBlock(ctx)
+				if err != nil {
+					t.Logf("Failed to get latest block, will retry: %v", err)
+					continue
+				}
+				t.Logf("L2 Anvil is up and running, latest block: %v", block)
+				return
+			}
 		}
-		fmt.Println("Checking if l2Anvil is up and running...")
 	}()
 	anvilWg.Wait()
+	close(startErrorsChan)
+
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Fatalf("Anvil failed to start: %v", err)
+		}
+	}
 
 	// ------------------------------------------------------------------------
 	// register peering data
@@ -312,25 +340,6 @@ func Test_Aggregator(t *testing.T) {
 	}()
 
 	// ------------------------------------------------------------------------
-	// Push a message to the mailbox
-	// ------------------------------------------------------------------------
-	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create contract caller: %v", err)
-	}
-	t.Logf("Pushing message to mailbox...")
-	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
-	if err != nil {
-		t.Fatalf("Failed to publish message to inbox: %v", err)
-	}
-	t.Logf("Task published: %+v", task)
-
-	// ------------------------------------------------------------------------
 	// Listen for TaskVerified event to know that the test is done
 	// ------------------------------------------------------------------------
 	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
@@ -388,11 +397,30 @@ func Test_Aggregator(t *testing.T) {
 		}
 	}()
 
+	// ------------------------------------------------------------------------
+	// Push a message to the mailbox
+	// ------------------------------------------------------------------------
+	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AppAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create contract caller: %v", err)
+	}
+	t.Logf("Pushing message to mailbox...")
+	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
+	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
+	if err != nil {
+		t.Fatalf("Failed to publish message to inbox: %v", err)
+	}
+	t.Logf("Task published: %+v", task)
+
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
 	case <-time.After(90 * time.Second):
-		t.Logf("Timeout after 60 seconds")
+		t.Logf("Timeout after 90 seconds")
 		cancel()
 	}
 	fmt.Printf("Test completed\n")
@@ -458,10 +486,10 @@ avsPerformers:
       repository: "hello-performer"
       tag: "latest"
     processType: "server"
-    avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
     workerCount: 1
     signingCurve: "bn254"
-    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
 `
 
 	aggregatorConfigYaml = `
@@ -479,8 +507,8 @@ chains:
     rpcUrl: http://localhost:9545
     pollIntervalSeconds: 2
 operator:
-  address: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
-  operatorPrivateKey: "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
+  address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
+  operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
   signingKeys:
     bls:
       password: ""
@@ -519,10 +547,10 @@ operator:
         }
 
 avss:
-  - address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  - address: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
     responseTimeout: 3000
     chainIds: [31337]
     signingCurve: "bn254"
-    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
 `
 )

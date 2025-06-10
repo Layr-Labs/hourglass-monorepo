@@ -181,6 +181,10 @@ chmod 444 internal/testData/anvil*
 rm $anvilL1DumpStatePath
 rm $anvilL1ConfigPath
 
+function lowercaseAddress() {
+    echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 # create a heredoc json file and dump it to internal/testData/chain-config.json
 cat <<EOF > internal/testData/chain-config.json
 {
