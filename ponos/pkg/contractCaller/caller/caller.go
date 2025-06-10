@@ -273,20 +273,7 @@ func encodeOperatorOutputMap(m map[string][]byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (cc *ContractCaller) GetOperatorSets(avsAddress string) ([]uint32, error) {
-	avsAddr := common.HexToAddress(avsAddress)
-	opSets, err := cc.allocationManagerCaller.GetRegisteredSets(&bind.CallOpts{}, avsAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator sets: %w", err)
-	}
-	opsetIds := make([]uint32, len(opSets))
-	for i, opSet := range opSets {
-		opsetIds[i] = opSet.Id
-	}
-	return opsetIds, nil
-}
-
-func (cc *ContractCaller) GetOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error) {
+func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error) {
 	avsAddr := common.HexToAddress(avsAddress)
 	operatorSet, err := cc.allocationManagerCaller.GetMembers(&bind.CallOpts{}, IAllocationManager.OperatorSet{
 		Avs: avsAddr,
@@ -306,7 +293,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	avsAddress string,
 	operatorSetId uint32,
 ) ([]*peering.OperatorPeerInfo, error) {
-	members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
+	members, err := cc.getOperatorSetMembers(avsAddress, operatorSetId)
 	if err != nil {
 		return nil, err
 	}
@@ -337,23 +324,6 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	return allMembers, nil
 }
 
-func (cc *ContractCaller) GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error) {
-	operatorSets, err := cc.GetOperatorSets(avsAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	opsetMembers := make(map[uint32][]string)
-	for _, operatorSetId := range operatorSets {
-		members, err := cc.GetOperatorSetMembers(avsAddress, operatorSetId)
-		if err != nil {
-			return nil, err
-		}
-		opsetMembers[operatorSetId] = members
-	}
-	return opsetMembers, nil
-}
-
 func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
 	avsAddr := common.HexToAddress(avsAddress)
 	avsConfig, err := cc.taskMailboxCaller.GetAvsConfig(&bind.CallOpts{}, avsAddr)
@@ -364,27 +334,6 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 	return &contractCaller.AVSConfig{
 		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
 		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
-	}, nil
-}
-
-func (cc *ContractCaller) GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*contractCaller.ExecutorOperatorSetTaskConfig, error) {
-	avsAddr := common.HexToAddress(avsAddress)
-	taskCfg, err := cc.taskMailboxCaller.GetExecutorOperatorSetTaskConfig(&bind.CallOpts{}, ITaskMailbox.OperatorSet{
-		Avs: avsAddr,
-		Id:  operatorSetId,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &contractCaller.ExecutorOperatorSetTaskConfig{
-		CertificateVerifier:      taskCfg.CertificateVerifier.String(),
-		TaskHook:                 taskCfg.TaskHook.String(),
-		FeeToken:                 taskCfg.FeeToken.String(),
-		FeeCollector:             taskCfg.FeeCollector.String(),
-		TaskSLA:                  taskCfg.TaskSLA,
-		StakeProportionThreshold: taskCfg.StakeProportionThreshold,
-		TaskMetadata:             taskCfg.TaskMetadata,
 	}, nil
 }
 

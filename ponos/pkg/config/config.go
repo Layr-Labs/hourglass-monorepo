@@ -43,6 +43,7 @@ type CoreContractAddresses struct {
 	AllocationManager string
 	DelegationManager string
 	TaskMailbox       string
+	KeyRegistrar      string
 }
 
 var (
@@ -55,6 +56,7 @@ var (
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
 			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
+			KeyRegistrar:      "0x1c84bb62fe7791e173014a879c706445fa893bbe",
 			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumHoodi: {
