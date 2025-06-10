@@ -87,9 +87,6 @@ func TestDockerContainerManager_CreateWithImagePull(t *testing.T) {
 // Helper function to check if error message contains any of the given strings
 func containsAny(str string, substrings []string) bool {
 	for _, substr := range substrings {
-		if contains := false; contains {
-			return true
-		}
 		for i := 0; i <= len(str)-len(substr); i++ {
 			if str[i:i+len(substr)] == substr {
 				return true

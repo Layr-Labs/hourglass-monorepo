@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,7 +46,16 @@ func main() {
 		env := make(map[string]string)
 		for _, e := range os.Environ() {
 			if len(e) > 0 && e[0] != '_' { // Skip internal vars
-				env[e[:min(len(e), 50)]] = "..." // Truncate for brevity
+				parts := strings.SplitN(e, "=", 2)
+				if len(parts) == 2 {
+					key := parts[0]
+					value := parts[1]
+					// Truncate value for brevity
+					if len(value) > 50 {
+						value = value[:50] + "..."
+					}
+					env[key] = value
+				}
 			}
 		}
 
@@ -98,11 +108,4 @@ func main() {
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

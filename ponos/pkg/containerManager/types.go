@@ -48,7 +48,7 @@ type ContainerInfo struct {
 
 // HealthCheckConfig defines how container health should be monitored
 type HealthCheckConfig struct {
-	Enabled          bool
+	Enabled          bool // false = disabled (default), true = enabled (must be explicitly set)
 	Interval         time.Duration
 	Timeout          time.Duration
 	Retries          int
