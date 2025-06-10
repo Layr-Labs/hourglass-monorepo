@@ -130,7 +130,7 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
-		aem := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
+		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
 			AvsAddress: avs.Address,
 			SupportedChainIds: util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
 				return config.ChainId(id)
@@ -157,6 +157,9 @@ func (a *Aggregator) Initialize() error {
 			a.peeringDataFetcher,
 			a.logger,
 		)
+		if err != nil {
+			return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
+		}
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}

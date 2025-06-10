@@ -12,6 +12,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"slices"
 	"strings"
@@ -24,10 +25,11 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	AggregatorUrl            string
+	L1ChainId                config.ChainId
 }
 
 type operatorSetRegistrationData struct {
-	AvsId           string
+	Avs             string
 	OperatorAddress string
 	OperatorSetId   uint32
 }
@@ -56,7 +58,14 @@ func NewAvsExecutionManager(
 	signer signer.ISigner,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	logger *zap.Logger,
-) *AvsExecutionManager {
+) (*AvsExecutionManager, error) {
+	if config.L1ChainId == 0 {
+		return nil, fmt.Errorf("L1ChainId must be set in AvsExecutionManagerConfig")
+	}
+	if _, ok := chainContractCallers[config.L1ChainId]; !ok {
+		return nil, fmt.Errorf("chainContractCallers must contain L1ChainId: %d", config.L1ChainId)
+	}
+
 	manager := &AvsExecutionManager{
 		config:               config,
 		logger:               logger,
@@ -66,7 +75,7 @@ func NewAvsExecutionManager(
 		inflightTasks:        sync.Map{},
 		taskQueue:            make(chan *types.Task, 10000),
 	}
-	return manager
+	return manager, nil
 }
 
 func (em *AvsExecutionManager) getListOfContractAddresses() []string {
@@ -143,9 +152,9 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	case "TaskCreated":
 		return em.processTask(lwb)
 	case "OperatorAddedToOperatorSet":
-		return em.processOperatorAdded(lwb)
+		return em.processOperatorAddedToOperatorSet(lwb)
 	case "OperatorRemovedFromOperatorSet":
-		return em.processOperatorRemoved(lwb)
+		return em.processOperatorRemovedFromOperatorSet(lwb)
 	}
 
 	em.logger.Sugar().Infow("Ignoring log",
@@ -293,8 +302,8 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 	}
 	var peers []*peering.OperatorPeerInfo
 	for _, peer := range em.operatorPeers {
-		if slices.Contains(peer.OperatorSetIds, task.OperatorSetId) {
-			clonedPeer, err := peer.Copy()
+		if peer.IncludesOperatorSetId(task.OperatorSetId) {
+			clonedPeer, err := peer.Clone()
 			if err != nil {
 				em.logger.Sugar().Errorw("Failed to clone peer",
 					zap.String("peer", peer.OperatorAddress),
@@ -311,9 +320,7 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 	return nil
 }
 
-func (em *AvsExecutionManager) parseOperatorSetData(
-	lwb *chainPoller.LogWithBlock,
-) (operatorSetRegistrationData, error) {
+func (em *AvsExecutionManager) parseOperatorAddedRemovedFromSet(lwb *chainPoller.LogWithBlock) (operatorSetRegistrationData, error) {
 	lg := lwb.Log
 	em.logger.Sugar().Infow("Received operator registration event",
 		zap.String("eventName", lg.EventName),
@@ -347,26 +354,48 @@ func (em *AvsExecutionManager) parseOperatorSetData(
 	)
 
 	return operatorSetRegistrationData{
-		AvsId:           operatorSet.Avs,
+		Avs:             operatorSet.Avs,
 		OperatorAddress: operatorAddr,
 		OperatorSetId:   operatorSet.Id,
 	}, nil
 }
 
-func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBlock) error {
-	registration, err := em.parseOperatorSetData(lwb)
+func (em *AvsExecutionManager) getL1ContractCaller() contractCaller.IContractCaller {
+	return em.chainContractCallers[em.config.L1ChainId]
+}
+
+func (em *AvsExecutionManager) processOperatorAddedToOperatorSet(lwb *chainPoller.LogWithBlock) error {
+	registration, err := em.parseOperatorAddedRemovedFromSet(lwb)
 	if err != nil {
 		return err
 	}
-	if registration.AvsId != em.config.AvsAddress {
+	if !strings.EqualFold(registration.Avs, em.config.AvsAddress) {
+		em.logger.Sugar().Infow("Ignoring operator registration for different AVS address",
+			zap.String("avsId", registration.Avs),
+			zap.String("currentAvsAddress", em.config.AvsAddress),
+			zap.String("operatorAddress", registration.OperatorAddress),
+			zap.Uint32("operatorSetId", registration.OperatorSetId),
+		)
 		return nil
 	}
+	// if the operator is already present in the map, just append the new operator set id
 	if operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]; ok {
-		operatorPeering.OperatorSetIds = append(operatorPeering.OperatorSetIds, registration.OperatorSetId)
+		opsetDetails, err := em.getL1ContractCaller().GetOperatorSetDetailsForOperator(
+			common.HexToAddress(registration.OperatorAddress),
+			registration.Avs,
+			registration.OperatorSetId,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to get operator set details: %w", err)
+		}
+
+		operatorPeering.OperatorSets = append(operatorPeering.OperatorSets, opsetDetails)
 		return nil
 	}
-	observedPeers, err := em.chainContractCallers[lwb.Block.ChainId].GetOperatorSetMembersWithPeering(
-		registration.AvsId,
+
+	// first time seeing the operator, so need to fetch all of their data
+	observedPeers, err := em.getL1ContractCaller().GetOperatorSetMembersWithPeering(
+		registration.Avs,
 		registration.OperatorSetId,
 	)
 	if err != nil {
@@ -374,7 +403,7 @@ func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBloc
 		return err
 	}
 	for _, observedPeer := range observedPeers {
-		if observedPeer.OperatorAddress == registration.OperatorAddress {
+		if strings.EqualFold(observedPeer.OperatorAddress, registration.OperatorAddress) {
 			em.operatorPeers[registration.OperatorAddress] = observedPeer
 			break
 		}
@@ -382,24 +411,32 @@ func (em *AvsExecutionManager) processOperatorAdded(lwb *chainPoller.LogWithBloc
 	return nil
 }
 
-func (em *AvsExecutionManager) processOperatorRemoved(lwb *chainPoller.LogWithBlock) error {
-	deregistration, err := em.parseOperatorSetData(lwb)
+func (em *AvsExecutionManager) processOperatorRemovedFromOperatorSet(lwb *chainPoller.LogWithBlock) error {
+	deregistration, err := em.parseOperatorAddedRemovedFromSet(lwb)
 	if err != nil {
 		return err
 	}
-	if deregistration.AvsId != em.config.AvsAddress {
+	if !strings.EqualFold(deregistration.Avs, em.config.AvsAddress) {
+		em.logger.Sugar().Infow("Ignoring operator deregistration for different AVS address",
+			zap.String("avsId", deregistration.Avs),
+			zap.String("currentAvsAddress", em.config.AvsAddress),
+			zap.String("operatorAddress", deregistration.OperatorAddress),
+			zap.Uint32("operatorSetId", deregistration.OperatorSetId),
+		)
 		return nil
 	}
 	peerInfo, ok := em.operatorPeers[deregistration.OperatorAddress]
 	if !ok {
-		// TODO: emit metric
-		return fmt.Errorf("peer not found for deregistration: %s", deregistration.OperatorAddress)
+		em.logger.Sugar().Infow("Operator not found in peers, ignoring deregistration",
+			zap.String("operatorAddress", deregistration.OperatorAddress),
+			zap.Uint32("operatorSetId", deregistration.OperatorSetId),
+			zap.String("avsAddress", deregistration.Avs),
+		)
+		return nil
 	}
-	for i, operatorSetId := range peerInfo.OperatorSetIds {
-		if deregistration.OperatorSetId == operatorSetId {
-			peerInfo.OperatorSetIds = append(peerInfo.OperatorSetIds[:i], peerInfo.OperatorSetIds[i+1:]...)
-			break
-		}
-	}
+	peerInfo.OperatorSets = slices.DeleteFunc(peerInfo.OperatorSets, func(os *peering.OperatorSet) bool {
+		return os.OperatorSetID == deregistration.OperatorSetId
+	})
+	em.operatorPeers[deregistration.OperatorAddress] = peerInfo
 	return nil
 }

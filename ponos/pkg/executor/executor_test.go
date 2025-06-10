@@ -68,9 +68,13 @@ func Test_Executor(t *testing.T) {
 		AggregatorPeers: []*peering.OperatorPeerInfo{
 			{
 				OperatorAddress: simAggConfig.Operator.Address,
-				PublicKey:       pubKey,
-				OperatorSetIds:  []uint32{0},
-				NetworkAddress:  "localhost",
+				OperatorSets: []*peering.OperatorSet{
+					{
+						OperatorSetID:  0,
+						PublicKey:      pubKey,
+						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
+					},
+				},
 			},
 		},
 	}, l)

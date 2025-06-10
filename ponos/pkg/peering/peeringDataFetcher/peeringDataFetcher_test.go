@@ -167,7 +167,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to sign message: %v", err)
 			}
 
-			valid, err := testSig.Verify(peers[0].PublicKey, testMessage)
+			valid, err := testSig.Verify(peers[0].OperatorSets[0].PublicKey, testMessage)
 			if err != nil {
 				t.Fatalf("Failed to verify signature: %v", err)
 			}

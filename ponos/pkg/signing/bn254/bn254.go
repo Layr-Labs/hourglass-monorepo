@@ -10,8 +10,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fp"
 
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
-
 	bn254 "github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"golang.org/x/crypto/hkdf"
@@ -206,8 +204,18 @@ func (pk *PublicKey) Bytes() []byte {
 	return pk.PointBytes
 }
 
+type SolidityBN254G1Point struct {
+	X *big.Int
+	Y *big.Int
+}
+
+type SolidityBN254G2Point struct {
+	X [2]*big.Int
+	Y [2]*big.Int
+}
+
 // NewPublicKeyFromSolidity creates a public key from a Solidity G1 and G2 points
-func NewPublicKeyFromSolidity(g1 ITaskAVSRegistrar.BN254G1Point, g2 ITaskAVSRegistrar.BN254G2Point) (*PublicKey, error) {
+func NewPublicKeyFromSolidity(g1 SolidityBN254G1Point, g2 SolidityBN254G2Point) (*PublicKey, error) {
 	// Create a new PublicKey struct
 	pubKey := &PublicKey{}
 
