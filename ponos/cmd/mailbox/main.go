@@ -28,7 +28,7 @@ func main() {
 	_ = chainConfig
 
 	client := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   "http://localhost:9545",
+		BaseUrl:   "http://localhost:8545",
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 

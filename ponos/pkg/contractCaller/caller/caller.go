@@ -20,12 +20,14 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 	"math/big"
 	"slices"
+	"time"
 )
 
 type ContractCallerConfig struct {
@@ -149,6 +151,30 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	return opts, nil
 }
 
+func (cc *ContractCaller) SubmitTaskResultRetryable(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*types.Receipt, error) {
+	backoffs := []int{1, 3, 5, 10, 20}
+	for i, backoff := range backoffs {
+		res, err := cc.SubmitTaskResult(ctx, aggCert)
+		if err != nil {
+			if i == len(backoffs)-1 {
+				cc.logger.Sugar().Errorw("failed to submit task result after retries",
+					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to submit task result: %w", err)
+			}
+			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
+				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.Int("attempt", i+1),
+			)
+			time.Sleep(time.Second * time.Duration(backoff))
+			continue
+		}
+		return res, nil
+	}
+	return nil, fmt.Errorf("failed to submit task result after retries")
+}
+
 func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*types.Receipt, error) {
 	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
@@ -160,7 +186,10 @@ func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggrega
 	}
 	var taskId [32]byte
 	copy(taskId[:], aggCert.TaskId)
-	cc.logger.Sugar().Infow("submitting task result", "taskId", taskId)
+	cc.logger.Sugar().Infow("submitting task result",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+	)
 
 	// Convert signature to G1 point in precompile format
 	g1Point := &bn254.G1Point{

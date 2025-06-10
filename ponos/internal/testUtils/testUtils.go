@@ -168,6 +168,7 @@ func StartAnvil(projectRoot string, ctx context.Context, cfg *AnvilConfig) (*exe
 		"--fork-block-number", cfg.ForkBlockNumber,
 		"-vvv",
 	}
+	fmt.Printf("Starting anvil with args: %v\n", args)
 	cmd := exec.CommandContext(ctx, "anvil", args...)
 	cmd.Stderr = os.Stderr
 

@@ -142,12 +142,16 @@ build/test-performer:
 build/test-performer-container:
 	cd ../demo && make build-container
 
+.PHONY: build/test-container
+build/test-container:
+	docker build -t ponos-test-container:latest ./internal/testUtils/testContainer/
+
 .PHONY: test
 test:
 	GOFLAGS="-count=1" $(GO) test -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
-ci-test: build/test-performer-container test
+ci-test: build/test-performer-container build/test-container test
 
 .PHONY: lint
 lint:
