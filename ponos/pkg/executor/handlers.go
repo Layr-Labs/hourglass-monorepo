@@ -3,13 +3,15 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
 )
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
@@ -23,6 +25,62 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 		return nil, fmt.Errorf("Failed to handle received task: %w", err)
 	}
 	return res, nil
+}
+
+func (e *Executor) List(ctx context.Context, req *executorV1.ListRequest) (*executorV1.ListResponse, error) {
+	var performers []*executorV1.Performer
+
+	e.logger.Debug("Listing AVS performers", zap.Int("count", len(e.avsPerformers)))
+
+	// Iterate through all performers
+	for avsAddress, performer := range e.avsPerformers {
+		// Get performer information using the new interface method
+		performerInfo, err := performer.GetPerformerInfo(ctx)
+		if err != nil {
+			e.logger.Error("Failed to get performer info",
+				zap.String("avsAddress", avsAddress),
+				zap.Error(err),
+			)
+			// Still include the performer with unknown status
+			performers = append(performers, &executorV1.Performer{
+				AvsAddress:   avsAddress,
+				Status:       executorV1.PerformerStatus_PERFORMER_STATUS_UNKNOWN,
+				Id:           "unknown",
+				RestartCount: 0,
+			})
+			continue
+		}
+
+		// Convert our internal status to protobuf enum
+		protoStatus := mapPerformerStatusToProto(performerInfo.Status)
+
+		performers = append(performers, &executorV1.Performer{
+			AvsAddress:   avsAddress,
+			Status:       protoStatus,
+			Id:           performerInfo.ContainerID,
+			RestartCount: performerInfo.RestartCount,
+		})
+	}
+
+	e.logger.Debug("Listed AVS performers", zap.Int("returned", len(performers)))
+
+	return &executorV1.ListResponse{
+		Performers: performers,
+	}, nil
+}
+
+// mapPerformerStatusToProto converts internal PerformerStatus to protobuf enum
+func mapPerformerStatusToProto(status avsPerformer.PerformerStatus) executorV1.PerformerStatus {
+	switch status {
+	case avsPerformer.PerformerStatusHealthy:
+		return executorV1.PerformerStatus_PERFORMER_STATUS_HEALTHY
+	case avsPerformer.PerformerStatusUnhealthy:
+		return executorV1.PerformerStatus_PERFORMER_STATUS_UNHEALTHY
+	case avsPerformer.PerformerStatusStopped:
+		return executorV1.PerformerStatus_PERFORMER_STATUS_STOPPED
+	default:
+		return executorV1.PerformerStatus_PERFORMER_STATUS_UNKNOWN
+	}
 }
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {

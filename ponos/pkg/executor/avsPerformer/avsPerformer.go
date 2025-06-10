@@ -2,6 +2,7 @@ package avsPerformer
 
 import (
 	"context"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
 
@@ -26,9 +27,29 @@ type AvsPerformerConfig struct {
 	SigningCurve         string // bn254, bls381, etc
 }
 
+// PerformerStatus represents the current status of a performer
+type PerformerStatus string
+
+const (
+	PerformerStatusUnknown   PerformerStatus = "unknown"
+	PerformerStatusHealthy   PerformerStatus = "healthy"
+	PerformerStatusUnhealthy PerformerStatus = "unhealthy"
+	PerformerStatusStopped   PerformerStatus = "stopped"
+)
+
+// PerformerInfo contains runtime information about a performer
+type PerformerInfo struct {
+	ContainerID  string
+	Status       PerformerStatus
+	RestartCount uint32
+}
+
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
 	ValidateTaskSignature(task *performerTask.PerformerTask) error
 	Shutdown() error
+
+	// Status and information methods
+	GetPerformerInfo(ctx context.Context) (*PerformerInfo, error)
 }

@@ -774,3 +774,75 @@ func (aps *AvsPerformerServer) Shutdown() error {
 
 	return nil
 }
+
+// GetPerformerInfo returns detailed information about the performer
+func (aps *AvsPerformerServer) GetPerformerInfo(ctx context.Context) (*avsPerformer.PerformerInfo, error) {
+	if aps.containerManager == nil || aps.containerInfo == nil {
+		return &avsPerformer.PerformerInfo{
+			ContainerID:  "unknown",
+			Status:       avsPerformer.PerformerStatusUnknown,
+			RestartCount: 0,
+		}, nil
+	}
+
+	// Get current status
+	status := aps.getStatus(ctx)
+
+	// Get restart count from container state
+	var restartCount uint32 = 0
+	containerState, err := aps.containerManager.GetContainerState(ctx, aps.containerInfo.ID)
+	if err != nil {
+		aps.logger.Debug("Failed to get container state",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", aps.containerInfo.ID),
+			zap.Error(err),
+		)
+	} else {
+		restartCount = uint32(containerState.RestartCount)
+	}
+
+	return &avsPerformer.PerformerInfo{
+		ContainerID:  aps.containerInfo.ID,
+		Status:       status,
+		RestartCount: restartCount,
+	}, nil
+}
+
+// getStatus returns the current status of the performer
+func (aps *AvsPerformerServer) getStatus(ctx context.Context) avsPerformer.PerformerStatus {
+	if aps.containerManager == nil || aps.containerInfo == nil {
+		return avsPerformer.PerformerStatusUnknown
+	}
+
+	// Check if container is running
+	running, err := aps.containerManager.IsRunning(ctx, aps.containerInfo.ID)
+	if err != nil {
+		aps.logger.Debug("Failed to check container status",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("containerID", aps.containerInfo.ID),
+			zap.Error(err),
+		)
+		return avsPerformer.PerformerStatusUnknown
+	}
+
+	if !running {
+		return avsPerformer.PerformerStatusStopped
+	}
+
+	// If container is running, check if performer client is responding
+	if aps.performerClient != nil {
+		healthCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		defer cancel()
+
+		_, err := aps.performerClient.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
+		if err != nil {
+			aps.logger.Debug("Performer health check failed",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.Error(err),
+			)
+			return avsPerformer.PerformerStatusUnhealthy
+		}
+	}
+
+	return avsPerformer.PerformerStatusHealthy
+}

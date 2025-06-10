@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	ExecutorService_SubmitTask_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorService/SubmitTask"
+	ExecutorService_List_FullMethodName       = "/eigenlayer.hourglass.v1.ExecutorService/List"
 )
 
 // ExecutorServiceClient is the client API for ExecutorService service.
@@ -30,6 +31,8 @@ const (
 type ExecutorServiceClient interface {
 	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*TaskResult, error)
+	// List returns the status of all AVS performers
+	List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error)
 }
 
 type executorServiceClient struct {
@@ -50,6 +53,16 @@ func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmissi
 	return out, nil
 }
 
+func (c *executorServiceClient) List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListResponse)
+	err := c.cc.Invoke(ctx, ExecutorService_List_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExecutorServiceServer is the server API for ExecutorService service.
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
@@ -58,6 +71,8 @@ func (c *executorServiceClient) SubmitTask(ctx context.Context, in *TaskSubmissi
 type ExecutorServiceServer interface {
 	// SubmitTask submits a task to the executor from the aggregator
 	SubmitTask(context.Context, *TaskSubmission) (*TaskResult, error)
+	// List returns the status of all AVS performers
+	List(context.Context, *ListRequest) (*ListResponse, error)
 }
 
 // UnimplementedExecutorServiceServer should be embedded to have
@@ -69,6 +84,9 @@ type UnimplementedExecutorServiceServer struct{}
 
 func (UnimplementedExecutorServiceServer) SubmitTask(context.Context, *TaskSubmission) (*TaskResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitTask not implemented")
+}
+func (UnimplementedExecutorServiceServer) List(context.Context, *ListRequest) (*ListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedExecutorServiceServer) testEmbeddedByValue() {}
 
@@ -108,6 +126,24 @@ func _ExecutorService_SubmitTask_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExecutorService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExecutorServiceServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExecutorService_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExecutorServiceServer).List(ctx, req.(*ListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExecutorService_ServiceDesc is the grpc.ServiceDesc for ExecutorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +154,10 @@ var ExecutorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitTask",
 			Handler:    _ExecutorService_SubmitTask_Handler,
+		},
+		{
+			MethodName: "List",
+			Handler:    _ExecutorService_List_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

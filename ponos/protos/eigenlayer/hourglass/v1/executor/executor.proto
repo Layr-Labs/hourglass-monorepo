@@ -8,6 +8,8 @@ option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/ei
 service ExecutorService {
   // SubmitTask submits a task to the executor from the aggregator
   rpc SubmitTask(TaskSubmission) returns (TaskResult) {}
+  // List returns the status of all AVS performers
+  rpc List(ListRequest) returns (ListResponse) {}
 }
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
@@ -25,4 +27,26 @@ message TaskResult {
   bytes output = 3;
   bytes signature = 4;
   string avs_address = 5;
+}
+
+message ListRequest {
+  // Empty for now - list all performers
+}
+
+message ListResponse {
+  repeated Performer performers = 1;
+}
+
+message Performer {
+  string avs_address = 1;
+  PerformerStatus status = 2;
+  string id = 3;
+  uint32 restart_count = 4;
+}
+
+enum PerformerStatus {
+  PERFORMER_STATUS_UNKNOWN = 0;
+  PERFORMER_STATUS_HEALTHY = 1;
+  PERFORMER_STATUS_UNHEALTHY = 2;
+  PERFORMER_STATUS_STOPPED = 3;
 }
