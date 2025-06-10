@@ -230,7 +230,7 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 			return
 		}
 
-		receipt, err := chainCaller.SubmitTaskResult(ctx, cert)
+		receipt, err := chainCaller.SubmitTaskResultRetryable(ctx, cert)
 		if err != nil {
 			// TODO: emit metric
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)

@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	"math/big"
 	"slices"
+	"time"
 )
 
 type ContractCallerConfig struct {
@@ -148,6 +149,30 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	}
 	opts.NoSend = true
 	return opts, nil
+}
+
+func (cc *ContractCaller) SubmitTaskResultRetryable(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*types.Receipt, error) {
+	backoffs := []int{1, 3, 5, 10, 20}
+	for i, backoff := range backoffs {
+		res, err := cc.SubmitTaskResult(ctx, aggCert)
+		if err != nil {
+			if i == len(backoffs)-1 {
+				cc.logger.Sugar().Errorw("failed to submit task result after retries",
+					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to submit task result: %w", err)
+			}
+			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
+				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.Int("attempt", i+1),
+			)
+			time.Sleep(time.Second * time.Duration(backoff))
+			continue
+		}
+		return res, nil
+	}
+	return nil, fmt.Errorf("failed to submit task result after retries")
 }
 
 func (cc *ContractCaller) SubmitTaskResult(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*types.Receipt, error) {

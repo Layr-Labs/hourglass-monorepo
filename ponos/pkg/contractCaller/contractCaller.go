@@ -30,6 +30,8 @@ type IContractCaller interface {
 	// TODO: task will need a certificate
 	SubmitTaskResult(ctx context.Context, task *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
 
+	SubmitTaskResultRetryable(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
+
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
 
 	GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
