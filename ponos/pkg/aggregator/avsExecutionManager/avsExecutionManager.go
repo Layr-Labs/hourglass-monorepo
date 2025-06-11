@@ -180,12 +180,41 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}
 
+	chainCC, err := em.getContractCallerForChain(task.ChainId)
+	if err != nil {
+		cancel()
+		em.logger.Sugar().Errorw("Failed to get contract caller for chain",
+			zap.Uint("chainId", uint(task.ChainId)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to get contract caller for chain: %w", err)
+	}
+
+	tableData, err := chainCC.GetOperatorTableDataForOperatorSet(
+		ctx,
+		common.HexToAddress(task.AVSAddress),
+		task.OperatorSetId,
+		task.ChainId,
+		task.BlockNumber,
+	)
+	if err != nil {
+		cancel()
+		em.logger.Sugar().Errorw("Failed to get operator table data",
+			zap.String("avsAddress", task.AVSAddress),
+			zap.Uint32("operatorSetId", task.OperatorSetId),
+			zap.Uint("chainId", uint(task.ChainId)),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to get operator table data: %w", err)
+	}
+
 	ts, err := taskSession.NewTaskSession(
 		ctx,
 		cancel,
 		task,
 		em.config.AggregatorAddress,
 		sig,
+		tableData,
 		em.logger,
 	)
 	if err != nil {
@@ -239,7 +268,7 @@ func (em *AvsExecutionManager) HandleTask(ctx context.Context, task *types.Task)
 			return
 		}
 
-		receipt, err := chainCaller.SubmitTaskResultRetryable(ctx, cert)
+		receipt, err := chainCaller.SubmitTaskResultRetryable(ctx, cert, tableData.LatestReferenceTimestamp)
 		if err != nil {
 			// TODO: emit metric
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
@@ -360,8 +389,16 @@ func (em *AvsExecutionManager) parseOperatorAddedRemovedFromSet(lwb *chainPoller
 	}, nil
 }
 
-func (em *AvsExecutionManager) getL1ContractCaller() contractCaller.IContractCaller {
-	return em.chainContractCallers[em.config.L1ChainId]
+func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId) (contractCaller.IContractCaller, error) {
+	caller, ok := em.chainContractCallers[chainId]
+	if !ok {
+		return nil, fmt.Errorf("no contract caller found for chain ID: %d", chainId)
+	}
+	return caller, nil
+}
+
+func (em *AvsExecutionManager) getL1ContractCaller() (contractCaller.IContractCaller, error) {
+	return em.getContractCallerForChain(em.config.L1ChainId)
 }
 
 func (em *AvsExecutionManager) processOperatorAddedToOperatorSet(lwb *chainPoller.LogWithBlock) error {
@@ -378,9 +415,15 @@ func (em *AvsExecutionManager) processOperatorAddedToOperatorSet(lwb *chainPolle
 		)
 		return nil
 	}
+	l1cc, err := em.getL1ContractCaller()
+	if err != nil {
+		return fmt.Errorf("failed to get L1 contract caller: %w", err)
+	}
+
 	// if the operator is already present in the map, just append the new operator set id
 	if operatorPeering, ok := em.operatorPeers[registration.OperatorAddress]; ok {
-		opsetDetails, err := em.getL1ContractCaller().GetOperatorSetDetailsForOperator(
+
+		opsetDetails, err := l1cc.GetOperatorSetDetailsForOperator(
 			common.HexToAddress(registration.OperatorAddress),
 			registration.Avs,
 			registration.OperatorSetId,
@@ -394,7 +437,7 @@ func (em *AvsExecutionManager) processOperatorAddedToOperatorSet(lwb *chainPolle
 	}
 
 	// first time seeing the operator, so need to fetch all of their data
-	observedPeers, err := em.getL1ContractCaller().GetOperatorSetMembersWithPeering(
+	observedPeers, err := l1cc.GetOperatorSetMembersWithPeering(
 		registration.Avs,
 		registration.OperatorSetId,
 	)

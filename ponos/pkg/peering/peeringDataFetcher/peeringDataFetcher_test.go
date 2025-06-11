@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -81,6 +82,18 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		fmt.Println("Checking if anvil is up and running...")
 
+		chainId, err := ethClient.ChainID(ctx)
+		if err != nil {
+			l.Sugar().Fatalf("failed to get chain ID: %v", err)
+		}
+		t.Logf("Chain ID: %d", chainId.Uint64())
+
+		coreContracts, err := config.GetCoreContractsForChainId(config.ChainId(chainId.Uint64()))
+		if err != nil {
+			l.Sugar().Fatalf("failed to get core contracts for chain ID %d: %v", chainId.Uint64(), err)
+		}
+		t.Logf("Core contracts: %+v", coreContracts)
+
 		testCases := []struct {
 			privateKey   string
 			address      string
@@ -102,31 +115,43 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+				PrivateKey:          chainConfig.AVSAccountPrivateKey,
+				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+				KeyRegistrarAddress: coreContracts.KeyRegistrar,
+			}, ethClient, l)
+			if err != nil {
+				t.Fatalf("failed to create contract caller: %v", err)
+			}
+
+			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				PrivateKey:          tc.privateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+				KeyRegistrarAddress: coreContracts.KeyRegistrar,
 			}, ethClient, l)
 			if err != nil {
-				l.Sugar().Fatalf("failed to create contract caller: %v", err)
+				t.Fatalf("Failed to create contract caller: %v", err)
 			}
 
 			testOperatorAddress := common.HexToAddress(tc.address)
 
-			privateKey, publicKey, err := bn254.GenerateKeyPair()
+			pk, _, err := bn254.GenerateKeyPair()
 			if err != nil {
-				l.Sugar().Fatalf("failed to generate key pair: %v", err)
+				t.Fatalf("Failed to generate key pair: %v", err)
 			}
 
+			socket := "localhost:8545"
 			result, err := operator.RegisterOperatorToOperatorSets(
 				ctx,
-				cc,
+				avsCc,
+				operatorCc,
 				testOperatorAddress,
 				common.HexToAddress(chainConfig.AVSAccountAddress),
 				tc.operatorSets,
-				publicKey,
-				privateKey,
-				"localhost:8545",
+				pk,
+				socket,
 				7200,
 				"http://localhost:8545",
 				l,
@@ -135,7 +160,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			fmt.Printf("Result: %+v\n", result)
 
 			// create a peeringDataFetcher and get the data
-			pdf := NewPeeringDataFetcher(cc, l)
+			pdf := NewPeeringDataFetcher(operatorCc, l)
 
 			var peers []*peering.OperatorPeerInfo
 			if tc.operatorType == "executor" {
@@ -147,6 +172,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				for _, peer := range peers {
 					t.Logf("Executor Peer: %+v\n", peer)
 				}
+				assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
 
 			} else if tc.operatorType == "aggregator" {
 				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress)
@@ -162,7 +188,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			testMessage := []byte("test message")
 
-			testSig, err := privateKey.Sign(testMessage)
+			testSig, err := pk.Sign(testMessage)
 			if err != nil {
 				t.Fatalf("Failed to sign message: %v", err)
 			}

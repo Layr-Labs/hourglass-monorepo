@@ -22,6 +22,14 @@ func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
 	return sig.Bytes(), nil
 }
 
+func (ims *InMemorySigner) SignMessageForSolidity(data [32]byte) ([]byte, error) {
+	sig, err := ims.privateKey.SignSolidityCompatible(data)
+	if err != nil {
+		return nil, err
+	}
+	return sig.Bytes(), nil
+}
+
 // TODO(seanmcgary): remove this
 func (ims *InMemorySigner) VerifyMessage(publicKey []byte, message []byte, signature []byte) (bool, error) {
 	return true, nil

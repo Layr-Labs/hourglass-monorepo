@@ -243,7 +243,7 @@ func (tra *TaskResultAggregator) VerifyResponseSignature(taskResponse *types.Tas
 		return nil, nil, fmt.Errorf("failed to create signature from bytes: %w", err)
 	}
 
-	if verified, err := sig.Verify(operator.PublicKey, digestBytes[:]); err != nil {
+	if verified, err := sig.VerifySolidityCompatible(operator.PublicKey, digestBytes); err != nil {
 		return nil, nil, fmt.Errorf("signature verification failed: %w", err)
 	} else if !verified {
 		return nil, nil, fmt.Errorf("signature verification failed: signature does not match operator public key")

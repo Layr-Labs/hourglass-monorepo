@@ -65,7 +65,7 @@ func Test_Aggregation(t *testing.T) {
 		}
 
 		// Sign the response
-		sig, err := privateKeys[i].Sign(digest[:])
+		sig, err := privateKeys[i].SignSolidityCompatible(digest)
 		require.NoError(t, err)
 		taskResult.Signature = sig.Bytes()
 		individualSigs[i] = sig
@@ -88,7 +88,9 @@ func Test_Aggregation(t *testing.T) {
 	// Verify the aggregated signature
 	signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 	require.NoError(t, err)
-	verified, err := cert.SignersSignature.Verify(signersPubKey, cert.TaskResponseDigest)
+	var responseDigest [32]byte
+	copy(responseDigest[:], cert.TaskResponseDigest)
+	verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, responseDigest)
 	require.NoError(t, err)
 	assert.True(t, verified, "Aggregated signature verification failed")
 
@@ -103,7 +105,7 @@ func Test_Aggregation(t *testing.T) {
 
 	// Test: Verify if an operator's signature was included
 	// We can verify this by checking that the remaining signatures verify correctly
-	verified, err = bn254.BatchVerify(remainingPubKeys, cert.TaskResponseDigest, remainingSigs)
+	verified, err = bn254.BatchVerifySolidityCompatible(remainingPubKeys, responseDigest, remainingSigs)
 	require.NoError(t, err)
 	assert.True(t, verified, "Remaining signatures should verify correctly")
 
@@ -111,7 +113,7 @@ func Test_Aggregation(t *testing.T) {
 	// Create a new signature array including the non-signer's signature
 	allSigs := append(remainingSigs, individualSigs[0])            // Add a duplicate signature
 	allPubKeys := append(remainingPubKeys, operators[3].PublicKey) // Add non-signer's public key
-	verified, err = bn254.BatchVerify(allPubKeys, cert.TaskResponseDigest, allSigs)
+	verified, err = bn254.BatchVerifySolidityCompatible(allPubKeys, responseDigest, allSigs)
 	require.NoError(t, err)
 	assert.False(t, verified, "Verification should fail when including non-signer's public key")
 }

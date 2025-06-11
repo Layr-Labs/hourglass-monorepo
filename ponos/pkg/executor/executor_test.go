@@ -137,7 +137,7 @@ func Test_Executor(t *testing.T) {
 	assert.Nil(t, err)
 
 	digest := util.GetKeccak256Digest(taskResult.Output)
-	verified, err := sig.Verify(privateSigningKey.Public(), digest[:])
+	verified, err := sig.VerifySolidityCompatible(privateSigningKey.Public(), digest)
 	assert.Nil(t, err)
 	assert.True(t, verified)
 	cancel()

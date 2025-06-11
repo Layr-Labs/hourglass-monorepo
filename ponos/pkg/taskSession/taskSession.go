@@ -6,6 +6,7 @@ import (
 	"fmt"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
@@ -24,6 +25,8 @@ type TaskSession struct {
 	resultsCount        atomic.Uint32
 	aggregatorAddress   string
 
+	operatorTableData *contractCaller.OperatorTableData
+
 	taskAggregator *aggregation.TaskResultAggregator
 	thresholdMet   atomic.Bool
 }
@@ -34,6 +37,7 @@ func NewTaskSession(
 	task *types.Task,
 	aggregatorAddress string,
 	aggregatorSignature []byte,
+	operatorTableData *contractCaller.OperatorTableData,
 	logger *zap.Logger,
 ) (*TaskSession, error) {
 	operators := []*aggregation.Operator{}
@@ -70,6 +74,7 @@ func NewTaskSession(
 		contextCancel:       cancel,
 		logger:              logger,
 		taskAggregator:      ta,
+		operatorTableData:   operatorTableData,
 		thresholdMet:        atomic.Bool{},
 	}
 	ts.resultsCount.Store(0)
