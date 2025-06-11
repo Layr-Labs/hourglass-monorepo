@@ -141,21 +141,19 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 echo "Deploying L2 contracts on L1..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
 taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
-certificateVerifierAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
 echo "Deploying L2 contracts on L2..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
 taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
-certificateVerifierAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
 # -----------------------------------------------------------------------------
 # Setup L1 task mailbox config
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddressL1 $certificateVerifierAddressL1 $taskHookAddressL1
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL1 $taskHookAddressL1
 
 echo "Setting up L2 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address, address)" $mailboxContractAddressL2 $certificateVerifierAddressL2 $taskHookAddressL2
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL2 $taskHookAddressL2
 
 # -----------------------------------------------------------------------------
 # Create test task
@@ -203,7 +201,5 @@ cat <<EOF > internal/testData/chain-config.json
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
       "taskHookAddressL1": "$taskHookAddressL1",
       "taskHookAddressL2": "$taskHookAddressL2",
-      "certificateVerifierAddressL1": "$certificateVerifierAddressL1",
-      "certificateVerifierAddressL2": "$certificateVerifierAddressL2",
       "destinationEnv": "anvil"
 }
