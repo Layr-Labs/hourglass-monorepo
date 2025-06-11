@@ -12,11 +12,11 @@ import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrateg
 
 contract SetupAVSL1 is Script {
     // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0xFdD5749e11977D60850E06bF5B13221Ad95eb6B4);
 
     // Eigenlayer Strategies
-    IStrategy public STRATEGY_EIGEN = IStrategy(0xaCB55C530Acdb2849e6d4f36992Cd8c9D50ED8F7);
-    IStrategy public STRATEGY_STETH = IStrategy(0x93c4b944D05dfe6df7645A86cd2206016c51564D);
+    IStrategy public STRATEGY_EIGEN = IStrategy(0x4e0125f8a928Eb1b9dB4BeDd3756BA3c200563C2);
+    IStrategy public STRATEGY_STETH = IStrategy(0x5C8b55722f421556a2AAfb7A3EA63d4c3e514312);
 
     function setUp() public {}
 
