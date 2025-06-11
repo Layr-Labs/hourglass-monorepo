@@ -12,8 +12,6 @@ import {IAVSRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IAVS
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
-import {ITaskAVSRegistrar, ITaskAVSRegistrarTypes} from "../../src/interfaces/avs/l1/ITaskAVSRegistrar.sol";
-
 contract RegisterOperator is Script {
     // Eigenlayer Core Contracts
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
@@ -27,8 +25,7 @@ contract RegisterOperator is Script {
         string memory metadataURI,
         address avs,
         uint32 operatorSetId,
-        string memory socket,
-        bytes memory pubkeyRegistrationParams
+        string memory socket
     ) public {
         // Load the private key from the environment variable
         address operator = vm.addr(uint256(operatorPrivateKey));
@@ -48,14 +45,7 @@ contract RegisterOperator is Script {
             IAllocationManagerTypes.RegisterParams({
                 avs: avs,
                 operatorSetIds: operatorSetIds,
-                data: abi.encode(
-                    ITaskAVSRegistrarTypes.OperatorRegistrationParams({
-                        socket: socket,
-                        pubkeyRegistrationParams: abi.decode(
-                            pubkeyRegistrationParams, (ITaskAVSRegistrarTypes.PubkeyRegistrationParams)
-                        )
-                    })
-                )
+                data: abi.encode(socket) // AVSRegistrarWithSocket expects just the socket string
             })
         );
         console.log(

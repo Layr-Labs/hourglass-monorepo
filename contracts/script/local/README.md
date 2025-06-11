@@ -16,7 +16,7 @@ This README provides step-by-step instructions for setting up and deploying the 
 Start a local Anvil node forked from Ethereum mainnet at a specific block (This includes the Eigenlayer Protocol already deployed):
 
 ```sh
-anvil --fork-url <MAINNET_RPC_URL> --fork-block-number 22396947
+anvil --fork-url <HOLESKY_RPC_URL> --fork-block-number 22396947
 ```
 
 This will run a local node at `127.0.0.1:8545`.
