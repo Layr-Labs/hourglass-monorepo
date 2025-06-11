@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {AVSRegistrarWithSocket} from "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
+import {AVSRegistrarWithSocket} from
+    "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
@@ -30,4 +31,4 @@ abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket {
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
     uint256[50] private __gap;
-} 
+}

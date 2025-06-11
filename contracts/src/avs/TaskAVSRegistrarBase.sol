@@ -24,4 +24,4 @@ abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage {
         IAllocationManager _allocationManager,
         IKeyRegistrar _keyRegistrar
     ) TaskAVSRegistrarBaseStorage(_avs, _allocationManager, _keyRegistrar) {}
-} 
+}

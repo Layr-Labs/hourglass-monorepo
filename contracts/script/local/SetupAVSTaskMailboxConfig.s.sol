@@ -8,7 +8,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {
     function setUp() public {}

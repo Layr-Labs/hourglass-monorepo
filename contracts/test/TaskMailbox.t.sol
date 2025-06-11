@@ -2,8 +2,12 @@
 pragma solidity ^0.8.27;
 
 import {Test, console} from "forge-std/Test.sol";
+import {
+    IBN254CertificateVerifier,
+    IBN254CertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {BN254} from "@eigenlayer-middleware/src/libraries/BN254.sol";
+import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TaskMailbox} from "../src/core/TaskMailbox.sol";
@@ -14,7 +18,6 @@ import {
     ITaskMailboxEvents
 } from "../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
 import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
 import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
@@ -107,14 +110,13 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
 
     function _createValidBN254Certificate(
         bytes32 messageHash
-    ) internal view returns (IBN254CertificateVerifier.BN254Certificate memory) {
-        return IBN254CertificateVerifier.BN254Certificate({
+    ) internal view returns (IBN254CertificateVerifierTypes.BN254Certificate memory) {
+        return IBN254CertificateVerifierTypes.BN254Certificate({
             referenceTimestamp: uint32(block.timestamp),
             messageHash: messageHash,
-            sig: BN254.G1Point(0, 0),
+            signature: BN254.G1Point(0, 0),
             apk: BN254.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)]),
-            nonsignerIndices: new uint32[](0),
-            nonSignerWitnesses: new IBN254CertificateVerifier.BN254OperatorInfoWitness[](0)
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
         });
     }
 }
