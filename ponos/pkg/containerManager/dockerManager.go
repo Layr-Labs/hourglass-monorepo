@@ -629,7 +629,7 @@ func (dcm *DockerContainerManager) StopLivenessMonitoring(containerID string) {
 		// Close the channel in a goroutine to avoid blocking
 		go func() {
 			// Give some time for monitoring goroutines to exit
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			close(monitor.eventChan)
 		}()
 
@@ -1100,7 +1100,7 @@ func (dcm *DockerContainerManager) attemptRestart(ctx context.Context, monitor *
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
-		// Channel might be closed, that's ok
+		return nil
 	}
 
 	// Create restart context with timeout
@@ -1214,8 +1214,8 @@ func (dcm *DockerContainerManager) monitorDockerEvents(ctx context.Context, moni
 	eventOptions := events.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("container", monitor.containerID),
-			filters.Arg("event", "die"),
-			filters.Arg("event", "oom"),
+			filters.Arg("event", string(events.ActionDie)),
+			filters.Arg("event", string(events.ActionOOM)),
 		),
 	}
 
@@ -1250,8 +1250,8 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 		zap.Any("attributes", dockerEvent.Actor.Attributes),
 	)
 
-	switch string(dockerEvent.Action) {
-	case "die":
+	switch dockerEvent.Action {
+	case events.ActionDie:
 		// Container crashed or was stopped
 		exitCode := 0
 		if exitCodeStr, exists := dockerEvent.Actor.Attributes["exitCode"]; exists {
@@ -1322,7 +1322,7 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			}
 		}
 
-	case "oom":
+	case events.ActionOOM:
 		// OOM event (may come before die event)
 		dcm.logger.Warn("Container OOM event detected",
 			zap.String("containerID", monitor.containerID),

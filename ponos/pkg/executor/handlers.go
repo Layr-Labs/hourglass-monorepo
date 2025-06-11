@@ -27,7 +27,7 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 	return res, nil
 }
 
-func (e *Executor) List(ctx context.Context, req *executorV1.ListRequest) (*executorV1.ListResponse, error) {
+func (e *Executor) List(ctx context.Context, _ *executorV1.ListRequest) (*executorV1.ListResponse, error) {
 	var performers []*executorV1.Performer
 
 	e.logger.Debug("Listing AVS performers", zap.Int("count", len(e.avsPerformers)))
