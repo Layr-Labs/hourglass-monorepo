@@ -2,6 +2,8 @@ package avsPerformer
 
 import (
 	"context"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
 
@@ -30,5 +32,11 @@ type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
 	ValidateTaskSignature(task *performerTask.PerformerTask) error
+	DeployContainer(
+		ctx context.Context,
+		avsId string,
+		config *AvsPerformerConfig,
+		containerMgr containerManager.ContainerManager,
+	) error
 	Shutdown() error
 }

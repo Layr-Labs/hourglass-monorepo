@@ -32,13 +32,13 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 
 // validateDeployArtifactRequest validates the DeployArtifactRequest and returns an error message if invalid
 func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string {
-	if req.AvsAddress == "" {
+	if req.GetAvsAddress() == "" {
 		return "AVS address is required"
 	}
-	if req.Digest == "" {
+	if req.GetDigest() == "" {
 		return "Artifact digest is required"
 	}
-	if req.RegistryUrl == "" {
+	if req.GetRegistryUrl() == "" {
 		return "Registry URL is required"
 	}
 	return ""
@@ -83,7 +83,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		config := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{Repository: "placeholder", Tag: "placeholder"}, // Will be updated by deployment
+			Image:                avsPerformer.PerformerImage{Repository: req.GetRegistryUrl(), Tag: req.GetDigest()},
 			WorkerCount:          1,
 			PerformerNetworkName: e.config.PerformerNetworkName,
 			SigningCurve:         "bn254",
@@ -132,7 +132,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		ProcessType: avsPerformer.AvsProcessTypeServer,
 		Image: avsPerformer.PerformerImage{
 			Repository: repository,
-			Tag:        digest, // TODO: verify this works until we have a digest
+			Tag:        digest, // TODO: revisit this naming
 		},
 		WorkerCount:          1,
 		PerformerNetworkName: e.config.PerformerNetworkName,
