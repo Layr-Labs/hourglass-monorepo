@@ -825,7 +825,7 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 			// Handle consecutive failures for current container
 			if currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
 				consecutiveFailures := currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures
-				currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0 // Reset before triggering restart
+				currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
 				aps.deploymentMu.Unlock()
 
 				aps.logger.Error("Current container application health failed multiple times, triggering restart",
@@ -845,21 +845,9 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 			}
 		} else {
 			// Health check succeeded
-			wasUnhealthy := !currentContainer.HealthCtx.ApplicationHealth
-			previousFailures := currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures
 			currentContainer.HealthCtx.ApplicationHealth = true
 			currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
 			aps.deploymentMu.Unlock()
-
-			// Log recovery if previously unhealthy
-			if wasUnhealthy && previousFailures > 0 {
-				aps.logger.Info("Application health recovered",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", currentContainer.Info.ID),
-					zap.String("containerType", "current"),
-					zap.Int("previousFailures", previousFailures),
-				)
-			}
 		}
 	}
 
@@ -917,21 +905,9 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 			}
 		} else {
 			// Health check succeeded
-			wasUnhealthy := !nextContainer.HealthCtx.ApplicationHealth
-			previousFailures := nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures
 			nextContainer.HealthCtx.ApplicationHealth = true
 			nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
 			aps.deploymentMu.Unlock()
-
-			// Log recovery if previously unhealthy
-			if wasUnhealthy && previousFailures > 0 {
-				aps.logger.Info("Application health recovered",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", nextContainer.Info.ID),
-					zap.String("containerType", "next"),
-					zap.Int("previousFailures", previousFailures),
-				)
-			}
 
 			aps.logger.Info("Next container became application-healthy and ready for promotion",
 				zap.String("avsAddress", aps.config.AvsAddress),
