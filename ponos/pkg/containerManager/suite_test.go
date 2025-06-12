@@ -3,6 +3,7 @@ package containerManager
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,7 +170,15 @@ func (suite *ContainerManagerTestSuite) TestUtilityFunctions() {
 
 		config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
 
-		suite.Equal("avs-performer-"+HashAvsAddress(avsAddress), config.Hostname)
+		// Verify hostname format (should include hash and timestamp)
+		expectedPrefix := "avs-performer-" + HashAvsAddress(avsAddress) + "-"
+		suite.True(strings.HasPrefix(config.Hostname, expectedPrefix),
+			"Hostname should start with %s, got %s", expectedPrefix, config.Hostname)
+
+		// Verify hostname includes timestamp (should be numeric suffix after the hash)
+		suite.Regexp(`^avs-performer-[a-f0-9]{6}-\d+$`, config.Hostname,
+			"Hostname should follow pattern 'avs-performer-{6-digit-hash}-{timestamp}'")
+
 		suite.Equal("test/app:v1.0.0", config.Image)
 		suite.Equal("test-network", config.NetworkName)
 		suite.True(config.AutoRemove)

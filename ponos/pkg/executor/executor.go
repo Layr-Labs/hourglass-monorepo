@@ -3,17 +3,21 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/deployment"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"strings"
-	"sync"
 )
 
 type Executor struct {
@@ -22,8 +26,9 @@ type Executor struct {
 	avsPerformers map[string]avsPerformer.IAvsPerformer
 	rpcServer     *rpcServer.RpcServer
 	signer        signer.ISigner
-
+	containerMgr  *containerManager.DockerContainerManager
 	inflightTasks *sync.Map
+	deploymentMgr *deployment.Manager
 
 	peeringFetcher peering.IPeeringDataFetcher
 }
@@ -59,12 +64,21 @@ func NewExecutor(
 		rpcServer:      rpcServer,
 		signer:         signer,
 		inflightTasks:  &sync.Map{},
+		deploymentMgr:  deployment.NewManager(logger),
 		peeringFetcher: peeringFetcher,
 	}
 }
 
-func (e *Executor) Initialize() error {
+func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
+	containerMgr, err := containerManager.NewDockerContainerManager(
+		containerManager.DefaultContainerManagerConfig(),
+		e.logger,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create container manager for executor: %v", err)
+	}
+	e.containerMgr = containerMgr
 
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
@@ -77,25 +91,48 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := serverPerformer.NewAvsPerformerServer(
+			performer := serverPerformer.NewAvsPerformerServer(
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
 					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-					Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
 					WorkerCount:          avs.WorkerCount,
 					PerformerNetworkName: e.config.PerformerNetworkName,
 					SigningCurve:         avs.SigningCurve,
 				},
 				e.peeringFetcher,
 				e.logger,
+				containerMgr,
 			)
+			err = performer.Initialize(ctx)
 			if err != nil {
-				e.logger.Sugar().Errorw("Failed to create AVS performer server",
+				return err
+			}
+
+			// Deploy container using deployment manager
+			deploymentConfig := deployment.DeploymentConfig{
+				AvsAddress: avsAddress,
+				Image: avsPerformer.PerformerImage{
+					Repository: avs.Image.Repository,
+					Tag:        avs.Image.Tag,
+				},
+				Timeout: 1 * time.Minute,
+			}
+
+			result, err := e.deploymentMgr.Deploy(ctx, deploymentConfig, performer)
+			if err != nil {
+				e.logger.Sugar().Errorw("Failed to deploy container for AVS performer during startup",
 					zap.String("avsAddress", avsAddress),
 					zap.Error(err),
 				)
-				return fmt.Errorf("failed to create AVS performer server: %v", err)
+				return fmt.Errorf("failed to deploy container for AVS %s: %w", avsAddress, err)
 			}
+
+			e.logger.Sugar().Infow("AVS performer container deployed successfully",
+				zap.String("avsAddress", avsAddress),
+				zap.String("deploymentId", result.DeploymentID),
+				zap.String("performerId", result.PerformerID),
+			)
+
 			e.avsPerformers[avsAddress] = performer
 
 		default:

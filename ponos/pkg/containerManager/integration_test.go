@@ -362,9 +362,14 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, containerInfo.ID)
 
-		// Verify hostname was set correctly
-		expectedHostname := "avs-performer-" + HashAvsAddress(avsAddress)
-		assert.Equal(t, expectedHostname, containerInfo.Hostname)
+		// Verify hostname was set correctly (should include hash and timestamp)
+		expectedPrefix := "avs-performer-" + HashAvsAddress(avsAddress) + "-"
+		assert.True(t, strings.HasPrefix(containerInfo.Hostname, expectedPrefix),
+			"Hostname should start with %s, got %s", expectedPrefix, containerInfo.Hostname)
+
+		// Verify hostname includes timestamp (should be numeric suffix after the hash)
+		assert.Regexp(t, `^avs-performer-[a-f0-9]{6}-\d+$`, containerInfo.Hostname,
+			"Hostname should follow pattern 'avs-performer-{6-digit-hash}-{timestamp}'")
 
 		// Start container
 		err = dcm.Start(ctx, containerInfo.ID)
@@ -373,7 +378,7 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 		// Inspect container to verify configuration
 		inspectedInfo, err := dcm.Inspect(ctx, containerInfo.ID)
 		require.NoError(t, err)
-		assert.Equal(t, expectedHostname, inspectedInfo.Hostname)
+		assert.Equal(t, containerInfo.Hostname, inspectedInfo.Hostname)
 
 		// Clean up
 		_ = dcm.Stop(ctx, containerInfo.ID, 5*time.Second)

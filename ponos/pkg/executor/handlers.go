@@ -2,15 +2,23 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/deployment"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
 )
+
+const deploymentTimeout = 1 * time.Minute
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
 	res, err := e.handleReceivedTask(req)
@@ -23,6 +31,140 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 		return nil, fmt.Errorf("Failed to handle received task: %w", err)
 	}
 	return res, nil
+}
+
+// validateDeployArtifactRequest validates the DeployArtifactRequest and returns an error message if invalid
+func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string {
+	if req.GetAvsAddress() == "" {
+		return "AVS address is required"
+	}
+	if req.GetDigest() == "" {
+		return "Artifact digest is required"
+	}
+	if req.GetRegistryUrl() == "" {
+		return "Registry URL is required"
+	}
+	return ""
+}
+
+func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
+	e.logger.Info("Received deploy artifact request",
+		zap.String("avsAddress", req.AvsAddress),
+		zap.String("digest", req.Digest),
+		zap.String("registryUrl", req.RegistryUrl),
+	)
+
+	// Validate request
+	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: errMsg,
+		}, status.Error(codes.InvalidArgument, errMsg)
+	}
+
+	avsAddress := strings.ToLower(req.AvsAddress)
+
+	// Find or create the AVS performer
+	performer, err := e.getOrCreateAvsPerformer(ctx, avsAddress)
+	if err != nil {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to get or create AVS performer: %v", err),
+		}, status.Error(codes.Internal, err.Error())
+	}
+
+	// Deploy using deployment manager
+	deploymentConfig := deployment.DeploymentConfig{
+		AvsAddress: avsAddress,
+		Image: avsPerformer.PerformerImage{
+			Repository: req.GetRegistryUrl(),
+			Tag:        req.GetDigest(),
+		},
+		Timeout: deploymentTimeout,
+	}
+
+	result, err := e.deploymentMgr.Deploy(ctx, deploymentConfig, performer)
+	if err != nil {
+		// Check for specific error types to return appropriate gRPC status codes
+		if errors.Is(err, deployment.ErrDeploymentInProgress) {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: err.Error(),
+			}, status.Error(codes.AlreadyExists, "deployment already in progress")
+		}
+
+		if errors.Is(err, deployment.ErrDeploymentTimeout) {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: err.Error(),
+			}, status.Error(codes.DeadlineExceeded, "deployment timeout")
+		}
+
+		// Log the error with full context
+		e.logger.Error("Deployment failed",
+			zap.String("avsAddress", avsAddress),
+			zap.String("registryUrl", req.GetRegistryUrl()),
+			zap.String("digest", req.GetDigest()),
+			zap.Error(err),
+		)
+
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: err.Error(),
+		}, status.Error(codes.Internal, err.Error())
+	}
+
+	e.logger.Info("Deployment completed successfully",
+		zap.String("avsAddress", avsAddress),
+		zap.String("deploymentId", result.DeploymentID),
+		zap.String("performerId", result.PerformerID),
+		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
+	)
+
+	return &executorV1.DeployArtifactResponse{
+		Success:      true,
+		Message:      result.Message,
+		DeploymentId: result.DeploymentID,
+	}, nil
+}
+
+// getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
+func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+	// Check if performer already exists
+	performer, ok := e.avsPerformers[avsAddress]
+	if ok {
+		return performer, nil
+	}
+
+	// Create new AVS performer for this address
+	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
+
+	// Create config without image info - will be deployed via CreatePerformer
+	config := &avsPerformer.AvsPerformerConfig{
+		AvsAddress:           avsAddress,
+		ProcessType:          avsPerformer.AvsProcessTypeServer,
+		Image:                avsPerformer.PerformerImage{},
+		WorkerCount:          1,
+		PerformerNetworkName: e.config.PerformerNetworkName,
+		SigningCurve:         "bn254",
+	}
+
+	newPerformer := serverPerformer.NewAvsPerformerServer(
+		config,
+		e.peeringFetcher,
+		e.logger,
+		e.containerMgr,
+	)
+
+	// Initialize the performer (fetches aggregator peers, but won't create container)
+	if err := newPerformer.Initialize(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize AVS performer: %w", err)
+	}
+
+	// Add to performers map
+	e.avsPerformers[avsAddress] = newPerformer
+
+	return newPerformer, nil
 }
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {

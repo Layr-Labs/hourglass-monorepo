@@ -2,10 +2,13 @@ package containerManager
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHashAvsAddress(t *testing.T) {
@@ -80,9 +83,14 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 				tt.networkName,
 			)
 
-			// Verify hostname format
-			expectedHostname := "avs-performer-" + HashAvsAddress(tt.avsAddress)
-			assert.Equal(t, expectedHostname, config.Hostname)
+			// Verify hostname format (should include hash and timestamp)
+			expectedPrefix := "avs-performer-" + HashAvsAddress(tt.avsAddress) + "-"
+			assert.True(t, strings.HasPrefix(config.Hostname, expectedPrefix),
+				"Hostname should start with %s, got %s", expectedPrefix, config.Hostname)
+
+			// Verify hostname includes timestamp (should be numeric suffix after the hash)
+			assert.Regexp(t, `^avs-performer-[a-f0-9]{6}-\d+$`, config.Hostname,
+				"Hostname should follow pattern 'avs-performer-{6-digit-hash}-{timestamp}'")
 
 			// Verify image format
 			expectedImage := tt.imageRepo + ":" + tt.imageTag
@@ -188,4 +196,40 @@ func TestGetContainerEndpoint(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewDefaultAvsPerformerLivenessConfig(t *testing.T) {
+	config := NewDefaultAvsPerformerLivenessConfig()
+
+	// Verify the factory method returns a properly configured LivenessConfig
+	require.NotNil(t, config)
+
+	// Verify HealthCheckConfig
+	assert.True(t, config.HealthCheckConfig.Enabled)
+	assert.Equal(t, 5*time.Second, config.HealthCheckConfig.Interval)
+	assert.Equal(t, 2*time.Second, config.HealthCheckConfig.Timeout)
+	assert.Equal(t, 3, config.HealthCheckConfig.Retries)
+	assert.Equal(t, 10*time.Second, config.HealthCheckConfig.StartPeriod)
+	assert.Equal(t, 3, config.HealthCheckConfig.FailureThreshold)
+
+	// Verify RestartPolicy
+	assert.True(t, config.RestartPolicy.Enabled)
+	assert.Equal(t, 5, config.RestartPolicy.MaxRestarts)
+	assert.Equal(t, 2*time.Second, config.RestartPolicy.RestartDelay)
+	assert.Equal(t, 2.0, config.RestartPolicy.BackoffMultiplier)
+	assert.Equal(t, 30*time.Second, config.RestartPolicy.MaxBackoffDelay)
+	assert.Equal(t, 60*time.Second, config.RestartPolicy.RestartTimeout)
+	assert.True(t, config.RestartPolicy.RestartOnCrash)
+	assert.True(t, config.RestartPolicy.RestartOnOOM)
+	assert.True(t, config.RestartPolicy.RestartOnUnhealthy)
+
+	// Verify ResourceThresholds
+	assert.Equal(t, 90.0, config.ResourceThresholds.CPUThreshold)
+	assert.Equal(t, 90.0, config.ResourceThresholds.MemoryThreshold)
+	assert.False(t, config.ResourceThresholds.RestartOnCPU)
+	assert.False(t, config.ResourceThresholds.RestartOnMemory)
+
+	// Verify other settings
+	assert.True(t, config.ResourceMonitoring)
+	assert.Equal(t, 30*time.Second, config.ResourceCheckInterval)
 }
