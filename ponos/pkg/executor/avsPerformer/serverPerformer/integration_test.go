@@ -1,20 +1,3 @@
-// Integration tests for AvsPerformerServer automatic container promotion functionality
-//
-// These tests validate the new blue-green deployment feature where a healthy
-// next container is automatically promoted to current container when it becomes healthy.
-//
-// Prerequisites:
-//   - Docker must be running
-//   - hello-performer container image "hello-performer:latest" must be available
-//     (Run 'make build/test-performer-container' to build it)
-//
-// Run with:
-//
-//	go test -v ./pkg/executor/avsPerformer/serverPerformer -run TestAvsPerformerServer
-//
-// Skip with short mode:
-//
-//	go test -short ./pkg/executor/avsPerformer/serverPerformer
 package serverPerformer
 
 import (
@@ -234,13 +217,6 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef2222222222222222"
 
-		// Ensure network cleanup no matter what
-		//defer func() {
-		//	if err := containerMgr.RemoveNetwork(ctx, networkName); err != nil {
-		//		t.Logf("Network cleanup completed (expected if network was already cleaned): %v", err)
-		//	}
-		//}()
-
 		config := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
@@ -288,13 +264,6 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 	t.Run("no promotion when no next container exists", func(t *testing.T) {
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef3333333333333333"
-
-		// Ensure network cleanup no matter what
-		//defer func() {
-		//	if err := containerMgr.RemoveNetwork(ctx, networkName); err != nil {
-		//		t.Logf("Network cleanup completed (expected if network was already cleaned): %v", err)
-		//	}
-		//}()
 
 		config := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
@@ -372,13 +341,6 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 	t.Run("complete blue-green deployment flow", func(t *testing.T) {
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef4444444444444444"
-
-		// Ensure network cleanup no matter what
-		//defer func() {
-		//	if err := containerMgr.RemoveNetwork(ctx, networkName); err != nil {
-		//		t.Logf("Network cleanup completed (expected if network was already cleaned): %v", err)
-		//	}
-		//}()
 
 		// Create AVS performer config
 		config := &avsPerformer.AvsPerformerConfig{
