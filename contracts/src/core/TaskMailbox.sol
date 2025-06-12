@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {
+    IBN254CertificateVerifier,
+    IBN254CertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -8,7 +12,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../interfaces/avs/l2/IBN254CertificateVerifier.sol";
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
 
@@ -176,7 +179,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     /// @inheritdoc ITaskMailbox
     function submitResult(
         bytes32 taskHash,
-        IBN254CertificateVerifier.BN254Certificate memory cert,
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert,
         bytes memory result
     ) external nonReentrant {
         // TODO: Do we need a gasless version of this function?
@@ -188,8 +191,9 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
 
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
+        OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
         bool isCertificateValid = IBN254CertificateVerifier(task.executorOperatorSetTaskConfig.certificateVerifier)
-            .verifyCertificateProportion(cert, totalStakeProportionThresholds);
+            .verifyCertificateProportion(executorOperatorSet, cert, totalStakeProportionThresholds);
 
         require(isCertificateValid, CertificateVerificationFailed());
 

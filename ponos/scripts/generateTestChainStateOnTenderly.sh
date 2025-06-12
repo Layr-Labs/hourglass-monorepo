@@ -114,13 +114,12 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $RPC_URL --verifier 
 echo "Deploying L2 contracts..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast
 taskHookAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[0].contractAddress')
-certificateVerifierAddress=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$chainId/run-latest.json | jq -r '.transactions[1].contractAddress')
 
 # -----------------------------------------------------------------------------
 # Setup L1 task mailbox config
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast --sig "run(address, address, address)" $mailboxContractAddress $certificateVerifierAddress $taskHookAddress
+forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $RPC_URL --verifier etherscan --verify --verifier-url $verifierUrl --etherscan-api-key $tenderlyKey --broadcast --sig "run(address, address)" $mailboxContractAddress $taskHookAddress
 
 # -----------------------------------------------------------------------------
 # Create test task
@@ -161,6 +160,5 @@ cat <<EOF > internal/testData/tenderly-chain-config.json
   "mailboxContractAddress": "$mailboxContractAddress",
   "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
   "taskHookAddress": "$taskHookAddress",
-  "certificateVerifierAddress": "$certificateVerifierAddress",
   "destinationEnv": "tenderly"
 }

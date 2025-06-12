@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {IBN254CertificateVerifierTypes} from
+    "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../avs/l2/IBN254CertificateVerifier.sol";
 
 /**
  * @title ITaskMailboxTypes
@@ -296,7 +297,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
     function submitResult(
         bytes32 taskHash,
-        IBN254CertificateVerifier.BN254Certificate memory cert,
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert,
         bytes memory result
     ) external;
 

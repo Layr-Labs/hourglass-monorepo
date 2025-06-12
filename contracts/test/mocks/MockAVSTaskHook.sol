@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
+import {IBN254CertificateVerifierTypes} from
+    "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 
 contract MockAVSTaskHook is IAVSTaskHook {
     function validatePreTaskCreation(
@@ -23,7 +24,7 @@ contract MockAVSTaskHook is IAVSTaskHook {
 
     function validateTaskResultSubmission(
         bytes32, /*taskHash*/
-        IBN254CertificateVerifier.BN254Certificate memory /*cert*/
+        IBN254CertificateVerifierTypes.BN254Certificate memory /*cert*/
     ) external {
         //TODO: Implement
     }

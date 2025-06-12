@@ -8,12 +8,14 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
-import {IBN254CertificateVerifier} from "../../src/interfaces/avs/l2/IBN254CertificateVerifier.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {
+    // Eigenlayer Core Contracts
+    address public CERTIFICATE_VERIFIER = 0xf462d03A82C1F3496B0DFe27E978318eD1720E1f;
+
     function setUp() public {}
 
-    function run(address taskMailbox, address certificateVerifier, address taskHook) public {
+    function run(address taskMailbox, address taskHook) public {
         // Load the private key from the environment variable
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
         address avs = vm.addr(avsPrivateKey);
@@ -35,7 +37,7 @@ contract SetupAVSTaskMailboxConfig is Script {
         // 2. Set the Executor Operator Set Task Config
         ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig = ITaskMailboxTypes
             .ExecutorOperatorSetTaskConfig({
-            certificateVerifier: certificateVerifier,
+            certificateVerifier: CERTIFICATE_VERIFIER,
             taskHook: IAVSTaskHook(taskHook),
             feeToken: IERC20(address(0)),
             feeCollector: address(0),

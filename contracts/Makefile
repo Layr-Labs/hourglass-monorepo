@@ -1,55 +1,50 @@
-.PHONY: deploy-task-mailbox deploy-avs-l1-contracts setup-avs-l1 deploy-avs-l2-contracts setup-avs-task-mailbox-config generate-bls-params register-operator create-task 
-
 # Build
+.PHONY: build
 build:
 	forge clean && forge build && make bindings
 
 # Test
+.PHONY: test
 test:
 	forge test
 
 # Generate Contract Bindings
+.PHONY: bindings
 bindings:
 	./bin/compile-bindings.sh
 
 # Deploy Task Mailbox
+.PHONY: deploy-task-mailbox
 deploy-task-mailbox:
 	forge script script/local/DeployTaskMailbox.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
 # Deploy AVS L1 Contracts
+.PHONY: deploy-avs-l1-contracts
 deploy-avs-l1-contracts:
 	forge script script/local/DeployAVSL1Contracts.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(AVS_ADDRESS) -vvvv
 
 # Setup AVS L1
+.PHONY: setup-avs-l1
 setup-avs-l1:
 	forge script script/local/SetupAVSL1.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address)" $(TASK_AVS_REGISTRAR_ADDRESS) -vvvv
 
 # Deploy AVS L2 Contracts
+.PHONY: deploy-avs-l2-contracts
 deploy-avs-l2-contracts:
 	forge script script/local/DeployAVSL2Contracts.s.sol --rpc-url $(RPC_URL) --broadcast -vvvv
 
 # Setup AVS Task Mailbox Config
+.PHONY: setup-avs-task-mailbox-config
 setup-avs-task-mailbox-config:
-	forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address, address)" $(TASK_MAILBOX_ADDRESS) $(CERTIFICATE_VERIFIER_ADDRESS) $(TASK_HOOK_ADDRESS) -vvvv
-
-# Generate BLS Parameters for Operator Registration
-generate-bls-params:
-	@HASH_POINT=$$(cast call $(TASK_AVS_REGISTRAR_ADDRESS) "pubkeyRegistrationMessageHash(address)(uint256,uint256)" $(OPERATOR_ADDRESS) --rpc-url $(RPC_URL)); \
-	HASH_POINT_X=$$(echo "$$HASH_POINT" | head -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'); \
-	HASH_POINT_Y=$$(echo "$$HASH_POINT" | tail -n 1 | sed 's/\[.*\]//g' | tr -d '[:space:]'); \
-	echo "Hash Point X: $$HASH_POINT_X"; \
-	echo "Hash Point Y: $$HASH_POINT_Y"; \
-	cd script/common/utils && go run generate_bls_params.go $(OPERATOR_ADDRESS) $(CHAIN_ID) $(TASK_AVS_REGISTRAR_ADDRESS) $$HASH_POINT_X $$HASH_POINT_Y
-
-# Register Operator
-register-operator:
-	forge script script/local/RegisterOperator.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(bytes32, uint32, string, address, uint32, string, bytes)" $(OPERATOR_PRIVATE_KEY) $(ALLOCATION_DELAY) $(METADATA_URI) $(AVS_ADDRESS) $(OPERATOR_SET_ID) $(SOCKET) $(PUBKEY_REGISTRATION_PARAMS) -vvvv
+	forge script script/local/SetupAVSTaskMailboxConfig.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address)" $(TASK_MAILBOX_ADDRESS) $(TASK_HOOK_ADDRESS) -vvvv
 
 # Create Task
+.PHONY: create-task
 create-task:
 	forge script script/local/CreateTask.s.sol --rpc-url $(RPC_URL) --broadcast --sig "run(address, address)" $(TASK_MAILBOX_ADDRESS) $(AVS_ADDRESS) -vvvv
 
 # Helper message
+.PHONY: help
 help:
 	@echo "Available commands:"
 	@echo "  make deploy-task-mailbox    - Deploy Task Mailbox"
