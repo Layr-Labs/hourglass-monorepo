@@ -46,6 +46,23 @@ type DockerContainerManager struct {
 	mu sync.RWMutex
 }
 
+// NewDefaultDockerContainerManager creates a new Docker-based container manager with sensible defaults
+func NewDefaultDockerContainerManager(logger *zap.Logger) (*DockerContainerManager, error) {
+	config := &ContainerManagerConfig{
+		DefaultStartTimeout: 30 * time.Second,
+		DefaultStopTimeout:  10 * time.Second,
+		DefaultHealthCheckConfig: &HealthCheckConfig{
+			Enabled:          true,
+			Interval:         5 * time.Second,
+			Timeout:          2 * time.Second,
+			Retries:          3,
+			StartPeriod:      10 * time.Second,
+			FailureThreshold: 3,
+		},
+	}
+	return NewDockerContainerManager(config, logger)
+}
+
 // NewDockerContainerManager creates a new Docker-based container manager
 func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logger) (*DockerContainerManager, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv)
@@ -171,13 +188,16 @@ func (dcm *DockerContainerManager) Create(ctx context.Context, config *Container
 	}
 
 	// Create the container
+	// Use stable hostname for DNS but unique container name for Docker uniqueness
+	timestamp := time.Now().Unix()
+	containerName := fmt.Sprintf("%s-%d", config.Hostname, timestamp)
 	resp, err := dcm.client.ContainerCreate(
 		ctx,
 		containerConfig,
 		hostConfig,
 		netConfig,
 		nil,
-		config.Hostname,
+		containerName,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create container")
@@ -1250,8 +1270,8 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 		zap.Any("attributes", dockerEvent.Actor.Attributes),
 	)
 
-	switch string(dockerEvent.Action) {
-	case "die":
+	switch dockerEvent.Action {
+	case events.ActionDie:
 		// Container crashed or was stopped
 		exitCode := 0
 		if exitCodeStr, exists := dockerEvent.Actor.Attributes["exitCode"]; exists {
@@ -1322,7 +1342,7 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			}
 		}
 
-	case "oom":
+	case events.ActionOOM:
 		// OOM event (may come before die event)
 		dcm.logger.Warn("Container OOM event detected",
 			zap.String("containerID", monitor.containerID),
@@ -1336,6 +1356,22 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			State: ContainerState{
 				OOMKilled:    true,
 				RestartCount: monitor.restartCount,
+			},
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
+		}
+
+	case events.ActionHealthStatusHealthy:
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventHealthy,
+			Timestamp:   time.Now(),
+			Message:     "Container received healthy signal",
+			State: ContainerState{
+				Status: "healthy",
 			},
 		}
 
