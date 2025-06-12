@@ -3,7 +3,11 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
@@ -12,8 +16,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"strings"
-	"sync"
 )
 
 type Executor struct {
@@ -77,7 +79,16 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := serverPerformer.NewAvsPerformerServer(
+			containerMgr, err := containerManager.NewDefaultDockerContainerManager(e.logger)
+			if err != nil {
+				e.logger.Sugar().Errorw("Failed to create container manager",
+					zap.String("avsAddress", avsAddress),
+					zap.Error(err),
+				)
+				return fmt.Errorf("failed to create container manager for AVS %s: %v", avsAddress, err)
+			}
+
+			performer := serverPerformer.NewAvsPerformerServer(
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
 					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
@@ -88,14 +99,8 @@ func (e *Executor) Initialize() error {
 				},
 				e.peeringFetcher,
 				e.logger,
+				containerMgr,
 			)
-			if err != nil {
-				e.logger.Sugar().Errorw("Failed to create AVS performer server",
-					zap.String("avsAddress", avsAddress),
-					zap.Error(err),
-				)
-				return fmt.Errorf("failed to create AVS performer server: %v", err)
-			}
 			e.avsPerformers[avsAddress] = performer
 
 		default:

@@ -3,13 +3,18 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"strings"
 )
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
@@ -23,6 +28,144 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 		return nil, fmt.Errorf("Failed to handle received task: %w", err)
 	}
 	return res, nil
+}
+
+// validateDeployArtifactRequest validates the DeployArtifactRequest and returns an error message if invalid
+func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string {
+	if req.AvsAddress == "" {
+		return "AVS address is required"
+	}
+	if req.Digest == "" {
+		return "Artifact digest is required"
+	}
+	if req.RegistryUrl == "" {
+		return "Registry URL is required"
+	}
+	return ""
+}
+
+func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
+	e.logger.Info("Received deploy artifact request",
+		zap.String("avsAddress", req.AvsAddress),
+		zap.String("digest", req.Digest),
+		zap.String("registryUrl", req.RegistryUrl),
+	)
+
+	// Validate request
+	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: errMsg,
+		}, status.Error(codes.InvalidArgument, errMsg)
+	}
+
+	avsAddress := strings.ToLower(req.AvsAddress)
+
+	// Create container manager for the deployment
+	containerMgr, err := containerManager.NewDefaultDockerContainerManager(e.logger)
+	if err != nil {
+		e.logger.Error("Failed to create container manager for deployment",
+			zap.String("avsAddress", avsAddress),
+			zap.Error(err),
+		)
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create container manager: %v", err),
+		}, status.Error(codes.Internal, fmt.Sprintf("Failed to create container manager: %v", err))
+	}
+
+	// Find or create the AVS performer
+	performer, ok := e.avsPerformers[avsAddress]
+	if !ok {
+		// Create new AVS performer for this address
+		e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
+
+		config := &avsPerformer.AvsPerformerConfig{
+			AvsAddress:           avsAddress,
+			ProcessType:          avsPerformer.AvsProcessTypeServer,
+			Image:                avsPerformer.PerformerImage{Repository: "placeholder", Tag: "placeholder"}, // Will be updated by deployment
+			WorkerCount:          1,
+			PerformerNetworkName: e.config.PerformerNetworkName,
+			SigningCurve:         "bn254",
+		}
+
+		newPerformer := serverPerformer.NewAvsPerformerServer(
+			config,
+			e.peeringFetcher,
+			e.logger,
+			containerMgr,
+		)
+
+		// Add to performers map
+		e.avsPerformers[avsAddress] = newPerformer
+		performer = newPerformer
+	}
+
+	// Cast to server performer to access deployment functionality
+	serverPerformer, ok := performer.(*serverPerformer.AvsPerformerServer)
+	if !ok {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: "Deployment is only supported for server-type performers",
+		}, status.Error(codes.Unimplemented, "Deployment is only supported for server-type performers")
+	}
+
+	// Parse the registry URL and digest to create image reference
+	// For now, assume the digest format is sha256:xxxx and the registry URL contains the repository
+	imageRef := fmt.Sprintf("%s@%s", req.RegistryUrl, req.Digest)
+
+	// Split the image reference to get repository and tag/digest
+	parts := strings.Split(imageRef, "@")
+	if len(parts) != 2 {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: "Invalid image reference format",
+		}, status.Error(codes.InvalidArgument, "Invalid image reference format")
+	}
+
+	repository := parts[0]
+	digest := parts[1]
+
+	// Create AVS performer config for deployment
+	deployConfig := &avsPerformer.AvsPerformerConfig{
+		AvsAddress:  avsAddress,
+		ProcessType: avsPerformer.AvsProcessTypeServer,
+		Image: avsPerformer.PerformerImage{
+			Repository: repository,
+			Tag:        digest, // TODO: verify this works until we have a digest
+		},
+		WorkerCount:          1,
+		PerformerNetworkName: e.config.PerformerNetworkName,
+		SigningCurve:         "bn254",
+	}
+
+	// Deploy the container
+	err = serverPerformer.DeployContainer(ctx, avsAddress, deployConfig, containerMgr)
+	if err != nil {
+		e.logger.Error("Failed to deploy container",
+			zap.String("avsAddress", avsAddress),
+			zap.String("imageRef", imageRef),
+			zap.Error(err),
+		)
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to deploy container: %v", err),
+		}, status.Error(codes.Internal, fmt.Sprintf("Failed to deploy container: %v", err))
+	}
+
+	deploymentId := fmt.Sprintf("%s-%d", avsAddress, time.Now().Unix())
+
+	e.logger.Info("Artifact deployment started successfully",
+		zap.String("avsAddress", avsAddress),
+		zap.String("deploymentId", deploymentId),
+		zap.String("imageRef", imageRef),
+	)
+
+	return &executorV1.DeployArtifactResponse{
+		Success:      true,
+		Message:      "Artifact deployment started successfully",
+		DeploymentId: deploymentId,
+	}, nil
 }
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {

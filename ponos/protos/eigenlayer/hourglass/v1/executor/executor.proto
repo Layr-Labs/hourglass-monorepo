@@ -8,6 +8,9 @@ option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/ei
 service ExecutorService {
   // SubmitTask submits a task to the executor from the aggregator
   rpc SubmitTask(TaskSubmission) returns (TaskResult) {}
+  
+  // DeployArtifact deploys a new artifact to an AVS performer
+  rpc DeployArtifact(DeployArtifactRequest) returns (DeployArtifactResponse) {}
 }
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
@@ -25,4 +28,17 @@ message TaskResult {
   bytes output = 3;
   bytes signature = 4;
   string avs_address = 5;
+}
+
+// DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer
+message DeployArtifactRequest {
+  string avs_address = 1;
+  string digest = 2;
+  string registry_url = 3;
+}
+
+message DeployArtifactResponse {
+  bool success = 1;
+  string message = 2;
+  string deployment_id = 3;
 }
