@@ -115,7 +115,7 @@ func Test_Executor(t *testing.T) {
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 
-	// Test 1: Submit Task (existing test)
+	// Test 1: Submit Task
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
 

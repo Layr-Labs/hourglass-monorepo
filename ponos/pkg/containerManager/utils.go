@@ -87,15 +87,6 @@ func CreateAndStartDefaultContainer(
 		networkName,
 	)
 
-	if logger != nil {
-		logger.Info("Creating container with default configuration",
-			zap.String("avsAddress", avsAddress),
-			zap.String("hostname", containerConfig.Hostname),
-			zap.String("image", containerConfig.Image),
-			zap.String("networkName", containerConfig.NetworkName),
-		)
-	}
-
 	// Create the container
 	containerInfo, err := manager.Create(ctx, containerConfig)
 	if err != nil {
@@ -152,13 +143,11 @@ func CreateAndStartDefaultContainer(
 		return nil, errors.Wrap(err, "failed to get container endpoint")
 	}
 
-	if logger != nil {
-		logger.Info("Container created and started successfully",
-			zap.String("avsAddress", avsAddress),
-			zap.String("containerID", updatedInfo.ID),
-			zap.String("endpoint", endpoint),
-		)
-	}
+	logger.Info("Container created and started successfully",
+		zap.String("avsAddress", avsAddress),
+		zap.String("containerID", updatedInfo.ID),
+		zap.String("endpoint", endpoint),
+	)
 
 	return &ContainerResult{
 		Info:     updatedInfo,
