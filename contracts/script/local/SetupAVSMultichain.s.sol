@@ -4,13 +4,17 @@ pragma solidity ^0.8.27;
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
-import {ICrossChainRegistry, ICrossChainRegistryTypes} from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
+import {
+    ICrossChainRegistry,
+    ICrossChainRegistryTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
 import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract SetupAVSMultichain is Script {
     ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F);
-    IBN254TableCalculator public BN254_TABLE_CALCULATOR = IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
+    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
+        IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
 
     function setUp() public {}
 
@@ -34,15 +38,10 @@ contract SetupAVSMultichain is Script {
             OperatorSet memory operatorSet = OperatorSet({avs: avs, id: i});
             ICrossChainRegistryTypes.OperatorSetConfig memory config = ICrossChainRegistryTypes.OperatorSetConfig({
                 owner: avs,
-                maxStalenessPeriod: 604800 // 1 week
+                maxStalenessPeriod: 604_800 // 1 week
             });
 
-            CROSS_CHAIN_REGISTRY.createGenerationReservation(
-                operatorSet,
-                BN254_TABLE_CALCULATOR,
-                config,
-                chainIds
-            );
+            CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config, chainIds);
             console.log("Generation reservation created for operator set", i);
         }
 

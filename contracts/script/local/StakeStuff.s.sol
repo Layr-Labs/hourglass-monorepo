@@ -4,7 +4,10 @@ pragma solidity ^0.8.27;
 import {Script, console} from "forge-std/Script.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {ICrossChainRegistry, ICrossChainRegistryTypes} from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
+import {
+    ICrossChainRegistry,
+    ICrossChainRegistryTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
 import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
@@ -19,12 +22,15 @@ interface IWETH {
 }
 
 interface IStETH {
-    function submit(address _referral) external payable returns (uint256);
+    function submit(
+        address _referral
+    ) external payable returns (uint256);
 }
 
 contract StakeStuff is Script {
     ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F);
-    IBN254TableCalculator public BN254_TABLE_CALCULATOR = IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
+    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
+        IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
 
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0xFdD5749e11977D60850E06bF5B13221Ad95eb6B4);
     IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x75dfE5B44C2E530568001400D3f704bC8AE350CC);
@@ -48,7 +54,7 @@ contract StakeStuff is Script {
         IERC20 stethToken = STRATEGY_STETH.underlyingToken();
 
         // For WETH - deposit ETH to get WETH
-        vm.deal(aggStakerAddr, 100000e18);
+        vm.deal(aggStakerAddr, 100_000e18);
         vm.startBroadcast(aggStakerPrivateKey);
         IWETH(address(wethToken)).deposit{value: 20e18}();
         // Approve while still broadcasting
@@ -56,7 +62,7 @@ contract StakeStuff is Script {
         vm.stopBroadcast();
 
         // For stETH - submit ETH to get stETH
-        vm.deal(execStakerAddr, 100000e18);
+        vm.deal(execStakerAddr, 100_000e18);
         vm.startBroadcast(execStakerPrivateKey);
         IStETH(address(stethToken)).submit{value: 20e18}(address(0));
         // Approve while still broadcasting
@@ -79,10 +85,7 @@ contract StakeStuff is Script {
         vm.stopBroadcast();
 
         // Check deposit
-        uint256 depositedAmount = STRATEGY_MANAGER.stakerDepositShares(
-            aggStakerAddr,
-            STRATEGY_WETH
-        );
+        uint256 depositedAmount = STRATEGY_MANAGER.stakerDepositShares(aggStakerAddr, STRATEGY_WETH);
         console.log("Staker deposit shares in STRATEGY_WETH:", depositedAmount);
 
         // Executor staker operations
@@ -93,10 +96,7 @@ contract StakeStuff is Script {
         vm.stopBroadcast();
 
         // Check deposit
-        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(
-            execStakerAddr,
-            STRATEGY_STETH
-        );
+        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStakerAddr, STRATEGY_STETH);
         console.log("Staker deposit shares in STRATEGY_STETH:", depositedAmount);
     }
 }
