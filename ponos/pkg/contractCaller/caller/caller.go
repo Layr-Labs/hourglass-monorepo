@@ -214,7 +214,6 @@ func (cc *ContractCaller) SubmitTaskResult(
 		},
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{},
 	}
-	fmt.Printf("\n\nCert: %+v\n\n", cert)
 
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, cert, aggCert.TaskResponse)
 	if err != nil {
@@ -473,7 +472,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
 	}
 
-	fmt.Println("Registering key with KeyRegistrar",
+	cc.logger.Sugar().Debugw("Registering key with KeyRegistrar",
 		"operatorAddress:", operatorAddress.String(),
 		"avsAddress:", avsAddress.String(),
 		"operatorSetId:", operatorSetId,
