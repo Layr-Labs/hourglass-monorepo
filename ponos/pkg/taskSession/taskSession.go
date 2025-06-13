@@ -6,10 +6,10 @@ import (
 	"fmt"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
@@ -25,6 +25,8 @@ type TaskSession struct {
 	resultsCount        atomic.Uint32
 	aggregatorAddress   string
 
+	operatorTableData *contractCaller.OperatorTableData
+
 	taskAggregator *aggregation.TaskResultAggregator
 	thresholdMet   atomic.Bool
 }
@@ -35,14 +37,20 @@ func NewTaskSession(
 	task *types.Task,
 	aggregatorAddress string,
 	aggregatorSignature []byte,
+	operatorTableData *contractCaller.OperatorTableData,
 	logger *zap.Logger,
 ) (*TaskSession, error) {
-	operators := util.Map(task.RecipientOperators, func(peer *peering.OperatorPeerInfo, i uint64) *aggregation.Operator {
-		return &aggregation.Operator{
-			Address:   peer.OperatorAddress,
-			PublicKey: peer.PublicKey,
+	operators := []*aggregation.Operator{}
+	for _, peer := range task.RecipientOperators {
+		opset, err := peer.GetOperatorSet(task.OperatorSetId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
-	})
+		operators = append(operators, &aggregation.Operator{
+			Address:   peer.OperatorAddress,
+			PublicKey: opset.PublicKey,
+		})
+	}
 
 	ta, err := aggregation.NewTaskResultAggregator(
 		ctx,
@@ -66,6 +74,7 @@ func NewTaskSession(
 		contextCancel:       cancel,
 		logger:              logger,
 		taskAggregator:      ta,
+		operatorTableData:   operatorTableData,
 		thresholdMet:        atomic.Bool{},
 	}
 	ts.resultsCount.Store(0)
@@ -131,7 +140,16 @@ func (ts *TaskSession) Broadcast() (*aggregation.AggregatedCertificate, error) {
 
 	for _, peer := range ts.Task.RecipientOperators {
 		go func(peer *peering.OperatorPeerInfo) {
-			c, err := executorClient.NewExecutorClient(peer.NetworkAddress, true)
+			socket, err := peer.GetSocketForOperatorSet(ts.Task.OperatorSetId)
+			if err != nil {
+				ts.logger.Sugar().Errorw("Failed to get socket for operator set",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.String("operatorAddress", peer.OperatorAddress),
+					zap.Error(err),
+				)
+				return
+			}
+			c, err := executorClient.NewExecutorClient(socket, true)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
 					zap.String("executorAddress", peer.OperatorAddress),
@@ -144,7 +162,7 @@ func (ts *TaskSession) Broadcast() (*aggregation.AggregatedCertificate, error) {
 			ts.logger.Sugar().Infow("broadcasting task to operator",
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
-				zap.String("networkAddress", peer.NetworkAddress),
+				zap.String("networkAddress", socket),
 			)
 			res, err := c.SubmitTask(ts.context, taskSubmission)
 			if err != nil {

@@ -28,6 +28,7 @@ type AggregatorConfig struct {
 	PrivateKey    string
 	AVSs          []*aggregatorConfig.AggregatorAvs
 	Chains        []*aggregatorConfig.Chain
+	L1ChainId     config.ChainId
 }
 
 type Aggregator struct {
@@ -80,7 +81,7 @@ func NewAggregatorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %w", err)
 	}
 
-	return NewAggregator(rpc, cfg, contractStore, tlp, peeringDataFetcher, signer, logger), nil
+	return NewAggregator(rpc, cfg, contractStore, tlp, peeringDataFetcher, signer, logger)
 }
 
 func NewAggregator(
@@ -91,7 +92,10 @@ func NewAggregator(
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signer signer.ISigner,
 	logger *zap.Logger,
-) *Aggregator {
+) (*Aggregator, error) {
+	if cfg.L1ChainId == 0 {
+		return nil, fmt.Errorf("L1ChainId must be set in AggregatorConfig")
+	}
 	agg := &Aggregator{
 		rpcServer:            rpcServer,
 		contractStore:        contractStore,
@@ -105,7 +109,7 @@ func NewAggregator(
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
 	}
-	return agg
+	return agg, nil
 }
 
 // Initialize sets up chain pollers and AVSExecutionManagers
@@ -130,7 +134,7 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
-		aem := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
+		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
 			AvsAddress: avs.Address,
 			SupportedChainIds: util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
 				return config.ChainId(id)
@@ -151,12 +155,16 @@ func (a *Aggregator) Initialize() error {
 				return acc
 			}, make(map[config.ChainId]string)),
 			AggregatorAddress: a.config.Address,
+			L1ChainId:         a.config.L1ChainId,
 		},
 			a.chainContractCallers,
 			a.signer,
 			a.peeringDataFetcher,
 			a.logger,
 		)
+		if err != nil {
+			return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
+		}
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}
@@ -194,6 +202,7 @@ func InitializeContractCaller(
 	privateKey string,
 	contractStore contractStore.IContractStore,
 	avsRegistrarAddress string,
+	isL1Chain bool,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
 	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -218,18 +227,37 @@ func InitializeContractCaller(
 		return nil, err
 	}
 
-	return caller.NewContractCaller(&caller.ContractCallerConfig{
+	callerConfig := &caller.ContractCallerConfig{
 		PrivateKey:          privateKey,
 		AVSRegistrarAddress: avsRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
-	}, ethereumContractCaller, logger)
+	}
+	if isL1Chain {
+		protocolContractAddresses, err := config.GetCoreContractsForChainId(chain.ChainId)
+		if err != nil {
+			logger.Sugar().Errorw("failed to get protocol contract addresses", "error", err)
+			return nil, fmt.Errorf("failed to get protocol contract addresses for chain %s: %w", chain.Name, err)
+		}
+		callerConfig.KeyRegistrarAddress = protocolContractAddresses.KeyRegistrar
+		callerConfig.CrossChainRegistryAddress = protocolContractAddresses.CrossChainRegistry
+	}
+
+	return caller.NewContractCaller(callerConfig, ethereumContractCaller, logger)
 }
 
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
 	a.logger.Sugar().Infow("Initializing contract callers...")
 	contractCallers := make(map[config.ChainId]contractCaller.IContractCaller)
 	for _, chain := range a.config.Chains {
-		cc, err := InitializeContractCaller(chain, a.config.PrivateKey, a.contractStore, a.config.AVSs[0].AVSRegistrarAddress, a.logger)
+
+		cc, err := InitializeContractCaller(
+			chain,
+			a.config.PrivateKey,
+			a.contractStore,
+			a.config.AVSs[0].AVSRegistrarAddress,
+			chain.ChainId == a.config.L1ChainId,
+			a.logger,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize contract caller for chain %s: %w", chain.Name, err)
 		}

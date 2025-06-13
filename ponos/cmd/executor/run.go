@@ -100,6 +100,11 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		protocolContractAddresses, err := config.GetCoreContractsForChainId(Config.L1Chain.ChainId)
+		if err != nil {
+			l.Sugar().Fatalw("Failed to get protocol contract addresses", zap.Error(err))
+		}
+
 		var pdf peering.IPeeringDataFetcher
 		if Config.Simulation != nil && Config.Simulation.SimulatePeering != nil && Config.Simulation.SimulatePeering.Enabled {
 			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.Simulation.SimulatePeering.AggregatorPeers)
@@ -125,6 +130,7 @@ var runCmd = &cobra.Command{
 				PrivateKey:          "",
 				AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
 				TaskMailboxAddress:  mailboxContract.Address,
+				KeyRegistrarAddress: protocolContractAddresses.KeyRegistrar,
 			}, ethereumClient, l)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)

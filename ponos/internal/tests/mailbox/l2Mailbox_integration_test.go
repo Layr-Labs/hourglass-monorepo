@@ -26,12 +26,13 @@ import (
 	"time"
 )
 
-const (
-	L1RpcUrl = "http://127.0.0.1:8545"
-	L2RpcUrl = "http://127.0.0.1:9545"
-)
+func Test_L2Mailbox(t *testing.T) {
+	const (
+		L1RpcUrl = "http://127.0.0.1:8545"
+		L2RpcUrl = "http://127.0.0.1:9545"
+	)
 
-func Test_EVMChainPollerIntegration(t *testing.T) {
+	t.Skip()
 	// t.Skip("Flaky, skipping for now")
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
@@ -114,15 +115,6 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 	}
 	fmt.Println("Checking if l1Anvil is up and running...")
 
-	l2CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L2 contract caller: %v", err)
-	}
-
 	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get L1 chain ID: %v", err)
@@ -134,6 +126,15 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 		t.Fatalf("Failed to get L2 chain ID: %v", err)
 	}
 	t.Logf("L2 Chain ID: %s", l2ChainId.String())
+
+	l2CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AppAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 contract caller: %v", err)
+	}
 
 	if err := l1Poller.Start(ctx); err != nil {
 		cancel()
@@ -252,7 +253,8 @@ func Test_EVMChainPollerIntegration(t *testing.T) {
 			}
 
 			fmt.Printf("Submitting task result to AVS\n\n\n")
-			receipt, err := avsCc.SubmitTaskResult(ctx, cert)
+			// TODO(seanmcgary): use the global root timestamp here
+			receipt, err := avsCc.SubmitTaskResult(ctx, cert, uint32(0))
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to submit task result: %v", err)

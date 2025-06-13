@@ -9,12 +9,14 @@
       "operatorAccountPk": "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214",
       "execOperatorAccountAddress": "0x9b18a6d836e9b2b6541fa9c7247f46b4a4a2f2fc",
       "execOperatorAccountPk": "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849",
+      "aggStakerAccountAddress": "0x419c488fe555b39ddfcb84b0d828f1addfc9ff9b",
+      "aggStakerAccountPk": "0xc8422d023f0bffa56c6c39204a4f4b9dfb09d792600283cfbbc10da706694635",
+      "execStakerAccountAddress": "0x71982626daee31433b6eb22b4cfef1df0f4d00ca",
+      "execStakerAccountPk": "0x6e671498f55737fb1f4c6be0233d8fa8a399987f5861fb0f54380a4e100f978c",
       "mailboxContractAddressL1": "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
       "mailboxContractAddressL2": "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
       "avsTaskRegistrarAddress": "0x5897a9b8b746c78e0cae876962796949832e3357",
       "taskHookAddressL1": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
       "taskHookAddressL2": "0x5897a9b8b746c78e0cae876962796949832e3357",
-      "certificateVerifierAddressL1": "0x70c62b678fbe85a97af474b90343bb03c0443425",
-      "certificateVerifierAddressL2": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
       "destinationEnv": "anvil"
 }

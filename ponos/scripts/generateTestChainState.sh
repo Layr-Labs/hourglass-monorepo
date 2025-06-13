@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
 
+anvilL1Pid=""
+anvilL2Pid=""
+
+function cleanup() {
+    kill $anvilL1Pid || true
+    kill $anvilL2Pid || true
+
+    exit $?
+}
+trap cleanup ERR
 set -e
 
-# ethereum mainnet
-L1_FORK_RPC_URL=https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/
+
+# ethereum holesky
+L1_FORK_RPC_URL=https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/
 
 anvilL1ChinId=31337
-anvilL1StartBlock=22396947
+anvilL1StartBlock=3994152
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -99,6 +110,16 @@ export PRIVATE_KEY_EXEC_OPERATOR=$appAccountPk
 echo "Exec Operator account: $execOperatorAccountAddress"
 echo "Exec Operator account private key: $execOperatorAccountPk"
 
+aggStakerAccountAddress=$(echo $seedAccounts | jq -r '.[5].address')
+aggStakerAccountPk=$(echo $seedAccounts | jq -r '.[5].private_key')
+echo "Agg staker account: $aggStakerAccountAddress"
+echo "Agg staker account private key: $aggStakerAccountPk"
+
+execStakerAccountAddress=$(echo $seedAccounts | jq -r '.[6].address')
+execStakerAccountPk=$(echo $seedAccounts | jq -r '.[6].private_key')
+echo "Exec staker account: $execStakerAccountAddress"
+echo "Exec staker account private key: $execStakerAccountPk"
+
 echo $deployAccount
 echo $deployAccountPk
 
@@ -136,6 +157,15 @@ echo "Setting up L1 AVS..."
 forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" $avsTaskRegistrarAddress
 
 # -----------------------------------------------------------------------------
+# Setup L1 multichain
+# -----------------------------------------------------------------------------
+echo "Setting up L1 AVS..."
+export L1_CHAIN_ID=$anvilL1ChinId
+cast rpc anvil_impersonateAccount "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --rpc-url $L1_RPC_URL
+forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --unlocked --broadcast --sig "run()"
+forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
+
+# -----------------------------------------------------------------------------
 # Deploy L2
 # -----------------------------------------------------------------------------
 echo "Deploying L2 contracts on L1..."
@@ -159,6 +189,35 @@ forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L2_R
 # Create test task
 # -----------------------------------------------------------------------------
 # forge script script/CreateTask.s.sol --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL1 $avsAccountAddress
+
+# -----------------------------------------------------------------------------
+# Create operators
+# -----------------------------------------------------------------------------
+echo "Registering operators"
+export AGGREGATOR_PRIVATE_KEY=$operatorAccountPk
+export EXECUTOR_PRIVATE_KEY=$execOperatorAccountPk
+forge script script/local/SetupOperators.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
+
+# -----------------------------------------------------------------------------
+# Stake some stuff
+# -----------------------------------------------------------------------------
+echo "Aggregator addres: ${operatorAccountAddress}"
+echo "Exec aggregator address: ${execOperatorAccountAddress}"
+echo "Agg staker address: ${aggStakerAccountAddress}"
+echo "Exec staker address: ${execStakerAccountAddress}"
+
+echo "Staking all the things"
+export AGG_STAKER_PRIVATE_KEY=$aggStakerAccountPk
+export EXEC_STAKER_PRIVATE_KEY=$execStakerAccountPk
+forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast \
+    --sig "run(address, address)" $operatorAccountAddress $execOperatorAccountAddress \
+    -vvvv
+
+
+cast rpc --rpc-url $L1_RPC_URL anvil_mine 10
+
+echo "Ended at block number: "
+cast block-number
 
 kill $anvilL1Pid
 kill $anvilL2Pid
@@ -196,6 +255,10 @@ cat <<EOF > internal/testData/chain-config.json
       "operatorAccountPk": "$operatorAccountPk",
       "execOperatorAccountAddress": "$execOperatorAccountAddress",
       "execOperatorAccountPk": "$execOperatorAccountPk",
+      "aggStakerAccountAddress": "$aggStakerAccountAddress",
+      "aggStakerAccountPk": "$aggStakerAccountPk",
+      "execStakerAccountAddress": "$execStakerAccountAddress",
+      "execStakerAccountPk": "$execStakerAccountPk",
       "mailboxContractAddressL1": "$mailboxContractAddressL1",
       "mailboxContractAddressL2": "$mailboxContractAddressL2",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",

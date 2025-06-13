@@ -32,7 +32,10 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAdd
 		)
 		return nil, err
 	}
+	// map[operatorAddress]*peering.OperatorPeerInfo
 	operatorPeeringInfos := map[string]*peering.OperatorPeerInfo{}
+
+	// iterate over all operator sets and get their members with peering info
 	for _, operatorSetId := range avsConfig.ExecutorOperatorSetIds {
 		peeringInfos, err := pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, operatorSetId)
 		if err != nil {
@@ -44,9 +47,8 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAdd
 				operatorPeeringInfos[peeringInfo.OperatorAddress] = peeringInfo
 				continue
 			}
-			infos.OperatorSetIds = append(infos.OperatorSetIds, peeringInfo.OperatorSetIds...)
+			infos.OperatorSets = append(infos.OperatorSets, peeringInfo.OperatorSets...)
 		}
-
 	}
 	result := make([]*peering.OperatorPeerInfo, 0, len(operatorPeeringInfos))
 	for _, info := range operatorPeeringInfos {

@@ -9,7 +9,7 @@ anvil \
     --dump-state ./anvil.json \
     --config-out ./anvil-config.json \
     --chain-id 1 \
-    --fork-block-number 22396947 &
+    --fork-block-number 3987088 &
 
 anvilPid=$!
 sleep 3
@@ -29,7 +29,7 @@ anvil \
     --dump-state ./anvil-final.json \
     --config-out ./anvil-config-final.json \
     --chain-id 1 \
-    --fork-block-number 22396947 &
+    --fork-block-number 3987088 &
 anvilPid=$!
 
 sleep 3

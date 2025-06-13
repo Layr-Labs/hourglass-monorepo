@@ -17,8 +17,10 @@ const (
 )
 
 const (
-	ContractName_AllocationManager = "AllocationManager"
-	ContractName_TaskMailbox       = "TaskMailbox"
+	ContractName_AllocationManager  = "AllocationManager"
+	ContractName_TaskMailbox        = "TaskMailbox"
+	ContractName_KeyRegistrar       = "KeyRegistrar"
+	ContractName_CrossChainRegistry = "CrossChainRegistry"
 )
 
 const (
@@ -40,9 +42,11 @@ func IsL1Chain(chainId ChainId) bool {
 }
 
 type CoreContractAddresses struct {
-	AllocationManager string
-	DelegationManager string
-	TaskMailbox       string
+	AllocationManager  string
+	DelegationManager  string
+	TaskMailbox        string
+	KeyRegistrar       string
+	CrossChainRegistry string
 }
 
 var (
@@ -63,9 +67,11 @@ var (
 			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumAnvil: {
-			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
-			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
-			TaskMailbox:       "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
+			AllocationManager:  "0xfdd5749e11977d60850e06bf5b13221ad95eb6b4",
+			DelegationManager:  "0x75dfe5b44c2e530568001400d3f704bc8ae350cc",
+			TaskMailbox:        "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
+			KeyRegistrar:       "0x1c84bb62fe7791e173014a879c706445fa893bbe",
+			CrossChainRegistry: "0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
 		},
 		ChainId_BaseAnvil: {
 			TaskMailbox: "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",

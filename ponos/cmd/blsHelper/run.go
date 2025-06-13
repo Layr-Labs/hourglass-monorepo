@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/blsHelper/blsHelperConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
-	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -54,6 +52,7 @@ var generateOperatorData = &cobra.Command{
 			l.Sugar().Errorw("Failed to create private key from bytes", "error", err)
 			return err
 		}
+		_ = privateKey
 
 		ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 			BaseUrl: cfg.RpcUrl,
@@ -70,27 +69,29 @@ var generateOperatorData = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		_ = cc
 
-		g1Point, err := cc.GetOperatorRegistrationMessageHash(context.Background(), common.HexToAddress(cfg.OperatorAddress))
-		if err != nil {
-			l.Sugar().Errorw("Failed to get operator registration message hash", "error", err)
-			return err
-		}
-
-		// Create G1 point from contract coordinates
-		hashPoint := bn254.NewG1Point(g1Point.X, g1Point.Y)
-
-		// Sign the hash point
-		signature, err := privateKey.SignG1Point(hashPoint.G1Affine)
-		if err != nil {
-			l.Sugar().Fatalf("failed to sign hash point: %v", err)
-		}
-
-		payload, err := cc.CreateOperatorRegistrationPayload(privateKey.Public(), signature, cfg.Socket)
-		if err != nil {
-			l.Sugar().Fatalf("failed to create operator registration payload: %v", err)
-		}
-		fmt.Printf("%x", payload)
+		// g1Point, err := cc.GetOperatorRegistrationMessageHash(context.Background(), common.HexToAddress(cfg.OperatorAddress))
+		// if err != nil {
+		// 	l.Sugar().Errorw("Failed to get operator registration message hash", "error", err)
+		// 	return err
+		// }
+		//
+		// // Create G1 point from contract coordinates
+		// hashPoint := bn254.NewG1Point(g1Point.X, g1Point.Y)
+		//
+		// // Sign the hash point
+		// signature, err := privateKey.SignG1Point(hashPoint.G1Affine)
+		// if err != nil {
+		// 	l.Sugar().Fatalf("failed to sign hash point: %v", err)
+		// }
+		//
+		// payload, err := cc.CreateOperatorRegistrationPayload(privateKey.Public(), signature, cfg.Socket)
+		// if err != nil {
+		// 	l.Sugar().Fatalf("failed to create operator registration payload: %v", err)
+		// }
+		// fmt.Printf("%x", payload)
+		// return nil
 		return nil
 	},
 }
