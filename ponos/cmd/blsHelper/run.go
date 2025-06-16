@@ -5,11 +5,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/blsHelper/blsHelperConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	"github.com/ethereum/go-ethereum/common"
 
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -20,6 +21,7 @@ var generateOperatorData = &cobra.Command{
 	Short: "Generate operator registration data",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
+		ctx := cmd.Context()
 		cfg := blsHelperConfig.NewBlsHelperConfig()
 
 		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: cfg.Debug})
@@ -64,34 +66,42 @@ var generateOperatorData = &cobra.Command{
 		}
 
 		cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-			AVSRegistrarAddress: cfg.AvsRegistrarAddress,
+			AVSRegistrarAddress: cfg.AvsAddress,
 		}, ethClient, l)
 		if err != nil {
 			return err
 		}
 		_ = cc
 
-		// g1Point, err := cc.GetOperatorRegistrationMessageHash(context.Background(), common.HexToAddress(cfg.OperatorAddress))
-		// if err != nil {
-		// 	l.Sugar().Errorw("Failed to get operator registration message hash", "error", err)
-		// 	return err
-		// }
-		//
-		// // Create G1 point from contract coordinates
-		// hashPoint := bn254.NewG1Point(g1Point.X, g1Point.Y)
-		//
-		// // Sign the hash point
-		// signature, err := privateKey.SignG1Point(hashPoint.G1Affine)
-		// if err != nil {
-		// 	l.Sugar().Fatalf("failed to sign hash point: %v", err)
-		// }
-		//
-		// payload, err := cc.CreateOperatorRegistrationPayload(privateKey.Public(), signature, cfg.Socket)
-		// if err != nil {
-		// 	l.Sugar().Fatalf("failed to create operator registration payload: %v", err)
-		// }
-		// fmt.Printf("%x", payload)
-		// return nil
+		keyData, err := cc.EncodeBN254KeyData(privateKey.Public())
+		if err != nil {
+			l.Sugar().Fatalf("failed to encode BN254 key data: %v", err)
+		}
+
+		messageHash, err := cc.GetOperatorRegistrationMessageHash(
+			ctx,
+			common.HexToAddress(cfg.OperatorAddress),
+			common.HexToAddress(cfg.AvsAddress),
+			cfg.OperatorSetId,
+			keyData,
+		)
+		if err != nil {
+			l.Sugar().Fatalf("failed to get operator registration message hash: %v", err)
+		}
+
+		sig, err := privateKey.SignSolidityCompatible(messageHash)
+		if err != nil {
+			l.Sugar().Fatalf("failed to sign message hash: %v", err)
+		}
+
+		g1Point := &bn254.G1Point{
+			G1Affine: sig.GetG1Point(),
+		}
+		g1Bytes, err := g1Point.ToPrecompileFormat()
+		if err != nil {
+			l.Sugar().Fatalf("failed to convert G1 point to precompile format: %v", err)
+		}
+		fmt.Printf("%x", g1Bytes)
 		return nil
 	},
 }

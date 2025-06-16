@@ -37,7 +37,7 @@ func init() {
 
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.RpcUrl, "", "RPC URL to connect to the Ethereum node")
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.OperatorAddress, "", "address of the operator")
-	generateOperatorData.PersistentFlags().String(blsHelperConfig.AvsRegistrarAddress, "", "address of the AVS registrar contract")
+	generateOperatorData.PersistentFlags().String(blsHelperConfig.AvsAddress, "", "address of the AVS registrar contract")
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.Socket, "", "socket path for IPC connection")
 
 	for _, cmd := range []*cobra.Command{rootCmd} {

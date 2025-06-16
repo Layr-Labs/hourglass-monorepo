@@ -3,7 +3,7 @@ module github.com/Layr-Labs/hourglass-monorepo/ponos
 go 1.23.6
 
 require (
-	github.com/Layr-Labs/crypto-libs v0.0.3-0.20250612202818-ba1e64e74d68
+	github.com/Layr-Labs/crypto-libs v0.0.3-0.20250616135336-b8e67eb53ef7
 	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e
 	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250603132723-b0a53eef24e1
 	github.com/Layr-Labs/multichain-go v0.0.3-0.20250613170051-947a06c1e417

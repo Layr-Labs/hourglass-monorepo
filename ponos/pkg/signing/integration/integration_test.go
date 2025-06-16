@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bls381"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/bls381"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 )
 
 // Test_AllSignatureTypes tests both BLS381 and BN254 signature schemes through the generic interface

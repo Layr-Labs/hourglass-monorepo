@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bls381"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/bls381"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/google/uuid"
 )

@@ -1,7 +1,7 @@
 package inMemorySigner
 
 import (
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 )
 
 type InMemorySigner struct {
