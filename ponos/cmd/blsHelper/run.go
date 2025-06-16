@@ -54,7 +54,6 @@ var generateOperatorData = &cobra.Command{
 			l.Sugar().Errorw("Failed to create private key from bytes", "error", err)
 			return err
 		}
-		_ = privateKey
 
 		ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 			BaseUrl: cfg.RpcUrl,
@@ -71,7 +70,6 @@ var generateOperatorData = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		_ = cc
 
 		keyData, err := cc.EncodeBN254KeyData(privateKey.Public())
 		if err != nil {
