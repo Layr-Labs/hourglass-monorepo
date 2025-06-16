@@ -39,6 +39,7 @@ func init() {
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.OperatorAddress, "", "address of the operator")
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.AvsAddress, "", "address of the AVS registrar contract")
 	generateOperatorData.PersistentFlags().String(blsHelperConfig.Socket, "", "socket path for IPC connection")
+	generateOperatorData.PersistentFlags().Uint32(blsHelperConfig.OperatorSetId, 0, "ID of the operator set to register")
 
 	for _, cmd := range []*cobra.Command{rootCmd} {
 		cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
