@@ -62,6 +62,12 @@ func NewAvsExecutionManager(
 	if config.L1ChainId == 0 {
 		return nil, fmt.Errorf("L1ChainId must be set in AvsExecutionManagerConfig")
 	}
+	if err := hasExpectedMailboxContractsForChains(config.SupportedChainIds, config.MailboxContractAddresses); err != nil {
+		return nil, fmt.Errorf("invalid mailbox contract addresses: %w", err)
+	}
+	if err := hasExpectedContractCallersForChains(config.SupportedChainIds, chainContractCallers); err != nil {
+		return nil, fmt.Errorf("invalid contract callers: %w", err)
+	}
 	if _, ok := chainContractCallers[config.L1ChainId]; !ok {
 		return nil, fmt.Errorf("chainContractCallers must contain L1ChainId: %d", config.L1ChainId)
 	}
@@ -76,6 +82,24 @@ func NewAvsExecutionManager(
 		taskQueue:            make(chan *types.Task, 10000),
 	}
 	return manager, nil
+}
+
+func hasExpectedMailboxContractsForChains(supportedChains []config.ChainId, mailboxAddresses map[config.ChainId]string) error {
+	for _, chainId := range supportedChains {
+		if _, ok := mailboxAddresses[chainId]; !ok {
+			return fmt.Errorf("missing mailbox contract address for chain ID: %d", chainId)
+		}
+	}
+	return nil
+}
+
+func hasExpectedContractCallersForChains(supportedChains []config.ChainId, contractCallers map[config.ChainId]contractCaller.IContractCaller) error {
+	for _, chainId := range supportedChains {
+		if _, ok := contractCallers[chainId]; !ok {
+			return fmt.Errorf("missing contract caller for chain ID: %d", chainId)
+		}
+	}
+	return nil
 }
 
 func (em *AvsExecutionManager) getListOfContractAddresses() []string {
