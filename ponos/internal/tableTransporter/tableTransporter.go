@@ -21,7 +21,7 @@ func TransportTable(
 	crossChainRegistryAddress string,
 	blsPrivateKey string,
 	l *zap.Logger,
-) (interface{}, error) {
+) {
 	ctx := context.Background()
 
 	cm := chainManager.NewChainManager()
@@ -115,7 +115,7 @@ func TransportTable(
 	opsets := dist.GetOperatorSets()
 	if len(opsets) == 0 {
 		l.Sugar().Infow("No operator sets found, skipping AVS stake table transport")
-		return nil, nil
+		return
 	}
 	for _, opset := range opsets {
 		err = stakeTransport.SignAndTransportAvsStakeTable(
@@ -133,5 +133,4 @@ func TransportTable(
 			l.Sugar().Infof("Successfully signed and transported AVS stake table for opset %v", opset)
 		}
 	}
-	return nil, nil
 }

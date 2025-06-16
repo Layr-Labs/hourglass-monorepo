@@ -263,9 +263,7 @@ func Test_L1Mailbox(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 	// transport the tables for good measure
-	if err = testUtils.TransportL1Tables(l); err != nil {
-		t.Fatalf("Failed to transport L1 tables: %v", err)
-	}
+	testUtils.TransportL1Tables(l)
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
 

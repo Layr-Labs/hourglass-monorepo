@@ -257,8 +257,8 @@ const (
 	transportBlsPrivateKey   = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
 )
 
-func TransportL1Tables(l *zap.Logger) error {
-	_, err := tableTransporter.TransportTable(
+func TransportL1Tables(l *zap.Logger) {
+	tableTransporter.TransportTable(
 		transportEcdsaPrivateKey,
 		"http://localhost:8545",
 		31337,
@@ -266,5 +266,4 @@ func TransportL1Tables(l *zap.Logger) error {
 		transportBlsPrivateKey,
 		l,
 	)
-	return err
 }
