@@ -685,22 +685,41 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 		return fmt.Errorf("failed to find peer for task")
 	}
 
-	verfied, err := sig.Verify(peer.PublicKey, t.Payload)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to verify signature",
+	isVerified := false
+
+	// TODO(seanmcgary): this should verify the key against the expected aggregator operatorSetID
+	for _, opset := range peer.OperatorSets {
+		verfied, err := sig.Verify(opset.PublicKey, t.Payload)
+		if err != nil {
+			aps.logger.Sugar().Errorw("Error verifying signature",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.String("aggregatorAddress", t.AggregatorAddress),
+				zap.Error(err),
+			)
+			continue
+		}
+		if !verfied {
+			aps.logger.Sugar().Errorw("Failed to verify signature",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.String("aggregatorAddress", t.AggregatorAddress),
+				zap.Error(err),
+			)
+			continue
+		}
+		aps.logger.Sugar().Infow("Signature verified with operator set",
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.String("aggregatorAddress", t.AggregatorAddress),
-			zap.Error(err),
+			zap.Uint32("opsetID", opset.OperatorSetID),
 		)
-		return err
+		isVerified = true
 	}
-	if !verfied {
-		aps.logger.Sugar().Errorw("Failed to verify signature",
+
+	if !isVerified {
+		aps.logger.Sugar().Errorw("Failed to verify signature with any operator set",
 			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("publicKey", string(peer.PublicKey.Bytes())),
-			zap.Error(err),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
 		)
-		return fmt.Errorf("failed to verify signature")
+		return fmt.Errorf("failed to verify signature with any operator set")
 	}
 
 	return nil

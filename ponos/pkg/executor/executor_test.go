@@ -68,9 +68,13 @@ func Test_Executor(t *testing.T) {
 		AggregatorPeers: []*peering.OperatorPeerInfo{
 			{
 				OperatorAddress: simAggConfig.Operator.Address,
-				PublicKey:       pubKey,
-				OperatorSetIds:  []uint32{0},
-				NetworkAddress:  "localhost",
+				OperatorSets: []*peering.OperatorSet{
+					{
+						OperatorSetID:  0,
+						PublicKey:      pubKey,
+						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
+					},
+				},
 			},
 		},
 	}, l)
@@ -133,7 +137,7 @@ func Test_Executor(t *testing.T) {
 	assert.Nil(t, err)
 
 	digest := util.GetKeccak256Digest(taskResult.Output)
-	verified, err := sig.Verify(privateSigningKey.Public(), digest[:])
+	verified, err := sig.VerifySolidityCompatible(privateSigningKey.Public(), digest)
 	assert.Nil(t, err)
 	assert.True(t, verified)
 	cancel()

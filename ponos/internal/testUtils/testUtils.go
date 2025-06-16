@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"go.uber.org/zap"
 	"net/http"
 	"os"
 	"os/exec"
@@ -89,10 +91,10 @@ func ReadTenderlyChainConfig(projectRoot string) (*ChainConfig, error) {
 }
 
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	forkUrl := "https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/"
+	forkUrl := "https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "22396947"
+	forkBlockNumber := "3994152"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -248,4 +250,20 @@ func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chain
 		return fmt.Errorf("failed to override mailbox contract: %w", err)
 	}
 	return nil
+}
+
+const (
+	transportEcdsaPrivateKey = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
+	transportBlsPrivateKey   = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
+)
+
+func TransportL1Tables(l *zap.Logger) {
+	tableTransporter.TransportTable(
+		transportEcdsaPrivateKey,
+		"http://localhost:8545",
+		31337,
+		"0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
+		transportBlsPrivateKey,
+		l,
+	)
 }

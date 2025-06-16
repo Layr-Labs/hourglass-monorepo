@@ -2,7 +2,7 @@ package contractCaller
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrar"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
@@ -26,37 +26,77 @@ type ExecutorOperatorSetTaskConfig struct {
 	TaskMetadata             []byte
 }
 
-type IContractCaller interface {
-	// TODO: task will need a certificate
-	SubmitTaskResult(ctx context.Context, task *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
+type CurveType uint8
 
-	SubmitTaskResultRetryable(ctx context.Context, aggCert *aggregation.AggregatedCertificate) (*ethereumTypes.Receipt, error)
+const (
+	CurveTypeUnknown CurveType = 0 // Unknown curve type
+	CurveTypeECDSA   CurveType = 1
+	CurveTypeBN254   CurveType = 2 // BN254 is the only supported curve type for now
+)
+
+type OperatorTableData struct {
+	OperatorWeights          [][]*big.Int
+	Operators                []common.Address
+	LatestReferenceTimestamp uint32
+}
+
+type IContractCaller interface {
+	SubmitTaskResult(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedCertificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SubmitTaskResultRetryable(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedCertificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
 
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
 
-	GetTaskConfigForExecutorOperatorSet(avsAddress string, operatorSetId uint32) (*ExecutorOperatorSetTaskConfig, error)
-
-	GetOperatorSets(avsAddress string) ([]uint32, error)
-
-	GetOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error)
-
-	GetMembersForAllOperatorSets(avsAddress string) (map[uint32][]string, error)
-
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
+
+	GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error)
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorRegistrationMessageHash(ctx context.Context, address common.Address) (ITaskAVSRegistrar.BN254G1Point, error)
+	GetOperatorRegistrationMessageHash(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		keyData []byte,
+	) ([32]byte, error)
+
+	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType CurveType) (*ethereumTypes.Receipt, error)
+
+	RegisterKeyWithKeyRegistrar(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		signature *bn254.Signature,
+		keyData []byte,
+	) (*ethereumTypes.Receipt, error)
 
 	CreateOperatorAndRegisterWithAvs(
 		ctx context.Context,
 		avsAddress common.Address,
 		operatorAddress common.Address,
 		operatorSetIds []uint32,
-		publicKey *bn254.PublicKey,
-		signature *bn254.Signature,
 		socket string,
 		allocationDelay uint32,
 		metadataUri string,
 	) (*ethereumTypes.Receipt, error)
+
+	EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error)
+
+	GetOperatorTableDataForOperatorSet(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		chainId config.ChainId,
+		referenceBlocknumber uint64,
+	) (*OperatorTableData, error)
 }

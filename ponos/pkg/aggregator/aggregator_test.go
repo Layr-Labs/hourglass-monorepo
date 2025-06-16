@@ -14,7 +14,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
@@ -24,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"math/big"
 	"sync"
 	"testing"
@@ -32,8 +32,9 @@ import (
 
 const (
 	L1RPCUrl = "http://127.0.0.1:8545"
-	L2RPCUrl = "http://127.0.0.1:9545"
-	L2WSUrl  = "ws://127.0.0.1:9545"
+	// L2RPCUrl = "http://127.0.0.1:9545"
+	//L2WSUrl  = "ws://127.0.0.1:9545"
+	L1WsUrl = "ws://127.0.0.1:8545"
 )
 
 // Test_Aggregator is an integration test for the Aggregator component of the system.
@@ -163,42 +164,42 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// L2Chain & l1Anvil setup
 	// ------------------------------------------------------------------------
-	anvilWg.Add(1)
-	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L2RPCUrl,
-		BlockType: ethereum.BlockType_Latest,
-	}, l)
-
-	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
-	if err != nil {
-		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
-	}
-
-	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
-	if err != nil {
-		t.Fatalf("Failed to start L2 Anvil: %v", err)
-	}
-	go func() {
-		defer anvilWg.Done()
-
-		for {
-			select {
-			// timeout of 60 seconds
-			case <-ctx.Done():
-				t.Logf("Failed to start l2Anvil: %v", ctx.Err())
-				return
-			case <-time.After(2 * time.Second):
-				t.Logf("Checking if l2Anvil is up and running...")
-				block, err := l2EthereumClient.GetLatestBlock(ctx)
-				if err != nil {
-					t.Logf("Failed to get latest block, will retry: %v", err)
-					continue
-				}
-				t.Logf("L2 Anvil is up and running, latest block: %v", block)
-				return
-			}
-		}
-	}()
+	// anvilWg.Add(1)
+	// l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+	// 	BaseUrl:   L2RPCUrl,
+	// 	BlockType: ethereum.BlockType_Latest,
+	// }, l)
+	//
+	// l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
+	// if err != nil {
+	// 	t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	// }
+	//
+	// l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
+	// if err != nil {
+	// 	t.Fatalf("Failed to start L2 Anvil: %v", err)
+	// }
+	// go func() {
+	// 	defer anvilWg.Done()
+	//
+	// 	for {
+	// 		select {
+	// 		// timeout of 60 seconds
+	// 		case <-ctx.Done():
+	// 			t.Logf("Failed to start l2Anvil: %v", ctx.Err())
+	// 			return
+	// 		case <-time.After(2 * time.Second):
+	// 			t.Logf("Checking if l2Anvil is up and running...")
+	// 			block, err := l2EthereumClient.GetLatestBlock(ctx)
+	// 			if err != nil {
+	// 				t.Logf("Failed to get latest block, will retry: %v", err)
+	// 				continue
+	// 			}
+	// 			t.Logf("L2 Anvil is up and running, latest block: %v", block)
+	// 			return
+	// 		}
+	// 	}
+	// }()
 	anvilWg.Wait()
 	close(startErrorsChan)
 
@@ -208,59 +209,54 @@ func Test_Aggregator(t *testing.T) {
 		}
 	}
 
+	l1ChainId, err := l1EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("failed to get L1 chain ID: %v", err)
+	}
+
+	coreContracts, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
+	if err != nil {
+		l.Sugar().Fatalf("failed to get core contracts for chain ID %d: %v", l1ChainId.Uint64(), err)
+	}
+
 	// ------------------------------------------------------------------------
 	// register peering data
 	// ------------------------------------------------------------------------
+	l.Sugar().Infow("Setting up operator peering",
+		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
+	)
+	err = testUtils.SetupOperatorPeering(
+		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
+		l1EthClient,
+		aggPrivateSigningKey,
+		execPrivateSigningKey,
+		fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up operator peering: %v", err)
+	}
+
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
-	}
-	t.Logf("Registering avs peering data")
-	_, err = operator.RegisterOperatorToOperatorSets(
-		ctx,
-		l1AggCc,
-		common.HexToAddress(aggConfig.Operator.Address),
-		common.HexToAddress(aggConfig.Avss[0].Address),
-		[]uint32{0},
-		aggPrivateSigningKey.Public(),
-		aggPrivateSigningKey,
-		"",
-		7200,
-		"http://something.com",
-		l,
-	)
-	if err != nil {
-		t.Fatalf("failed to register aggregator operator to operator sets: %v", err)
 	}
 
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
-	}
-	t.Logf("Registering operator peering data")
-	_, err = operator.RegisterOperatorToOperatorSets(
-		ctx,
-		l1ExecCc,
-		common.HexToAddress(execConfig.Operator.Address),
-		common.HexToAddress(execConfig.AvsPerformers[0].AvsAddress),
-		[]uint32{1},
-		execPrivateSigningKey.Public(),
-		execPrivateSigningKey,
-		fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
-		7200,
-		"http://something.com",
-		l,
-	)
-	if err != nil {
-		t.Fatalf("failed to register executor operator to operator sets: %v", err)
 	}
 
 	// ------------------------------------------------------------------------
@@ -276,12 +272,12 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Setup the aggregator
 	// ------------------------------------------------------------------------
-	coreContracts, err := eigenlayer.LoadContracts()
+	eigenlayerContracts, err := eigenlayer.LoadContracts()
 	if err != nil {
 		t.Fatalf("failed to load contracts: %v", err)
 	}
 
-	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
+	imContractStore := inMemoryContractStore.NewInMemoryContractStore(eigenlayerContracts, l)
 
 	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
 		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
@@ -298,6 +294,7 @@ func Test_Aggregator(t *testing.T) {
 			Address:       aggConfig.Operator.Address,
 			PrivateKey:    aggConfig.Operator.OperatorPrivateKey,
 			AggregatorUrl: aggConfig.ServerConfig.AggregatorUrl,
+			L1ChainId:     aggConfig.L1ChainId,
 		},
 		imContractStore,
 		tlp,
@@ -309,6 +306,19 @@ func Test_Aggregator(t *testing.T) {
 		t.Logf("Failed to create aggregator: %v", err)
 	}
 	_ = agg
+
+	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
+	// transport the tables for good measure
+	testUtils.TransportL1Tables(l)
+	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
+	time.Sleep(time.Second * 6)
+
+	// update current block to account for transport
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+	l.Sugar().Infow("Current block number", zap.Uint64("blockNumber", currentBlock))
 
 	// ------------------------------------------------------------------------
 	// Boot up everything
@@ -342,7 +352,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Listen for TaskVerified event to know that the test is done
 	// ------------------------------------------------------------------------
-	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
+	wsEthClient, err := l1EthereumClient.GetWebsocketConnection(L1WsUrl)
 	if err != nil {
 		t.Fatalf("Failed to get websocket connection: %v", err)
 	}
@@ -400,17 +410,18 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
-	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l1AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
+		KeyRegistrarAddress: coreContracts.KeyRegistrar,
+	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
+	task, err := l1AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to publish message to inbox: %v", err)
 	}
@@ -427,7 +438,7 @@ func Test_Aggregator(t *testing.T) {
 
 	t.Cleanup(func() {
 		_ = l1Anvil.Process.Kill()
-		_ = l2Anvil.Process.Kill()
+		// _ = l2Anvil.Process.Kill()
 		cancel()
 	})
 
@@ -501,11 +512,11 @@ chains:
     chainId: 31337
     rpcUrl: http://localhost:8545
     pollIntervalSeconds: 10
-  - name: base
-    network: mainnet
-    chainId: 31338
-    rpcUrl: http://localhost:9545
-    pollIntervalSeconds: 2
+  # - name: base
+  #   network: mainnet
+  #   chainId: 31338
+  #   rpcUrl: http://localhost:9545
+  #   pollIntervalSeconds: 2
 operator:
   address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
   operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"

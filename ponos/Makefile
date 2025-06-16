@@ -174,8 +174,8 @@ fmtcheck:
 .PHONY: anvil/start
 anvil/start/l1:
 	anvil \
-		--fork-url https://tame-fabled-liquid.quiknode.pro/f27d4be93b4d7de3679f5c5ae881233f857407a0/ \
-		--fork-block-number 22396947 \
+		--fork-url https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/ \
+		--fork-block-number 3994152 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2

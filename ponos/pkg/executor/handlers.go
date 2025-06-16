@@ -89,5 +89,5 @@ func (e *Executor) signResult(result *performerTask.PerformerTaskResult) ([]byte
 	// This is for compatibility with the certificate verifier.
 	digestBytes := util.GetKeccak256Digest(result.Result)
 
-	return e.signer.SignMessage(digestBytes[:])
+	return e.signer.SignMessageForSolidity(digestBytes)
 }
