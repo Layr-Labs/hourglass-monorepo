@@ -10,6 +10,8 @@ github.com/Layr-Labs/crypto-libs v0.0.3-0.20250616134545-be057b2770f6 h1:z0nD8GM
 github.com/Layr-Labs/crypto-libs v0.0.3-0.20250616134545-be057b2770f6/go.mod h1:PWjHsuxgk5MNopPr3QLhpP/RJerbjh98qCCSivnVPHE=
 github.com/Layr-Labs/crypto-libs v0.0.3-0.20250616135336-b8e67eb53ef7 h1:RnWxGlSk0oDE8htp8uyW1cIZYlthG6E1/inTMMPncnY=
 github.com/Layr-Labs/crypto-libs v0.0.3-0.20250616135336-b8e67eb53ef7/go.mod h1:PWjHsuxgk5MNopPr3QLhpP/RJerbjh98qCCSivnVPHE=
+github.com/Layr-Labs/crypto-libs v0.0.3 h1:n5jcvmaBLcjhxL7hcnL8ar0MiycPl6s3OMsuUCn2OEg=
+github.com/Layr-Labs/crypto-libs v0.0.3/go.mod h1:PWjHsuxgk5MNopPr3QLhpP/RJerbjh98qCCSivnVPHE=
 github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e h1:KU3yFC1zbmy38GPRJpLoG5SdeJnsqxZUHYMNrzeEmUM=
 github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e/go.mod h1:Ie8YE3EQkTHqG6/tnUS0He7/UPMkXPo/3OFXwSy0iRo=
 github.com/Layr-Labs/multichain-go v0.0.3-0.20250613170051-947a06c1e417 h1:EBOURcJB4DwNxi77PML62AhKNNvjGW2/JCkR098xbc0=
