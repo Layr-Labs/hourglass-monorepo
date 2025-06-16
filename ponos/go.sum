@@ -16,6 +16,8 @@ github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c42
 github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e/go.mod h1:Ie8YE3EQkTHqG6/tnUS0He7/UPMkXPo/3OFXwSy0iRo=
 github.com/Layr-Labs/multichain-go v0.0.3-0.20250613170051-947a06c1e417 h1:EBOURcJB4DwNxi77PML62AhKNNvjGW2/JCkR098xbc0=
 github.com/Layr-Labs/multichain-go v0.0.3-0.20250613170051-947a06c1e417/go.mod h1:yNXWmc5+Ntn4fvroi4O2Cyf7jZb60IXo8Xz/Y2y7EPY=
+github.com/Layr-Labs/multichain-go v0.0.3-0.20250616160002-871065ece835 h1:ryd2nZsoXoUUS9fMS9LWciwaNlX1+NC8jtSAd+0gGNg=
+github.com/Layr-Labs/multichain-go v0.0.3-0.20250616160002-871065ece835/go.mod h1:yNXWmc5+Ntn4fvroi4O2Cyf7jZb60IXo8Xz/Y2y7EPY=
 github.com/Layr-Labs/protocol-apis v1.14.0 h1:tluZ3M53RN+Ql4uztfHwaT/OCqlaQFsmN/iv1YT/Wbg=
 github.com/Layr-Labs/protocol-apis v1.14.0/go.mod h1:tyzQDWHu4/dmBSRKNRXi65wLic3j5B+7YQ8lMQB08aM=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=

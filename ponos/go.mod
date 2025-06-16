@@ -6,7 +6,7 @@ require (
 	github.com/Layr-Labs/crypto-libs v0.0.3
 	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e
 	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250603132723-b0a53eef24e1
-	github.com/Layr-Labs/multichain-go v0.0.3-0.20250613170051-947a06c1e417
+	github.com/Layr-Labs/multichain-go v0.0.3-0.20250616160002-871065ece835
 	github.com/Layr-Labs/protocol-apis v1.14.0
 	github.com/consensys/gnark-crypto v0.17.0
 	github.com/docker/docker v28.0.1+incompatible
