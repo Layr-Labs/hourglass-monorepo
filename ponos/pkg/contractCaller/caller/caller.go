@@ -654,7 +654,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	avsAddress common.Address,
 	operatorSetId uint32,
 	chainId config.ChainId,
-	referenceBlocknumber uint64,
+	referenceBlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
 	operatorSet := ICrossChainRegistry.OperatorSet{
 		Avs: avsAddress,
@@ -666,7 +666,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	)
 	otcAddr, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlocknumber),
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
 	}, operatorSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator table calculator address: %w", err)
@@ -686,14 +686,14 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	)
 	operatorWeights, err := opTableCalculator.GetOperatorWeights(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlocknumber),
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
 	}, IOperatorTableCalculator.OperatorSet(operatorSet))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator weights: %w", err)
 	}
 
 	cc.logger.Sugar().Infow("Fetching supported chains for multichain")
-	chainIds, tableUpdaterAddresses, err := cc.GetSupportChainsForMultichain(ctx, referenceBlocknumber)
+	chainIds, tableUpdaterAddresses, err := cc.GetSupportChainsForMultichain(ctx, referenceBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get supported chains for multichain: %w", err)
 	}
@@ -720,7 +720,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 
 	latestReferenceTimestamp, err := tableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlocknumber),
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference timestamp: %w", err)

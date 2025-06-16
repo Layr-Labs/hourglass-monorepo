@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -140,6 +141,11 @@ func (a *Aggregator) Initialize() error {
 			return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
 		}
 
+		om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
+			AvsAddress: avs.Address,
+			ChainIds:   supportedChains,
+		}, callers, a.peeringDataFetcher, a.logger)
+
 		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
 			AvsAddress:               avs.Address,
 			SupportedChainIds:        supportedChains,
@@ -149,7 +155,8 @@ func (a *Aggregator) Initialize() error {
 		},
 			a.chainContractCallers,
 			a.signer,
-			a.peeringDataFetcher,
+			a.contractStore,
+			om,
 			a.logger,
 		)
 		if err != nil {
