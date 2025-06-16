@@ -3,8 +3,8 @@ package operator
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"go.uber.org/zap"

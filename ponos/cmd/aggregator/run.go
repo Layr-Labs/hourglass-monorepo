@@ -13,12 +13,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"time"
 
+	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"

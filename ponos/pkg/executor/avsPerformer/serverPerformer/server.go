@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"github.com/pkg/errors"

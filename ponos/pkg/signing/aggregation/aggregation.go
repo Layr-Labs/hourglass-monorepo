@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 )

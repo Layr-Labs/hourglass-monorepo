@@ -3,6 +3,8 @@ package executor
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
@@ -11,8 +13,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"math/big"

@@ -3,6 +3,7 @@ package peeringDataFetcher
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -11,7 +12,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"os"

@@ -3,11 +3,11 @@ package testUtils
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/bn254"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
