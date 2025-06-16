@@ -198,7 +198,9 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	aps.deploymentMu.Lock()
 	aps.currentContainer = containerInstance
+	aps.deploymentMu.Unlock()
 
 	// Start monitoring events for the new container
 	go aps.monitorContainerEvents(ctx, aps.currentContainer.EventChan)
@@ -208,9 +210,9 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 
 // monitorContainerEvents monitors container lifecycle events and performs periodic application health checks
 func (aps *AvsPerformerServer) monitorContainerEvents(ctx context.Context, eventChan <-chan containerManager.ContainerEvent) {
-	// Create a ticker for periodic health checks
-	healthCheckTicker := time.NewTicker(1 * time.Second)
-	defer healthCheckTicker.Stop()
+	// Create a ticker for periodic application health checks
+	appHealthCheckTicker := time.NewTicker(15 * time.Second)
+	defer appHealthCheckTicker.Stop()
 
 	for {
 		select {
@@ -222,7 +224,7 @@ func (aps *AvsPerformerServer) monitorContainerEvents(ctx context.Context, event
 				return
 			}
 			aps.handleContainerEvent(ctx, event)
-		case <-healthCheckTicker.C:
+		case <-appHealthCheckTicker.C:
 			// Perform periodic application health checks for containers that are Docker-healthy
 			aps.performPeriodicApplicationHealthChecks(ctx)
 		}
@@ -463,7 +465,11 @@ func (aps *AvsPerformerServer) recreatePerformerClientForContainer(ctx context.C
 		return
 	}
 
+	// Lock before modifying shared container fields
+	aps.deploymentMu.Lock()
+	container.Info = updatedInfo
 	container.Client = perfClient
+	aps.deploymentMu.Unlock()
 
 	aps.logger.Info("Performer client recreated successfully after container restart",
 		zap.String("avsAddress", aps.config.AvsAddress),
@@ -476,19 +482,23 @@ func (aps *AvsPerformerServer) recreatePerformerClientForContainer(ctx context.C
 func (aps *AvsPerformerServer) TriggerContainerRestart(reason string) error {
 	aps.deploymentMu.Lock()
 	container := aps.currentContainer
-	aps.deploymentMu.Unlock()
-
 	if container == nil || container.Manager == nil || container.Info == nil {
+		aps.deploymentMu.Unlock()
 		return fmt.Errorf("container manager or container info not available")
 	}
 
+	// Copy needed values while under lock
+	containerID := container.Info.ID
+	containerManager := container.Manager
+	aps.deploymentMu.Unlock()
+
 	aps.logger.Info("Triggering manual container restart",
 		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.String("containerID", container.Info.ID),
+		zap.String("containerID", containerID),
 		zap.String("reason", reason),
 	)
 
-	return container.Manager.TriggerRestart(container.Info.ID, reason)
+	return containerManager.TriggerRestart(containerID, reason)
 }
 
 // checkContainerHealth performs a single health check on the specified container
@@ -567,8 +577,6 @@ func (aps *AvsPerformerServer) DeployContainer(
 // promoteNextContainer promotes the nextContainer to currentContainer
 // This should be called after verifying the nextContainer is working properly
 func (aps *AvsPerformerServer) promoteNextContainer(ctx context.Context) error {
-	aps.deploymentMu.Lock()
-	defer aps.deploymentMu.Unlock()
 
 	if aps.nextContainer == nil || !aps.nextContainer.HealthCtx.ApplicationHealth {
 		return fmt.Errorf("cannot promote next container")
@@ -681,14 +689,17 @@ func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.
 	aps.logger.Sugar().Infow("Processing task", zap.Any("task", task))
 
 	aps.deploymentMu.Lock()
-	container := aps.currentContainer
-	aps.deploymentMu.Unlock()
-
-	if container == nil || container.Client == nil {
+	if aps.currentContainer == nil || aps.currentContainer.Client == nil {
+		aps.deploymentMu.Unlock()
 		return nil, fmt.Errorf("no current container available to execute task")
 	}
 
-	res, err := container.Client.ExecuteTask(ctx, &performerV1.TaskRequest{
+	// Make the call while holding the lock, or copy the client reference
+	client := aps.currentContainer.Client
+	aps.deploymentMu.Unlock()
+
+	// Use the local client reference
+	res, err := client.ExecuteTask(ctx, &performerV1.TaskRequest{
 		TaskId:  []byte(task.TaskID),
 		Payload: task.Payload,
 	})
@@ -794,19 +805,16 @@ func (aps *AvsPerformerServer) Shutdown() error {
 
 // performPeriodicApplicationHealthChecks checks application health for containers that are Docker-healthy
 func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx context.Context) {
-	// Safely get container references under mutex
-	aps.deploymentMu.Lock()
-	currentContainer := aps.currentContainer
-	nextContainer := aps.nextContainer
-	aps.deploymentMu.Unlock()
-
 	// Check current container application health
-	if currentContainer != nil && currentContainer.HealthCtx.ContainerHealth && currentContainer.Client != nil {
-		// Perform the application health check (outside mutex to avoid blocking)
+	aps.deploymentMu.Lock()
+	if aps.currentContainer != nil && aps.currentContainer.HealthCtx.ContainerHealth && aps.currentContainer.Client != nil {
+		// Copy needed data while holding lock
+		currentContainer := aps.currentContainer
+		containerID := currentContainer.Info.ID
+
+		// Perform the application health check while holding lock to avoid races
 		err := aps.checkContainerHealth(ctx, currentContainer)
 
-		// Protect health context modifications
-		aps.deploymentMu.Lock()
 		currentContainer.HealthCtx.LastHealthCheck = time.Now()
 
 		if err != nil {
@@ -816,7 +824,7 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 
 			aps.logger.Warn("Application health check failed",
 				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("containerID", currentContainer.Info.ID),
+				zap.String("containerID", containerID),
 				zap.String("containerType", "current"),
 				zap.Error(err),
 				zap.Int("consecutiveFailures", currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures),
@@ -830,7 +838,7 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 
 				aps.logger.Error("Current container application health failed multiple times, triggering restart",
 					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", currentContainer.Info.ID),
+					zap.String("containerID", containerID),
 					zap.Int("consecutiveFailures", consecutiveFailures),
 				)
 
@@ -840,86 +848,82 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 						zap.Error(restartErr),
 					)
 				}
-			} else {
-				aps.deploymentMu.Unlock()
+				return // Early return since we unlocked
 			}
 		} else {
 			// Health check succeeded
 			currentContainer.HealthCtx.ApplicationHealth = true
 			currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
-			aps.deploymentMu.Unlock()
 		}
 	}
 
-	// Check next container application health
-	if nextContainer != nil && nextContainer.HealthCtx.ContainerHealth && nextContainer.Client != nil {
-		// Perform the application health check (outside mutex to avoid blocking)
-		err := aps.checkContainerHealth(ctx, nextContainer)
+	if aps.nextContainer != nil && aps.nextContainer.HealthCtx.ContainerHealth && aps.nextContainer.Client != nil {
+		// Perform the application health check while holding the lock
+		err := aps.checkContainerHealth(ctx, aps.nextContainer)
 
-		// Protect health context modifications
-		aps.deploymentMu.Lock()
-		nextContainer.HealthCtx.LastHealthCheck = time.Now()
+		aps.nextContainer.HealthCtx.LastHealthCheck = time.Now()
 
 		if err != nil {
 			// Health check failed
-			nextContainer.HealthCtx.ApplicationHealth = false
-			nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures++
+			aps.nextContainer.HealthCtx.ApplicationHealth = false
+			aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures++
 
 			aps.logger.Warn("Application health check failed",
 				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("containerID", nextContainer.Info.ID),
+				zap.String("containerID", aps.nextContainer.Info.ID),
 				zap.String("containerType", "next"),
 				zap.Error(err),
-				zap.Int("consecutiveFailures", nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures),
+				zap.Int("consecutiveFailures", aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures),
 			)
 
 			// Handle consecutive failures for next container - abort deployment
-			if nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
-				if aps.nextContainer != nil && aps.nextContainer.Info.ID == nextContainer.Info.ID {
-					containerID := aps.nextContainer.Info.ID
-					consecutiveFailures := nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures
+			if aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
+				containerID := aps.nextContainer.Info.ID
+				consecutiveFailures := aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures
 
-					aps.logger.Info("Aborting deployment due to application health check failures",
-						zap.String("avsAddress", aps.config.AvsAddress),
-						zap.String("nextContainerID", containerID),
-						zap.Int("consecutiveFailures", consecutiveFailures),
-					)
+				aps.logger.Info("Aborting deployment due to application health check failures",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.String("nextContainerID", containerID),
+					zap.Int("consecutiveFailures", consecutiveFailures),
+				)
 
-					containerToShutdown := aps.nextContainer
-					aps.nextContainer = nil
-					aps.deploymentMu.Unlock()
-
-					// Clean up the next container (outside mutex to avoid blocking)
-					if err := aps.shutdownContainer(ctx, aps.config.AvsAddress, containerToShutdown); err != nil {
-						aps.logger.Error("Failed to shutdown next container during deployment abort",
-							zap.String("avsAddress", aps.config.AvsAddress),
-							zap.String("containerID", containerID),
-							zap.Error(err),
-						)
-					}
-				} else {
-					aps.deploymentMu.Unlock()
-				}
-			} else {
+				containerToShutdown := aps.nextContainer
+				aps.nextContainer = nil
 				aps.deploymentMu.Unlock()
+
+				// Clean up the next container (outside mutex to avoid blocking)
+				if err := aps.shutdownContainer(ctx, aps.config.AvsAddress, containerToShutdown); err != nil {
+					aps.logger.Error("Failed to shutdown next container during deployment abort",
+						zap.String("avsAddress", aps.config.AvsAddress),
+						zap.String("containerID", containerID),
+						zap.Error(err),
+					)
+				}
+				// Return early since we unlocked
+				return
 			}
 		} else {
 			// Health check succeeded
-			nextContainer.HealthCtx.ApplicationHealth = true
-			nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
-			aps.deploymentMu.Unlock()
+			aps.nextContainer.HealthCtx.ApplicationHealth = true
+			aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
 
-			aps.logger.Info("Next container became application-healthy and ready for promotion",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("containerID", nextContainer.Info.ID),
-			)
-			if err := aps.promoteNextContainer(ctx); err != nil {
-				aps.logger.Error("Failed to promote healthy next container",
+			// Promote immediately while holding the lock
+			if aps.nextContainer.HealthCtx.ApplicationHealth {
+				aps.logger.Info("Next container became application-healthy and ready for promotion",
 					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("containerID", nextContainer.Info.ID),
-					zap.Error(err),
+					zap.String("containerID", aps.nextContainer.Info.ID),
 				)
+
+				if err := aps.promoteNextContainer(ctx); err != nil {
+					aps.logger.Error("Failed to promote healthy next container",
+						zap.String("avsAddress", aps.config.AvsAddress),
+						zap.String("containerID", aps.nextContainer.Info.ID),
+						zap.Error(err),
+					)
+				}
+				return
 			}
 		}
 	}
+	aps.deploymentMu.Unlock()
 }
