@@ -188,16 +188,13 @@ func (dcm *DockerContainerManager) Create(ctx context.Context, config *Container
 	}
 
 	// Create the container
-	// Use stable hostname for DNS but unique container name for Docker uniqueness
-	timestamp := time.Now().Unix()
-	containerName := fmt.Sprintf("%s-%d", config.Hostname, timestamp)
 	resp, err := dcm.client.ContainerCreate(
 		ctx,
 		containerConfig,
 		hostConfig,
 		netConfig,
 		nil,
-		containerName,
+		config.Hostname,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create container")
