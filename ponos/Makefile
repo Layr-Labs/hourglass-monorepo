@@ -7,7 +7,7 @@ GO_FLAGS=-ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/ve
 
 PROTO_OPTS=--proto_path=protos --go_out=paths=source_relative:protos
 
-all: deps/go build/cmd/executor build/cmd/aggregator build/cmd/bls-helper
+all: deps/go build/cmd/executor build/cmd/aggregator
 
 # -----------------------------------------------------------------------------
 # Dependencies
@@ -72,27 +72,6 @@ build/cmd/aggregator/darwin-arm64:
 .PHONY: build/cmd/aggregator/darwin-amd64
 build/cmd/aggregator/darwin-amd64:
 	GOOS=darwin GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/aggregator ./cmd/aggregator
-
-# bls-helper
-.PHONY: build/cmd/bls-helper
-build/cmd/bls-helper:
-	go build $(GO_FLAGS) -o ${BIN}/bls-helper ./cmd/blsHelper
-
-.PHONY: build/cmd/bls-helper/linux-arm64
-build/cmd/bls-helper/linux-arm64:
-	GOOS=linux GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/bls-helper ./cmd/blsHelper
-
-.PHONY: build/cmd/bls-helper/linux-amd64
-build/cmd/bls-helper/linux-amd64:
-	GOOS=linux GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/arm64/bls-helper ./cmd/blsHelper
-
-.PHONY: build/cmd/bls-helper/darwin-arm64
-build/cmd/bls-helper/darwin-arm64:
-	GOOS=darwin GOARCH=arm64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/bls-helper ./cmd/blsHelper
-
-.PHONY: build/cmd/bls-helper/darwin-amd64
-build/cmd/bls-helper/darwin-amd64:
-	GOOS=darwin GOARCH=amd64 go build $(GO_FLAGS) -o ${BIN}/linux/darwin/bls-helper ./cmd/blsHelper
 
 .PHONY: build/local-container
 build/local-container:
@@ -175,7 +154,7 @@ fmtcheck:
 anvil/start/l1:
 	anvil \
 		--fork-url https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/ \
-		--fork-block-number 3994152 \
+		--fork-block-number 4015731 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2

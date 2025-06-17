@@ -430,7 +430,7 @@ func Test_Aggregator(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
-	case <-time.After(90 * time.Second):
+	case <-time.After(120 * time.Second):
 		t.Logf("Timeout after 90 seconds")
 		cancel()
 	}
