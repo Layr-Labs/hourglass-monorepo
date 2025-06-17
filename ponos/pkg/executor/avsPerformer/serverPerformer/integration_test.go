@@ -118,9 +118,7 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 	peeringFetcher := &MockPeeringFetcher{}
 
 	// Create a short health check interval for tests
-	testHealthCheckConfig := &HealthCheckConfiguration{
-		ApplicationHealthCheckInterval: 1 * time.Second,
-	}
+	testHealthCheckInterval := 1 * time.Second
 
 	t.Run("automatic promotion when next container becomes healthy", func(t *testing.T) {
 		// Use simple static AVS address for this test
@@ -139,11 +137,11 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		defer cancel()
 
 		// Create container manager
-		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 		require.NoError(t, err)
 
 		// Create AVS performer server with test health check config
-		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
+		server := NewAvsPerformerServerWithHealthCheckInterval(config, peeringFetcher, logger, containerMgr, testHealthCheckInterval)
 
 		// Initialize the server (creates initial currentContainer)
 		err = server.Initialize(ctx)
@@ -232,11 +230,11 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		defer cancel()
 
 		// Create container manager
-		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 		require.NoError(t, err)
 
 		// Create AVS performer server with test health check config
-		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
+		server := NewAvsPerformerServerWithHealthCheckInterval(config, peeringFetcher, logger, containerMgr, testHealthCheckInterval)
 
 		err = server.Initialize(ctx)
 		require.NoError(t, err)
@@ -275,7 +273,7 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		defer cancel()
 
 		// Create container manager
-		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 		require.NoError(t, err)
 
 		// Use simple static AVS address for this test
@@ -291,7 +289,7 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		}
 
 		// Create AVS performer server with test health check config
-		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
+		server := NewAvsPerformerServerWithHealthCheckInterval(config, peeringFetcher, logger, containerMgr, testHealthCheckInterval)
 
 		// Reset to clean state
 		err = server.Initialize(ctx)
@@ -348,16 +346,14 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 	peeringFetcher := &MockPeeringFetcher{}
 
 	// Create a short health check interval for tests
-	testHealthCheckConfig := &HealthCheckConfiguration{
-		ApplicationHealthCheckInterval: 1 * time.Second,
-	}
+	testHealthCheckInterval := 1 * time.Second
 
 	t.Run("complete blue-green deployment flow", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		// Create container manager for this test scenario
-		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 		require.NoError(t, err)
 
 		// Use simple static AVS address for this test
@@ -374,7 +370,7 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		}
 
 		// Create AVS performer server with test health check config
-		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
+		server := NewAvsPerformerServerWithHealthCheckInterval(config, peeringFetcher, logger, containerMgr, testHealthCheckInterval)
 
 		// Step 1: Initialize server with initial container
 		err = server.Initialize(ctx)

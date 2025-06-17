@@ -61,24 +61,23 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	avsAddress := strings.ToLower(req.AvsAddress)
 
-	// Create container manager for the deployment
-	containerMgr, err := containerManager.NewDefaultDockerContainerManager(e.logger)
-	if err != nil {
-		e.logger.Error("Failed to create container manager for deployment",
-			zap.String("avsAddress", avsAddress),
-			zap.Error(err),
-		)
-		return &executorV1.DeployArtifactResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create container manager: %v", err),
-		}, status.Error(codes.Internal, fmt.Sprintf("Failed to create container manager: %v", err))
-	}
-
 	// Find or create the AVS performer
 	performer, ok := e.avsPerformers[avsAddress]
 	if !ok {
 		// Create new AVS performer for this address
 		e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
+
+		// Create container manager for this performer
+		containerMgr, err := containerManager.NewDockerContainerManager(
+			containerManager.DefaultContainerManagerConfig(),
+			e.logger,
+		)
+		if err != nil {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: fmt.Sprintf("Failed to deploy artifact: %v", err),
+			}, status.Error(codes.Internal, fmt.Sprintf("Failed to create container manager: %v", err))
+		}
 
 		config := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
@@ -140,8 +139,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	}
 
 	// Deploy the container
-	err = serverPerformer.DeployContainer(ctx, avsAddress, deployConfig)
-	if err != nil {
+	if err := serverPerformer.DeployContainer(ctx, avsAddress, deployConfig); err != nil {
 		e.logger.Error("Failed to deploy container",
 			zap.String("avsAddress", avsAddress),
 			zap.String("imageRef", imageRef),

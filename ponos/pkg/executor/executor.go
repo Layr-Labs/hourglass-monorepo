@@ -79,7 +79,10 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			containerMgr, err := containerManager.NewDefaultDockerContainerManager(e.logger)
+			containerMgr, err := containerManager.NewDockerContainerManager(
+				containerManager.DefaultContainerManagerConfig(),
+				e.logger,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to create container manager for AVS %s: %v", avsAddress, err)
 			}

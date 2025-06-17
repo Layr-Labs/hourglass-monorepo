@@ -1,22 +1,13 @@
 package containerManager
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/docker/go-connections/nat"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
 )
-
-// ContainerResult holds the result of a successful container creation and startup
-type ContainerResult struct {
-	Info     *ContainerInfo
-	Endpoint string
-}
 
 // HashAvsAddress takes a sha256 hash of the AVS address and returns the first 6 chars
 func HashAvsAddress(avsAddress string) string {
@@ -58,101 +49,6 @@ func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag string, contai
 		MemoryLimit:   0, // No limit by default, could be configurable
 		CPUShares:     0, // No limit by default, could be configurable
 	}
-}
-
-// CreateAndStartDefaultContainer is a factory method that creates, starts, and prepares a container
-// with default configurations.
-// Returns ContainerResult with the container info and endpoint, or error with cleanup
-func CreateAndStartDefaultContainer(
-	ctx context.Context,
-	manager ContainerManager,
-	avsAddress string,
-	imageRepo string,
-	imageTag string,
-	containerPort int,
-	networkName string,
-	logger *zap.Logger,
-) (*ContainerResult, error) {
-	// Validate required parameters
-	if manager == nil {
-		return nil, errors.New("container manager cannot be nil")
-	}
-
-	// Create container configuration
-	containerConfig := CreateDefaultContainerConfig(
-		avsAddress,
-		imageRepo,
-		imageTag,
-		containerPort,
-		networkName,
-	)
-
-	// Create the container
-	containerInfo, err := manager.Create(ctx, containerConfig)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create container")
-	}
-
-	// Start the container
-	if err := manager.Start(ctx, containerInfo.ID); err != nil {
-		// Clean up on failure
-		if removeErr := manager.Remove(ctx, containerInfo.ID, true); removeErr != nil && logger != nil {
-			logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
-		return nil, errors.Wrap(err, "failed to start container")
-	}
-
-	// Wait for the container to be running
-	if err := manager.WaitForRunning(ctx, containerInfo.ID, 30*time.Second); err != nil {
-		// Clean up on failure
-		if removeErr := manager.Remove(ctx, containerInfo.ID, true); removeErr != nil && logger != nil {
-			logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
-		return nil, errors.Wrap(err, "failed to wait for container to be running")
-	}
-
-	// Get updated container information with port mappings
-	updatedInfo, err := manager.Inspect(ctx, containerInfo.ID)
-	if err != nil {
-		// Clean up on failure
-		if removeErr := manager.Remove(ctx, containerInfo.ID, true); removeErr != nil && logger != nil {
-			logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
-		return nil, errors.Wrap(err, "failed to inspect container")
-	}
-
-	// Get the container endpoint
-	endpoint, err := GetContainerEndpoint(updatedInfo, containerPort, networkName)
-	if err != nil {
-		// Clean up on failure
-		if removeErr := manager.Remove(ctx, containerInfo.ID, true); removeErr != nil && logger != nil {
-			logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
-		return nil, errors.Wrap(err, "failed to get container endpoint")
-	}
-
-	logger.Info("Container created and started successfully",
-		zap.String("avsAddress", avsAddress),
-		zap.String("containerID", updatedInfo.ID),
-		zap.String("endpoint", endpoint),
-	)
-
-	return &ContainerResult{
-		Info:     updatedInfo,
-		Endpoint: endpoint,
-	}, nil
 }
 
 // GetContainerEndpoint returns the connection endpoint for a container

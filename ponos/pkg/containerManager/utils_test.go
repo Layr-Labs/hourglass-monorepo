@@ -1,7 +1,6 @@
 package containerManager
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,7 +9,6 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestHashAvsAddress(t *testing.T) {
@@ -198,54 +196,6 @@ func TestGetContainerEndpoint(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCreateAndStartDefaultContainer_Signature(t *testing.T) {
-	// This is a unit test to verify the function signature and basic validation
-	// without requiring Docker to be available
-
-	t.Run("verify function exists and signature", func(t *testing.T) {
-		// Test that the function exists with the expected signature
-		// by checking it can be called with the right parameters (even if they're nil/invalid)
-
-		ctx := context.Background()
-		logger := zaptest.NewLogger(t)
-
-		// This should fail gracefully with a nil manager
-		result, err := CreateAndStartDefaultContainer(
-			ctx,
-			nil, // nil manager should cause an error
-			"0x1234567890abcdef",
-			"test-repo",
-			"latest",
-			8080,
-			"test-network",
-			logger,
-		)
-
-		// Should get an error due to nil manager
-		assert.Error(t, err)
-		assert.Nil(t, result)
-		assert.Contains(t, err.Error(), "container manager cannot be nil")
-	})
-
-	t.Run("verify ContainerResult struct", func(t *testing.T) {
-		// Test that ContainerResult struct has the expected fields
-		result := &ContainerResult{
-			Info: &ContainerInfo{
-				ID:       "test-id",
-				Hostname: "test-hostname",
-				Status:   "running",
-			},
-			Endpoint: "http://localhost:8080",
-		}
-
-		assert.NotNil(t, result.Info)
-		assert.Equal(t, "test-id", result.Info.ID)
-		assert.Equal(t, "test-hostname", result.Info.Hostname)
-		assert.Equal(t, "running", result.Info.Status)
-		assert.Equal(t, "http://localhost:8080", result.Endpoint)
-	})
 }
 
 func TestNewDefaultAvsPerformerLivenessConfig(t *testing.T) {

@@ -26,33 +26,20 @@ const (
 	defaultApplicationHealthCheckInterval   = 15 * time.Second
 )
 
-// HealthCheckConfiguration configures health check behavior
-type HealthCheckConfiguration struct {
-	// ApplicationHealthCheckInterval is the interval between application health checks
-	ApplicationHealthCheckInterval time.Duration
-}
-
-// DefaultHealthCheckConfiguration returns the default health check configuration
-func DefaultHealthCheckConfiguration() *HealthCheckConfiguration {
-	return &HealthCheckConfiguration{
-		ApplicationHealthCheckInterval: defaultApplicationHealthCheckInterval,
-	}
-}
-
-// ContainerHealthContext tracks the health state of a container
-type ContainerHealthContext struct {
+// PerformerHealth tracks the health state of a container
+type PerformerHealth struct {
 	ContainerHealth                      bool
 	ApplicationHealth                    bool
 	ConsecutiveApplicationHealthFailures int
 	LastHealthCheck                      time.Time
 }
 
-// ContainerInstance holds all information about a container
-type ContainerInstance struct {
-	Info      *containerManager.ContainerInfo
-	Client    performerV1.PerformerServiceClient
-	EventChan <-chan containerManager.ContainerEvent
-	HealthCtx *ContainerHealthContext
+// PerformerContainer holds all information about a container
+type PerformerContainer struct {
+	Info            *containerManager.ContainerInfo
+	Client          performerV1.PerformerServiceClient
+	EventChan       <-chan containerManager.ContainerEvent
+	PerformerHealth *PerformerHealth
 }
 
 type AvsPerformerServer struct {
@@ -61,12 +48,12 @@ type AvsPerformerServer struct {
 	peeringFetcher peering.IPeeringDataFetcher
 
 	containerManager containerManager.ContainerManager
-	currentContainer *ContainerInstance
-	nextContainer    *ContainerInstance
+	currentContainer *PerformerContainer
+	nextContainer    *PerformerContainer
 	deploymentMu     sync.Mutex
 
-	aggregatorPeers   []*peering.OperatorPeerInfo
-	healthCheckConfig *HealthCheckConfiguration
+	aggregatorPeers                []*peering.OperatorPeerInfo
+	applicationHealthCheckInterval time.Duration
 }
 
 // NewAvsPerformerServer creates a new AvsPerformerServer with the provided container manager
@@ -76,36 +63,29 @@ func NewAvsPerformerServer(
 	logger *zap.Logger,
 	containerMgr containerManager.ContainerManager,
 ) *AvsPerformerServer {
-	return NewAvsPerformerServerWithHealthCheckConfig(
+	return NewAvsPerformerServerWithHealthCheckInterval(
 		config,
 		peeringFetcher,
 		logger,
 		containerMgr,
-		DefaultHealthCheckConfiguration(),
+		defaultApplicationHealthCheckInterval,
 	)
 }
 
-// NewAvsPerformerServerWithHealthCheckConfig creates a new AvsPerformerServer with custom health check configuration
-func NewAvsPerformerServerWithHealthCheckConfig(
+// NewAvsPerformerServerWithHealthCheckInterval creates a new AvsPerformerServer with custom health check interval
+func NewAvsPerformerServerWithHealthCheckInterval(
 	config *avsPerformer.AvsPerformerConfig,
 	peeringFetcher peering.IPeeringDataFetcher,
 	logger *zap.Logger,
 	containerMgr containerManager.ContainerManager,
-	healthCheckConfig *HealthCheckConfiguration,
+	applicationHealthCheckInterval time.Duration,
 ) *AvsPerformerServer {
 	return &AvsPerformerServer{
-		config:            config,
-		logger:            logger,
-		peeringFetcher:    peeringFetcher,
-		containerManager:  containerMgr,
-		healthCheckConfig: healthCheckConfig,
-		currentContainer: &ContainerInstance{
-			HealthCtx: &ContainerHealthContext{
-				ContainerHealth:                      false,
-				ApplicationHealth:                    false,
-				ConsecutiveApplicationHealthFailures: 0,
-			},
-		},
+		config:                         config,
+		logger:                         logger,
+		peeringFetcher:                 peeringFetcher,
+		containerManager:               containerMgr,
+		applicationHealthCheckInterval: applicationHealthCheckInterval,
 	}
 }
 
@@ -133,37 +113,81 @@ func (aps *AvsPerformerServer) fetchAggregatorPeerInfo(ctx context.Context) ([]*
 	return nil, fmt.Errorf("failed to fetch aggregator peers after retries")
 }
 
-// createAndStartContainer handles the common container creation steps
-// Returns the created ContainerInstance with populated Info, Client, and EventChan
+// createAndStartContainer creates, starts, and prepares a container for the AVS performer
 func (aps *AvsPerformerServer) createAndStartContainer(
 	ctx context.Context,
 	avsAddress string,
-	imageRepo string,
-	imageTag string,
-	networkName string,
-) (*ContainerInstance, error) {
-	// Use the default factory method from containerManager
-	result, err := containerManager.CreateAndStartDefaultContainer(
-		ctx,
-		aps.containerManager,
-		avsAddress,
-		imageRepo,
-		imageTag,
-		containerPort,
-		networkName,
-		aps.logger,
-	)
+	containerConfig *containerManager.ContainerConfig,
+) (*PerformerContainer, error) {
+	// Create the container
+	containerInfo, err := aps.containerManager.Create(ctx, containerConfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create container")
 	}
 
-	// Create performer client
-	perfClient, err := avsPerformerClient.NewAvsPerformerClient(result.Endpoint, true)
+	// Start the container
+	if err := aps.containerManager.Start(ctx, containerInfo.ID); err != nil {
+		// Clean up on failure
+		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
+			aps.logger.Error("Failed to remove failed container during cleanup",
+				zap.String("containerID", containerInfo.ID),
+				zap.Error(removeErr),
+			)
+		}
+		return nil, errors.Wrap(err, "failed to start container")
+	}
+
+	// Wait for the container to be running
+	if err := aps.containerManager.WaitForRunning(ctx, containerInfo.ID, 30*time.Second); err != nil {
+		// Clean up on failure
+		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
+			aps.logger.Error("Failed to remove failed container during cleanup",
+				zap.String("containerID", containerInfo.ID),
+				zap.Error(removeErr),
+			)
+		}
+		return nil, errors.Wrap(err, "failed to wait for container to be running")
+	}
+
+	// Get updated container information with port mappings
+	updatedInfo, err := aps.containerManager.Inspect(ctx, containerInfo.ID)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, result.Info.ID, true); removeErr != nil {
+		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
 			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", result.Info.ID),
+				zap.String("containerID", containerInfo.ID),
+				zap.Error(removeErr),
+			)
+		}
+		return nil, errors.Wrap(err, "failed to inspect container")
+	}
+
+	// Get the container endpoint
+	endpoint, err := containerManager.GetContainerEndpoint(updatedInfo, containerPort, containerConfig.NetworkName)
+	if err != nil {
+		// Clean up on failure
+		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
+			aps.logger.Error("Failed to remove failed container during cleanup",
+				zap.String("containerID", containerInfo.ID),
+				zap.Error(removeErr),
+			)
+		}
+		return nil, errors.Wrap(err, "failed to get container endpoint")
+	}
+
+	aps.logger.Info("Container created and started successfully",
+		zap.String("avsAddress", avsAddress),
+		zap.String("containerID", updatedInfo.ID),
+		zap.String("endpoint", endpoint),
+	)
+
+	// Create performer client
+	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, true)
+	if err != nil {
+		// Clean up on failure
+		if removeErr := aps.containerManager.Remove(ctx, updatedInfo.ID, true); removeErr != nil {
+			aps.logger.Error("Failed to remove failed container during cleanup",
+				zap.String("containerID", updatedInfo.ID),
 				zap.Error(removeErr),
 			)
 		}
@@ -172,12 +196,12 @@ func (aps *AvsPerformerServer) createAndStartContainer(
 
 	// Start liveness monitoring for this container
 	livenessConfig := containerManager.NewDefaultAvsPerformerLivenessConfig()
-	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, result.Info.ID, livenessConfig)
+	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, updatedInfo.ID, livenessConfig)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, result.Info.ID, true); removeErr != nil {
+		if removeErr := aps.containerManager.Remove(ctx, updatedInfo.ID, true); removeErr != nil {
 			aps.logger.Error("Failed to remove container during monitoring setup failure",
-				zap.String("containerID", result.Info.ID),
+				zap.String("containerID", updatedInfo.ID),
 				zap.Error(removeErr),
 			)
 		}
@@ -185,11 +209,11 @@ func (aps *AvsPerformerServer) createAndStartContainer(
 	}
 
 	// Create the container instance with all components
-	containerInstance := &ContainerInstance{
-		Info:      result.Info,
+	containerInstance := &PerformerContainer{
+		Info:      updatedInfo,
 		Client:    perfClient,
 		EventChan: eventChan,
-		HealthCtx: &ContainerHealthContext{
+		PerformerHealth: &PerformerHealth{
 			ContainerHealth:                      false,
 			ApplicationHealth:                    false,
 			ConsecutiveApplicationHealthFailures: 0,
@@ -198,8 +222,8 @@ func (aps *AvsPerformerServer) createAndStartContainer(
 
 	aps.logger.Info("Container created and monitoring started",
 		zap.String("avsAddress", avsAddress),
-		zap.String("containerID", result.Info.ID),
-		zap.String("endpoint", result.Endpoint),
+		zap.String("containerID", updatedInfo.ID),
+		zap.String("endpoint", endpoint),
 	)
 
 	return containerInstance, nil
@@ -221,9 +245,13 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 	containerInstance, err := aps.createAndStartContainer(
 		ctx,
 		aps.config.AvsAddress,
-		aps.config.Image.Repository,
-		aps.config.Image.Tag,
-		aps.config.PerformerNetworkName,
+		containerManager.CreateDefaultContainerConfig(
+			aps.config.AvsAddress,
+			aps.config.Image.Repository,
+			aps.config.Image.Tag,
+			containerPort,
+			aps.config.PerformerNetworkName,
+		),
 	)
 	if err != nil {
 		return err
@@ -241,7 +269,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 // monitorContainerEvents monitors container lifecycle events and performs periodic application health checks
 func (aps *AvsPerformerServer) monitorContainerEvents(ctx context.Context, eventChan <-chan containerManager.ContainerEvent) {
 	// Create a ticker for periodic application health checks
-	appHealthCheckTicker := time.NewTicker(aps.healthCheckConfig.ApplicationHealthCheckInterval)
+	appHealthCheckTicker := time.NewTicker(aps.applicationHealthCheckInterval)
 	defer appHealthCheckTicker.Stop()
 
 	for {
@@ -275,7 +303,7 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 	aps.deploymentMu.Lock()
 	defer aps.deploymentMu.Unlock()
 
-	var targetContainer *ContainerInstance
+	var targetContainer *PerformerContainer
 	var isCurrentContainer bool
 
 	if aps.currentContainer != nil && aps.currentContainer.Info != nil && aps.currentContainer.Info.ID == event.ContainerID {
@@ -304,7 +332,7 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.String("containerID", event.ContainerID),
 		)
-		targetContainer.HealthCtx.ContainerHealth = true
+		targetContainer.PerformerHealth.ContainerHealth = true
 
 	case containerManager.EventCrashed:
 		aps.logger.Error("Container crashed",
@@ -315,8 +343,8 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("error", event.State.Error),
 		)
 		// Auto-restart is handled by containerManager based on RestartPolicy
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
 
 	case containerManager.EventOOMKilled:
 		aps.logger.Error("Container killed due to OOM",
@@ -325,8 +353,8 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.Int("restartCount", event.State.RestartCount),
 		)
 		// Auto-restart is handled by containerManager
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
 
 	case containerManager.EventRestarted:
 		aps.logger.Info("Container restarted successfully",
@@ -335,9 +363,9 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.Int("restartCount", event.State.RestartCount),
 		)
 		// Reset health context since container was restarted
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
-		targetContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
+		targetContainer.PerformerHealth.ConsecutiveApplicationHealthFailures = 0
 		// Recreate performer client connection for the specific container that restarted
 		go aps.recreatePerformerClientForContainer(ctx, targetContainer)
 
@@ -348,8 +376,8 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("error", event.Message),
 			zap.Int("restartCount", event.State.RestartCount),
 		)
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
 
 		// Handle restart failures differently for current vs next container
 		if strings.Contains(event.Message, "recreation needed") {
@@ -386,7 +414,7 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("containerID", event.ContainerID),
 		)
 		// Update the container health status
-		targetContainer.HealthCtx.ContainerHealth = true
+		targetContainer.PerformerHealth.ContainerHealth = true
 
 	case containerManager.EventUnhealthy:
 		aps.logger.Warn("Container is unhealthy",
@@ -395,8 +423,8 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("reason", event.Message),
 		)
 		// Update the container health status
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
 
 	case containerManager.EventRestarting:
 		aps.logger.Info("Container is being restarted",
@@ -405,8 +433,8 @@ func (aps *AvsPerformerServer) handleContainerEvent(ctx context.Context, event c
 			zap.String("reason", event.Message),
 		)
 		// Container is restarting, mark as unhealthy
-		targetContainer.HealthCtx.ContainerHealth = false
-		targetContainer.HealthCtx.ApplicationHealth = false
+		targetContainer.PerformerHealth.ContainerHealth = false
+		targetContainer.PerformerHealth.ApplicationHealth = false
 	}
 }
 
@@ -429,9 +457,13 @@ func (aps *AvsPerformerServer) recreateContainer(ctx context.Context) {
 	containerInstance, err := aps.createAndStartContainer(
 		ctx,
 		aps.config.AvsAddress,
-		aps.config.Image.Repository,
-		aps.config.Image.Tag,
-		aps.config.PerformerNetworkName,
+		containerManager.CreateDefaultContainerConfig(
+			aps.config.AvsAddress,
+			aps.config.Image.Repository,
+			aps.config.Image.Tag,
+			containerPort,
+			aps.config.PerformerNetworkName,
+		),
 	)
 	if err != nil {
 		aps.logger.Error("Failed to recreate container",
@@ -455,7 +487,7 @@ func (aps *AvsPerformerServer) recreateContainer(ctx context.Context) {
 }
 
 // recreatePerformerClientForContainer recreates the performer client connection after container restart
-func (aps *AvsPerformerServer) recreatePerformerClientForContainer(ctx context.Context, container *ContainerInstance) {
+func (aps *AvsPerformerServer) recreatePerformerClientForContainer(ctx context.Context, container *PerformerContainer) {
 	// Wait a moment for the container to fully start
 	time.Sleep(2 * time.Second)
 
@@ -530,7 +562,7 @@ func (aps *AvsPerformerServer) TriggerContainerRestart(reason string) error {
 }
 
 // checkContainerHealth performs a single health check on the specified container
-func (aps *AvsPerformerServer) checkContainerHealth(ctx context.Context, container *ContainerInstance) error {
+func (aps *AvsPerformerServer) checkContainerHealth(ctx context.Context, container *PerformerContainer) error {
 	healthCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
@@ -574,9 +606,13 @@ func (aps *AvsPerformerServer) DeployContainer(
 	nextContainer, err := aps.createAndStartContainer(
 		ctx,
 		avsId,
-		config.Image.Repository,
-		config.Image.Tag,
-		config.PerformerNetworkName,
+		containerManager.CreateDefaultContainerConfig(
+			avsId,
+			config.Image.Repository,
+			config.Image.Tag,
+			containerPort,
+			config.PerformerNetworkName,
+		),
 	)
 	if err != nil {
 		return errors.Wrap(err, "failed to create next container")
@@ -604,7 +640,7 @@ func (aps *AvsPerformerServer) DeployContainer(
 // This should be called after verifying the nextContainer is working properly
 func (aps *AvsPerformerServer) promoteNextContainer(ctx context.Context) error {
 
-	if aps.nextContainer == nil || !aps.nextContainer.HealthCtx.ApplicationHealth {
+	if aps.nextContainer == nil || !aps.nextContainer.PerformerHealth.ApplicationHealth {
 		return fmt.Errorf("cannot promote next container")
 	}
 
@@ -615,7 +651,6 @@ func (aps *AvsPerformerServer) promoteNextContainer(ctx context.Context) error {
 	aps.logger.Info("Promoting next container to current container",
 		zap.String("avsAddress", aps.config.AvsAddress),
 		zap.String("newContainerID", aps.nextContainer.Info.ID),
-		zap.String("oldContainerID", aps.currentContainer.Info.ID),
 	)
 
 	// Stop the old container gracefully
@@ -741,7 +776,7 @@ func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.
 }
 
 // shutdownContainer handles the shutdown of a single container instance
-func (aps *AvsPerformerServer) shutdownContainer(ctx context.Context, avsAddress string, container *ContainerInstance) error {
+func (aps *AvsPerformerServer) shutdownContainer(ctx context.Context, avsAddress string, container *PerformerContainer) error {
 	if container == nil || container.Info == nil || aps.containerManager == nil {
 		return nil
 	}
@@ -828,7 +863,7 @@ func (aps *AvsPerformerServer) Shutdown() error {
 func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx context.Context) {
 	// Check current container application health
 	aps.deploymentMu.Lock()
-	if aps.currentContainer != nil && aps.currentContainer.HealthCtx.ContainerHealth && aps.currentContainer.Client != nil {
+	if aps.currentContainer != nil && aps.currentContainer.PerformerHealth.ContainerHealth && aps.currentContainer.Client != nil {
 		// Copy needed data while holding lock
 		currentContainer := aps.currentContainer
 		containerID := currentContainer.Info.ID
@@ -836,25 +871,25 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 		// Perform the application health check while holding lock to avoid races
 		err := aps.checkContainerHealth(ctx, currentContainer)
 
-		currentContainer.HealthCtx.LastHealthCheck = time.Now()
+		currentContainer.PerformerHealth.LastHealthCheck = time.Now()
 
 		if err != nil {
 			// Health check failed
-			currentContainer.HealthCtx.ApplicationHealth = false
-			currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures++
+			currentContainer.PerformerHealth.ApplicationHealth = false
+			currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures++
 
 			aps.logger.Warn("Application health check failed",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("containerID", containerID),
 				zap.String("containerType", "current"),
 				zap.Error(err),
-				zap.Int("consecutiveFailures", currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures),
+				zap.Int("consecutiveFailures", currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures),
 			)
 
 			// Handle consecutive failures for current container
-			if currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
-				consecutiveFailures := currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures
-				currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
+			if currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
+				consecutiveFailures := currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures
+				currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures = 0
 				aps.deploymentMu.Unlock()
 
 				aps.logger.Error("Current container application health failed multiple times, triggering restart",
@@ -873,34 +908,34 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 			}
 		} else {
 			// Health check succeeded
-			currentContainer.HealthCtx.ApplicationHealth = true
-			currentContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
+			currentContainer.PerformerHealth.ApplicationHealth = true
+			currentContainer.PerformerHealth.ConsecutiveApplicationHealthFailures = 0
 		}
 	}
 
-	if aps.nextContainer != nil && aps.nextContainer.HealthCtx.ContainerHealth && aps.nextContainer.Client != nil {
+	if aps.nextContainer != nil && aps.nextContainer.PerformerHealth.ContainerHealth && aps.nextContainer.Client != nil {
 		// Perform the application health check while holding the lock
 		err := aps.checkContainerHealth(ctx, aps.nextContainer)
 
-		aps.nextContainer.HealthCtx.LastHealthCheck = time.Now()
+		aps.nextContainer.PerformerHealth.LastHealthCheck = time.Now()
 
 		if err != nil {
 			// Health check failed
-			aps.nextContainer.HealthCtx.ApplicationHealth = false
-			aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures++
+			aps.nextContainer.PerformerHealth.ApplicationHealth = false
+			aps.nextContainer.PerformerHealth.ConsecutiveApplicationHealthFailures++
 
 			aps.logger.Warn("Application health check failed",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("containerID", aps.nextContainer.Info.ID),
 				zap.String("containerType", "next"),
 				zap.Error(err),
-				zap.Int("consecutiveFailures", aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures),
+				zap.Int("consecutiveFailures", aps.nextContainer.PerformerHealth.ConsecutiveApplicationHealthFailures),
 			)
 
 			// Handle consecutive failures for next container - abort deployment
-			if aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
+			if aps.nextContainer.PerformerHealth.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
 				containerID := aps.nextContainer.Info.ID
-				consecutiveFailures := aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures
+				consecutiveFailures := aps.nextContainer.PerformerHealth.ConsecutiveApplicationHealthFailures
 
 				aps.logger.Info("Aborting deployment due to application health check failures",
 					zap.String("avsAddress", aps.config.AvsAddress),
@@ -923,11 +958,11 @@ func (aps *AvsPerformerServer) performPeriodicApplicationHealthChecks(ctx contex
 			}
 		} else {
 			// Health check succeeded
-			aps.nextContainer.HealthCtx.ApplicationHealth = true
-			aps.nextContainer.HealthCtx.ConsecutiveApplicationHealthFailures = 0
+			aps.nextContainer.PerformerHealth.ApplicationHealth = true
+			aps.nextContainer.PerformerHealth.ConsecutiveApplicationHealthFailures = 0
 
 			// Promote immediately while holding the lock
-			if aps.nextContainer.HealthCtx.ApplicationHealth {
+			if aps.nextContainer.PerformerHealth.ApplicationHealth {
 				aps.logger.Info("Next container became application-healthy and ready for promotion",
 					zap.String("avsAddress", aps.config.AvsAddress),
 					zap.String("containerID", aps.nextContainer.Info.ID),
