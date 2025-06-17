@@ -3,7 +3,6 @@ package avsPerformer
 import (
 	"context"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
 
@@ -36,7 +35,6 @@ type IAvsPerformer interface {
 		ctx context.Context,
 		avsId string,
 		config *AvsPerformerConfig,
-		containerMgr containerManager.ContainerManager,
 	) error
 	Shutdown() error
 }

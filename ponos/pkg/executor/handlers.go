@@ -140,7 +140,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	}
 
 	// Deploy the container
-	err = serverPerformer.DeployContainer(ctx, avsAddress, deployConfig, containerMgr)
+	err = serverPerformer.DeployContainer(ctx, avsAddress, deployConfig)
 	if err != nil {
 		e.logger.Error("Failed to deploy container",
 			zap.String("avsAddress", avsAddress),

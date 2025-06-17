@@ -114,27 +114,17 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 	}
 
 	logger := zaptest.NewLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Create container manager
-	containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
-	require.NoError(t, err)
-	defer func() { _ = containerMgr.Shutdown(ctx) }()
-
 	// Create mock peering fetcher
 	peeringFetcher := &MockPeeringFetcher{}
+
+	// Create a short health check interval for tests
+	testHealthCheckConfig := &HealthCheckConfiguration{
+		ApplicationHealthCheckInterval: 1 * time.Second,
+	}
 
 	t.Run("automatic promotion when next container becomes healthy", func(t *testing.T) {
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef"
-
-		//// Ensure network cleanup no matter what
-		//defer func() {
-		//	if err := containerMgr.RemoveNetwork(ctx, networkName); err != nil {
-		//		t.Logf("Network cleanup completed (expected if network was already cleaned): %v", err)
-		//	}
-		//}()
 
 		// Create AVS performer config
 		config := &avsPerformer.AvsPerformerConfig{
@@ -145,13 +135,18 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 			PerformerNetworkName: "",
 			SigningCurve:         "bn254",
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-		// Create AVS performer server
-		server := NewAvsPerformerServer(config, peeringFetcher, logger, containerMgr)
-		defer func() { _ = server.Shutdown() }()
+		// Create container manager
+		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		require.NoError(t, err)
+
+		// Create AVS performer server with test health check config
+		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
 
 		// Initialize the server (creates initial currentContainer)
-		err := server.Initialize(ctx)
+		err = server.Initialize(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, server.currentContainer)
 		require.NotNil(t, server.currentContainer.Info)
@@ -160,10 +155,6 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		originalCurrentContainerID := server.currentContainer.Info.ID
 
 		// Deploy a new container to nextContainer slot
-		nextContainerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
-		require.NoError(t, err)
-		defer func() { _ = nextContainerMgr.Shutdown(ctx) }()
-
 		deployConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
@@ -173,7 +164,7 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 			SigningCurve:         "bn254",
 		}
 
-		err = server.DeployContainer(ctx, avsAddress, deployConfig, nextContainerMgr)
+		err = server.DeployContainer(ctx, avsAddress, deployConfig)
 		require.NoError(t, err)
 		require.NotNil(t, server.nextContainer)
 		require.NotNil(t, server.nextContainer.Info)
@@ -207,8 +198,10 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		// Call the event handler directly to simulate receiving a healthy event
 		server.handleContainerEvent(ctx, healthyEvent)
 
-		// Wait for the promotion to complete
-		time.Sleep(5 * time.Second)
+		// Wait for the periodic health check to run and complete the promotion
+		// With our test config, the periodic health check runs every 1 second
+		t.Logf("Waiting for periodic health check to trigger automatic promotion...")
+		time.Sleep(3 * time.Second)
 
 		// Verify that the next container was promoted to current container
 		require.NotNil(t, server.currentContainer)
@@ -235,11 +228,17 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 			SigningCurve:         "bn254",
 		}
 
-		server := NewAvsPerformerServer(config, peeringFetcher, logger, containerMgr)
-		defer func() { _ = server.Shutdown() }()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-		// Reset to clean state
-		err := server.Initialize(ctx)
+		// Create container manager
+		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		require.NoError(t, err)
+
+		// Create AVS performer server with test health check config
+		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
+
+		err = server.Initialize(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, server.currentContainer)
 
@@ -271,6 +270,14 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 	})
 
 	t.Run("no promotion when no next container exists", func(t *testing.T) {
+		// Create container manager for this test scenario
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Create container manager
+		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		require.NoError(t, err)
+
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef3333333333333333"
 
@@ -283,11 +290,11 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 			SigningCurve:         "bn254",
 		}
 
-		server := NewAvsPerformerServer(config, peeringFetcher, logger, containerMgr)
-		defer func() { _ = server.Shutdown() }()
+		// Create AVS performer server with test health check config
+		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
 
 		// Reset to clean state
-		err := server.Initialize(ctx)
+		err = server.Initialize(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, server.currentContainer)
 
@@ -336,18 +343,23 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-
-	// Create container manager
-	containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
-	require.NoError(t, err)
-	defer func() { _ = containerMgr.Shutdown(ctx) }()
 
 	// Create mock peering fetcher
 	peeringFetcher := &MockPeeringFetcher{}
 
+	// Create a short health check interval for tests
+	testHealthCheckConfig := &HealthCheckConfiguration{
+		ApplicationHealthCheckInterval: 1 * time.Second,
+	}
+
 	t.Run("complete blue-green deployment flow", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Create container manager for this test scenario
+		containerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
+		require.NoError(t, err)
+
 		// Use simple static AVS address for this test
 		avsAddress := "0x1234567890abcdef4444444444444444"
 
@@ -361,12 +373,11 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 			SigningCurve:         "bn254",
 		}
 
-		// Create AVS performer server
-		server := NewAvsPerformerServer(config, peeringFetcher, logger, containerMgr)
-		defer func() { _ = server.Shutdown() }()
+		// Create AVS performer server with test health check config
+		server := NewAvsPerformerServerWithHealthCheckConfig(config, peeringFetcher, logger, containerMgr, testHealthCheckConfig)
 
 		// Step 1: Initialize server with initial container
-		err := server.Initialize(ctx)
+		err = server.Initialize(ctx)
 		require.NoError(t, err)
 		require.NotNil(t, server.currentContainer)
 		require.Nil(t, server.nextContainer)
@@ -374,10 +385,6 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		originalContainerID := server.currentContainer.Info.ID
 
 		// Step 2: Deploy new version to next container
-		nextContainerMgr, err := containerManager.NewDefaultDockerContainerManager(logger)
-		require.NoError(t, err)
-		defer func() { _ = nextContainerMgr.Shutdown(ctx) }()
-
 		deployConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessTypeServer,
@@ -387,7 +394,7 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 			SigningCurve:         "bn254",
 		}
 
-		err = server.DeployContainer(ctx, avsAddress, deployConfig, nextContainerMgr)
+		err = server.DeployContainer(ctx, avsAddress, deployConfig)
 		require.NoError(t, err)
 		require.NotNil(t, server.nextContainer)
 
@@ -397,6 +404,9 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		assert.Equal(t, originalContainerID, server.currentContainer.Info.ID, "Current container should be unchanged")
 		assert.Equal(t, nextContainerID, server.nextContainer.Info.ID, "Next container should be deployed")
 		assert.NotEqual(t, originalContainerID, nextContainerID, "Containers should be different")
+
+		// Wait for containers to be ready
+		time.Sleep(5 * time.Second)
 
 		// Step 4: Simulate automatic promotion via healthy event
 		healthyEvent := containerManager.ContainerEvent{
@@ -418,6 +428,7 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		server.handleContainerEvent(ctx, healthyEvent)
 
 		// Wait for promotion to complete
+		// With our test config, the periodic health check runs every 1 second
 		time.Sleep(3 * time.Second)
 
 		// Step 5: Verify promotion completed
@@ -427,7 +438,6 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 
 		// Step 6: Verify the new container is operational
 		assert.NotNil(t, server.currentContainer.Client, "Performer client should be available")
-		assert.NotNil(t, server.currentContainer.Manager, "Container manager should be available")
 		assert.Equal(t, "running", server.currentContainer.Info.Status, "Container should be running")
 	})
 }
