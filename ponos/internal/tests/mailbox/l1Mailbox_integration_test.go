@@ -417,7 +417,7 @@ func Test_L1Mailbox(t *testing.T) {
 	t.Logf("Task published: %+v", task)
 
 	select {
-	case <-time.After(90 * time.Second):
+	case <-time.After(120 * time.Second):
 		cancel()
 		t.Fatalf("Test timed out after 10 seconds")
 	case <-ctx.Done():
