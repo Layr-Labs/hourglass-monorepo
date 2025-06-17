@@ -71,7 +71,7 @@ func NewContractCaller(
 	ethclient *ethclient.Client,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
-	logger.Sugar().Infow("Creating contract caller",
+	logger.Sugar().Debugw("Creating contract caller",
 		zap.String("AVSRegistrarAddress", cfg.AVSRegistrarAddress),
 		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
 	)
