@@ -33,7 +33,6 @@ func Test_L2Mailbox(t *testing.T) {
 	)
 
 	t.Skip()
-	// t.Skip("Flaky, skipping for now")
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)

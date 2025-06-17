@@ -64,8 +64,20 @@ var generateOperatorData = &cobra.Command{
 			return err
 		}
 
+		chainId, err := ethClient.ChainID(ctx)
+		if err != nil {
+			l.Sugar().Fatalf("failed to get chain ID: %v", err)
+			return err
+		}
+
+		contracts, err := config.GetCoreContractsForChainId(config.ChainId(chainId.Uint64()))
+		if err != nil {
+			l.Sugar().Fatalf("failed to get core contracts for chain ID %d: %v", chainId.Uint64(), err)
+		}
+
 		cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-			AVSRegistrarAddress: cfg.AvsAddress,
+			KeyRegistrarAddress:       contracts.KeyRegistrar,
+			CrossChainRegistryAddress: contracts.CrossChainRegistry,
 		}, ethClient, l)
 		if err != nil {
 			return err
@@ -76,6 +88,7 @@ var generateOperatorData = &cobra.Command{
 			l.Sugar().Fatalf("failed to encode BN254 key data: %v", err)
 		}
 
+		// generate the message to hash for operator registration
 		messageHash, err := cc.GetOperatorRegistrationMessageHash(
 			ctx,
 			common.HexToAddress(cfg.OperatorAddress),
@@ -87,6 +100,7 @@ var generateOperatorData = &cobra.Command{
 			l.Sugar().Fatalf("failed to get operator registration message hash: %v", err)
 		}
 
+		// sign the message with the private key
 		sig, err := privateKey.SignSolidityCompatible(messageHash)
 		if err != nil {
 			l.Sugar().Fatalf("failed to sign message hash: %v", err)
@@ -99,6 +113,8 @@ var generateOperatorData = &cobra.Command{
 		if err != nil {
 			l.Sugar().Fatalf("failed to convert G1 point to precompile format: %v", err)
 		}
+
+		// print out the g1 bytes
 		fmt.Printf("%x", g1Bytes)
 		return nil
 	},

@@ -4,11 +4,10 @@ go 1.23.6
 
 require (
 	github.com/Layr-Labs/crypto-libs v0.0.3
-	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250611220551-5932d4c4233e
+	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250616202559-70e3fc0e60c8
 	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250603132723-b0a53eef24e1
-	github.com/Layr-Labs/multichain-go v0.0.3-0.20250616160002-871065ece835
+	github.com/Layr-Labs/multichain-go v0.0.3
 	github.com/Layr-Labs/protocol-apis v1.14.0
-	github.com/consensys/gnark-crypto v0.17.0
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.15.11
@@ -34,6 +33,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.7 // indirect
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/consensys/bavard v0.1.29 // indirect
+	github.com/consensys/gnark-crypto v0.17.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/crate-crypto/go-eth-kzg v1.3.0 // indirect
 	github.com/crate-crypto/go-ipa v0.0.0-20240724233137-53bbb0ceb27a // indirect

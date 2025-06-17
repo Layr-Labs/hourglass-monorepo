@@ -9,7 +9,7 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
-	chainPoller2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -37,7 +37,6 @@ func Test_L1Mailbox(t *testing.T) {
 		L1RpcUrl = "http://127.0.0.1:8545"
 	)
 
-	// t.Skip("Flaky, skipping for now")
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -79,7 +78,7 @@ func Test_L1Mailbox(t *testing.T) {
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
-	logsChan := make(chan *chainPoller2.LogWithBlock)
+	logsChan := make(chan *chainPoller.LogWithBlock)
 
 	l1Poller := EVMChainPoller.NewEVMChainPoller(l1EthereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
 		ChainId:              config.ChainId_EthereumAnvil,

@@ -175,7 +175,7 @@ fmtcheck:
 anvil/start/l1:
 	anvil \
 		--fork-url https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/ \
-		--fork-block-number 3994152 \
+		--fork-block-number 4015731 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2
