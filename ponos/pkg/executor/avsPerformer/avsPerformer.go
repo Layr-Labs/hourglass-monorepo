@@ -2,6 +2,7 @@ package avsPerformer
 
 import (
 	"context"
+	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
@@ -16,6 +17,22 @@ const (
 type PerformerImage struct {
 	Repository string
 	Tag        string
+}
+
+// PerformerStatus represents the health status of a performer container
+type PerformerStatus int
+
+const (
+	PerformerHealthy PerformerStatus = iota
+	PerformerUnhealthy
+)
+
+// PerformerStatusEvent contains status information sent to deployment watchers
+type PerformerStatusEvent struct {
+	Status      PerformerStatus
+	ContainerID string
+	Message     string
+	Timestamp   time.Time
 }
 
 type AvsPerformerConfig struct {
@@ -34,7 +51,9 @@ type IAvsPerformer interface {
 	DeployContainer(
 		ctx context.Context,
 		avsId string,
-		config *AvsPerformerConfig,
-	) error
+		image PerformerImage,
+	) (<-chan PerformerStatusEvent, error)
+	PromoteContainer(ctx context.Context) error
+	CancelDeployment(ctx context.Context) error
 	Shutdown() error
 }

@@ -98,7 +98,12 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create Docker client")
 	}
-	
+
+	// Use default config if nil
+	if config == nil {
+		config = DefaultContainerManagerConfig()
+	}
+
 	if config.DefaultStartTimeout == 0 {
 		config.DefaultStartTimeout = DefaultStartTimeout
 	}

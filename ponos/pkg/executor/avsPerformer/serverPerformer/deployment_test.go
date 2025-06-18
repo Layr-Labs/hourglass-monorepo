@@ -2,7 +2,6 @@ package serverPerformer
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -12,22 +11,31 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
-// isDockerAvailable checks if Docker is available and running
+// isDockerAvailable checks if Docker is available and running using containerManager
 func isDockerAvailable(t *testing.T) bool {
-	// Check if docker command exists
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Logf("Docker command not found: %v", err)
+	logger := zaptest.NewLogger(t)
+	cm, err := containerManager.NewDockerContainerManager(nil, logger)
+	if err != nil {
+		t.Logf("Failed to create container manager: %v", err)
 		return false
 	}
+	defer cm.Shutdown(context.Background())
 
-	// Check if Docker daemon is running
-	cmd := exec.Command("docker", "info")
-	if err := cmd.Run(); err != nil {
+	// Try to list containers as a way to check if Docker daemon is running
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// We can check by trying to inspect a non-existent container
+	// If Docker is not running, this will fail with a connection error
+	_, err = cm.Inspect(ctx, "non-existent-container-id")
+	if err != nil && strings.Contains(err.Error(), "Cannot connect to the Docker daemon") {
 		t.Logf("Docker daemon not running: %v", err)
 		return false
 	}
@@ -35,68 +43,41 @@ func isDockerAvailable(t *testing.T) bool {
 	return true
 }
 
-// isHelloPerformerAvailable checks if the hello-performer container image is available
-func isHelloPerformerAvailable(t *testing.T) bool {
-	cmd := exec.Command("docker", "images", "--format", "{{.Repository}}:{{.Tag}}", "hello-performer:latest")
-	output, err := cmd.Output()
-	if err != nil {
-		t.Logf("Failed to check for hello-performer image: %v", err)
-		return false
-	}
+// createTestPeeringFetcher creates a LocalPeeringDataFetcher configured for testing
+func createTestPeeringFetcher(t *testing.T, logger *zap.Logger) peering.IPeeringDataFetcher {
+	// Create mock BN254 public keys for executor and aggregator
+	_, executorPubKey, err := bn254.GenerateKeyPair()
+	require.NoError(t, err)
 
-	if !strings.Contains(string(output), "hello-performer:latest") {
-		t.Logf("hello-performer image not found. Run 'make build/test-performer-container' to build it.")
-		return false
-	}
+	_, aggregatorPubKey, err := bn254.GenerateKeyPair()
+	require.NoError(t, err)
 
-	return true
-}
-
-// MockPeeringFetcher implements peering.IPeeringDataFetcher for testing
-type MockPeeringFetcher struct{}
-
-func (m *MockPeeringFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	// Create a mock BN254 public key
-	_, mockPubKey, err := bn254.GenerateKeyPair()
-	if err != nil {
-		return nil, err
-	}
-
-	// Return mock peering data for tests
-	return []*peering.OperatorPeerInfo{
-		{
-			OperatorAddress: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc",
-			OperatorSets: []*peering.OperatorSet{
-				{
-					OperatorSetID:  1,
-					NetworkAddress: "localhost:9999",
-					PublicKey:      mockPubKey,
+	return localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
+		OperatorPeers: []*peering.OperatorPeerInfo{
+			{
+				OperatorAddress: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc",
+				OperatorSets: []*peering.OperatorSet{
+					{
+						OperatorSetID:  1,
+						NetworkAddress: "localhost:9999",
+						PublicKey:      executorPubKey,
+					},
 				},
 			},
 		},
-	}, nil
-}
-
-func (m *MockPeeringFetcher) ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	// Create a mock BN254 public key
-	_, mockPubKey, err := bn254.GenerateKeyPair()
-	if err != nil {
-		return nil, err
-	}
-
-	// Return mock peering data for tests
-	return []*peering.OperatorPeerInfo{
-		{
-			OperatorAddress: "0x7B58f6762689DF33fe8fa3FC40Fb5a3089D3a8dd",
-			OperatorSets: []*peering.OperatorSet{
-				{
-					OperatorSetID:  0, // Aggregator operator set
-					NetworkAddress: "localhost:9998",
-					PublicKey:      mockPubKey,
+		AggregatorPeers: []*peering.OperatorPeerInfo{
+			{
+				OperatorAddress: "0x7B58f6762689DF33fe8fa3FC40Fb5a3089D3a8dd",
+				OperatorSets: []*peering.OperatorSet{
+					{
+						OperatorSetID:  0, // Aggregator operator set
+						NetworkAddress: "localhost:9998",
+						PublicKey:      aggregatorPubKey,
+					},
 				},
 			},
 		},
-	}, nil
+	}, logger)
 }
 
 func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T) {
@@ -109,13 +90,9 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		return
 	}
 
-	if !isHelloPerformerAvailable(t) {
-		t.Skip("hello-performer image not available, skipping integration tests. Run 'make build/test-performer-container' to build it.")
-	}
-
 	logger := zaptest.NewLogger(t)
 	// Create mock peering fetcher
-	peeringFetcher := &MockPeeringFetcher{}
+	peeringFetcher := createTestPeeringFetcher(t, logger)
 
 	// Create a short health check interval for tests
 	testHealthCheckInterval := 1 * time.Second
@@ -153,17 +130,14 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		originalCurrentContainerID := server.currentContainer.Info.ID
 
 		// Deploy a new container to nextContainer slot
-		deployConfig := &avsPerformer.AvsPerformerConfig{
-			AvsAddress:           avsAddress,
-			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{Repository: "hello-performer", Tag: "latest"},
-			WorkerCount:          1,
-			PerformerNetworkName: "",
-			SigningCurve:         "bn254",
+		deployImage := avsPerformer.PerformerImage{
+			Repository: "hello-performer",
+			Tag:        "latest",
 		}
 
-		err = server.DeployContainer(ctx, avsAddress, deployConfig)
+		statusChan, err := server.DeployContainer(ctx, avsAddress, deployImage)
 		require.NoError(t, err)
+		require.NotNil(t, statusChan)
 		require.NotNil(t, server.nextContainer)
 		require.NotNil(t, server.nextContainer.Info)
 
@@ -196,10 +170,23 @@ func TestAvsPerformerServer_AutomaticContainerPromotion_Integration(t *testing.T
 		// Call the event handler directly to simulate receiving a healthy event
 		server.handleContainerEvent(ctx, healthyEvent)
 
-		// Wait for the periodic health check to run and complete the promotion
+		// Wait for the periodic health check to run and send status to channel
 		// With our test config, the periodic health check runs every 1 second
-		t.Logf("Waiting for periodic health check to trigger automatic promotion...")
-		time.Sleep(3 * time.Second)
+		t.Logf("Waiting for container to become application-healthy...")
+
+		// Monitor the status channel for health events
+		select {
+		case statusEvent := <-statusChan:
+			assert.Equal(t, avsPerformer.PerformerHealthy, statusEvent.Status, "Should receive healthy status")
+			assert.Equal(t, nextContainerID, statusEvent.ContainerID, "Status should be for next container")
+			t.Logf("Received healthy status event for container %s", statusEvent.ContainerID)
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timeout waiting for healthy status event")
+		}
+
+		// Now manually promote the container (no longer automatic)
+		err = server.PromoteContainer(ctx)
+		require.NoError(t, err, "Promotion should succeed for healthy container")
 
 		// Verify that the next container was promoted to current container
 		require.NotNil(t, server.currentContainer)
@@ -336,14 +323,10 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		t.Skip("Docker is not available, skipping integration tests")
 	}
 
-	if !isHelloPerformerAvailable(t) {
-		t.Skip("hello-performer image not available, skipping integration tests. Run 'make build/test-performer-container' to build it.")
-	}
-
 	logger := zaptest.NewLogger(t)
 
 	// Create mock peering fetcher
-	peeringFetcher := &MockPeeringFetcher{}
+	peeringFetcher := createTestPeeringFetcher(t, logger)
 
 	// Create a short health check interval for tests
 	testHealthCheckInterval := 1 * time.Second
@@ -381,17 +364,14 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 		originalContainerID := server.currentContainer.Info.ID
 
 		// Step 2: Deploy new version to next container
-		deployConfig := &avsPerformer.AvsPerformerConfig{
-			AvsAddress:           avsAddress,
-			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{Repository: "hello-performer", Tag: "latest"},
-			WorkerCount:          1,
-			PerformerNetworkName: "",
-			SigningCurve:         "bn254",
+		deployImage := avsPerformer.PerformerImage{
+			Repository: "hello-performer",
+			Tag:        "latest",
 		}
 
-		err = server.DeployContainer(ctx, avsAddress, deployConfig)
+		statusChan, err := server.DeployContainer(ctx, avsAddress, deployImage)
 		require.NoError(t, err)
+		require.NotNil(t, statusChan)
 		require.NotNil(t, server.nextContainer)
 
 		nextContainerID := server.nextContainer.Info.ID
@@ -423,9 +403,22 @@ func TestAvsPerformerServer_ContainerDeploymentFlow_Integration(t *testing.T) {
 
 		server.handleContainerEvent(ctx, healthyEvent)
 
-		// Wait for promotion to complete
-		// With our test config, the periodic health check runs every 1 second
-		time.Sleep(3 * time.Second)
+		// Wait for the container to become application-healthy
+		t.Logf("Waiting for container to become application-healthy...")
+
+		// Monitor the status channel for health events
+		select {
+		case statusEvent := <-statusChan:
+			assert.Equal(t, avsPerformer.PerformerHealthy, statusEvent.Status, "Should receive healthy status")
+			assert.Equal(t, nextContainerID, statusEvent.ContainerID, "Status should be for next container")
+			t.Logf("Received healthy status event for container %s", statusEvent.ContainerID)
+		case <-time.After(5 * time.Second):
+			t.Fatal("Timeout waiting for healthy status event")
+		}
+
+		// Manually promote the container
+		err = server.PromoteContainer(ctx)
+		require.NoError(t, err, "Promotion should succeed for healthy container")
 
 		// Step 5: Verify promotion completed
 		require.NotNil(t, server.currentContainer)

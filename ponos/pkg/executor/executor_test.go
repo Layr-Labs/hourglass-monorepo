@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"math/big"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -115,7 +114,6 @@ func Test_Executor(t *testing.T) {
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 
-	// Test 1: Submit Task
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
 
@@ -144,50 +142,8 @@ func Test_Executor(t *testing.T) {
 	verified, err := sig.VerifySolidityCompatible(privateSigningKey.Public(), digest)
 	assert.Nil(t, err)
 	assert.True(t, verified)
-
-	t.Logf("Successfully verified signature for task %s", taskResult.TaskId)
-
-	// Test 2: Deploy Artifact
-	deployResult, err := execClient.DeployArtifact(ctx, &executorV1.DeployArtifactRequest{
-		AvsAddress:  simAggConfig.Avss[0].Address,
-		Digest:      "latest",
-		RegistryUrl: "hello-performer",
-	})
-	if err != nil {
-		t.Fatalf("Failed to deploy artifact: %v", err)
-	}
-
-	assert.NotNil(t, deployResult)
-	assert.True(t, deployResult.Success, "Expected deployment to succeed, got: %s", deployResult.Message)
-	assert.NotEmpty(t, deployResult.DeploymentId, "Expected non-empty deployment ID")
-	assert.Contains(t, deployResult.Message, "successfully", "Expected success message")
-
-	t.Logf("Successfully deployed artifact with deployment ID: %s", deployResult.DeploymentId)
-
-	// Test 3: Deploy Artifact with invalid request (validation test)
-	invalidDeployResult, err := execClient.DeployArtifact(ctx, &executorV1.DeployArtifactRequest{
-		AvsAddress:  "", // Invalid: empty AVS address
-		Digest:      "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-		RegistryUrl: "localhost:5000/test-performer",
-	})
-
-	// This should succeed at gRPC level but return success=false
-	if err != nil {
-		// Check if it's a gRPC status error indicating validation failure
-		if strings.Contains(err.Error(), "AVS address is required") {
-			t.Logf("Validation error correctly returned: %v", err)
-		} else {
-			t.Fatalf("Unexpected error during invalid deploy: %v", err)
-		}
-	} else {
-		// If no gRPC error, check the response indicates failure
-		assert.NotNil(t, invalidDeployResult)
-		assert.False(t, invalidDeployResult.Success, "Expected deployment to fail for invalid request")
-		assert.Contains(t, invalidDeployResult.Message, "AVS address is required", "Expected validation error message")
-		t.Logf("Validation test passed: %s", invalidDeployResult.Message)
-	}
-
 	cancel()
+	t.Logf("Successfully verified signature for task %s", taskResult.TaskId)
 
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")

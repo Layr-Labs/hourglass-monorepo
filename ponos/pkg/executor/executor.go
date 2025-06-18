@@ -19,13 +19,14 @@ import (
 )
 
 type Executor struct {
-	logger        *zap.Logger
-	config        *executorConfig.ExecutorConfig
-	avsPerformers map[string]avsPerformer.IAvsPerformer
-	rpcServer     *rpcServer.RpcServer
-	signer        signer.ISigner
-
-	inflightTasks *sync.Map
+	logger            *zap.Logger
+	config            *executorConfig.ExecutorConfig
+	avsPerformers     map[string]avsPerformer.IAvsPerformer
+	rpcServer         *rpcServer.RpcServer
+	signer            signer.ISigner
+	containerMgr      *containerManager.DockerContainerManager
+	inflightTasks     *sync.Map
+	activeDeployments *sync.Map
 
 	peeringFetcher peering.IPeeringDataFetcher
 }
@@ -55,18 +56,27 @@ func NewExecutor(
 	peeringFetcher peering.IPeeringDataFetcher,
 ) *Executor {
 	return &Executor{
-		logger:         logger,
-		config:         config,
-		avsPerformers:  make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:      rpcServer,
-		signer:         signer,
-		inflightTasks:  &sync.Map{},
-		peeringFetcher: peeringFetcher,
+		logger:            logger,
+		config:            config,
+		avsPerformers:     make(map[string]avsPerformer.IAvsPerformer),
+		rpcServer:         rpcServer,
+		signer:            signer,
+		inflightTasks:     &sync.Map{},
+		activeDeployments: &sync.Map{},
+		peeringFetcher:    peeringFetcher,
 	}
 }
 
 func (e *Executor) Initialize() error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
+	containerMgr, err := containerManager.NewDockerContainerManager(
+		containerManager.DefaultContainerManagerConfig(),
+		e.logger,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create container manager for executor: %v", err)
+	}
+	e.containerMgr = containerMgr
 
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
@@ -79,14 +89,6 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			containerMgr, err := containerManager.NewDockerContainerManager(
-				containerManager.DefaultContainerManagerConfig(),
-				e.logger,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to create container manager for AVS %s: %v", avsAddress, err)
-			}
-
 			performer := serverPerformer.NewAvsPerformerServer(
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
