@@ -13,12 +13,14 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
+	"strings"
 	"time"
 )
 
@@ -134,32 +136,27 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
-		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
-			AvsAddress: avs.Address,
-			SupportedChainIds: util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
-				return config.ChainId(id)
-			}),
-			MailboxContractAddresses: util.Reduce(avs.ChainIds, func(acc map[config.ChainId]string, chainId uint) map[config.ChainId]string {
-				cId := config.ChainId(chainId)
-				chainTaskMailbox := util.Find(loadedContracts, func(c *contracts.Contract) bool {
-					return c.Name == config.ContractName_TaskMailbox && c.ChainId == cId
-				})
-				if chainTaskMailbox == nil {
-					a.logger.Sugar().Warnw("TaskMailbox contract not found for chain",
-						zap.Uint64("chainId", uint64(cId)),
-					)
-					return acc
-				}
+		supportedChains, err := a.getValidChainsForAvs(avs.Address)
+		if err != nil {
+			return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
+		}
 
-				acc[cId] = chainTaskMailbox.Address
-				return acc
-			}, make(map[config.ChainId]string)),
-			AggregatorAddress: a.config.Address,
-			L1ChainId:         a.config.L1ChainId,
+		om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
+			AvsAddress: avs.Address,
+			ChainIds:   supportedChains,
+		}, callers, a.peeringDataFetcher, a.logger)
+
+		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
+			AvsAddress:               avs.Address,
+			SupportedChainIds:        supportedChains,
+			MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
+			AggregatorAddress:        a.config.Address,
+			L1ChainId:                a.config.L1ChainId,
 		},
 			a.chainContractCallers,
 			a.signer,
-			a.peeringDataFetcher,
+			a.contractStore,
+			om,
 			a.logger,
 		)
 		if err != nil {
@@ -169,6 +166,30 @@ func (a *Aggregator) Initialize() error {
 		a.avsExecutionManagers[avs.Address] = aem
 	}
 	return nil
+}
+
+func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config.ChainId]string {
+	return util.Reduce(allContracts, func(acc map[config.ChainId]string, c *contracts.Contract) map[config.ChainId]string {
+		if c.Name != config.ContractName_TaskMailbox {
+			return acc
+		}
+		acc[c.ChainId] = c.Address
+		return acc
+	}, map[config.ChainId]string{})
+}
+
+// getValidChainsForAvs returns the valid chain IDs for a given AVS address
+// for now, this is a stub for eventually calling on-chain to get the valid chains
+func (a *Aggregator) getValidChainsForAvs(avsAddress string) ([]config.ChainId, error) {
+	avs := util.Find(a.config.AVSs, func(avs *aggregatorConfig.AggregatorAvs) bool {
+		return strings.EqualFold(avs.Address, avsAddress)
+	})
+	if avs == nil {
+		return nil, fmt.Errorf("AVS with address %s not found in config", avsAddress)
+	}
+	return util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
+		return config.ChainId(id)
+	}), nil
 }
 
 func (a *Aggregator) initializePollers() error {

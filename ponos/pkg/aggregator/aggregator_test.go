@@ -103,7 +103,7 @@ func Test_Aggregator(t *testing.T) {
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 
 	// run the AVS on the L2 (base)
-	aggConfig.Avss[0].ChainIds = []uint{uint(config.ChainId_BaseAnvil)}
+	aggConfig.Avss[0].ChainIds = []uint{uint(config.ChainId_EthereumAnvil)}
 
 	aggStoredKeys, err := keystore.ParseKeystoreJSON(aggConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
@@ -512,11 +512,6 @@ chains:
     chainId: 31337
     rpcUrl: http://localhost:8545
     pollIntervalSeconds: 10
-  # - name: base
-  #   network: mainnet
-  #   chainId: 31338
-  #   rpcUrl: http://localhost:9545
-  #   pollIntervalSeconds: 2
 operator:
   address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
   operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
