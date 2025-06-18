@@ -46,6 +46,7 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 }
 
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
+	// TODO: refactor this to use the deployment manager instead of calling the performer directly
 	e.logger.Info("Received deploy artifact request",
 		zap.String("avsAddress", req.AvsAddress),
 		zap.String("digest", req.Digest),

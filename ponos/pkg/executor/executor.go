@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
@@ -67,7 +68,7 @@ func NewExecutor(
 	}
 }
 
-func (e *Executor) Initialize() error {
+func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 	containerMgr, err := containerManager.NewDockerContainerManager(
 		containerManager.DefaultContainerManagerConfig(),
@@ -93,7 +94,6 @@ func (e *Executor) Initialize() error {
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
 					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-					Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
 					WorkerCount:          avs.WorkerCount,
 					PerformerNetworkName: e.config.PerformerNetworkName,
 					SigningCurve:         avs.SigningCurve,
@@ -102,6 +102,38 @@ func (e *Executor) Initialize() error {
 				e.logger,
 				containerMgr,
 			)
+			err = performer.Initialize(ctx)
+			if err != nil {
+				return err
+			}
+			containerStatusChan, err := performer.DeployContainer(
+				ctx,
+				avsAddress,
+				avsPerformer.PerformerImage{
+					Repository: avs.Image.Repository,
+					Tag:        avs.Image.Tag,
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to deploy container for AVS %s: %v", avsAddress, err)
+			}
+
+			// Wait for container deployment status with 1 minute timeout
+			// TODO: refactor this to use the deployment manager instead of calling the performer directly
+			select {
+			case status := <-containerStatusChan:
+				if status.Status != avsPerformer.PerformerHealthy {
+					return fmt.Errorf("container deployment failed for AVS %s: %s", avsAddress, status.Message)
+				}
+				e.logger.Sugar().Infow("Container deployed successfully",
+					zap.String("avsAddress", avsAddress),
+					zap.String("containerId", status.ContainerID),
+				)
+			case <-time.After(1 * time.Minute):
+				return fmt.Errorf("container deployment timed out after 1 minute for AVS %s", avsAddress)
+			case <-ctx.Done():
+				return fmt.Errorf("context cancelled while waiting for container deployment for AVS %s", avsAddress)
+			}
 			e.avsPerformers[avsAddress] = performer
 
 		default:

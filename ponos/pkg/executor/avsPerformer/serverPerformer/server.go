@@ -238,7 +238,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		zap.Any("aggregatorPeers", aps.aggregatorPeers),
 	)
 
-	// Check if we should create an initial container
+	// Check if we should start with a container loaded
 	// Skip container creation if image info is empty (for deployment-based initialization)
 	if aps.config.Image.Repository == "" || aps.config.Image.Tag == "" {
 		aps.logger.Info("Starting PerformerServer without initial container.",

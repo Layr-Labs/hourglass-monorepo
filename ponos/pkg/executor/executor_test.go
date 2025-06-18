@@ -86,7 +86,7 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
 
-	if err := exec.Initialize(); err != nil {
+	if err := exec.Initialize(ctx); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
 	}
 

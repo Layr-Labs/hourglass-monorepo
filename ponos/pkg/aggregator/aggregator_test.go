@@ -323,7 +323,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Boot up everything
 	// ------------------------------------------------------------------------
-	if err := exec.Initialize(); err != nil {
+	if err := exec.Initialize(ctx); err != nil {
 		t.Logf("Failed to initialize executor: %v", err)
 		cancel()
 	}
