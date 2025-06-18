@@ -209,21 +209,18 @@ func (aps *AvsPerformerServer) createAndStartContainer(
 		return nil, errors.Wrap(err, "failed to start liveness monitoring")
 	}
 
-	// Create the container instance with all components
-	containerInstance := &PerformerContainer{
-		Info:            updatedInfo,
-		Client:          perfClient,
-		EventChan:       eventChan,
-		PerformerHealth: &PerformerHealth{},
-	}
-
 	aps.logger.Info("Container created and monitoring started",
 		zap.String("avsAddress", avsAddress),
 		zap.String("containerID", updatedInfo.ID),
 		zap.String("endpoint", endpoint),
 	)
-
-	return containerInstance, nil
+	// Create the container instance with all components
+	return &PerformerContainer{
+		Info:            updatedInfo,
+		Client:          perfClient,
+		EventChan:       eventChan,
+		PerformerHealth: &PerformerHealth{},
+	}, nil
 }
 
 func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
