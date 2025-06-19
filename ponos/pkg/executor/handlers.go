@@ -233,3 +233,53 @@ func (e *Executor) signResult(result *performerTask.PerformerTaskResult) ([]byte
 
 	return e.signer.SignMessageForSolidity(digestBytes)
 }
+
+// ListPerformers returns a list of all performers and their status
+func (e *Executor) ListPerformers(_ context.Context, req *executorV1.ListPerformersRequest) (*executorV1.ListPerformersResponse, error) {
+	e.logger.Info("Received list performers request",
+		zap.String("avsAddressFilter", req.GetAvsAddress()),
+	)
+
+	var allPerformers []*executorV1.Performer
+	filterAddress := strings.ToLower(req.GetAvsAddress())
+
+	// Iterate through all AVS performers
+	for avsAddress, avsServerPerformer := range e.avsPerformers {
+		// Apply filter if provided
+		if filterAddress != "" && !strings.EqualFold(filterAddress, avsAddress) {
+			continue
+		}
+
+		// Get performer info from the server performer
+		performerInfos := avsServerPerformer.ListPerformers()
+
+		// Convert each performer info to proto format
+		for _, info := range performerInfos {
+			allPerformers = append(allPerformers, e.performerInfoToProto(info))
+		}
+	}
+
+	e.logger.Info("Returning performer list",
+		zap.Int("count", len(allPerformers)),
+		zap.String("avsAddressFilter", req.GetAvsAddress()),
+	)
+
+	return &executorV1.ListPerformersResponse{
+		Performers: allPerformers,
+	}, nil
+}
+
+// performerInfoToProto converts a PerformerInfo to the protobuf Performer format
+func (e *Executor) performerInfoToProto(info avsPerformer.PerformerInfo) *executorV1.Performer {
+	return &executorV1.Performer{
+		PerformerId:        info.PerformerID,
+		AvsAddress:         info.AvsAddress,
+		Status:             string(info.Status),
+		ArtifactRegistry:   info.ArtifactRegistry,
+		ArtifactDigest:     info.ArtifactDigest,
+		ResourceHealthy:    info.ContainerHealthy,
+		ApplicationHealthy: info.ApplicationHealthy,
+		LastHealthCheck:    info.LastHealthCheck.Format(time.RFC3339),
+		ContainerId:        info.ContainerID,
+	}
+}
