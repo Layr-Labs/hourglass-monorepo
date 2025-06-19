@@ -3,6 +3,12 @@ package executor
 import (
 	"context"
 	"fmt"
+
+	"math/big"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
@@ -15,14 +21,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
-	"math/big"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 func Test_Executor(t *testing.T) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
@@ -84,7 +86,7 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
 
-	if err := exec.Initialize(); err != nil {
+	if err := exec.Initialize(ctx); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
 	}
 
@@ -141,7 +143,6 @@ func Test_Executor(t *testing.T) {
 	assert.Nil(t, err)
 	assert.True(t, verified)
 	cancel()
-
 	t.Logf("Successfully verified signature for task %s", taskResult.TaskId)
 
 	<-ctx.Done()

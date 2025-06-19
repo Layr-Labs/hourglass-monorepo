@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/docker/go-connections/nat"
 )
@@ -18,10 +19,15 @@ func HashAvsAddress(avsAddress string) string {
 
 // CreateDefaultContainerConfig creates a default container configuration for AVS performers
 func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag string, containerPort int, networkName string) *ContainerConfig {
+	// Use predictable hostname for DNS resolution in Docker networks
 	hostname := fmt.Sprintf("avs-performer-%s", HashAvsAddress(avsAddress))
 
+	// Add timestamp to hostname to ensure uniqueness for blue-green deployments
+	timestamp := time.Now().Unix()
+	uniqueHostname := fmt.Sprintf("%s-%d", hostname, timestamp)
+
 	return &ContainerConfig{
-		Hostname: hostname,
+		Hostname: uniqueHostname,
 		Image:    fmt.Sprintf("%s:%s", imageRepo, imageTag),
 		ExposedPorts: nat.PortSet{
 			nat.Port(fmt.Sprintf("%d/tcp", containerPort)): struct{}{},
@@ -60,4 +66,40 @@ func GetContainerEndpoint(info *ContainerInfo, containerPort int, networkName st
 	}
 
 	return "", fmt.Errorf("no port mapping found for container port %d", containerPort)
+}
+
+// NewDefaultAvsPerformerLivenessConfig creates a default liveness configuration
+// optimized for AVS performer containers with aggressive health monitoring
+// and auto-restart capabilities
+func NewDefaultAvsPerformerLivenessConfig() *LivenessConfig {
+	return &LivenessConfig{
+		HealthCheckConfig: HealthCheckConfig{
+			Enabled:          true,
+			Interval:         5 * time.Second,
+			Timeout:          2 * time.Second,
+			Retries:          3,
+			StartPeriod:      10 * time.Second,
+			FailureThreshold: 3,
+		},
+		RestartPolicy: RestartPolicy{
+			Enabled:            true,
+			MaxRestarts:        5,
+			RestartDelay:       2 * time.Second,
+			BackoffMultiplier:  2.0,
+			MaxBackoffDelay:    30 * time.Second,
+			RestartTimeout:     60 * time.Second,
+			RestartOnCrash:     true,
+			RestartOnOOM:       true,
+			RestartOnUnhealthy: true,
+		},
+		ResourceThresholds: ResourceThresholds{
+			CPUThreshold:    90.0,
+			MemoryThreshold: 90.0,
+			RestartOnCPU:    false, // Log warnings but don't auto-restart on resource thresholds
+			RestartOnMemory: false, // Log warnings but don't auto-restart on resource thresholds
+		},
+		MonitorEvents:         true,
+		ResourceMonitoring:    true,
+		ResourceCheckInterval: 30 * time.Second,
+	}
 }

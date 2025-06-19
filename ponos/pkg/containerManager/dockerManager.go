@@ -46,6 +46,52 @@ type DockerContainerManager struct {
 	mu sync.RWMutex
 }
 
+// DefaultContainerManagerConfig returns a ContainerManagerConfig with sensible defaults
+func DefaultContainerManagerConfig() *ContainerManagerConfig {
+	return &ContainerManagerConfig{
+		DefaultStartTimeout: DefaultStartTimeout,
+		DefaultStopTimeout:  DefaultStopTimeout,
+		DefaultHealthCheckConfig: &HealthCheckConfig{
+			Enabled:          DefaultHealthEnabled,
+			Interval:         DefaultHealthInterval,
+			Timeout:          DefaultHealthTimeout,
+			Retries:          DefaultHealthRetries,
+			StartPeriod:      DefaultStartTimeout,
+			FailureThreshold: DefaultFailureThreshold,
+		},
+		DefaultLivenessConfig: &LivenessConfig{
+			HealthCheckConfig: HealthCheckConfig{
+				Enabled:          DefaultHealthEnabled,
+				Interval:         DefaultHealthInterval,
+				Timeout:          DefaultHealthTimeout,
+				Retries:          DefaultHealthRetries,
+				StartPeriod:      DefaultHealthStartPeriod,
+				FailureThreshold: DefaultFailureThreshold,
+			},
+			RestartPolicy: RestartPolicy{
+				Enabled:            DefaultRestartEnabled,
+				MaxRestarts:        DefaultMaxRestarts,
+				RestartDelay:       DefaultRestartDelay,
+				BackoffMultiplier:  DefaultBackoffMultiplier,
+				MaxBackoffDelay:    DefaultMaxBackoffDelay,
+				RestartTimeout:     DefaultRestartTimeout,
+				RestartOnCrash:     DefaultRestartOnCrash,
+				RestartOnOOM:       DefaultRestartOnOOM,
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy, // Let application decide
+			},
+			ResourceThresholds: ResourceThresholds{
+				CPUThreshold:    DefaultCPUThreshold,
+				MemoryThreshold: DefaultMemoryThreshold,
+				RestartOnCPU:    DefaultResourceRestartOnCPU,
+				RestartOnMemory: DefaultRestartOnMemory,
+			},
+			MonitorEvents:         DefaultMonitorEvents,
+			ResourceMonitoring:    DefaultResourceMonitoring,
+			ResourceCheckInterval: DefaultResourceInterval,
+		},
+	}
+}
+
 // NewDockerContainerManager creates a new Docker-based container manager
 func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logger) (*DockerContainerManager, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv)
@@ -53,49 +99,50 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 		return nil, errors.Wrap(err, "failed to create Docker client")
 	}
 
-	// Set default values if not provided
+	// Use default config if nil
 	if config == nil {
-		config = &ContainerManagerConfig{}
+		config = DefaultContainerManagerConfig()
 	}
+
 	if config.DefaultStartTimeout == 0 {
-		config.DefaultStartTimeout = 30 * time.Second
+		config.DefaultStartTimeout = DefaultStartTimeout
 	}
 	if config.DefaultStopTimeout == 0 {
-		config.DefaultStopTimeout = 10 * time.Second
+		config.DefaultStopTimeout = DefaultStopTimeout
 	}
 	if config.DefaultHealthCheckConfig == nil {
 		config.DefaultHealthCheckConfig = &HealthCheckConfig{
-			Enabled:          true,
-			Interval:         5 * time.Second,
-			Timeout:          2 * time.Second,
-			Retries:          3,
-			StartPeriod:      10 * time.Second,
-			FailureThreshold: 3,
+			Enabled:          DefaultHealthEnabled,
+			Interval:         DefaultHealthInterval,
+			Timeout:          DefaultHealthTimeout,
+			Retries:          DefaultHealthRetries,
+			StartPeriod:      DefaultStartTimeout,
+			FailureThreshold: DefaultFailureThreshold,
 		}
 	}
 	if config.DefaultLivenessConfig == nil {
 		config.DefaultLivenessConfig = &LivenessConfig{
 			HealthCheckConfig: *config.DefaultHealthCheckConfig,
 			RestartPolicy: RestartPolicy{
-				Enabled:            true,
-				MaxRestarts:        5,
-				RestartDelay:       2 * time.Second,
-				BackoffMultiplier:  2.0,
-				MaxBackoffDelay:    30 * time.Second,
-				RestartTimeout:     60 * time.Second,
-				RestartOnCrash:     true,
-				RestartOnOOM:       true,
-				RestartOnUnhealthy: false, // Let application decide
+				Enabled:            DefaultRestartEnabled,
+				MaxRestarts:        DefaultMaxRestarts,
+				RestartDelay:       DefaultRestartDelay,
+				BackoffMultiplier:  DefaultBackoffMultiplier,
+				MaxBackoffDelay:    DefaultMaxBackoffDelay,
+				RestartTimeout:     DefaultRestartTimeout,
+				RestartOnCrash:     DefaultRestartOnCrash,
+				RestartOnOOM:       DefaultRestartOnOOM,
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy, // Let application decide
 			},
 			ResourceThresholds: ResourceThresholds{
-				CPUThreshold:    90.0,
-				MemoryThreshold: 90.0,
-				RestartOnCPU:    false,
-				RestartOnMemory: false,
+				CPUThreshold:    DefaultCPUThreshold,
+				MemoryThreshold: DefaultMemoryThreshold,
+				RestartOnCPU:    DefaultResourceRestartOnCPU,
+				RestartOnMemory: DefaultRestartOnMemory,
 			},
-			MonitorEvents:         true,
-			ResourceMonitoring:    true,
-			ResourceCheckInterval: 30 * time.Second,
+			MonitorEvents:         DefaultMonitorEvents,
+			ResourceMonitoring:    DefaultResourceMonitoring,
+			ResourceCheckInterval: DefaultResourceInterval,
 		}
 	}
 
@@ -1250,8 +1297,8 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 		zap.Any("attributes", dockerEvent.Actor.Attributes),
 	)
 
-	switch string(dockerEvent.Action) {
-	case "die":
+	switch dockerEvent.Action {
+	case events.ActionDie:
 		// Container crashed or was stopped
 		exitCode := 0
 		if exitCodeStr, exists := dockerEvent.Actor.Attributes["exitCode"]; exists {
@@ -1322,7 +1369,7 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			}
 		}
 
-	case "oom":
+	case events.ActionOOM:
 		// OOM event (may come before die event)
 		dcm.logger.Warn("Container OOM event detected",
 			zap.String("containerID", monitor.containerID),
@@ -1336,6 +1383,22 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			State: ContainerState{
 				OOMKilled:    true,
 				RestartCount: monitor.restartCount,
+			},
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
+		}
+
+	case events.ActionHealthStatusHealthy:
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventHealthy,
+			Timestamp:   time.Now(),
+			Message:     "Container received healthy signal",
+			State: ContainerState{
+				Status: "healthy",
 			},
 		}
 
