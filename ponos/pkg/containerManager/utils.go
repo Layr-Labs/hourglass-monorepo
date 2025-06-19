@@ -98,6 +98,7 @@ func NewDefaultAvsPerformerLivenessConfig() *LivenessConfig {
 			RestartOnCPU:    false, // Log warnings but don't auto-restart on resource thresholds
 			RestartOnMemory: false, // Log warnings but don't auto-restart on resource thresholds
 		},
+		MonitorEvents:         true,
 		ResourceMonitoring:    true,
 		ResourceCheckInterval: 30 * time.Second,
 	}

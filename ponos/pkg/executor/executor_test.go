@@ -24,7 +24,7 @@ import (
 )
 
 func Test_Executor(t *testing.T) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(15*time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {

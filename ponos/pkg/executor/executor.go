@@ -11,6 +11,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/deployment"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -20,14 +21,14 @@ import (
 )
 
 type Executor struct {
-	logger            *zap.Logger
-	config            *executorConfig.ExecutorConfig
-	avsPerformers     map[string]avsPerformer.IAvsPerformer
-	rpcServer         *rpcServer.RpcServer
-	signer            signer.ISigner
-	containerMgr      *containerManager.DockerContainerManager
-	inflightTasks     *sync.Map
-	activeDeployments *sync.Map
+	logger        *zap.Logger
+	config        *executorConfig.ExecutorConfig
+	avsPerformers map[string]avsPerformer.IAvsPerformer
+	rpcServer     *rpcServer.RpcServer
+	signer        signer.ISigner
+	containerMgr  *containerManager.DockerContainerManager
+	inflightTasks *sync.Map
+	deploymentMgr *deployment.Manager
 
 	peeringFetcher peering.IPeeringDataFetcher
 }
@@ -57,14 +58,14 @@ func NewExecutor(
 	peeringFetcher peering.IPeeringDataFetcher,
 ) *Executor {
 	return &Executor{
-		logger:            logger,
-		config:            config,
-		avsPerformers:     make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:         rpcServer,
-		signer:            signer,
-		inflightTasks:     &sync.Map{},
-		activeDeployments: &sync.Map{},
-		peeringFetcher:    peeringFetcher,
+		logger:         logger,
+		config:         config,
+		avsPerformers:  make(map[string]avsPerformer.IAvsPerformer),
+		rpcServer:      rpcServer,
+		signer:         signer,
+		inflightTasks:  &sync.Map{},
+		deploymentMgr:  deployment.NewManager(logger),
+		peeringFetcher: peeringFetcher,
 	}
 }
 
@@ -106,34 +107,32 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			containerStatusChan, err := performer.DeployContainer(
-				ctx,
-				avsAddress,
-				avsPerformer.PerformerImage{
+
+			// Deploy container using deployment manager
+			deploymentConfig := deployment.DeploymentConfig{
+				AvsAddress: avsAddress,
+				Image: avsPerformer.PerformerImage{
 					Repository: avs.Image.Repository,
 					Tag:        avs.Image.Tag,
 				},
-			)
-			if err != nil {
-				return fmt.Errorf("failed to deploy container for AVS %s: %v", avsAddress, err)
+				Timeout: 1 * time.Minute,
 			}
 
-			// Wait for container deployment status with 1 minute timeout
-			// TODO: refactor this to use the deployment manager instead of calling the performer directly
-			select {
-			case status := <-containerStatusChan:
-				if status.Status != avsPerformer.PerformerHealthy {
-					return fmt.Errorf("container deployment failed for AVS %s: %s", avsAddress, status.Message)
-				}
-				e.logger.Sugar().Infow("Container deployed successfully",
+			result, err := e.deploymentMgr.Deploy(ctx, deploymentConfig, performer)
+			if err != nil {
+				e.logger.Sugar().Errorw("Failed to deploy container for AVS performer during startup",
 					zap.String("avsAddress", avsAddress),
-					zap.String("containerId", status.ContainerID),
+					zap.Error(err),
 				)
-			case <-time.After(1 * time.Minute):
-				return fmt.Errorf("container deployment timed out after 1 minute for AVS %s", avsAddress)
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled while waiting for container deployment for AVS %s", avsAddress)
+				return fmt.Errorf("failed to deploy container for AVS %s: %w", avsAddress, err)
 			}
+
+			e.logger.Sugar().Infow("AVS performer container deployed successfully",
+				zap.String("avsAddress", avsAddress),
+				zap.String("deploymentId", result.DeploymentID),
+				zap.String("performerId", result.PerformerID),
+			)
+
 			e.avsPerformers[avsAddress] = performer
 
 		default:

@@ -30,7 +30,7 @@ const (
 // PerformerStatusEvent contains status information sent to deployment watchers
 type PerformerStatusEvent struct {
 	Status      PerformerStatus
-	ContainerID string
+	PerformerID string
 	Message     string
 	Timestamp   time.Time
 }
@@ -44,16 +44,18 @@ type AvsPerformerConfig struct {
 	SigningCurve         string // bn254, bls381, etc
 }
 
+// PerformerCreationResult contains information about a deployed performer
+type PerformerCreationResult struct {
+	PerformerID string
+	StatusChan  <-chan PerformerStatusEvent
+}
+
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
 	ValidateTaskSignature(task *performerTask.PerformerTask) error
-	DeployContainer(
-		ctx context.Context,
-		avsId string,
-		image PerformerImage,
-	) (<-chan PerformerStatusEvent, error)
-	PromoteContainer(ctx context.Context) error
-	CancelDeployment(ctx context.Context) error
+	CreatePerformer(ctx context.Context, image PerformerImage) (*PerformerCreationResult, error)
+	PromotePerformer(ctx context.Context, performerID string) error
+	RemovePerformer(ctx context.Context, performerID string) error
 	Shutdown() error
 }

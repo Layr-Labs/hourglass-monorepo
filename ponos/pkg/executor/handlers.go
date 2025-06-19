@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/deployment"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
@@ -46,7 +48,6 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 }
 
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
-	// TODO: refactor this to use the deployment manager instead of calling the performer directly
 	e.logger.Info("Received deploy artifact request",
 		zap.String("avsAddress", req.AvsAddress),
 		zap.String("digest", req.Digest),
@@ -63,17 +64,6 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	avsAddress := strings.ToLower(req.AvsAddress)
 
-	// Check if a deployment is already in progress for this AVS
-	if _, exists := e.activeDeployments.LoadOrStore(avsAddress, true); exists {
-		return &executorV1.DeployArtifactResponse{
-			Success: false,
-			Message: "Deployment already in progress for this AVS",
-		}, status.Error(codes.AlreadyExists, "deployment already in progress")
-	}
-
-	// Ensure we clean up the active deployment marker on exit
-	defer e.activeDeployments.Delete(avsAddress)
-
 	// Find or create the AVS performer
 	performer, err := e.getOrCreateAvsPerformer(ctx, avsAddress)
 	if err != nil {
@@ -83,36 +73,59 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, status.Error(codes.Internal, err.Error())
 	}
 
-	performerImage := avsPerformer.PerformerImage{
-		Repository: req.GetRegistryUrl(),
-		Tag:        req.GetDigest(),
+	// Deploy using deployment manager
+	deploymentConfig := deployment.DeploymentConfig{
+		AvsAddress: avsAddress,
+		Image: avsPerformer.PerformerImage{
+			Repository: req.GetRegistryUrl(),
+			Tag:        req.GetDigest(),
+		},
+		Timeout: deploymentTimeout,
 	}
 
-	// Deploy the container and get status channel
-	statusChan, err := performer.DeployContainer(ctx, avsAddress, performerImage)
+	result, err := e.deploymentMgr.Deploy(ctx, deploymentConfig, performer)
 	if err != nil {
-		e.logger.Error("Failed to deploy container",
+		// Check for specific error types to return appropriate gRPC status codes
+		if errors.Is(err, deployment.ErrDeploymentInProgress) {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: err.Error(),
+			}, status.Error(codes.AlreadyExists, "deployment already in progress")
+		}
+
+		if errors.Is(err, deployment.ErrDeploymentTimeout) {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: err.Error(),
+			}, status.Error(codes.DeadlineExceeded, "deployment timeout")
+		}
+
+		// Log the error with full context
+		e.logger.Error("Deployment failed",
 			zap.String("avsAddress", avsAddress),
-			zap.String("registryUrl", performerImage.Repository),
-			zap.String("digest", performerImage.Tag),
+			zap.String("registryUrl", req.GetRegistryUrl()),
+			zap.String("digest", req.GetDigest()),
 			zap.Error(err),
 		)
+
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
-			Message: fmt.Sprintf("Failed to deploy container: %v", err),
-		}, status.Error(codes.Internal, fmt.Sprintf("Failed to deploy container: %v", err))
+			Message: err.Error(),
+		}, status.Error(codes.Internal, err.Error())
 	}
 
-	deploymentId := fmt.Sprintf("%s-%d", avsAddress, time.Now().Unix())
-
-	e.logger.Info("Container deployment started, monitoring for events",
+	e.logger.Info("Deployment completed successfully",
 		zap.String("avsAddress", avsAddress),
-		zap.String("deploymentId", deploymentId),
-		zap.String("registryUrl", performerImage.Repository),
-		zap.String("digest", performerImage.Tag),
+		zap.String("deploymentId", result.DeploymentID),
+		zap.String("performerId", result.PerformerID),
+		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
 
-	return e.processDeploymentEvents(ctx, performer, statusChan, avsAddress, deploymentId)
+	return &executorV1.DeployArtifactResponse{
+		Success:      true,
+		Message:      result.Message,
+		DeploymentId: result.DeploymentID,
+	}, nil
 }
 
 // getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
@@ -126,7 +139,7 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 	// Create new AVS performer for this address
 	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
 
-	// Create config without image info - will be deployed via DeployContainer
+	// Create config without image info - will be deployed via CreatePerformer
 	config := &avsPerformer.AvsPerformerConfig{
 		AvsAddress:           avsAddress,
 		ProcessType:          avsPerformer.AvsProcessTypeServer,
@@ -152,126 +165,6 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 	e.avsPerformers[avsAddress] = newPerformer
 
 	return newPerformer, nil
-}
-
-// processDeploymentEvents monitors the deployment status channel and handles container health events
-func (e *Executor) processDeploymentEvents(
-	ctx context.Context,
-	performer avsPerformer.IAvsPerformer,
-	statusChan <-chan avsPerformer.PerformerStatusEvent,
-	avsAddress string,
-	deploymentId string,
-) (*executorV1.DeployArtifactResponse, error) {
-	// Wait for deployment status with timeout
-	timeoutCtx, cancel := context.WithTimeout(ctx, deploymentTimeout)
-	defer cancel()
-
-	for {
-		select {
-		case <-timeoutCtx.Done():
-			e.logger.Error("Deployment timeout waiting for container to become healthy",
-				zap.String("avsAddress", avsAddress),
-				zap.String("deploymentId", deploymentId),
-				zap.Duration("timeout", deploymentTimeout),
-			)
-
-			// Cancel the deployment to clean up resources
-			if cancelErr := performer.CancelDeployment(ctx); cancelErr != nil {
-				e.logger.Error("Failed to cancel deployment after timeout",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentId", deploymentId),
-					zap.Error(cancelErr),
-				)
-			}
-
-			return &executorV1.DeployArtifactResponse{
-				Success: false,
-				Message: fmt.Sprintf("Deployment timeout: container failed to become healthy within %v", deploymentTimeout),
-			}, status.Error(codes.DeadlineExceeded, "deployment timeout")
-
-		case statusEvent, ok := <-statusChan:
-			if !ok {
-				// Channel closed unexpectedly
-				e.logger.Error("Status channel closed unexpectedly",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentId", deploymentId),
-				)
-
-				// Cancel the deployment to clean up
-				if cancelErr := performer.CancelDeployment(ctx); cancelErr != nil {
-					e.logger.Error("Failed to cancel deployment after promotion failure",
-						zap.String("avsAddress", avsAddress),
-						zap.String("deploymentId", deploymentId),
-						zap.Error(cancelErr),
-					)
-				}
-
-				return &executorV1.DeployArtifactResponse{
-					Success: false,
-					Message: "Deployment monitoring failed",
-				}, status.Error(codes.Internal, "deployment monitoring failed")
-			}
-
-			e.logger.Info("Received deployment status update",
-				zap.String("avsAddress", avsAddress),
-				zap.String("deploymentId", deploymentId),
-				zap.String("status", fmt.Sprintf("%v", statusEvent.Status)),
-				zap.String("message", statusEvent.Message),
-			)
-
-			switch statusEvent.Status {
-			case avsPerformer.PerformerHealthy:
-				e.logger.Info("Container deployment completed successfully and is healthy",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentId", deploymentId),
-					zap.String("containerID", statusEvent.ContainerID),
-				)
-
-				// Promote the healthy container to current
-				if promoteErr := performer.PromoteContainer(ctx); promoteErr != nil {
-					e.logger.Error("Failed to promote healthy container",
-						zap.String("avsAddress", avsAddress),
-						zap.String("deploymentId", deploymentId),
-						zap.Error(promoteErr),
-					)
-
-					// Cancel the deployment to clean up
-					if cancelErr := performer.CancelDeployment(ctx); cancelErr != nil {
-						e.logger.Error("Failed to cancel deployment after promotion failure",
-							zap.String("avsAddress", avsAddress),
-							zap.String("deploymentId", deploymentId),
-							zap.Error(cancelErr),
-						)
-					}
-
-					return &executorV1.DeployArtifactResponse{
-						Success: false,
-						Message: fmt.Sprintf("Failed to promote container: %v", promoteErr),
-					}, status.Error(codes.Internal, "container promotion failed")
-				}
-
-				e.logger.Info("Container promoted successfully",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentId", deploymentId),
-					zap.String("containerID", statusEvent.ContainerID),
-				)
-
-				return &executorV1.DeployArtifactResponse{
-					Success:      true,
-					Message:      "Container deployment completed successfully and is healthy",
-					DeploymentId: deploymentId,
-				}, nil
-
-			case avsPerformer.PerformerUnhealthy:
-				e.logger.Error("Container deployment container is unhealthy",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentId", deploymentId),
-					zap.String("containerID", statusEvent.ContainerID),
-					zap.String("reason", statusEvent.Message),
-				)
-			}
-		}
-	}
 }
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
