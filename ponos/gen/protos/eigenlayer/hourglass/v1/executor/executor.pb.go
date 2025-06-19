@@ -295,6 +295,206 @@ func (x *DeployArtifactResponse) GetDeploymentId() string {
 	return ""
 }
 
+// ListPerformersRequest is the message used to list all performers
+type ListPerformersRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional: filter by AVS address
+	AvsAddress    string `protobuf:"bytes,1,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPerformersRequest) Reset() {
+	*x = ListPerformersRequest{}
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPerformersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPerformersRequest) ProtoMessage() {}
+
+func (x *ListPerformersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPerformersRequest.ProtoReflect.Descriptor instead.
+func (*ListPerformersRequest) Descriptor() ([]byte, []int) {
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ListPerformersRequest) GetAvsAddress() string {
+	if x != nil {
+		return x.AvsAddress
+	}
+	return ""
+}
+
+// Performer contains information about a single performer
+type Performer struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PerformerId        string                 `protobuf:"bytes,1,opt,name=performer_id,json=performerId,proto3" json:"performer_id,omitempty"`
+	AvsAddress         string                 `protobuf:"bytes,2,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
+	Status             string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	ArtifactRegistry   string                 `protobuf:"bytes,4,opt,name=artifact_registry,json=artifactRegistry,proto3" json:"artifact_registry,omitempty"`
+	ArtifactDigest     string                 `protobuf:"bytes,5,opt,name=artifact_digest,json=artifactDigest,proto3" json:"artifact_digest,omitempty"`
+	ResourceHealthy    bool                   `protobuf:"varint,6,opt,name=resource_healthy,json=resourceHealthy,proto3" json:"resource_healthy,omitempty"`
+	ApplicationHealthy bool                   `protobuf:"varint,7,opt,name=application_healthy,json=applicationHealthy,proto3" json:"application_healthy,omitempty"`
+	LastHealthCheck    string                 `protobuf:"bytes,8,opt,name=last_health_check,json=lastHealthCheck,proto3" json:"last_health_check,omitempty"`
+	ContainerId        string                 `protobuf:"bytes,9,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *Performer) Reset() {
+	*x = Performer{}
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Performer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Performer) ProtoMessage() {}
+
+func (x *Performer) ProtoReflect() protoreflect.Message {
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Performer.ProtoReflect.Descriptor instead.
+func (*Performer) Descriptor() ([]byte, []int) {
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Performer) GetPerformerId() string {
+	if x != nil {
+		return x.PerformerId
+	}
+	return ""
+}
+
+func (x *Performer) GetAvsAddress() string {
+	if x != nil {
+		return x.AvsAddress
+	}
+	return ""
+}
+
+func (x *Performer) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *Performer) GetArtifactRegistry() string {
+	if x != nil {
+		return x.ArtifactRegistry
+	}
+	return ""
+}
+
+func (x *Performer) GetArtifactDigest() string {
+	if x != nil {
+		return x.ArtifactDigest
+	}
+	return ""
+}
+
+func (x *Performer) GetResourceHealthy() bool {
+	if x != nil {
+		return x.ResourceHealthy
+	}
+	return false
+}
+
+func (x *Performer) GetApplicationHealthy() bool {
+	if x != nil {
+		return x.ApplicationHealthy
+	}
+	return false
+}
+
+func (x *Performer) GetLastHealthCheck() string {
+	if x != nil {
+		return x.LastHealthCheck
+	}
+	return ""
+}
+
+func (x *Performer) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+// ListPerformersResponse contains the list of all performers
+type ListPerformersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Performers    []*Performer           `protobuf:"bytes,1,rep,name=performers,proto3" json:"performers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPerformersResponse) Reset() {
+	*x = ListPerformersResponse{}
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPerformersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPerformersResponse) ProtoMessage() {}
+
+func (x *ListPerformersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPerformersResponse.ProtoReflect.Descriptor instead.
+func (*ListPerformersResponse) Descriptor() ([]byte, []int) {
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListPerformersResponse) GetPerformers() []*Performer {
+	if x != nil {
+		return x.Performers
+	}
+	return nil
+}
+
 var File_eigenlayer_hourglass_v1_executor_executor_proto protoreflect.FileDescriptor
 
 const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
@@ -323,11 +523,30 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\x16DeployArtifactResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12#\n" +
-	"\rdeployment_id\x18\x03 \x01(\tR\fdeploymentId2\xe4\x01\n" +
+	"\rdeployment_id\x18\x03 \x01(\tR\fdeploymentId\"8\n" +
+	"\x15ListPerformersRequest\x12\x1f\n" +
+	"\vavs_address\x18\x01 \x01(\tR\n" +
+	"avsAddress\"\xe8\x02\n" +
+	"\tPerformer\x12!\n" +
+	"\fperformer_id\x18\x01 \x01(\tR\vperformerId\x12\x1f\n" +
+	"\vavs_address\x18\x02 \x01(\tR\n" +
+	"avsAddress\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12+\n" +
+	"\x11artifact_registry\x18\x04 \x01(\tR\x10artifactRegistry\x12'\n" +
+	"\x0fartifact_digest\x18\x05 \x01(\tR\x0eartifactDigest\x12)\n" +
+	"\x10resource_healthy\x18\x06 \x01(\bR\x0fresourceHealthy\x12/\n" +
+	"\x13application_healthy\x18\a \x01(\bR\x12applicationHealthy\x12*\n" +
+	"\x11last_health_check\x18\b \x01(\tR\x0flastHealthCheck\x12!\n" +
+	"\fcontainer_id\x18\t \x01(\tR\vcontainerId\"\\\n" +
+	"\x16ListPerformersResponse\x12B\n" +
+	"\n" +
+	"performers\x18\x01 \x03(\v2\".eigenlayer.hourglass.v1.PerformerR\n" +
+	"performers2\xd9\x02\n" +
 	"\x0fExecutorService\x12\\\n" +
 	"\n" +
 	"SubmitTask\x12'.eigenlayer.hourglass.v1.TaskSubmission\x1a#.eigenlayer.hourglass.v1.TaskResult\"\x00\x12s\n" +
-	"\x0eDeployArtifact\x12..eigenlayer.hourglass.v1.DeployArtifactRequest\x1a/.eigenlayer.hourglass.v1.DeployArtifactResponse\"\x00B\x85\x02\n" +
+	"\x0eDeployArtifact\x12..eigenlayer.hourglass.v1.DeployArtifactRequest\x1a/.eigenlayer.hourglass.v1.DeployArtifactResponse\"\x00\x12s\n" +
+	"\x0eListPerformers\x12..eigenlayer.hourglass.v1.ListPerformersRequest\x1a/.eigenlayer.hourglass.v1.ListPerformersResponse\"\x00B\x85\x02\n" +
 	"\x1bcom.eigenlayer.hourglass.v1B\rExecutorProtoP\x01ZYgithub.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor\xa2\x02\x03EHX\xaa\x02\x17Eigenlayer.Hourglass.V1\xca\x02\x17Eigenlayer\\Hourglass\\V1\xe2\x02#Eigenlayer\\Hourglass\\V1\\GPBMetadata\xea\x02\x19Eigenlayer::Hourglass::V1b\x06proto3"
 
 var (
@@ -342,23 +561,29 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP() []byte {
 	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescData
 }
 
-var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_eigenlayer_hourglass_v1_executor_executor_proto_goTypes = []any{
 	(*TaskSubmission)(nil),         // 0: eigenlayer.hourglass.v1.TaskSubmission
 	(*TaskResult)(nil),             // 1: eigenlayer.hourglass.v1.TaskResult
 	(*DeployArtifactRequest)(nil),  // 2: eigenlayer.hourglass.v1.DeployArtifactRequest
 	(*DeployArtifactResponse)(nil), // 3: eigenlayer.hourglass.v1.DeployArtifactResponse
+	(*ListPerformersRequest)(nil),  // 4: eigenlayer.hourglass.v1.ListPerformersRequest
+	(*Performer)(nil),              // 5: eigenlayer.hourglass.v1.Performer
+	(*ListPerformersResponse)(nil), // 6: eigenlayer.hourglass.v1.ListPerformersResponse
 }
 var file_eigenlayer_hourglass_v1_executor_executor_proto_depIdxs = []int32{
-	0, // 0: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:input_type -> eigenlayer.hourglass.v1.TaskSubmission
-	2, // 1: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:input_type -> eigenlayer.hourglass.v1.DeployArtifactRequest
-	1, // 2: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
-	3, // 3: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5, // 0: eigenlayer.hourglass.v1.ListPerformersResponse.performers:type_name -> eigenlayer.hourglass.v1.Performer
+	0, // 1: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:input_type -> eigenlayer.hourglass.v1.TaskSubmission
+	2, // 2: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:input_type -> eigenlayer.hourglass.v1.DeployArtifactRequest
+	4, // 3: eigenlayer.hourglass.v1.ExecutorService.ListPerformers:input_type -> eigenlayer.hourglass.v1.ListPerformersRequest
+	1, // 4: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
+	3, // 5: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
+	6, // 6: eigenlayer.hourglass.v1.ExecutorService.ListPerformers:output_type -> eigenlayer.hourglass.v1.ListPerformersResponse
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_eigenlayer_hourglass_v1_executor_executor_proto_init() }
@@ -372,7 +597,7 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc), len(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -35,6 +35,35 @@ type PerformerStatusEvent struct {
 	Timestamp   time.Time
 }
 
+// PerformerContainerStatus represents the deployment status of a performer container
+type PerformerContainerStatus string
+
+const (
+	PerformerContainerStatusInService PerformerContainerStatus = "InService"
+	PerformerContainerStatusStaged    PerformerContainerStatus = "Staged"
+)
+
+// PerformerHealth tracks the health state of a container
+type PerformerHealth struct {
+	ContainerHealth                      bool
+	ApplicationHealth                    bool
+	ConsecutiveApplicationHealthFailures int
+	LastHealthCheck                      time.Time
+}
+
+// PerformerInfo holds information about a performer container
+type PerformerInfo struct {
+	PerformerID        string
+	AvsAddress         string
+	Status             PerformerContainerStatus
+	ArtifactRegistry   string
+	ArtifactDigest     string
+	ContainerHealthy   bool
+	ApplicationHealthy bool
+	LastHealthCheck    time.Time
+	ContainerID        string
+}
+
 type AvsPerformerConfig struct {
 	AvsAddress           string
 	ProcessType          AvsProcessType
@@ -57,5 +86,6 @@ type IAvsPerformer interface {
 	CreatePerformer(ctx context.Context, image PerformerImage) (*PerformerCreationResult, error)
 	PromotePerformer(ctx context.Context, performerID string) error
 	RemovePerformer(ctx context.Context, performerID string) error
+	ListPerformers() []PerformerInfo
 	Shutdown() error
 }
