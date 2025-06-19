@@ -16,6 +16,7 @@ import (
 const (
 	// DefaultDeploymentTimeout is the default timeout for deployments
 	DefaultDeploymentTimeout = 1 * time.Minute
+	DefaultCleanupTimeout    = 5 * time.Second
 )
 
 // Manager manages container deployments for AVS performers
@@ -139,7 +140,11 @@ func (m *Manager) executeDeployment(
 			zap.String("deploymentID", deployment.ID),
 		)
 
-		if cancelErr := performer.RemovePerformer(ctx, deployment.PerformerID); cancelErr != nil {
+		// Use a fresh context for cleanup since the original context might be cancelled
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), DefaultDeploymentTimeout)
+		defer cleanupCancel()
+
+		if cancelErr := performer.RemovePerformer(cleanupCtx, deployment.PerformerID); cancelErr != nil {
 			m.logger.Error("Failed to cancel deployment after error",
 				zap.String("deploymentID", deployment.ID),
 				zap.Error(cancelErr),
@@ -174,7 +179,7 @@ func (m *Manager) executeDeployment(
 		m.updateDeploymentStatus(deployment.ID, DeploymentStatusFailed)
 
 		// Cancel deployment after promotion failure
-		cancelCtx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
+		cancelCtx, cancelFunc := context.WithTimeout(context.Background(), DefaultCleanupTimeout)
 		defer cancelFunc()
 
 		m.logger.Info("Calling performer.RemovePerformer after promotion failure",

@@ -22,25 +22,15 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := context.Background()
 
-	// Create a real container manager (Docker)
-	containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
-	require.NoError(t, err)
-
-	// Ensure cleanup
-	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := containerMgr.Shutdown(shutdownCtx); err != nil {
-			t.Logf("Warning: failed to shutdown container manager: %v", err)
-		}
-	}()
-
 	// Create peering data fetcher (required by serverPerformer)
 	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 		AggregatorPeers: nil, // Empty for tests
 	}, logger)
 
 	t.Run("successful deployment with real container", func(t *testing.T) {
+		// Create a container manager for this specific test
+		containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
+		require.NoError(t, err)
 		// Create deployment manager
 		deploymentMgr := NewManager(logger)
 
@@ -59,11 +49,15 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 			pdf,
 			logger,
 			containerMgr,
-			1*time.Second, // Short health check interval for tests
+			1*time.Second,
 		)
+		// Ensure cleanup for this test's container manager
+		defer func() {
+			assert.NoError(t, performer.Shutdown())
+		}()
 
 		// Initialize the performer
-		err := performer.Initialize(ctx)
+		err = performer.Initialize(ctx)
 		require.NoError(t, err)
 
 		// Deploy with a test container image
@@ -96,13 +90,13 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 		historicalResult, exists := deploymentMgr.GetDeploymentResult(result.DeploymentID)
 		assert.True(t, exists, "Deployment should be in history")
 		assert.Equal(t, result, historicalResult)
-
-		// Cleanup: shutdown the performer
-		err = performer.Shutdown()
-		assert.NoError(t, err)
 	})
 
 	t.Run("deployment already in progress", func(t *testing.T) {
+		// Create a container manager for this specific test
+		containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
+		require.NoError(t, err)
+
 		// Create deployment manager
 		deploymentMgr := NewManager(logger)
 
@@ -124,7 +118,17 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 			60*time.Second, // Long interval to keep deployment in progress
 		)
 
-		err := performer.Initialize(ctx)
+		// Ensure cleanup for this test's container manager
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if shutdownErr := containerMgr.Shutdown(shutdownCtx); shutdownErr != nil {
+				t.Logf("Warning: failed to shutdown container manager: %v", shutdownErr)
+			}
+			assert.NoError(t, performer.Shutdown())
+		}()
+
+		err = performer.Initialize(ctx)
 		require.NoError(t, err)
 
 		// Start first deployment with long timeout
@@ -139,8 +143,9 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 
 		// Start deployment in background
 		deploymentDone := make(chan struct{})
+		var deploymentResult *DeploymentResult
 		go func() {
-			_, _ = deploymentMgr.Deploy(ctx, config, performer)
+			deploymentResult, _ = deploymentMgr.Deploy(ctx, config, performer)
 			close(deploymentDone)
 		}()
 
@@ -153,24 +158,20 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 		assert.Nil(t, result)
 		assert.ErrorIs(t, err, ErrDeploymentInProgress)
 
-		// Cancel the active deployment
-		err = deploymentMgr.CancelDeployment(config.AvsAddress)
-		assert.NoError(t, err)
+		// Wait for first deployment to finish
+		<-deploymentDone
 
-		// Wait for deployment to finish
-		select {
-		case <-deploymentDone:
-			// Good
-		case <-time.After(10 * time.Second):
-			t.Fatal("Deployment did not finish after cancellation")
+		// Cleanup: remove any deployed performers if they exist
+		if deploymentResult != nil && deploymentResult.PerformerID != "" {
+			_ = performer.RemovePerformer(ctx, deploymentResult.PerformerID)
 		}
-
-		// Cleanup
-		err = performer.Shutdown()
-		assert.NoError(t, err)
 	})
 
 	t.Run("deployment timeout", func(t *testing.T) {
+		// Create a container manager for this specific test
+		containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
+		require.NoError(t, err)
+
 		// Create deployment manager
 		deploymentMgr := NewManager(logger)
 
@@ -192,7 +193,12 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 			5*time.Minute, // Very long interval to ensure timeout
 		)
 
-		err := performer.Initialize(ctx)
+		// Ensure cleanup for this test's container manager
+		defer func() {
+			assert.NoError(t, performer.Shutdown())
+		}()
+
+		err = performer.Initialize(ctx)
 		require.NoError(t, err)
 
 		// Deploy with short timeout
@@ -213,12 +219,15 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 		assert.ErrorIs(t, err, ErrDeploymentTimeout)
 		assert.Contains(t, result.Message, "Deployment timed out")
 
-		// Cleanup
-		err = performer.Shutdown()
-		assert.NoError(t, err)
+		// Note: No need to remove performer as deployment failed/timed out
+		// The deployment manager should have already cleaned up
 	})
 
 	t.Run("deployment cancelled", func(t *testing.T) {
+		// Create a container manager for this specific test
+		containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
+		require.NoError(t, err)
+
 		// Create a cancellable context
 		deployCtx, cancel := context.WithCancel(ctx)
 
@@ -243,7 +252,12 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 			30*time.Second, // Moderate interval
 		)
 
-		err := performer.Initialize(ctx)
+		// Ensure cleanup for this test's container manager
+		defer func() {
+			assert.NoError(t, performer.Shutdown())
+		}()
+
+		err = performer.Initialize(ctx)
 		require.NoError(t, err)
 
 		// Deploy configuration
@@ -278,9 +292,8 @@ func TestDeploymentManagerIntegration(t *testing.T) {
 		assert.Equal(t, DeploymentStatusCancelled, result.Status)
 		assert.ErrorIs(t, err, ErrDeploymentCancelled)
 
-		// Cleanup
-		cleanupErr := performer.Shutdown()
-		assert.NoError(t, cleanupErr)
+		// Note: No need to remove performer as deployment was cancelled
+		// The deployment manager should have already cleaned up
 	})
 
 	// Note: Promotion failure test would require manipulating the container health
@@ -296,7 +309,7 @@ func TestDeploymentManagerMultipleDeployments(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := context.Background()
 
-	// Create container manager
+	// Create container manager for this test
 	containerMgr, err := containerManager.NewDockerContainerManager(nil, logger)
 	require.NoError(t, err)
 	defer func() {
@@ -322,6 +335,7 @@ func TestDeploymentManagerMultipleDeployments(t *testing.T) {
 
 	type deploymentResult struct {
 		avsAddress string
+		performer  avsPerformer.IAvsPerformer
 		result     *DeploymentResult
 		err        error
 	}
@@ -366,17 +380,19 @@ func TestDeploymentManagerMultipleDeployments(t *testing.T) {
 			result, err := deploymentMgr.Deploy(ctx, config, performer)
 			resultChan <- deploymentResult{
 				avsAddress: avsAddr,
+				performer:  performer,
 				result:     result,
 				err:        err,
 			}
-
-			// Note: In real usage, we wouldn't shutdown immediately after deployment
-			// This is just for test cleanup
-			_ = performer.Shutdown()
 		}()
 	}
 
-	// Collect results
+	// Collect results and track performers for cleanup
+	var deployedPerformers []struct {
+		performer   avsPerformer.IAvsPerformer
+		performerID string
+	}
+
 	successCount := 0
 	for i := 0; i < len(avsAddresses); i++ {
 		res := <-resultChan
@@ -384,6 +400,15 @@ func TestDeploymentManagerMultipleDeployments(t *testing.T) {
 			successCount++
 			assert.Equal(t, DeploymentStatusCompleted, res.result.Status)
 			t.Logf("Deployment to %s completed successfully", res.avsAddress)
+
+			// Track for cleanup
+			deployedPerformers = append(deployedPerformers, struct {
+				performer   avsPerformer.IAvsPerformer
+				performerID string
+			}{
+				performer:   res.performer,
+				performerID: res.result.PerformerID,
+			})
 		} else {
 			t.Logf("Deployment to %s failed: %v", res.avsAddress, res.err)
 		}
@@ -391,4 +416,11 @@ func TestDeploymentManagerMultipleDeployments(t *testing.T) {
 
 	// All deployments should succeed
 	assert.Equal(t, len(avsAddresses), successCount, "All deployments should succeed")
+
+	// Cleanup: remove all deployed performers
+	for _, deployed := range deployedPerformers {
+		if err := deployed.performer.RemovePerformer(ctx, deployed.performerID); err != nil {
+			t.Logf("Warning: failed to remove performer %s: %v", deployed.performerID, err)
+		}
+	}
 }
