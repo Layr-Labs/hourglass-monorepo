@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ExecutorService_SubmitTask_FullMethodName     = "/eigenlayer.hourglass.v1.ExecutorService/SubmitTask"
-	ExecutorService_DeployArtifact_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorService/DeployArtifact"
-	ExecutorService_ListPerformers_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorService/ListPerformers"
+	ExecutorService_SubmitTask_FullMethodName      = "/eigenlayer.hourglass.v1.ExecutorService/SubmitTask"
+	ExecutorService_DeployArtifact_FullMethodName  = "/eigenlayer.hourglass.v1.ExecutorService/DeployArtifact"
+	ExecutorService_ListPerformers_FullMethodName  = "/eigenlayer.hourglass.v1.ExecutorService/ListPerformers"
+	ExecutorService_RemovePerformer_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorService/RemovePerformer"
 )
 
 // ExecutorServiceClient is the client API for ExecutorService service.
@@ -34,8 +35,10 @@ type ExecutorServiceClient interface {
 	SubmitTask(ctx context.Context, in *TaskSubmission, opts ...grpc.CallOption) (*TaskResult, error)
 	// DeployArtifact deploys a new artifact to an AVS performer
 	DeployArtifact(ctx context.Context, in *DeployArtifactRequest, opts ...grpc.CallOption) (*DeployArtifactResponse, error)
-	// ListPerformers returns a list of all performers and their status
+	// ListPerformers returns a list of all performers an d their status
 	ListPerformers(ctx context.Context, in *ListPerformersRequest, opts ...grpc.CallOption) (*ListPerformersResponse, error)
+	// RemovePerformer removes a performer from the executor
+	RemovePerformer(ctx context.Context, in *RemovePerformerRequest, opts ...grpc.CallOption) (*RemovePerformerResponse, error)
 }
 
 type executorServiceClient struct {
@@ -76,6 +79,16 @@ func (c *executorServiceClient) ListPerformers(ctx context.Context, in *ListPerf
 	return out, nil
 }
 
+func (c *executorServiceClient) RemovePerformer(ctx context.Context, in *RemovePerformerRequest, opts ...grpc.CallOption) (*RemovePerformerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemovePerformerResponse)
+	err := c.cc.Invoke(ctx, ExecutorService_RemovePerformer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExecutorServiceServer is the server API for ExecutorService service.
 // All implementations should embed UnimplementedExecutorServiceServer
 // for forward compatibility.
@@ -86,8 +99,10 @@ type ExecutorServiceServer interface {
 	SubmitTask(context.Context, *TaskSubmission) (*TaskResult, error)
 	// DeployArtifact deploys a new artifact to an AVS performer
 	DeployArtifact(context.Context, *DeployArtifactRequest) (*DeployArtifactResponse, error)
-	// ListPerformers returns a list of all performers and their status
+	// ListPerformers returns a list of all performers an d their status
 	ListPerformers(context.Context, *ListPerformersRequest) (*ListPerformersResponse, error)
+	// RemovePerformer removes a performer from the executor
+	RemovePerformer(context.Context, *RemovePerformerRequest) (*RemovePerformerResponse, error)
 }
 
 // UnimplementedExecutorServiceServer should be embedded to have
@@ -105,6 +120,9 @@ func (UnimplementedExecutorServiceServer) DeployArtifact(context.Context, *Deplo
 }
 func (UnimplementedExecutorServiceServer) ListPerformers(context.Context, *ListPerformersRequest) (*ListPerformersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPerformers not implemented")
+}
+func (UnimplementedExecutorServiceServer) RemovePerformer(context.Context, *RemovePerformerRequest) (*RemovePerformerResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemovePerformer not implemented")
 }
 func (UnimplementedExecutorServiceServer) testEmbeddedByValue() {}
 
@@ -180,6 +198,24 @@ func _ExecutorService_ListPerformers_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExecutorService_RemovePerformer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePerformerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExecutorServiceServer).RemovePerformer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExecutorService_RemovePerformer_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExecutorServiceServer).RemovePerformer(ctx, req.(*RemovePerformerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExecutorService_ServiceDesc is the grpc.ServiceDesc for ExecutorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -198,6 +234,10 @@ var ExecutorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPerformers",
 			Handler:    _ExecutorService_ListPerformers_Handler,
+		},
+		{
+			MethodName: "RemovePerformer",
+			Handler:    _ExecutorService_RemovePerformer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

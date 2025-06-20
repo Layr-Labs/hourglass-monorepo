@@ -495,6 +495,104 @@ func (x *ListPerformersResponse) GetPerformers() []*Performer {
 	return nil
 }
 
+// RemovePerformerRequest is the message used to remove a performer
+type RemovePerformerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PerformerId   string                 `protobuf:"bytes,1,opt,name=performer_id,json=performerId,proto3" json:"performer_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemovePerformerRequest) Reset() {
+	*x = RemovePerformerRequest{}
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemovePerformerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemovePerformerRequest) ProtoMessage() {}
+
+func (x *RemovePerformerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemovePerformerRequest.ProtoReflect.Descriptor instead.
+func (*RemovePerformerRequest) Descriptor() ([]byte, []int) {
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RemovePerformerRequest) GetPerformerId() string {
+	if x != nil {
+		return x.PerformerId
+	}
+	return ""
+}
+
+// RemovePerformerResponse contains the result of performer removal
+type RemovePerformerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemovePerformerResponse) Reset() {
+	*x = RemovePerformerResponse{}
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemovePerformerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemovePerformerResponse) ProtoMessage() {}
+
+func (x *RemovePerformerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemovePerformerResponse.ProtoReflect.Descriptor instead.
+func (*RemovePerformerResponse) Descriptor() ([]byte, []int) {
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RemovePerformerResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RemovePerformerResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_eigenlayer_hourglass_v1_executor_executor_proto protoreflect.FileDescriptor
 
 const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
@@ -541,12 +639,18 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\x16ListPerformersResponse\x12B\n" +
 	"\n" +
 	"performers\x18\x01 \x03(\v2\".eigenlayer.hourglass.v1.PerformerR\n" +
-	"performers2\xd9\x02\n" +
+	"performers\";\n" +
+	"\x16RemovePerformerRequest\x12!\n" +
+	"\fperformer_id\x18\x01 \x01(\tR\vperformerId\"M\n" +
+	"\x17RemovePerformerResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xd1\x03\n" +
 	"\x0fExecutorService\x12\\\n" +
 	"\n" +
 	"SubmitTask\x12'.eigenlayer.hourglass.v1.TaskSubmission\x1a#.eigenlayer.hourglass.v1.TaskResult\"\x00\x12s\n" +
 	"\x0eDeployArtifact\x12..eigenlayer.hourglass.v1.DeployArtifactRequest\x1a/.eigenlayer.hourglass.v1.DeployArtifactResponse\"\x00\x12s\n" +
-	"\x0eListPerformers\x12..eigenlayer.hourglass.v1.ListPerformersRequest\x1a/.eigenlayer.hourglass.v1.ListPerformersResponse\"\x00B\x85\x02\n" +
+	"\x0eListPerformers\x12..eigenlayer.hourglass.v1.ListPerformersRequest\x1a/.eigenlayer.hourglass.v1.ListPerformersResponse\"\x00\x12v\n" +
+	"\x0fRemovePerformer\x12/.eigenlayer.hourglass.v1.RemovePerformerRequest\x1a0.eigenlayer.hourglass.v1.RemovePerformerResponse\"\x00B\x85\x02\n" +
 	"\x1bcom.eigenlayer.hourglass.v1B\rExecutorProtoP\x01ZYgithub.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor\xa2\x02\x03EHX\xaa\x02\x17Eigenlayer.Hourglass.V1\xca\x02\x17Eigenlayer\\Hourglass\\V1\xe2\x02#Eigenlayer\\Hourglass\\V1\\GPBMetadata\xea\x02\x19Eigenlayer::Hourglass::V1b\x06proto3"
 
 var (
@@ -561,26 +665,30 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP() []byte {
 	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescData
 }
 
-var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_eigenlayer_hourglass_v1_executor_executor_proto_goTypes = []any{
-	(*TaskSubmission)(nil),         // 0: eigenlayer.hourglass.v1.TaskSubmission
-	(*TaskResult)(nil),             // 1: eigenlayer.hourglass.v1.TaskResult
-	(*DeployArtifactRequest)(nil),  // 2: eigenlayer.hourglass.v1.DeployArtifactRequest
-	(*DeployArtifactResponse)(nil), // 3: eigenlayer.hourglass.v1.DeployArtifactResponse
-	(*ListPerformersRequest)(nil),  // 4: eigenlayer.hourglass.v1.ListPerformersRequest
-	(*Performer)(nil),              // 5: eigenlayer.hourglass.v1.Performer
-	(*ListPerformersResponse)(nil), // 6: eigenlayer.hourglass.v1.ListPerformersResponse
+	(*TaskSubmission)(nil),          // 0: eigenlayer.hourglass.v1.TaskSubmission
+	(*TaskResult)(nil),              // 1: eigenlayer.hourglass.v1.TaskResult
+	(*DeployArtifactRequest)(nil),   // 2: eigenlayer.hourglass.v1.DeployArtifactRequest
+	(*DeployArtifactResponse)(nil),  // 3: eigenlayer.hourglass.v1.DeployArtifactResponse
+	(*ListPerformersRequest)(nil),   // 4: eigenlayer.hourglass.v1.ListPerformersRequest
+	(*Performer)(nil),               // 5: eigenlayer.hourglass.v1.Performer
+	(*ListPerformersResponse)(nil),  // 6: eigenlayer.hourglass.v1.ListPerformersResponse
+	(*RemovePerformerRequest)(nil),  // 7: eigenlayer.hourglass.v1.RemovePerformerRequest
+	(*RemovePerformerResponse)(nil), // 8: eigenlayer.hourglass.v1.RemovePerformerResponse
 }
 var file_eigenlayer_hourglass_v1_executor_executor_proto_depIdxs = []int32{
 	5, // 0: eigenlayer.hourglass.v1.ListPerformersResponse.performers:type_name -> eigenlayer.hourglass.v1.Performer
 	0, // 1: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:input_type -> eigenlayer.hourglass.v1.TaskSubmission
 	2, // 2: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:input_type -> eigenlayer.hourglass.v1.DeployArtifactRequest
 	4, // 3: eigenlayer.hourglass.v1.ExecutorService.ListPerformers:input_type -> eigenlayer.hourglass.v1.ListPerformersRequest
-	1, // 4: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
-	3, // 5: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
-	6, // 6: eigenlayer.hourglass.v1.ExecutorService.ListPerformers:output_type -> eigenlayer.hourglass.v1.ListPerformersResponse
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
+	7, // 4: eigenlayer.hourglass.v1.ExecutorService.RemovePerformer:input_type -> eigenlayer.hourglass.v1.RemovePerformerRequest
+	1, // 5: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
+	3, // 6: eigenlayer.hourglass.v1.ExecutorService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
+	6, // 7: eigenlayer.hourglass.v1.ExecutorService.ListPerformers:output_type -> eigenlayer.hourglass.v1.ListPerformersResponse
+	8, // 8: eigenlayer.hourglass.v1.ExecutorService.RemovePerformer:output_type -> eigenlayer.hourglass.v1.RemovePerformerResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -597,7 +705,7 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc), len(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

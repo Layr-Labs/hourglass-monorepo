@@ -12,8 +12,11 @@ service ExecutorService {
   // DeployArtifact deploys a new artifact to an AVS performer
   rpc DeployArtifact(DeployArtifactRequest) returns (DeployArtifactResponse) {}
   
-  // ListPerformers returns a list of all performers and their status
+  // ListPerformers returns a list of all performers an d their status
   rpc ListPerformers(ListPerformersRequest) returns (ListPerformersResponse) {}
+  
+  // RemovePerformer removes a performer from the executor
+  rpc RemovePerformer(RemovePerformerRequest) returns (RemovePerformerResponse) {}
 }
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
@@ -68,4 +71,15 @@ message Performer {
 // ListPerformersResponse contains the list of all performers
 message ListPerformersResponse {
   repeated Performer performers = 1;
+}
+
+// RemovePerformerRequest is the message used to remove a performer
+message RemovePerformerRequest {
+  string performer_id = 1;
+}
+
+// RemovePerformerResponse contains the result of performer removal
+message RemovePerformerResponse {
+  bool success = 1;
+  string message = 2;
 }

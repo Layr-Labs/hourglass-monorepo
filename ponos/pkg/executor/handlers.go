@@ -269,6 +269,77 @@ func (e *Executor) ListPerformers(_ context.Context, req *executorV1.ListPerform
 	}, nil
 }
 
+// RemovePerformer removes a performer from the executor
+func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePerformerRequest) (*executorV1.RemovePerformerResponse, error) {
+	e.logger.Info("Received remove performer request",
+		zap.String("performerId", req.GetPerformerId()),
+	)
+
+	// Validate request
+	if err := e.validateRemovePerformerRequest(req); err != nil {
+		return &executorV1.RemovePerformerResponse{
+			Success: false,
+			Message: err.Error(),
+		}, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	// Find the performer
+	avsAddress, performer, err := e.findPerformerByID(req.GetPerformerId())
+	if err != nil {
+		e.logger.Warn("Performer not found for removal",
+			zap.String("performerId", req.GetPerformerId()),
+		)
+		return &executorV1.RemovePerformerResponse{
+			Success: false,
+			Message: err.Error(),
+		}, status.Error(codes.NotFound, err.Error())
+	}
+
+	// Remove the performer
+	if err := performer.RemovePerformer(ctx, req.GetPerformerId()); err != nil {
+		e.logger.Error("Failed to remove performer",
+			zap.String("performerId", req.GetPerformerId()),
+			zap.String("avsAddress", avsAddress),
+			zap.Error(err),
+		)
+		return &executorV1.RemovePerformerResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to remove performer: %v", err),
+		}, status.Error(codes.Internal, err.Error())
+	}
+
+	e.logger.Info("Successfully removed performer",
+		zap.String("performerId", req.GetPerformerId()),
+		zap.String("avsAddress", avsAddress),
+	)
+
+	return &executorV1.RemovePerformerResponse{
+		Success: true,
+		Message: fmt.Sprintf("Performer %s removed successfully", req.GetPerformerId()),
+	}, nil
+}
+
+// validateRemovePerformerRequest validates the RemovePerformerRequest
+func (e *Executor) validateRemovePerformerRequest(req *executorV1.RemovePerformerRequest) error {
+	if req.GetPerformerId() == "" {
+		return errors.New("performer ID is required")
+	}
+	return nil
+}
+
+// findPerformerByID finds a performer by ID across all AVS performers
+func (e *Executor) findPerformerByID(performerID string) (string, avsPerformer.IAvsPerformer, error) {
+	for avsAddress, avsServerPerformer := range e.avsPerformers {
+		performerInfos := avsServerPerformer.ListPerformers()
+		for _, info := range performerInfos {
+			if info.PerformerID == performerID {
+				return avsAddress, avsServerPerformer, nil
+			}
+		}
+	}
+	return "", nil, fmt.Errorf("performer with ID %s not found", performerID)
+}
+
 // performerInfoToProto converts a PerformerInfo to the protobuf Performer format
 func (e *Executor) performerInfoToProto(info avsPerformer.PerformerInfo) *executorV1.Performer {
 	return &executorV1.Performer{
