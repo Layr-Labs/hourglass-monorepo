@@ -23,7 +23,8 @@ type PerformerImage struct {
 type PerformerStatus int
 
 const (
-	PerformerHealthy PerformerStatus = iota
+	PerformerHealthUnknown PerformerStatus = iota
+	PerformerHealthy
 	PerformerUnhealthy
 )
 
@@ -35,42 +36,66 @@ type PerformerStatusEvent struct {
 	Timestamp   time.Time
 }
 
-// PerformerContainerStatus represents the deployment status of a performer container
-type PerformerContainerStatus string
-
-const (
-	PerformerContainerStatusInService PerformerContainerStatus = "InService"
-	PerformerContainerStatusStaged    PerformerContainerStatus = "Staged"
-)
-
 // PerformerHealth tracks the health state of a container
 type PerformerHealth struct {
-	ContainerHealth                      bool
-	ApplicationHealth                    bool
+	ContainerIsHealthy                   bool
+	ApplicationIsHealthy                 bool
 	ConsecutiveApplicationHealthFailures int
 	LastHealthCheck                      time.Time
 }
 
-// PerformerInfo holds information about a performer container
-type PerformerInfo struct {
+// PerformerResourceStatus represents the deployment status of a performer container
+type PerformerResourceStatus string
+
+const (
+	PerformerResourceStatusInService PerformerResourceStatus = "InService"
+	PerformerResourceStatusStaged    PerformerResourceStatus = "Staged"
+)
+
+// PerformerMetadata holds information about a performer container
+type PerformerMetadata struct {
 	PerformerID        string
 	AvsAddress         string
-	Status             PerformerContainerStatus
+	ResourceID         string
+	Status             PerformerResourceStatus
 	ArtifactRegistry   string
 	ArtifactDigest     string
 	ContainerHealthy   bool
 	ApplicationHealthy bool
 	LastHealthCheck    time.Time
-	ContainerID        string
 }
 
 type AvsPerformerConfig struct {
-	AvsAddress           string
-	ProcessType          AvsProcessType
-	Image                PerformerImage
-	WorkerCount          int
-	PerformerNetworkName string
-	SigningCurve         string // bn254, bls381, etc
+	AvsAddress                     string
+	ProcessType                    AvsProcessType
+	Image                          PerformerImage
+	WorkerCount                    int
+	PerformerNetworkName           string
+	SigningCurve                   string        // bn254, bls381, etc
+	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
+}
+
+// DeploymentStatus represents the current state of a deployment
+type DeploymentStatus string
+
+const (
+	DeploymentStatusPending    DeploymentStatus = "pending"
+	DeploymentStatusInProgress DeploymentStatus = "in_progress"
+	DeploymentStatusFailed     DeploymentStatus = "failed"
+	DeploymentStatusCompleted  DeploymentStatus = "completed"
+	DeploymentStatusCancelled  DeploymentStatus = "cancelled"
+)
+
+// DeploymentResult contains the result of a deployment operation
+type DeploymentResult struct {
+	ID          string
+	PerformerID string
+	Status      DeploymentStatus
+	Image       PerformerImage
+	StartTime   time.Time
+	EndTime     time.Time
+	Message     string
+	Error       error
 }
 
 // PerformerCreationResult contains information about a deployed performer
@@ -83,9 +108,10 @@ type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
 	ValidateTaskSignature(task *performerTask.PerformerTask) error
+	Deploy(ctx context.Context, image PerformerImage) (*DeploymentResult, error)
 	CreatePerformer(ctx context.Context, image PerformerImage) (*PerformerCreationResult, error)
 	PromotePerformer(ctx context.Context, performerID string) error
 	RemovePerformer(ctx context.Context, performerID string) error
-	ListPerformers() []PerformerInfo
+	ListPerformers() []PerformerMetadata
 	Shutdown() error
 }

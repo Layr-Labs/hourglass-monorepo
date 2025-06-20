@@ -49,9 +49,9 @@ type DockerContainerManager struct {
 // DefaultContainerManagerConfig returns a ContainerManagerConfig with sensible defaults
 func DefaultContainerManagerConfig() *ContainerManagerConfig {
 	return &ContainerManagerConfig{
-		DefaultStartTimeout: DefaultStartTimeout,
-		DefaultStopTimeout:  DefaultStopTimeout,
-		DefaultHealthCheckConfig: &HealthCheckConfig{
+		StartTimeout: DefaultStartTimeout,
+		StopTimeout:  DefaultStopTimeout,
+		HealthCheckConfig: &HealthCheckConfig{
 			Enabled:          DefaultHealthEnabled,
 			Interval:         DefaultHealthInterval,
 			Timeout:          DefaultHealthTimeout,
@@ -59,7 +59,7 @@ func DefaultContainerManagerConfig() *ContainerManagerConfig {
 			StartPeriod:      DefaultStartTimeout,
 			FailureThreshold: DefaultFailureThreshold,
 		},
-		DefaultLivenessConfig: &LivenessConfig{
+		LivenessConfig: &LivenessConfig{
 			HealthCheckConfig: HealthCheckConfig{
 				Enabled:          DefaultHealthEnabled,
 				Interval:         DefaultHealthInterval,
@@ -77,7 +77,7 @@ func DefaultContainerManagerConfig() *ContainerManagerConfig {
 				RestartTimeout:     DefaultRestartTimeout,
 				RestartOnCrash:     DefaultRestartOnCrash,
 				RestartOnOOM:       DefaultRestartOnOOM,
-				RestartOnUnhealthy: DefaultRestartOnUnhealthy, // Let application decide
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy,
 			},
 			ResourceThresholds: ResourceThresholds{
 				CPUThreshold:    DefaultCPUThreshold,
@@ -99,19 +99,18 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 		return nil, errors.Wrap(err, "failed to create Docker client")
 	}
 
-	// Use default config if nil
 	if config == nil {
-		config = DefaultContainerManagerConfig()
+		return nil, errors.New("config is required")
 	}
 
-	if config.DefaultStartTimeout == 0 {
-		config.DefaultStartTimeout = DefaultStartTimeout
+	if config.StartTimeout == 0 {
+		config.StartTimeout = DefaultStartTimeout
 	}
-	if config.DefaultStopTimeout == 0 {
-		config.DefaultStopTimeout = DefaultStopTimeout
+	if config.StopTimeout == 0 {
+		config.StopTimeout = DefaultStopTimeout
 	}
-	if config.DefaultHealthCheckConfig == nil {
-		config.DefaultHealthCheckConfig = &HealthCheckConfig{
+	if config.HealthCheckConfig == nil {
+		config.HealthCheckConfig = &HealthCheckConfig{
 			Enabled:          DefaultHealthEnabled,
 			Interval:         DefaultHealthInterval,
 			Timeout:          DefaultHealthTimeout,
@@ -120,9 +119,9 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 			FailureThreshold: DefaultFailureThreshold,
 		}
 	}
-	if config.DefaultLivenessConfig == nil {
-		config.DefaultLivenessConfig = &LivenessConfig{
-			HealthCheckConfig: *config.DefaultHealthCheckConfig,
+	if config.LivenessConfig == nil {
+		config.LivenessConfig = &LivenessConfig{
+			HealthCheckConfig: *config.HealthCheckConfig,
 			RestartPolicy: RestartPolicy{
 				Enabled:            DefaultRestartEnabled,
 				MaxRestarts:        DefaultMaxRestarts,
@@ -132,7 +131,7 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 				RestartTimeout:     DefaultRestartTimeout,
 				RestartOnCrash:     DefaultRestartOnCrash,
 				RestartOnOOM:       DefaultRestartOnOOM,
-				RestartOnUnhealthy: DefaultRestartOnUnhealthy, // Let application decide
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy,
 			},
 			ResourceThresholds: ResourceThresholds{
 				CPUThreshold:    DefaultCPUThreshold,
@@ -263,7 +262,7 @@ func (dcm *DockerContainerManager) Stop(ctx context.Context, containerID string,
 	dcm.StopHealthCheck(containerID)
 
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStopTimeout
+		timeout = dcm.config.StopTimeout
 	}
 
 	timeoutSeconds := int(timeout.Seconds())
@@ -334,7 +333,7 @@ func (dcm *DockerContainerManager) IsRunning(ctx context.Context, containerID st
 // WaitForRunning waits for a container to be running with ports exposed
 func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, containerID string, timeout time.Duration) error {
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStartTimeout
+		timeout = dcm.config.StartTimeout
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -469,17 +468,17 @@ func (dcm *DockerContainerManager) RemoveNetwork(ctx context.Context, networkNam
 // StartHealthCheck starts a health check routine for a container
 func (dcm *DockerContainerManager) StartHealthCheck(ctx context.Context, containerID string, config *HealthCheckConfig) (<-chan bool, error) {
 	if config == nil {
-		config = dcm.config.DefaultHealthCheckConfig
+		config = dcm.config.HealthCheckConfig
 	} else {
 		// Merge with defaults for any zero values
 		if config.Interval == 0 {
-			config.Interval = dcm.config.DefaultHealthCheckConfig.Interval
+			config.Interval = dcm.config.HealthCheckConfig.Interval
 		}
 		if config.FailureThreshold == 0 {
-			config.FailureThreshold = dcm.config.DefaultHealthCheckConfig.FailureThreshold
+			config.FailureThreshold = dcm.config.HealthCheckConfig.FailureThreshold
 		}
 		if config.Timeout == 0 {
-			config.Timeout = dcm.config.DefaultHealthCheckConfig.Timeout
+			config.Timeout = dcm.config.HealthCheckConfig.Timeout
 		}
 	}
 
@@ -604,17 +603,17 @@ func (dcm *DockerContainerManager) Shutdown(ctx context.Context) error {
 // StartLivenessMonitoring starts comprehensive container monitoring with auto-restart
 func (dcm *DockerContainerManager) StartLivenessMonitoring(ctx context.Context, containerID string, config *LivenessConfig) (<-chan ContainerEvent, error) {
 	if config == nil {
-		config = dcm.config.DefaultLivenessConfig
+		config = dcm.config.LivenessConfig
 	} else {
 		// Merge with defaults for any zero values
 		if config.HealthCheckConfig.Interval == 0 {
-			config.HealthCheckConfig.Interval = dcm.config.DefaultLivenessConfig.HealthCheckConfig.Interval
+			config.HealthCheckConfig.Interval = dcm.config.LivenessConfig.HealthCheckConfig.Interval
 		}
 		if config.HealthCheckConfig.FailureThreshold == 0 {
-			config.HealthCheckConfig.FailureThreshold = dcm.config.DefaultLivenessConfig.HealthCheckConfig.FailureThreshold
+			config.HealthCheckConfig.FailureThreshold = dcm.config.LivenessConfig.HealthCheckConfig.FailureThreshold
 		}
 		if config.ResourceCheckInterval == 0 {
-			config.ResourceCheckInterval = dcm.config.DefaultLivenessConfig.ResourceCheckInterval
+			config.ResourceCheckInterval = dcm.config.LivenessConfig.ResourceCheckInterval
 		}
 	}
 
@@ -726,7 +725,7 @@ func (dcm *DockerContainerManager) GetContainerState(ctx context.Context, contai
 // RestartContainer restarts a container with the specified timeout
 func (dcm *DockerContainerManager) RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error {
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStopTimeout
+		timeout = dcm.config.StopTimeout
 	}
 
 	// TODO: Emit metric for manual container restart
@@ -1159,7 +1158,7 @@ func (dcm *DockerContainerManager) attemptRestart(ctx context.Context, monitor *
 	}
 
 	// Perform the restart
-	if err := dcm.RestartContainer(restartCtx, monitor.containerID, dcm.config.DefaultStopTimeout); err != nil {
+	if err := dcm.RestartContainer(restartCtx, monitor.containerID, dcm.config.StopTimeout); err != nil {
 		// Check if container doesn't exist, in which case we need to recreate it
 		if strings.Contains(err.Error(), "No such container") {
 			dcm.logger.Info("Container doesn't exist, recreation needed but not supported in container manager",
@@ -1427,7 +1426,7 @@ func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageN
 		}
 	}
 
-	// Image not found locally, pull it
+	// image not found locally, pull it
 	dcm.logger.Info("Pulling image", zap.String("image", imageName))
 
 	pullOptions := image.PullOptions{}

@@ -121,6 +121,10 @@ build/test-performer:
 build/test-performer-container:
 	cd ../demo && make build-container
 
+.PHONY: build/sleepy-test-performer-container
+build/sleepy-test-performer-container:
+	docker build -t sleepy-hello-performer:latest -f internal/testUtils/sleepyPerformer/Dockerfile .
+
 .PHONY: build/test-container
 build/test-container:
 	docker build -t ponos-test-container:latest ./internal/testUtils/testContainer/
@@ -130,7 +134,7 @@ test:
 	GOFLAGS="-count=1" $(GO) test -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
-ci-test: build/test-performer-container build/test-container test
+ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container test
 
 .PHONY: lint
 lint:

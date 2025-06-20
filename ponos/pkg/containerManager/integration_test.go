@@ -66,7 +66,7 @@ func TestDockerContainerManager_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -150,7 +150,7 @@ func TestDockerContainerManager_LivenessMonitoring_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -276,7 +276,7 @@ func TestDockerContainerManager_HealthCheck_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -341,7 +341,7 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 

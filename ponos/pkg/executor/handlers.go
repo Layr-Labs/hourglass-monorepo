@@ -9,16 +9,13 @@ import (
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/deployment"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-const deploymentTimeout = 1 * time.Minute
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
 	res, err := e.handleReceivedTask(req)
@@ -73,27 +70,23 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, status.Error(codes.Internal, err.Error())
 	}
 
-	// Deploy using deployment manager
-	deploymentConfig := deployment.DeploymentConfig{
-		AvsAddress: avsAddress,
-		Image: avsPerformer.PerformerImage{
-			Repository: req.GetRegistryUrl(),
-			Tag:        req.GetDigest(),
-		},
-		Timeout: deploymentTimeout,
+	// Deploy using the performer's Deploy method
+	image := avsPerformer.PerformerImage{
+		Repository: req.GetRegistryUrl(),
+		Tag:        req.GetDigest(),
 	}
 
-	result, err := e.deploymentMgr.Deploy(ctx, deploymentConfig, performer)
+	result, err := performer.Deploy(ctx, image)
 	if err != nil {
 		// Check for specific error types to return appropriate gRPC status codes
-		if errors.Is(err, deployment.ErrDeploymentInProgress) {
+		if strings.Contains(err.Error(), "deployment already in progress") {
 			return &executorV1.DeployArtifactResponse{
 				Success: false,
 				Message: err.Error(),
 			}, status.Error(codes.AlreadyExists, "deployment already in progress")
 		}
 
-		if errors.Is(err, deployment.ErrDeploymentTimeout) {
+		if strings.Contains(err.Error(), "deployment timeout") {
 			return &executorV1.DeployArtifactResponse{
 				Success: false,
 				Message: err.Error(),
@@ -116,7 +109,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	e.logger.Info("Deployment completed successfully",
 		zap.String("avsAddress", avsAddress),
-		zap.String("deploymentId", result.DeploymentID),
+		zap.String("deploymentId", result.ID),
 		zap.String("performerId", result.PerformerID),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
@@ -124,7 +117,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	return &executorV1.DeployArtifactResponse{
 		Success:      true,
 		Message:      result.Message,
-		DeploymentId: result.DeploymentID,
+		DeploymentId: result.ID,
 	}, nil
 }
 
@@ -139,7 +132,7 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 	// Create new AVS performer for this address
 	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
 
-	// Create config without image info - will be deployed via CreatePerformer
+	// Create config without image info - will be deployed via Deploy method
 	config := &avsPerformer.AvsPerformerConfig{
 		AvsAddress:           avsAddress,
 		ProcessType:          avsPerformer.AvsProcessTypeServer,
@@ -149,12 +142,14 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 		SigningCurve:         "bn254",
 	}
 
-	newPerformer := serverPerformer.NewAvsPerformerServer(
+	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
 		config,
 		e.peeringFetcher,
 		e.logger,
-		e.containerMgr,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize the performer (fetches aggregator peers, but won't create container)
 	if err := newPerformer.Initialize(ctx); err != nil {
@@ -283,8 +278,8 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 		}, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	// Find the performer
-	avsAddress, performer, err := e.findPerformerByID(req.GetPerformerId())
+	// Find the performerServer
+	avsAddress, performerServer, err := e.findPerformerByID(req.GetPerformerId())
 	if err != nil {
 		e.logger.Warn("Performer not found for removal",
 			zap.String("performerId", req.GetPerformerId()),
@@ -295,20 +290,20 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 		}, status.Error(codes.NotFound, err.Error())
 	}
 
-	// Remove the performer
-	if err := performer.RemovePerformer(ctx, req.GetPerformerId()); err != nil {
-		e.logger.Error("Failed to remove performer",
+	// Remove the performerServer
+	if err = performerServer.RemovePerformer(ctx, req.GetPerformerId()); err != nil {
+		e.logger.Error("Failed to remove performerServer",
 			zap.String("performerId", req.GetPerformerId()),
 			zap.String("avsAddress", avsAddress),
 			zap.Error(err),
 		)
 		return &executorV1.RemovePerformerResponse{
 			Success: false,
-			Message: fmt.Sprintf("Failed to remove performer: %v", err),
+			Message: fmt.Sprintf("Failed to remove performerServer: %v", err),
 		}, status.Error(codes.Internal, err.Error())
 	}
 
-	e.logger.Info("Successfully removed performer",
+	e.logger.Info("Successfully removed performerServer",
 		zap.String("performerId", req.GetPerformerId()),
 		zap.String("avsAddress", avsAddress),
 	)
@@ -340,8 +335,8 @@ func (e *Executor) findPerformerByID(performerID string) (string, avsPerformer.I
 	return "", nil, fmt.Errorf("performer with ID %s not found", performerID)
 }
 
-// performerInfoToProto converts a PerformerInfo to the protobuf Performer format
-func (e *Executor) performerInfoToProto(info avsPerformer.PerformerInfo) *executorV1.Performer {
+// performerInfoToProto converts a PerformerMetadata to the protobuf Performer format
+func (e *Executor) performerInfoToProto(info avsPerformer.PerformerMetadata) *executorV1.Performer {
 	return &executorV1.Performer{
 		PerformerId:        info.PerformerID,
 		AvsAddress:         info.AvsAddress,
@@ -351,6 +346,6 @@ func (e *Executor) performerInfoToProto(info avsPerformer.PerformerInfo) *execut
 		ResourceHealthy:    info.ContainerHealthy,
 		ApplicationHealthy: info.ApplicationHealthy,
 		LastHealthCheck:    info.LastHealthCheck.Format(time.RFC3339),
-		ContainerId:        info.ContainerID,
+		ContainerId:        info.ResourceID,
 	}
 }

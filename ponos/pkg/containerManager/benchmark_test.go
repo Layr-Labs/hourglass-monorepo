@@ -33,8 +33,8 @@ func BenchmarkCreateDefaultContainerConfig(b *testing.B) {
 func BenchmarkContainerManagerCreation(b *testing.B) {
 	logger := zap.NewNop()
 	config := &ContainerManagerConfig{
-		DefaultStartTimeout: 30 * time.Second,
-		DefaultStopTimeout:  10 * time.Second,
+		StartTimeout: 30 * time.Second,
+		StopTimeout:  10 * time.Second,
 	}
 
 	b.ResetTimer()
@@ -50,7 +50,7 @@ func BenchmarkContainerManagerCreation(b *testing.B) {
 
 func BenchmarkLivenessMonitoringSetup(b *testing.B) {
 	logger := zap.NewNop()
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func BenchmarkLivenessMonitoringSetup(b *testing.B) {
 
 func BenchmarkTriggerRestart(b *testing.B) {
 	logger := zap.NewNop()
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func BenchmarkContainerEventCreation(b *testing.B) {
 // BenchmarkConcurrentMonitoring tests performance with multiple concurrent monitors
 func BenchmarkConcurrentMonitoring(b *testing.B) {
 	logger := zap.NewNop()
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		dcm, err := NewDockerContainerManager(nil, logger)
+		dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -26,7 +26,7 @@ func (suite *ContainerManagerTestSuite) SetupSuite() {
 	suite.ctx = context.Background()
 
 	var err error
-	suite.dcm, err = NewDockerContainerManager(nil, suite.logger)
+	suite.dcm, err = NewDockerContainerManager(DefaultContainerManagerConfig(), suite.logger)
 	suite.Require().NoError(err)
 }
 
@@ -59,10 +59,10 @@ func (suite *ContainerManagerTestSuite) TestBasicFunctionality() {
 
 	suite.T().Run("default configuration", func(t *testing.T) {
 		config := suite.dcm.config
-		suite.Equal(30*time.Second, config.DefaultStartTimeout)
-		suite.Equal(10*time.Second, config.DefaultStopTimeout)
-		suite.NotNil(config.DefaultHealthCheckConfig)
-		suite.NotNil(config.DefaultLivenessConfig)
+		suite.Equal(30*time.Second, config.StartTimeout)
+		suite.Equal(10*time.Second, config.StopTimeout)
+		suite.NotNil(config.HealthCheckConfig)
+		suite.NotNil(config.LivenessConfig)
 	})
 }
 
@@ -254,7 +254,7 @@ func (suite *ContainerManagerTestSuite) TestConcurrency() {
 func (suite *ContainerManagerTestSuite) TestShutdown() {
 	suite.T().Run("shutdown cleans up resources", func(t *testing.T) {
 		// Create a separate container manager for this test
-		dcm, err := NewDockerContainerManager(nil, suite.logger)
+		dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), suite.logger)
 		suite.NoError(err)
 
 		// Start some monitoring

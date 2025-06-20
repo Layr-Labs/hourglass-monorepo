@@ -148,10 +148,6 @@ var runCmd = &cobra.Command{
 			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
 		}
 
-		if err := exec.BootPerformers(ctx); err != nil {
-			l.Sugar().Fatalw("Failed to boot performers", zap.Error(err))
-		}
-
 		go func() {
 			if err := exec.Run(ctx); err != nil {
 				l.Sugar().Fatal("Failed to run executor", zap.Error(err))
