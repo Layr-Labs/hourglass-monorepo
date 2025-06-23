@@ -7,6 +7,7 @@ import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/l
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
+import {ITaskAVSRegistrarBase, ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/ITaskAVSRegistrarBase.sol";
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {
@@ -26,10 +27,10 @@ contract SetupAVSTaskMailboxConfig is Script {
         // 1. Set the AVS config
         uint32[] memory executorOperatorSetIds = new uint32[](1);
         executorOperatorSetIds[0] = 1;
-        ITaskMailboxTypes.AvsConfig memory avsConfig =
-            ITaskMailboxTypes.AvsConfig({aggregatorOperatorSetId: 0, executorOperatorSetIds: executorOperatorSetIds});
-        ITaskMailbox(taskMailbox).setAvsConfig(avs, avsConfig);
-        ITaskMailboxTypes.AvsConfig memory avsConfigStored = ITaskMailbox(taskMailbox).getAvsConfig(avs);
+        ITaskAVSRegistrarBaseTypes.AvsConfig memory avsConfig =
+            ITaskAVSRegistrarBaseTypes.AvsConfig({aggregatorOperatorSetId: 0, executorOperatorSetIds: executorOperatorSetIds});
+        ITaskAVSRegistrarBase(avs).setAvsConfig(avsConfig);
+        ITaskAVSRegistrarBaseTypes.AvsConfig memory avsConfigStored = ITaskAVSRegistrarBase(avs).getAvsConfig();
         console.log(
             "AVS config set:", avsConfigStored.aggregatorOperatorSetId, avsConfigStored.executorOperatorSetIds[0]
         );

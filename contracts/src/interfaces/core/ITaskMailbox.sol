@@ -13,16 +13,6 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  * @notice Interface defining the type structures used in the TaskMailbox
  */
 interface ITaskMailboxTypes {
-    /**
-     * @notice Configuration for an AVS
-     * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
-     * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
-     */
-    struct AvsConfig {
-        // TODO: Pack storage efficiently.
-        uint32 aggregatorOperatorSetId; // TODO: Add avs address too: Any AVS can be an aggregator.
-        uint32[] executorOperatorSetIds;
-    }
 
     /**
      * @notice Configuration for the executor operator set
@@ -79,7 +69,6 @@ interface ITaskMailboxTypes {
      * @param status Current status of the task
      * @param avs Address of the AVS handling the task
      * @param executorOperatorSetId ID of the operator set executing the task
-     * @param aggregatorOperatorSetId ID of the operator set aggregating results
      * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
      * @param feeSplit Percentage split of fees taken by the TaskMailbox
@@ -94,7 +83,6 @@ interface ITaskMailboxTypes {
         TaskStatus status;
         address avs;
         uint32 executorOperatorSetId;
-        uint32 aggregatorOperatorSetId;
         address refundCollector;
         uint96 avsFee;
         uint16 feeSplit;
@@ -109,26 +97,14 @@ interface ITaskMailboxTypes {
  * @notice Interface defining errors that can be thrown by the TaskMailbox
  */
 interface ITaskMailboxErrors is ITaskMailboxTypes {
-    /// @notice Thrown when an AVS is not registered
-    error AvsNotRegistered();
-
     /// @notice Thrown when a certificate verification fails
     error CertificateVerificationFailed();
-
-    /// @notice Thrown when an executor operator set id is already in the set
-    error DuplicateExecutorOperatorSetId();
-
-    /// @notice Thrown when an executor operator set is not registered
-    error ExecutorOperatorSetNotRegistered();
 
     /// @notice Thrown when an executor operator set task config is not set
     error ExecutorOperatorSetTaskConfigNotSet();
 
     /// @notice Thrown when an input address is zero
     error InvalidAddressZero();
-
-    /// @notice Thrown when an aggregator operator set id is also an executor operator set id
-    error InvalidAggregatorOperatorSetId();
 
     /// @notice Thrown when a task creator is invalid
     error InvalidTaskCreator();
@@ -153,25 +129,6 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
  * @notice Interface defining events emitted by the TaskMailbox
  */
 interface ITaskMailboxEvents is ITaskMailboxTypes {
-    /**
-     * @notice Emitted when an AVS is registered or deregistered
-     * @param caller Address that called the registration function
-     * @param avs Address of the AVS being registered
-     * @param isRegistered Whether the AVS is being registered (true) or deregistered (false)
-     */
-    event AvsRegistered(address indexed caller, address indexed avs, bool isRegistered);
-
-    /**
-     * @notice Emitted when an AVS configuration is set
-     * @param caller Address that called the configuration function
-     * @param avs Address of the AVS being configured
-     * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
-     * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
-     */
-    event AvsConfigSet(
-        address indexed caller, address indexed avs, uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
-    );
-
     /**
      * @notice Emitted when an executor operator set task configuration is set
      * @param caller Address that called the configuration function
@@ -249,20 +206,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
 
     /**
-     * @notice Registers or deregisters an AVS with the TaskMailbox
-     * @param avs Address of the AVS to register
-     * @param isRegistered Whether to register (true) or deregister (false) the AVS
-     */
-    function registerAvs(address avs, bool isRegistered) external;
-
-    /**
-     * @notice Sets the configuration for an AVS
-     * @param avs Address of the AVS to configure
-     * @param config Configuration for the AVS
-     */
-    function setAvsConfig(address avs, AvsConfig memory config) external;
-
-    /**
      * @notice Sets the task configuration for an executor operator set
      * @param operatorSet The operator set to configure
      * @param config Task configuration for the operator set
@@ -306,33 +249,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         VIEW FUNCTIONS
      *
      */
-
-    /**
-     * @notice Checks if an AVS is registered
-     * @param avs Address of the AVS to check
-     * @return True if the AVS is registered, false otherwise
-     */
-    function isAvsRegistered(
-        address avs
-    ) external view returns (bool);
-
-    /**
-     * @notice Checks if an executor operator set is registered
-     * @param operatorSetKey Key of the operator set to check
-     * @return True if the executor operator set is registered, false otherwise
-     */
-    function isExecutorOperatorSetRegistered(
-        bytes32 operatorSetKey
-    ) external view returns (bool);
-
-    /**
-     * @notice Gets the configuration for an AVS
-     * @param avs Address of the AVS to get configuration for
-     * @return Configuration for the AVS
-     */
-    function getAvsConfig(
-        address avs
-    ) external view returns (AvsConfig memory);
 
     /**
      * @notice Gets the task configuration for an executor operator set

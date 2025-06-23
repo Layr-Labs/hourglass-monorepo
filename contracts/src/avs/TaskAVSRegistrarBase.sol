@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
+import {ITaskAVSRegistrarBase} from "../interfaces/avs/ITaskAVSRegistrarBase.sol";
 import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
 
 /**
@@ -24,4 +25,29 @@ abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage {
         IAllocationManager _allocationManager,
         IKeyRegistrar _keyRegistrar
     ) TaskAVSRegistrarBaseStorage(_avs, _allocationManager, _keyRegistrar) {}
+
+    /// @inheritdoc ITaskAVSRegistrarBase
+    function setAvsConfig(AvsConfig memory config) external {
+        // TODO: require checks - Figure out what checks are needed.
+        // 1. OperatorSets are valid
+        // 2. Only AVS delegated address can set config.
+
+        // Validate that aggregator operator set is not in executor operator sets
+        for (uint256 i = 0; i < config.executorOperatorSetIds.length; i++) {
+            require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[i], InvalidAggregatorOperatorSetId());
+            
+            // Check for duplicates in executor operator sets
+            for (uint256 j = i + 1; j < config.executorOperatorSetIds.length; j++) {
+                require(config.executorOperatorSetIds[i] != config.executorOperatorSetIds[j], DuplicateExecutorOperatorSetId());
+            }
+        }
+
+        avsConfig = config;
+        emit AvsConfigSet(msg.sender, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
+    }
+
+    /// @inheritdoc ITaskAVSRegistrarBase
+    function getAvsConfig() external view returns (AvsConfig memory) {
+        return avsConfig;
+    }
 }

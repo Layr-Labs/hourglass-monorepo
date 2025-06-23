@@ -17,6 +17,7 @@ import {
     ITaskMailboxErrors,
     ITaskMailboxEvents
 } from "../src/interfaces/core/ITaskMailbox.sol";
+
 import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
 import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
@@ -41,7 +42,6 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     address public aggregator = address(0x6);
 
     // Test operator set IDs
-    uint32 public aggregatorOperatorSetId = 0;
     uint32 public executorOperatorSetId = 1;
     uint32 public executorOperatorSetId2 = 2;
 
@@ -59,32 +59,10 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
         // Deploy TaskMailbox
         taskMailbox = new TaskMailbox();
 
-        // Setup initial AVS registration and config
-        _registerAndConfigureAvs();
-
         // Give creator some tokens and approve TaskMailbox
         mockToken.mint(creator, 1000 ether);
         vm.prank(creator);
         mockToken.approve(address(taskMailbox), type(uint256).max);
-    }
-
-    function _registerAndConfigureAvs() internal {
-        // Register AVS
-        vm.prank(avs);
-        taskMailbox.registerAvs(avs, true);
-
-        // Set AVS config
-        uint32[] memory executorOperatorSetIds = new uint32[](2);
-        executorOperatorSetIds[0] = executorOperatorSetId;
-        executorOperatorSetIds[1] = executorOperatorSetId2;
-
-        AvsConfig memory avsConfig = AvsConfig({
-            aggregatorOperatorSetId: aggregatorOperatorSetId,
-            executorOperatorSetIds: executorOperatorSetIds
-        });
-
-        vm.prank(avs);
-        taskMailbox.setAvsConfig(avs, avsConfig);
     }
 
     function _createValidTaskParams() internal view returns (TaskParams memory) {
@@ -167,21 +145,6 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(retrievedConfig.taskSLA, fuzzTaskSLA);
         assertEq(retrievedConfig.stakeProportionThreshold, fuzzStakeProportionThreshold);
         assertEq(retrievedConfig.taskMetadata, fuzzTaskMetadata);
-    }
-
-    function testFuzz_Revert_WhenExecutorOperatorSetNotRegistered(
-        uint32 unregisteredOperatorSetId
-    ) public {
-        vm.assume(
-            unregisteredOperatorSetId != executorOperatorSetId && unregisteredOperatorSetId != executorOperatorSetId2
-        );
-
-        OperatorSet memory unregisteredOperatorSet = OperatorSet(avs, unregisteredOperatorSetId);
-        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
-
-        vm.prank(avs);
-        vm.expectRevert(ExecutorOperatorSetNotRegistered.selector);
-        taskMailbox.setExecutorOperatorSetTaskConfig(unregisteredOperatorSet, config);
     }
 
     function test_Revert_WhenCertificateVerifierIsZero() public {
@@ -274,30 +237,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         }
     }
 
-    function test_Revert_WhenAvsNotRegistered() public {
-        TaskParams memory taskParams = _createValidTaskParams();
-        taskParams.executorOperatorSet.avs = address(0x999); // Unregistered AVS
-
-        vm.prank(creator);
-        vm.expectRevert(AvsNotRegistered.selector);
-        taskMailbox.createTask(taskParams);
-    }
-
-    function testFuzz_Revert_WhenExecutorOperatorSetNotRegistered(
-        uint32 unregisteredOperatorSetId
-    ) public {
-        vm.assume(
-            unregisteredOperatorSetId != executorOperatorSetId && unregisteredOperatorSetId != executorOperatorSetId2
-        );
-
-        TaskParams memory taskParams = _createValidTaskParams();
-        taskParams.executorOperatorSet.id = unregisteredOperatorSetId;
-
-        vm.prank(creator);
-        vm.expectRevert(ExecutorOperatorSetNotRegistered.selector);
-        taskMailbox.createTask(taskParams);
-    }
-
     function test_Revert_WhenPayloadIsEmpty() public {
         TaskParams memory taskParams = _createValidTaskParams();
         taskParams.payload = bytes("");
@@ -308,21 +247,8 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     }
 
     function test_Revert_WhenExecutorOperatorSetTaskConfigNotSet() public {
-        // Create a new executor operator set without config
-        uint32 newExecutorOperatorSetId = 99;
-        uint32[] memory executorOperatorSetIds = new uint32[](1);
-        executorOperatorSetIds[0] = newExecutorOperatorSetId;
-
-        AvsConfig memory avsConfig = AvsConfig({
-            aggregatorOperatorSetId: aggregatorOperatorSetId,
-            executorOperatorSetIds: executorOperatorSetIds
-        });
-
-        vm.prank(avs);
-        taskMailbox.setAvsConfig(avs, avsConfig);
-
         TaskParams memory taskParams = _createValidTaskParams();
-        taskParams.executorOperatorSet.id = newExecutorOperatorSetId;
+        taskParams.executorOperatorSet.id = 99; // Unconfigured operator set
 
         vm.prank(creator);
         vm.expectRevert(ExecutorOperatorSetTaskConfigNotSet.selector);

@@ -33,44 +33,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
-    function registerAvs(address avs, bool isRegistered) external {
-        // TODO: require checks - Figure out what checks are needed.
-        // 1. AVS is valid
-        // 2. Only AVS delegated address can (de)register.
-        _registerAvs(avs, isRegistered);
-    }
-
-    /// @inheritdoc ITaskMailbox
-    function setAvsConfig(address avs, AvsConfig memory config) external {
-        // TODO: require checks - Figure out what checks are needed.
-        // 1. OperatorSets are valid
-        // 2. Only AVS delegated address can set config.
-
-        AvsConfig memory memAvsConfig = avsConfigs[avs];
-        // Deregister all current executor operator sets.
-        for (uint256 i = 0; i < memAvsConfig.executorOperatorSetIds.length; i++) {
-            OperatorSet memory executorOperatorSet = OperatorSet(avs, memAvsConfig.executorOperatorSetIds[i]);
-            isExecutorOperatorSetRegistered[executorOperatorSet.key()] = false;
-        }
-
-        // Register new executor operator sets.
-        for (uint256 i = 0; i < config.executorOperatorSetIds.length; i++) {
-            OperatorSet memory executorOperatorSet = OperatorSet(avs, config.executorOperatorSetIds[i]);
-            require(config.aggregatorOperatorSetId != executorOperatorSet.id, InvalidAggregatorOperatorSetId());
-            require(!isExecutorOperatorSetRegistered[executorOperatorSet.key()], DuplicateExecutorOperatorSetId());
-            isExecutorOperatorSetRegistered[executorOperatorSet.key()] = true;
-        }
-
-        // If AVS is not registered, register it.
-        if (!isAvsRegistered[avs]) {
-            _registerAvs(avs, true);
-        }
-
-        avsConfigs[avs] = config;
-        emit AvsConfigSet(msg.sender, avs, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
@@ -81,7 +43,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
 
         // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
-        require(isExecutorOperatorSetRegistered[operatorSet.key()], ExecutorOperatorSetNotRegistered());
+        
         require(config.certificateVerifier != address(0), InvalidAddressZero());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
@@ -99,10 +61,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // TODO: Do we need a gasless version of this function?
         // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
 
-        require(isAvsRegistered[taskParams.executorOperatorSet.avs], AvsNotRegistered());
-        require(
-            isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered()
-        );
         require(taskParams.payload.length > 0, PayloadIsEmpty());
 
         ExecutorOperatorSetTaskConfig memory taskConfig =
@@ -119,15 +77,12 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         bytes32 taskHash = keccak256(abi.encode(globalTaskCount, address(this), block.chainid, taskParams));
         globalTaskCount = globalTaskCount + 1;
 
-        AvsConfig memory memAvsConfig = avsConfigs[taskParams.executorOperatorSet.avs];
-
         tasks[taskHash] = Task(
             msg.sender,
             block.timestamp.toUint96(),
             TaskStatus.Created,
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
-            memAvsConfig.aggregatorOperatorSetId,
             taskParams.refundCollector,
             taskParams.avsFee,
             0, // TODO: Update with fee split % variable
@@ -233,27 +188,10 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     }
 
     /**
-     * @notice Registers or deregisters an AVS
-     * @param avs The AVS address to register or deregister
-     * @param isRegistered Whether to register (true) or deregister (false) the AVS
-     */
-    function _registerAvs(address avs, bool isRegistered) internal {
-        isAvsRegistered[avs] = isRegistered;
-        emit AvsRegistered(msg.sender, avs, isRegistered);
-    }
-
-    /**
      *
      *                         VIEW FUNCTIONS
      *
      */
-
-    /// @inheritdoc ITaskMailbox
-    function getAvsConfig(
-        address avs
-    ) external view returns (AvsConfig memory) {
-        return avsConfigs[avs];
-    }
 
     /// @inheritdoc ITaskMailbox
     function getExecutorOperatorSetTaskConfig(
@@ -273,7 +211,6 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
             _getTaskStatus(task),
             task.avs,
             task.executorOperatorSetId,
-            task.aggregatorOperatorSetId,
             task.refundCollector,
             task.avsFee,
             task.feeSplit,
