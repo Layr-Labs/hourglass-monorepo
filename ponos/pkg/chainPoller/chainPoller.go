@@ -11,6 +11,7 @@ type IChainPoller interface {
 }
 
 type LogWithBlock struct {
-	Log   *log.DecodedLog
-	Block *ethereum.EthereumBlock
+	Log    *log.DecodedLog
+	RawLog *ethereum.EthereumEventLog
+	Block  *ethereum.EthereumBlock
 }

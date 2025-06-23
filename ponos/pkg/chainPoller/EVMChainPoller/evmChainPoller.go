@@ -208,8 +208,9 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		}
 
 		lwb := &chainPoller.LogWithBlock{
-			Block: block,
-			Log:   decodedLog,
+			Block:  block,
+			RawLog: log,
+			Log:    decodedLog,
 		}
 		select {
 		case ecp.chainEventsChan <- lwb:

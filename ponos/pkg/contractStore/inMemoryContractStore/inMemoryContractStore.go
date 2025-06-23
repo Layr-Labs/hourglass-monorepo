@@ -1,6 +1,7 @@
 package inMemoryContractStore
 
 import (
+	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -19,6 +20,17 @@ func NewInMemoryContractStore(contracts []*contracts.Contract, logger *zap.Logge
 		contracts: contracts,
 		logger:    logger,
 	}
+}
+
+func (ics *InMemoryContractStore) GetContractByNameForChainId(name string, chainId config.ChainId) (*contracts.Contract, error) {
+	foundContract := util.Find(ics.contracts, func(c *contracts.Contract) bool {
+		return strings.EqualFold(c.Name, name) && c.ChainId == chainId
+	})
+	if foundContract == nil {
+		ics.logger.Error("Contract not found", zap.String("name", name), zap.Any("chainId", chainId))
+		return nil, fmt.Errorf("contract not found: name=%s, chainId=%d", name, chainId)
+	}
+	return foundContract, nil
 }
 
 // TODO(seanmcgary): take a chain ID as an argument to increase specificity
