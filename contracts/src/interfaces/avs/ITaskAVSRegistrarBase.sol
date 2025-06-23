@@ -7,13 +7,12 @@ pragma solidity ^0.8.27;
  */
 interface ITaskAVSRegistrarBaseTypes {
     /**
-     * @notice Configuration for an AVS
+     * @notice Configuration for the Task-based AVS
      * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
      * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
      */
     struct AvsConfig {
-        // TODO: Pack storage efficiently.
-        uint32 aggregatorOperatorSetId; // TODO: Add avs address too: Any AVS can be an aggregator.
+        uint32 aggregatorOperatorSetId;
         uint32[] executorOperatorSetIds;
     }
 }
@@ -26,7 +25,7 @@ interface ITaskAVSRegistrarBaseErrors {
     /// @notice Thrown when an aggregator operator set id is also an executor operator set id
     error InvalidAggregatorOperatorSetId();
 
-    /// @notice Thrown when an executor operator set id is already in the set
+    /// @notice Thrown when executor operator set ids are not in monotonically increasing order (duplicate or unsorted)
     error DuplicateExecutorOperatorSetId();
 }
 
@@ -37,12 +36,11 @@ interface ITaskAVSRegistrarBaseErrors {
 interface ITaskAVSRegistrarBaseEvents is ITaskAVSRegistrarBaseTypes {
     /**
      * @notice Emitted when the AVS configuration is set
-     * @param caller Address that called the configuration function
      * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
      * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
      */
     event AvsConfigSet(
-        address indexed caller, uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
+        uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
     );
 }
 
@@ -55,6 +53,7 @@ interface ITaskAVSRegistrarBase is ITaskAVSRegistrarBaseErrors, ITaskAVSRegistra
     /**
      * @notice Sets the configuration for this AVS
      * @param config Configuration for the AVS
+     * @dev The executorOperatorSetIds must be monotonically increasing.
      */
     function setAvsConfig(AvsConfig memory config) external;
 

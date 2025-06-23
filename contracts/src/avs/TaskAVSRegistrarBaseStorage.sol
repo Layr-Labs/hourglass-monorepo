@@ -34,5 +34,5 @@ abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket, ITaskAV
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-    uint256[49] private __gap; // Reduced from 50 to 49 to account for the 1 new storage variable
+    uint256[48] private __gap;
 }

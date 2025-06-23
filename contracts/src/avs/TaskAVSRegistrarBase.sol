@@ -32,18 +32,20 @@ abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage {
         // 1. OperatorSets are valid
         // 2. Only AVS delegated address can set config.
 
-        // Validate that aggregator operator set is not in executor operator sets
-        for (uint256 i = 0; i < config.executorOperatorSetIds.length; i++) {
-            require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[i], InvalidAggregatorOperatorSetId());
+        // Validate executorOperatorSetIds are monotonically increasing (sorted) to efficiently check for duplicates
+        if (config.executorOperatorSetIds.length > 0) {
+            // Check that first element is not the aggregator
+            require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[0], InvalidAggregatorOperatorSetId());
             
-            // Check for duplicates in executor operator sets
-            for (uint256 j = i + 1; j < config.executorOperatorSetIds.length; j++) {
-                require(config.executorOperatorSetIds[i] != config.executorOperatorSetIds[j], DuplicateExecutorOperatorSetId());
+            // Check monotonically increasing order and no aggregator overlap in one pass
+            for (uint256 i = 1; i < config.executorOperatorSetIds.length; i++) {
+                require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[i], InvalidAggregatorOperatorSetId());
+                require(config.executorOperatorSetIds[i] > config.executorOperatorSetIds[i - 1], DuplicateExecutorOperatorSetId()); 
             }
         }
 
         avsConfig = config;
-        emit AvsConfigSet(msg.sender, config.aggregatorOperatorSetId, config.executorOperatorSetIds);
+        emit AvsConfigSet(config.aggregatorOperatorSetId, config.executorOperatorSetIds);
     }
 
     /// @inheritdoc ITaskAVSRegistrarBase
