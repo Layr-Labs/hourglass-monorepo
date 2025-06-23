@@ -53,20 +53,24 @@ func NewOperatorManager(
 	}
 }
 
-// TODO(seanmcgary): extend/rename this later to support the aggregator as well when we add distributed aggregation
-func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
+func (om *OperatorManager) GetOperatorSetData(
 	ctx context.Context,
 	chainId config.ChainId,
 	taskBlockNumber uint64,
 	operatorSetId uint32,
-) (*PeerWeight, error) {
-	l1Cc, err := om.getContractCallerForChainId(om.config.L1ChainId)
+) (
+	*contractCaller.OperatorTableData,
+	map[string][]*big.Int,
+	uint32,
+	error,
+) {
+	l1Cc, err := om.getContractCallerForChainId(chainId)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get contract caller for chain ID",
 			zap.Uint32("ChainId", uint32(chainId)),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, nil, 0, err
 	}
 
 	var targetChainCc contractCaller.IContractCaller
@@ -79,7 +83,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 				zap.Uint32("ChainId", uint32(chainId)),
 				zap.Error(err),
 			)
-			return nil, err
+			return nil, nil, 0, err
 		}
 	}
 
@@ -106,7 +110,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			zap.Uint64("BlockNumber", taskBlockNumber),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, nil, 0, err
 	}
 	var destTableUpdaterAddress common.Address
 	for i, destChainId := range destChainIds {
@@ -122,7 +126,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			zap.Uint32("ChainId", uint32(chainId)),
 			zap.Uint64("BlockNumber", taskBlockNumber),
 		)
-		return nil, fmt.Errorf("no table updater address found for chain ID %d", chainId)
+		return nil, nil, 0, fmt.Errorf("no table updater address found for chain ID %d", chainId)
 	}
 
 	// this will tell us when the global root was last updated for this chain
@@ -133,7 +137,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			zap.Uint64("BlockNumber", taskBlockNumber),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, nil, 0, err
 	}
 
 	var blockForTableData uint64
@@ -159,7 +163,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			zap.Uint64("BlockNumber", taskBlockNumber),
 			zap.Error(err),
 		)
-		return nil, err
+		return nil, nil, 0, err
 	}
 
 	operatorWeights := make(map[string][]*big.Int, len(tableData.Operators))
@@ -167,11 +171,25 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		weight := tableData.OperatorWeights[i]
 		operatorWeights[operator.String()] = weight
 	}
-	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
+
+	var referenceTimestamp uint32
+	if chainId == om.config.L1ChainId {
+		referenceTimestamp = tableData.LatestReferenceTimestamp // use task block number as reference timestamp for L1
+	} else {
+		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
 	}
 
+	return tableData, operatorWeights, referenceTimestamp, nil
+}
+
+func (om *OperatorManager) filterAndJoinOperatorsWithData(
+	operatorWeights map[string][]*big.Int,
+	operatorSetId uint32,
+	atBlockNumber uint64,
+	referenceTimestamp uint32,
+	chainId config.ChainId,
+	operators []*peering.OperatorPeerInfo,
+) (*PeerWeight, error) {
 	// filter the list of Operators down to those that are in the operator set and have Weights
 	operators = util.Filter(operators, func(op *peering.OperatorPeerInfo) bool {
 		for opAddr := range operatorWeights {
@@ -182,22 +200,66 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		return false
 	})
 
-	var referenceTimestamp uint32
-	if chainId == om.config.L1ChainId {
-		referenceTimestamp = tableData.LatestReferenceTimestamp // use task block number as reference timestamp for L1
-	} else {
-		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
-	}
-
 	return &PeerWeight{
-		BlockNumber:            taskBlockNumber,
+		BlockNumber:            atBlockNumber,
 		ChainId:                chainId,
 		OperatorSetId:          operatorSetId,
 		RootReferenceTimestamp: referenceTimestamp,
 		Weights:                operatorWeights,
 		Operators:              operators,
 	}, nil
+}
 
+func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
+	ctx context.Context,
+	chainId config.ChainId,
+	atBlockNumber uint64,
+	operatorSetId uint32,
+) (*PeerWeight, error) {
+	_, operatorWeights, referenceTimestamp, err := om.GetOperatorSetData(ctx, chainId, atBlockNumber, operatorSetId)
+	if err != nil {
+		return nil, err
+	}
+
+	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
+	}
+
+	return om.filterAndJoinOperatorsWithData(
+		operatorWeights,
+		operatorSetId,
+		atBlockNumber,
+		referenceTimestamp,
+		chainId,
+		operators,
+	)
+}
+
+func (om *OperatorManager) GetAggregatorPeersAndWeightsForBlock(
+	ctx context.Context,
+	chainId config.ChainId,
+	atBlockNumber uint64,
+	operatorSetId uint32,
+) (*PeerWeight, error) {
+	_, operatorWeights, referenceTimestamp, err := om.GetOperatorSetData(ctx, chainId, atBlockNumber, operatorSetId)
+	if err != nil {
+		return nil, err
+	}
+
+	operators, err := om.peeringDataFetcher.ListAggregatorOperators(ctx, om.config.AvsAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
+	}
+
+	return om.filterAndJoinOperatorsWithData(
+		operatorWeights,
+		operatorSetId,
+		atBlockNumber,
+		referenceTimestamp,
+		chainId,
+		operators,
+	)
 }
 
 func (om *OperatorManager) getContractCallerForChainId(chainId config.ChainId) (contractCaller.IContractCaller, error) {
