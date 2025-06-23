@@ -18,7 +18,7 @@ abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket, ITaskAV
     AvsConfig public avsConfig;
 
     /**
-     * @notice Constructor for TaskAVSRegistrarBaseStorage
+     * @dev Constructor that passes parameters to parent AVSRegistrarWithSocket
      * @param _avs The address of the AVS
      * @param _allocationManager The AllocationManager contract address
      * @param _keyRegistrar The KeyRegistrar contract address

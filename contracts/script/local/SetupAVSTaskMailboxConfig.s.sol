@@ -24,18 +24,7 @@ contract SetupAVSTaskMailboxConfig is Script {
         vm.startBroadcast(avsPrivateKey);
         console.log("AVS address:", avs);
 
-        // 1. Set the AVS config
-        uint32[] memory executorOperatorSetIds = new uint32[](1);
-        executorOperatorSetIds[0] = 1;
-        ITaskAVSRegistrarBaseTypes.AvsConfig memory avsConfig =
-            ITaskAVSRegistrarBaseTypes.AvsConfig({aggregatorOperatorSetId: 0, executorOperatorSetIds: executorOperatorSetIds});
-        ITaskAVSRegistrarBase(avs).setAvsConfig(avsConfig);
-        ITaskAVSRegistrarBaseTypes.AvsConfig memory avsConfigStored = ITaskAVSRegistrarBase(avs).getAvsConfig();
-        console.log(
-            "AVS config set:", avsConfigStored.aggregatorOperatorSetId, avsConfigStored.executorOperatorSetIds[0]
-        );
-
-        // 2. Set the Executor Operator Set Task Config
+        // Set the Executor Operator Set Task Config
         ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig = ITaskMailboxTypes
             .ExecutorOperatorSetTaskConfig({
             certificateVerifier: CERTIFICATE_VERIFIER,

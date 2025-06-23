@@ -7,6 +7,7 @@ import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
 import {MockTaskAVSRegistrar} from "../../test/mocks/MockTaskAVSRegistrar.sol";
+import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/ITaskAVSRegistrarBase.sol";
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts
@@ -26,7 +27,15 @@ contract DeployAVSL1Contracts is Script {
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        MockTaskAVSRegistrar taskAVSRegistrar = new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR);
+        // Create initial config
+        uint32[] memory executorOperatorSetIds = new uint32[](1);
+        executorOperatorSetIds[0] = 1;
+        ITaskAVSRegistrarBaseTypes.AvsConfig memory initialConfig = ITaskAVSRegistrarBaseTypes.AvsConfig({
+            aggregatorOperatorSetId: 0,
+            executorOperatorSetIds: executorOperatorSetIds
+        });
+
+        MockTaskAVSRegistrar taskAVSRegistrar = new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR, avs, initialConfig);
         console.log("TaskAVSRegistrar deployed to:", address(taskAVSRegistrar));
 
         vm.stopBroadcast();

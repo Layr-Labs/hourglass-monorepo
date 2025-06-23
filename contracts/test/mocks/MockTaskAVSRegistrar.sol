@@ -7,9 +7,19 @@ import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKey
 import {TaskAVSRegistrarBase} from "../../src/avs/TaskAVSRegistrarBase.sol";
 
 contract MockTaskAVSRegistrar is TaskAVSRegistrarBase {
+    /**
+     * @dev Constructor that passes parameters to parent TaskAVSRegistrarBase
+     * @param _avs The address of the AVS
+     * @param _allocationManager The AllocationManager contract address
+     * @param _keyRegistrar The KeyRegistrar contract address
+     * @param _owner The owner of the contract
+     * @param _initialConfig The initial AVS configuration
+     */
     constructor(
-        address avs,
-        IAllocationManager allocationManager,
-        IKeyRegistrar keyRegistrar
-    ) TaskAVSRegistrarBase(avs, allocationManager, keyRegistrar) {}
+        address _avs,
+        IAllocationManager _allocationManager,
+        IKeyRegistrar _keyRegistrar,
+        address _owner,
+        AvsConfig memory _initialConfig
+    ) TaskAVSRegistrarBase(_avs, _allocationManager, _keyRegistrar, _owner, _initialConfig) {}
 }

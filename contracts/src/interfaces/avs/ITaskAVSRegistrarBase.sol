@@ -27,6 +27,9 @@ interface ITaskAVSRegistrarBaseErrors {
 
     /// @notice Thrown when executor operator set ids are not in monotonically increasing order (duplicate or unsorted)
     error DuplicateExecutorOperatorSetId();
+
+    /// @notice Thrown when executor operator set ids are empty
+    error ExecutorOperatorSetIdsEmpty();
 }
 
 /**
