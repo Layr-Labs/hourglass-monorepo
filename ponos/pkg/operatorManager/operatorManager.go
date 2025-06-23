@@ -52,7 +52,8 @@ func NewOperatorManager(
 	}
 }
 
-func (om *OperatorManager) GetOperatorPeersAndWeightsForBlock(
+// TODO(seanmcgary): extend/rename this later to support the aggregator as well when we add distributed aggregation
+func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	ctx context.Context,
 	chainId config.ChainId,
 	blockNumber uint64,
