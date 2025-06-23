@@ -2,7 +2,6 @@ package avsExecutionManager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -184,16 +183,15 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("task %s is already being processed", task.TaskId)
 	}
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
+	defer cancel()
 
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
-		cancel()
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}
 
 	chainCC, err := em.getContractCallerForChain(task.ChainId)
 	if err != nil {
-		cancel()
 		em.logger.Sugar().Errorw("Failed to get contract caller for chain",
 			zap.Uint("chainId", uint(task.ChainId)),
 			zap.Error(err),
@@ -208,7 +206,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		task.OperatorSetId,
 	)
 	if err != nil {
-		cancel()
 		em.logger.Sugar().Errorw("Failed to get operator peers and weights",
 			zap.Uint("chainId", uint(task.ChainId)),
 			zap.Uint64("blockNumber", task.BlockNumber),
@@ -227,7 +224,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		em.logger,
 	)
 	if err != nil {
-		cancel()
 		em.logger.Sugar().Errorw("Failed to create task session",
 			zap.String("taskId", task.TaskId),
 			zap.Error(err),
@@ -253,7 +249,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		)
 		cert, err := ts.Process()
 		if err != nil {
-			cancel()
 			em.logger.Sugar().Errorw("Failed to process task",
 				zap.String("taskId", task.TaskId),
 				zap.Error(err),
@@ -262,7 +257,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			return
 		}
 		if cert == nil {
-			cancel()
 			em.logger.Sugar().Errorw("Received nil aggregate certificate",
 				zap.String("taskId", task.TaskId),
 			)
@@ -296,24 +290,33 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		em.logger.Sugar().Infow("Task session completed",
 			zap.String("taskId", task.TaskId),
 		)
+		return nil
 	case <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		return err
 	case <-ctx.Done():
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			em.logger.Sugar().Errorw("Task session context deadline exceeded",
+		switch ctx.Err() {
+		case context.Canceled:
+			em.logger.Sugar().Errorw("task session context done",
+				zap.String("taskId", task.TaskId),
+				zap.Error(ctx.Err()),
+			)
+		case context.DeadlineExceeded:
+			em.logger.Sugar().Errorw("task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
+		default:
+			em.logger.Sugar().Errorw("task session encountered an error",
+				zap.String("taskId", task.TaskId),
+				zap.Error(ctx.Err()),
+			)
+			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
 		}
-		em.logger.Sugar().Errorw("Task session context done",
-			zap.String("taskId", task.TaskId),
-			zap.Error(ctx.Err()),
-		)
+
 		return nil
 	}
-	return nil
 }
 
 func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error {
