@@ -13,7 +13,6 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  * @notice Interface defining the type structures used in the TaskMailbox
  */
 interface ITaskMailboxTypes {
-
     /**
      * @notice Configuration for the executor operator set
      * @param certificateVerifier Address of the certificate verifier contract

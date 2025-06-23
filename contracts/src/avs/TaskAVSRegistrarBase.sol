@@ -34,7 +34,9 @@ abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage, Ownable {
     }
 
     /// @inheritdoc ITaskAVSRegistrarBase
-    function setAvsConfig(AvsConfig memory config) external onlyOwner {
+    function setAvsConfig(
+        AvsConfig memory config
+    ) external onlyOwner {
         _setAvsConfig(config);
     }
 
@@ -48,17 +50,24 @@ abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage, Ownable {
      * @param config The AVS configuration to set
      * @dev The executorOperatorSetIds must be monotonically increasing.
      */
-    function _setAvsConfig(AvsConfig memory config) internal {
+    function _setAvsConfig(
+        AvsConfig memory config
+    ) internal {
         // Require at least one executor operator set
         require(config.executorOperatorSetIds.length > 0, ExecutorOperatorSetIdsEmpty());
 
         // Check that first element is not the aggregator
         require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[0], InvalidAggregatorOperatorSetId());
-        
+
         // Check monotonically increasing order and no aggregator overlap in one pass
         for (uint256 i = 1; i < config.executorOperatorSetIds.length; i++) {
-            require(config.aggregatorOperatorSetId != config.executorOperatorSetIds[i], InvalidAggregatorOperatorSetId());
-            require(config.executorOperatorSetIds[i] > config.executorOperatorSetIds[i - 1], DuplicateExecutorOperatorSetId());
+            require(
+                config.aggregatorOperatorSetId != config.executorOperatorSetIds[i], InvalidAggregatorOperatorSetId()
+            );
+            require(
+                config.executorOperatorSetIds[i] > config.executorOperatorSetIds[i - 1],
+                DuplicateExecutorOperatorSetId()
+            );
         }
 
         avsConfig = config;

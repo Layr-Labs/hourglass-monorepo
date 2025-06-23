@@ -42,9 +42,7 @@ interface ITaskAVSRegistrarBaseEvents is ITaskAVSRegistrarBaseTypes {
      * @param aggregatorOperatorSetId The operator set ID responsible for aggregating results
      * @param executorOperatorSetIds Array of operator set IDs responsible for executing tasks
      */
-    event AvsConfigSet(
-        uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds
-    );
+    event AvsConfigSet(uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds);
 }
 
 /**
@@ -58,11 +56,13 @@ interface ITaskAVSRegistrarBase is ITaskAVSRegistrarBaseErrors, ITaskAVSRegistra
      * @param config Configuration for the AVS
      * @dev The executorOperatorSetIds must be monotonically increasing.
      */
-    function setAvsConfig(AvsConfig memory config) external;
+    function setAvsConfig(
+        AvsConfig memory config
+    ) external;
 
     /**
      * @notice Gets the configuration for this AVS
      * @return Configuration for the AVS
      */
     function getAvsConfig() external view returns (AvsConfig memory);
-} 
+}

@@ -35,7 +35,8 @@ contract DeployAVSL1Contracts is Script {
             executorOperatorSetIds: executorOperatorSetIds
         });
 
-        MockTaskAVSRegistrar taskAVSRegistrar = new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR, avs, initialConfig);
+        MockTaskAVSRegistrar taskAVSRegistrar =
+            new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR, avs, initialConfig);
         console.log("TaskAVSRegistrar deployed to:", address(taskAVSRegistrar));
 
         vm.stopBroadcast();
