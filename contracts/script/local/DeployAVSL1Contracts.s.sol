@@ -7,7 +7,7 @@ import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
 import {MockTaskAVSRegistrar} from "../../test/mocks/MockTaskAVSRegistrar.sol";
-import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/ITaskAVSRegistrarBase.sol";
+import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts

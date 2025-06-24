@@ -5,7 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
-import {ITaskAVSRegistrarBase} from "../interfaces/avs/ITaskAVSRegistrarBase.sol";
+import {ITaskAVSRegistrarBase} from "../interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
 
 /**

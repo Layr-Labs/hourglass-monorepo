@@ -7,7 +7,6 @@ import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/l
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
-import {ITaskAVSRegistrarBase, ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/ITaskAVSRegistrarBase.sol";
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {

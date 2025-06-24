@@ -15,6 +15,9 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     /// @notice Mapping from task hash to task details
     mapping(bytes32 taskHash => Task task) internal tasks;
 
+    /// @notice Mapping to track registered executor operator sets by their keys
+    mapping(bytes32 operatorSetKey => bool isRegistered) public isExecutorOperatorSetRegistered;
+
     /// @notice Mapping from executor operator set key to its task configuration
     mapping(bytes32 operatorSetKey => ExecutorOperatorSetTaskConfig config) public executorOperatorSetTaskConfigs;
 }
