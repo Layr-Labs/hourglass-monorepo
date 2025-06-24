@@ -15,12 +15,6 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     /// @notice Mapping from task hash to task details
     mapping(bytes32 taskHash => Task task) internal tasks;
 
-    /// @notice Mapping to track registered AVSs
-    mapping(address avs => bool isRegistered) public isAvsRegistered;
-
-    /// @notice Mapping from AVS address to its configuration
-    mapping(address avs => AvsConfig config) public avsConfigs;
-
     /// @notice Mapping to track registered executor operator sets by their keys
     mapping(bytes32 operatorSetKey => bool isRegistered) public isExecutorOperatorSetRegistered;
 

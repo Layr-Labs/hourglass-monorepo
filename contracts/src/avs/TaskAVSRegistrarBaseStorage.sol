@@ -5,6 +5,7 @@ import {AVSRegistrarWithSocket} from
     "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
+import {ITaskAVSRegistrarBase} from "../interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 
 /**
  * @title TaskAVSRegistrarBaseStorage
@@ -12,9 +13,12 @@ import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKey
  * @notice Storage contract for TaskAVSRegistrarBase that extends AVSRegistrarWithSocket
  * @dev This contract extends AVSRegistrarWithSocket which already includes AVSRegistrar and SocketRegistry storage
  */
-abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket {
+abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket, ITaskAVSRegistrarBase {
+    /// @notice Configuration for this AVS
+    AvsConfig public avsConfig;
+
     /**
-     * @notice Constructor for TaskAVSRegistrarBaseStorage
+     * @dev Constructor that passes parameters to parent AVSRegistrarWithSocket
      * @param _avs The address of the AVS
      * @param _allocationManager The AllocationManager contract address
      * @param _keyRegistrar The KeyRegistrar contract address
@@ -30,5 +34,5 @@ abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket {
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-    uint256[50] private __gap;
+    uint256[48] private __gap;
 }
