@@ -11,6 +11,7 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableCalculator"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
+	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/TaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -308,7 +309,18 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 
 func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
 	avsAddr := common.HexToAddress(avsAddress)
-	avsConfig, err := cc.taskMailbox.GetAvsConfig(&bind.CallOpts{}, avsAddr)
+
+	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, avsAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
+	}
+
+	registrarCaller, err := ITaskAVSRegistrarBase.NewITaskAVSRegistrarBaseCaller(avsRegistrarAddress, cc.ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
+	}
+
+	avsConfig, err := registrarCaller.GetAvsConfig(&bind.CallOpts{})
 	if err != nil {
 		return nil, err
 	}
