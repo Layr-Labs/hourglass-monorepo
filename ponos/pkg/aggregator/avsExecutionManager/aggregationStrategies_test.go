@@ -109,7 +109,7 @@ func TestSelectStakeWeightedLeader(t *testing.T) {
 				{OperatorAddress: operator2},
 			},
 			Weights: map[string][]*big.Int{
-				operator1: {big.NewInt(1)},   // 1% of total
+				operator1: {big.NewInt(1)},  // 1% of total
 				operator2: {big.NewInt(99)}, // 99% of total
 			},
 		}
@@ -251,7 +251,7 @@ func TestSelectStakeWeightedLeaderDeterministic(t *testing.T) {
 func TestSelectStakeWeightedLeaderDistribution(t *testing.T) {
 	// This test validates that the distribution roughly matches the stake weights
 	operator1 := "0x1111111111111111111111111111111111111111" // 10% stake
-	operator2 := "0x2222222222222222222222222222222222222222" // 60% stake  
+	operator2 := "0x2222222222222222222222222222222222222222" // 60% stake
 	operator3 := "0x3333333333333333333333333333333333333333" // 30% stake
 
 	aggregators := &operatorManager.PeerWeight{
@@ -286,7 +286,7 @@ func TestSelectStakeWeightedLeaderDistribution(t *testing.T) {
 	assert.InDelta(t, expectedPercent1, actualPercent1, tolerance, "Operator1 selection frequency should match stake weight")
 
 	expectedPercent2 := 0.60
-	actualPercent2 := float64(counts[operator2]) / float64(totalRuns)  
+	actualPercent2 := float64(counts[operator2]) / float64(totalRuns)
 	assert.InDelta(t, expectedPercent2, actualPercent2, tolerance, "Operator2 selection frequency should match stake weight")
 
 	expectedPercent3 := 0.30
@@ -295,6 +295,6 @@ func TestSelectStakeWeightedLeaderDistribution(t *testing.T) {
 
 	// Ensure all operators were selected at least once
 	assert.Greater(t, counts[operator1], 0, "Operator1 should be selected at least once")
-	assert.Greater(t, counts[operator2], 0, "Operator2 should be selected at least once")  
+	assert.Greater(t, counts[operator2], 0, "Operator2 should be selected at least once")
 	assert.Greater(t, counts[operator3], 0, "Operator3 should be selected at least once")
 }
