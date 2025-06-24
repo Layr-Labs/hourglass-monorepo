@@ -137,18 +137,18 @@ func (aps *AvsPerformerServer) retryWithBackoff(ctx context.Context, operation f
 		if err == nil {
 			return nil
 		}
-		
+
 		aps.logger.Error(fmt.Sprintf("Failed %s", operationName),
 			append(aps.logFields(), zap.Error(err))...,
 		)
-		
+
 		if i == len(retries)-1 {
 			aps.logger.Info(fmt.Sprintf("Giving up on %s", operationName),
 				append(aps.logFields(), zap.Error(err))...,
 			)
 			return err
 		}
-		
+
 		time.Sleep(time.Duration(retry) * time.Second)
 	}
 	return fmt.Errorf("failed %s after retries", operationName)
