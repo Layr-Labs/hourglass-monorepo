@@ -100,7 +100,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // Post-task submission checks:
         // 1. AVS can write to storage in their hook for validating task lifecycle
         // 2. AVS can design fee markets to validate their avsFee against.
-        taskConfig.taskHook.validatePostTaskCreation(taskHash);
+        taskConfig.taskHook.handlePostTaskCreation(taskHash);
 
         emit TaskCreated(
             msg.sender,
@@ -159,7 +159,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // Task result submission checks:
         // 1. AVS can validate the task result, params and certificate.
         // 2. It can update hook storage for task lifecycle if needed.
-        task.executorOperatorSetTaskConfig.taskHook.validateTaskResultSubmission(taskHash, cert);
+        task.executorOperatorSetTaskConfig.taskHook.handleTaskResultSubmission(taskHash, cert);
 
         emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.result);
     }

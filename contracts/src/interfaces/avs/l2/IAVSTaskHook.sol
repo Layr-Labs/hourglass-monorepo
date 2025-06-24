@@ -28,21 +28,21 @@ interface IAVSTaskHook {
     ) external view;
 
     /**
-     * @notice Validates a task after it is created
+     * @notice Handles a task after it is created
      * @param taskHash Unique identifier of the task
      * @dev This function can be used to perform additional validation or update AVS-specific state
      */
-    function validatePostTaskCreation(
+    function handlePostTaskCreation(
         bytes32 taskHash
     ) external;
 
     /**
-     * @notice Validates a task result submission
+     * @notice Handles a task result submission
      * @param taskHash Unique identifier of the task
      * @param cert Certificate proving the validity of the result
      * @dev This function can be used to perform additional validation or update AVS-specific state
      */
-    function validateTaskResultSubmission(
+    function handleTaskResultSubmission(
         bytes32 taskHash,
         IBN254CertificateVerifierTypes.BN254Certificate memory cert
     ) external;
