@@ -2,11 +2,12 @@ package avsExecutionManager
 
 import (
 	"context"
-	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"strings"
 	"sync"
@@ -77,14 +78,14 @@ func (swas *StakeWeightedAggregationStrategy) IsLeaderForBlock(ctx context.Conte
 		return true, nil
 	}
 
-	// use mixHash as a seed to determine if this AVS is the leader based on stake weight
+	// use mixHash + avsAddress as a seed to determine if this AVS is the leader based on stake weight
 	swas.logger.Debug("Calculating leader for block",
 		zap.Uint64("blockNumber", block.Number.Value()),
 		zap.String("avsAddress", swas.avsAddress),
 		zap.String("mixHash", block.MixHash.Value()),
 	)
 
-	selectedLeader, err := selectStakeWeightedLeader(aggregators, block.MixHash.Value())
+	selectedLeader, err := selectStakeWeightedLeader(aggregators, block.MixHash.Value(), swas.avsAddress)
 	if err != nil {
 		return false, err
 	}
@@ -100,8 +101,8 @@ func (swas *StakeWeightedAggregationStrategy) IsLeaderForBlock(ctx context.Conte
 	return isLeader, nil
 }
 
-// selectStakeWeightedLeader selects a leader from aggregators based on their stake weights using mixHash as seed
-func selectStakeWeightedLeader(aggregators *operatorManager.PeerWeight, mixHash string) (string, error) {
+// selectStakeWeightedLeader selects a leader from aggregators based on their stake weights using mixHash and avsAddress as seed
+func selectStakeWeightedLeader(aggregators *operatorManager.PeerWeight, mixHash string, avsAddress string) (string, error) {
 	if aggregators == nil || len(aggregators.Operators) == 0 {
 		return "", fmt.Errorf("no operators provided")
 	}
@@ -130,8 +131,8 @@ func selectStakeWeightedLeader(aggregators *operatorManager.PeerWeight, mixHash 
 		return "", fmt.Errorf("no operators with stake weight found")
 	}
 
-	// Use mixHash as random seed
-	seed := calculateSeedFromMixHash(mixHash)
+	// Use mixHash + avsAddress as random seed
+	seed := calculateSeedFromMixHashAndAVS(mixHash, avsAddress)
 
 	// Calculate weighted random selection
 	target := new(big.Int).Mod(seed, totalWeight)
@@ -153,14 +154,43 @@ func selectStakeWeightedLeader(aggregators *operatorManager.PeerWeight, mixHash 
 	return "", fmt.Errorf("failed to select leader")
 }
 
-// calculateSeedFromMixHash converts mixHash string to a big.Int for use as random seed
-func calculateSeedFromMixHash(mixHash string) *big.Int {
+// calculateSeedFromMixHashAndAVS creates a seed using keccak256(mixHash + avsAddress) to match Solidity behavior
+func calculateSeedFromMixHashAndAVS(mixHash string, avsAddress string) *big.Int {
 	// Remove 0x prefix if present
 	mixHash = strings.TrimPrefix(mixHash, "0x")
+	avsAddress = strings.TrimPrefix(avsAddress, "0x")
 
-	// Hash the mixHash to get a uniform distribution
-	hasher := sha256.New()
-	hasher.Write([]byte(mixHash))
+	// Create keccak256 hasher (equivalent to Solidity's keccak256)
+	hasher := sha3.NewLegacyKeccak256()
+	
+	// Write mixHash bytes (padded to 32 bytes like Solidity abi.encode)
+	mixHashBytes := make([]byte, 32)
+	if len(mixHash) > 0 {
+		if mixHashData, err := hex.DecodeString(mixHash); err == nil {
+			// Right-pad shorter values, left-pad longer values to fit 32 bytes
+			if len(mixHashData) <= 32 {
+				copy(mixHashBytes[32-len(mixHashData):], mixHashData)
+			} else {
+				copy(mixHashBytes, mixHashData[:32])
+			}
+		}
+	}
+	hasher.Write(mixHashBytes)
+	
+	// Write avsAddress bytes (padded to 32 bytes like Solidity abi.encode)
+	avsAddressBytes := make([]byte, 32)
+	if len(avsAddress) > 0 {
+		if avsData, err := hex.DecodeString(avsAddress); err == nil {
+			// Right-pad shorter values, left-pad longer values to fit 32 bytes
+			if len(avsData) <= 32 {
+				copy(avsAddressBytes[32-len(avsData):], avsData)
+			} else {
+				copy(avsAddressBytes, avsData[:32])
+			}
+		}
+	}
+	hasher.Write(avsAddressBytes)
+	
 	hash := hasher.Sum(nil)
 
 	// Convert to big.Int
