@@ -29,9 +29,15 @@ var (
 	_ = abi.ConvertType
 )
 
+// ITaskAVSRegistrarBaseTypesAvsConfig is an auto generated low-level Go binding around an user-defined struct.
+type ITaskAVSRegistrarBaseTypesAvsConfig struct {
+	AggregatorOperatorSetId uint32
+	ExecutorOperatorSetIds  []uint32
+}
+
 // TaskAVSRegistrarBaseStorageMetaData contains all meta data concerning the TaskAVSRegistrarBaseStorage contract.
 var TaskAVSRegistrarBaseStorageMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"allocationManager\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIAllocationManager\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"avs\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"deregisterOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"getOperatorSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"keyRegistrar\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIKeyRegistrar\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"},{\"name\":\"data\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"supportsAVS\",\"inputs\":[{\"name\":\"_avs\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"updateSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"Initialized\",\"inputs\":[{\"name\":\"version\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"uint8\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorDeregistered\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"indexed\":false,\"internalType\":\"uint32[]\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorRegistered\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"indexed\":false,\"internalType\":\"uint32[]\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorSocketSet\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"socket\",\"type\":\"string\",\"indexed\":false,\"internalType\":\"string\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"CallerNotOperator\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"DataLengthMismatch\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"KeyNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"NotAllocationManager\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"allocationManager\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIAllocationManager\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"avs\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"avsConfig\",\"inputs\":[],\"outputs\":[{\"name\":\"aggregatorOperatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"deregisterOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"getAvsConfig\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskAVSRegistrarBaseTypes.AvsConfig\",\"components\":[{\"name\":\"aggregatorOperatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"executorOperatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"string\",\"internalType\":\"string\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"keyRegistrar\",\"inputs\":[],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"contractIKeyRegistrar\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerOperator\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"},{\"name\":\"data\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setAvsConfig\",\"inputs\":[{\"name\":\"config\",\"type\":\"tuple\",\"internalType\":\"structITaskAVSRegistrarBaseTypes.AvsConfig\",\"components\":[{\"name\":\"aggregatorOperatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"executorOperatorSetIds\",\"type\":\"uint32[]\",\"internalType\":\"uint32[]\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"supportsAVS\",\"inputs\":[{\"name\":\"_avs\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"updateSocket\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"socket\",\"type\":\"string\",\"internalType\":\"string\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"AvsConfigSet\",\"inputs\":[{\"name\":\"aggregatorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"executorOperatorSetIds\",\"type\":\"uint32[]\",\"indexed\":false,\"internalType\":\"uint32[]\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"Initialized\",\"inputs\":[{\"name\":\"version\",\"type\":\"uint8\",\"indexed\":false,\"internalType\":\"uint8\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorDeregistered\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"indexed\":false,\"internalType\":\"uint32[]\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorRegistered\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"operatorSetIds\",\"type\":\"uint32[]\",\"indexed\":false,\"internalType\":\"uint32[]\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"OperatorSocketSet\",\"inputs\":[{\"name\":\"operator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"socket\",\"type\":\"string\",\"indexed\":false,\"internalType\":\"string\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"CallerNotOperator\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"DataLengthMismatch\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"DuplicateExecutorOperatorSetId\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ExecutorOperatorSetIdsEmpty\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidAggregatorOperatorSetId\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"KeyNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"NotAllocationManager\",\"inputs\":[]}]",
 }
 
 // TaskAVSRegistrarBaseStorageABI is the input ABI used to generate the binding from.
@@ -242,6 +248,68 @@ func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageCallerSession) Av
 	return _TaskAVSRegistrarBaseStorage.Contract.Avs(&_TaskAVSRegistrarBaseStorage.CallOpts)
 }
 
+// AvsConfig is a free data retrieval call binding the contract method 0x7e777803.
+//
+// Solidity: function avsConfig() view returns(uint32 aggregatorOperatorSetId)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageCaller) AvsConfig(opts *bind.CallOpts) (uint32, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarBaseStorage.contract.Call(opts, &out, "avsConfig")
+
+	if err != nil {
+		return *new(uint32), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(uint32)).(*uint32)
+
+	return out0, err
+
+}
+
+// AvsConfig is a free data retrieval call binding the contract method 0x7e777803.
+//
+// Solidity: function avsConfig() view returns(uint32 aggregatorOperatorSetId)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageSession) AvsConfig() (uint32, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.AvsConfig(&_TaskAVSRegistrarBaseStorage.CallOpts)
+}
+
+// AvsConfig is a free data retrieval call binding the contract method 0x7e777803.
+//
+// Solidity: function avsConfig() view returns(uint32 aggregatorOperatorSetId)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageCallerSession) AvsConfig() (uint32, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.AvsConfig(&_TaskAVSRegistrarBaseStorage.CallOpts)
+}
+
+// GetAvsConfig is a free data retrieval call binding the contract method 0x41f548f0.
+//
+// Solidity: function getAvsConfig() view returns((uint32,uint32[]))
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageCaller) GetAvsConfig(opts *bind.CallOpts) (ITaskAVSRegistrarBaseTypesAvsConfig, error) {
+	var out []interface{}
+	err := _TaskAVSRegistrarBaseStorage.contract.Call(opts, &out, "getAvsConfig")
+
+	if err != nil {
+		return *new(ITaskAVSRegistrarBaseTypesAvsConfig), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(ITaskAVSRegistrarBaseTypesAvsConfig)).(*ITaskAVSRegistrarBaseTypesAvsConfig)
+
+	return out0, err
+
+}
+
+// GetAvsConfig is a free data retrieval call binding the contract method 0x41f548f0.
+//
+// Solidity: function getAvsConfig() view returns((uint32,uint32[]))
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageSession) GetAvsConfig() (ITaskAVSRegistrarBaseTypesAvsConfig, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.GetAvsConfig(&_TaskAVSRegistrarBaseStorage.CallOpts)
+}
+
+// GetAvsConfig is a free data retrieval call binding the contract method 0x41f548f0.
+//
+// Solidity: function getAvsConfig() view returns((uint32,uint32[]))
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageCallerSession) GetAvsConfig() (ITaskAVSRegistrarBaseTypesAvsConfig, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.GetAvsConfig(&_TaskAVSRegistrarBaseStorage.CallOpts)
+}
+
 // GetOperatorSocket is a free data retrieval call binding the contract method 0x8481931d.
 //
 // Solidity: function getOperatorSocket(address operator) view returns(string)
@@ -377,6 +445,27 @@ func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageTransactorSession
 	return _TaskAVSRegistrarBaseStorage.Contract.RegisterOperator(&_TaskAVSRegistrarBaseStorage.TransactOpts, operator, avs, operatorSetIds, data)
 }
 
+// SetAvsConfig is a paid mutator transaction binding the contract method 0xd1f2e81d.
+//
+// Solidity: function setAvsConfig((uint32,uint32[]) config) returns()
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageTransactor) SetAvsConfig(opts *bind.TransactOpts, config ITaskAVSRegistrarBaseTypesAvsConfig) (*types.Transaction, error) {
+	return _TaskAVSRegistrarBaseStorage.contract.Transact(opts, "setAvsConfig", config)
+}
+
+// SetAvsConfig is a paid mutator transaction binding the contract method 0xd1f2e81d.
+//
+// Solidity: function setAvsConfig((uint32,uint32[]) config) returns()
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageSession) SetAvsConfig(config ITaskAVSRegistrarBaseTypesAvsConfig) (*types.Transaction, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.SetAvsConfig(&_TaskAVSRegistrarBaseStorage.TransactOpts, config)
+}
+
+// SetAvsConfig is a paid mutator transaction binding the contract method 0xd1f2e81d.
+//
+// Solidity: function setAvsConfig((uint32,uint32[]) config) returns()
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageTransactorSession) SetAvsConfig(config ITaskAVSRegistrarBaseTypesAvsConfig) (*types.Transaction, error) {
+	return _TaskAVSRegistrarBaseStorage.Contract.SetAvsConfig(&_TaskAVSRegistrarBaseStorage.TransactOpts, config)
+}
+
 // UpdateSocket is a paid mutator transaction binding the contract method 0x6591666a.
 //
 // Solidity: function updateSocket(address operator, string socket) returns()
@@ -396,6 +485,141 @@ func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageSession) UpdateSo
 // Solidity: function updateSocket(address operator, string socket) returns()
 func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageTransactorSession) UpdateSocket(operator common.Address, socket string) (*types.Transaction, error) {
 	return _TaskAVSRegistrarBaseStorage.Contract.UpdateSocket(&_TaskAVSRegistrarBaseStorage.TransactOpts, operator, socket)
+}
+
+// TaskAVSRegistrarBaseStorageAvsConfigSetIterator is returned from FilterAvsConfigSet and is used to iterate over the raw logs and unpacked data for AvsConfigSet events raised by the TaskAVSRegistrarBaseStorage contract.
+type TaskAVSRegistrarBaseStorageAvsConfigSetIterator struct {
+	Event *TaskAVSRegistrarBaseStorageAvsConfigSet // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *TaskAVSRegistrarBaseStorageAvsConfigSetIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(TaskAVSRegistrarBaseStorageAvsConfigSet)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(TaskAVSRegistrarBaseStorageAvsConfigSet)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *TaskAVSRegistrarBaseStorageAvsConfigSetIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *TaskAVSRegistrarBaseStorageAvsConfigSetIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// TaskAVSRegistrarBaseStorageAvsConfigSet represents a AvsConfigSet event raised by the TaskAVSRegistrarBaseStorage contract.
+type TaskAVSRegistrarBaseStorageAvsConfigSet struct {
+	AggregatorOperatorSetId uint32
+	ExecutorOperatorSetIds  []uint32
+	Raw                     types.Log // Blockchain specific contextual infos
+}
+
+// FilterAvsConfigSet is a free log retrieval operation binding the contract event 0x836f1d33f6d85cfc7b24565d309c6e1486cf56dd3d8267a9651e05b88342ef51.
+//
+// Solidity: event AvsConfigSet(uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageFilterer) FilterAvsConfigSet(opts *bind.FilterOpts) (*TaskAVSRegistrarBaseStorageAvsConfigSetIterator, error) {
+
+	logs, sub, err := _TaskAVSRegistrarBaseStorage.contract.FilterLogs(opts, "AvsConfigSet")
+	if err != nil {
+		return nil, err
+	}
+	return &TaskAVSRegistrarBaseStorageAvsConfigSetIterator{contract: _TaskAVSRegistrarBaseStorage.contract, event: "AvsConfigSet", logs: logs, sub: sub}, nil
+}
+
+// WatchAvsConfigSet is a free log subscription operation binding the contract event 0x836f1d33f6d85cfc7b24565d309c6e1486cf56dd3d8267a9651e05b88342ef51.
+//
+// Solidity: event AvsConfigSet(uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageFilterer) WatchAvsConfigSet(opts *bind.WatchOpts, sink chan<- *TaskAVSRegistrarBaseStorageAvsConfigSet) (event.Subscription, error) {
+
+	logs, sub, err := _TaskAVSRegistrarBaseStorage.contract.WatchLogs(opts, "AvsConfigSet")
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(TaskAVSRegistrarBaseStorageAvsConfigSet)
+				if err := _TaskAVSRegistrarBaseStorage.contract.UnpackLog(event, "AvsConfigSet", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseAvsConfigSet is a log parse operation binding the contract event 0x836f1d33f6d85cfc7b24565d309c6e1486cf56dd3d8267a9651e05b88342ef51.
+//
+// Solidity: event AvsConfigSet(uint32 aggregatorOperatorSetId, uint32[] executorOperatorSetIds)
+func (_TaskAVSRegistrarBaseStorage *TaskAVSRegistrarBaseStorageFilterer) ParseAvsConfigSet(log types.Log) (*TaskAVSRegistrarBaseStorageAvsConfigSet, error) {
+	event := new(TaskAVSRegistrarBaseStorageAvsConfigSet)
+	if err := _TaskAVSRegistrarBaseStorage.contract.UnpackLog(event, "AvsConfigSet", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
 }
 
 // TaskAVSRegistrarBaseStorageInitializedIterator is returned from FilterInitialized and is used to iterate over the raw logs and unpacked data for Initialized events raised by the TaskAVSRegistrarBaseStorage contract.

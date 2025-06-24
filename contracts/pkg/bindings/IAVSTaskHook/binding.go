@@ -71,7 +71,7 @@ type OperatorSet struct {
 
 // IAVSTaskHookMetaData contains all meta data concerning the IAVSTaskHook contract.
 var IAVSTaskHookMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"validatePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"validateTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254Certificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"signature\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"apk\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"nonSignerWitnesses\",\"type\":\"tuple[]\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254OperatorInfoWitness[]\",\"components\":[{\"name\":\"operatorIndex\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"operatorInfoProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"operatorInfo\",\"type\":\"tuple\",\"internalType\":\"structIBN254TableCalculatorTypes.BN254OperatorInfo\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}]}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"handlePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"handleTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254Certificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"signature\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"apk\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"nonSignerWitnesses\",\"type\":\"tuple[]\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254OperatorInfoWitness[]\",\"components\":[{\"name\":\"operatorIndex\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"operatorInfoProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"operatorInfo\",\"type\":\"tuple\",\"internalType\":\"structIBN254TableCalculatorTypes.BN254OperatorInfo\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}]}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"}]",
 }
 
 // IAVSTaskHookABI is the input ABI used to generate the binding from.
@@ -249,44 +249,44 @@ func (_IAVSTaskHook *IAVSTaskHookCallerSession) ValidatePreTaskCreation(caller c
 	return _IAVSTaskHook.Contract.ValidatePreTaskCreation(&_IAVSTaskHook.CallOpts, caller, operatorSet, payload)
 }
 
-// ValidatePostTaskCreation is a paid mutator transaction binding the contract method 0x8679c781.
+// HandlePostTaskCreation is a paid mutator transaction binding the contract method 0x09c5c450.
 //
-// Solidity: function validatePostTaskCreation(bytes32 taskHash) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactor) ValidatePostTaskCreation(opts *bind.TransactOpts, taskHash [32]byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.contract.Transact(opts, "validatePostTaskCreation", taskHash)
+// Solidity: function handlePostTaskCreation(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactor) HandlePostTaskCreation(opts *bind.TransactOpts, taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.contract.Transact(opts, "handlePostTaskCreation", taskHash)
 }
 
-// ValidatePostTaskCreation is a paid mutator transaction binding the contract method 0x8679c781.
+// HandlePostTaskCreation is a paid mutator transaction binding the contract method 0x09c5c450.
 //
-// Solidity: function validatePostTaskCreation(bytes32 taskHash) returns()
-func (_IAVSTaskHook *IAVSTaskHookSession) ValidatePostTaskCreation(taskHash [32]byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.ValidatePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
+// Solidity: function handlePostTaskCreation(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) HandlePostTaskCreation(taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandlePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
 }
 
-// ValidatePostTaskCreation is a paid mutator transaction binding the contract method 0x8679c781.
+// HandlePostTaskCreation is a paid mutator transaction binding the contract method 0x09c5c450.
 //
-// Solidity: function validatePostTaskCreation(bytes32 taskHash) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactorSession) ValidatePostTaskCreation(taskHash [32]byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.ValidatePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
+// Solidity: function handlePostTaskCreation(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandlePostTaskCreation(taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandlePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
 }
 
-// ValidateTaskResultSubmission is a paid mutator transaction binding the contract method 0x485e73b8.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
 //
-// Solidity: function validateTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactor) ValidateTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
-	return _IAVSTaskHook.contract.Transact(opts, "validateTaskResultSubmission", taskHash, cert)
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactor) HandleTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+	return _IAVSTaskHook.contract.Transact(opts, "handleTaskResultSubmission", taskHash, cert)
 }
 
-// ValidateTaskResultSubmission is a paid mutator transaction binding the contract method 0x485e73b8.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
 //
-// Solidity: function validateTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookSession) ValidateTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.ValidateTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) HandleTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
 }
 
-// ValidateTaskResultSubmission is a paid mutator transaction binding the contract method 0x485e73b8.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
 //
-// Solidity: function validateTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactorSession) ValidateTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.ValidateTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandleTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
 }
