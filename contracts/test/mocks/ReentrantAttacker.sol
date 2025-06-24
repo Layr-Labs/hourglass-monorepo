@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IBN254CertificateVerifierTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {IBN254CertificateVerifierTypes} from
+    "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 
@@ -15,20 +16,22 @@ import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
  */
 contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
     TaskMailbox public taskMailbox;
-    
+
     // Store attack parameters individually to avoid memory/storage issues
     address public refundCollector;
     uint96 public avsFee;
     address public executorOperatorSetAvs;
     uint32 public executorOperatorSetId;
     bytes public payload;
-    
+
     bytes32 public attackTaskHash;
     bytes public result;
     bool public attackOnPost;
     bool public attackCreateTask;
 
-    constructor(address _taskMailbox) {
+    constructor(
+        address _taskMailbox
+    ) {
         taskMailbox = TaskMailbox(_taskMailbox);
     }
 
@@ -46,20 +49,18 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
         executorOperatorSetAvs = _taskParams.executorOperatorSet.avs;
         executorOperatorSetId = _taskParams.executorOperatorSet.id;
         payload = _taskParams.payload;
-        
+
         attackTaskHash = _attackTaskHash;
         result = _result;
         attackOnPost = _attackOnPost;
         attackCreateTask = _attackCreateTask;
     }
 
-    function validatePreTaskCreation(
-        address,
-        OperatorSet memory,
-        bytes memory
-    ) external view override {}
+    function validatePreTaskCreation(address, OperatorSet memory, bytes memory) external view override {}
 
-    function handlePostTaskCreation(bytes32) external override {
+    function handlePostTaskCreation(
+        bytes32
+    ) external override {
         if (attackOnPost) {
             if (attackCreateTask) {
                 // Reconstruct TaskParams for the attack
@@ -73,7 +74,8 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                 taskMailbox.createTask(taskParams);
             } else {
                 // Reconstruct certificate for the attack
-                IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+                IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes
+                    .BN254Certificate({
                     referenceTimestamp: uint32(block.timestamp),
                     messageHash: attackTaskHash,
                     signature: BN254.G1Point(0, 0),
@@ -103,7 +105,8 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                 taskMailbox.createTask(taskParams);
             } else {
                 // Reconstruct certificate for the attack
-                IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+                IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes
+                    .BN254Certificate({
                     referenceTimestamp: uint32(block.timestamp),
                     messageHash: attackTaskHash,
                     signature: BN254.G1Point(0, 0),
@@ -115,4 +118,4 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
             }
         }
     }
-} 
+}

@@ -31,10 +31,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
-    function registerExecutorOperatorSet(
-        OperatorSet memory operatorSet,
-        bool isRegistered
-    ) external {
+    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
         // TODO: Only OperatorSetOwner can register executor operator set.
 
         _registerExecutorOperatorSet(operatorSet, isRegistered);
@@ -70,7 +67,9 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
 
         require(taskParams.payload.length > 0, PayloadIsEmpty());
-        require(isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered());
+        require(
+            isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered()
+        );
 
         ExecutorOperatorSetTaskConfig memory taskConfig =
             executorOperatorSetTaskConfigs[taskParams.executorOperatorSet.key()];
@@ -201,10 +200,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      * @param operatorSet The operator set to register
      * @param isRegistered Whether the operator set is registered
      */
-    function _registerExecutorOperatorSet(
-        OperatorSet memory operatorSet,
-        bool isRegistered
-    ) internal {
+    function _registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) internal {
         isExecutorOperatorSetRegistered[operatorSet.key()] = isRegistered;
         emit ExecutorOperatorSetRegistered(msg.sender, operatorSet.avs, operatorSet.id, isRegistered);
     }

@@ -138,8 +138,10 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
      * @param executorOperatorSetId ID of the executor operator set
      * @param isRegistered Whether the operator set is registered
      */
-    event ExecutorOperatorSetRegistered(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, bool isRegistered);
-    
+    event ExecutorOperatorSetRegistered(
+        address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, bool isRegistered
+    );
+
     /**
      * @notice Emitted when an executor operator set task configuration is set
      * @param caller Address that called the configuration function
@@ -221,10 +223,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @param operatorSet The operator set to register
      * @param isRegistered Whether the operator set is registered
      */
-    function registerExecutorOperatorSet(
-        OperatorSet memory operatorSet,
-        bool isRegistered
-    ) external;
+    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
 
     /**
      * @notice Sets the task configuration for an executor operator set

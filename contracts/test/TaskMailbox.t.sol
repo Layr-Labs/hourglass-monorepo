@@ -207,14 +207,19 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
 
         // Should not emit registration event since already registered
         vm.recordLogs();
-        
+
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
 
         // Verify only one event was emitted (config set, not registration)
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
-        assertEq(entries[0].topics[0], keccak256("ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,address,address,address,uint96,uint16,bytes))"));
+        assertEq(
+            entries[0].topics[0],
+            keccak256(
+                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,address,address,address,uint96,uint16,bytes))"
+            )
+        );
     }
 
     function test_Revert_WhenCertificateVerifierIsZero() public {
@@ -276,7 +281,8 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
 
         // First task will have count 0
         uint256 expectedTaskCount = 0;
-        bytes32 expectedTaskHash = keccak256(abi.encode(expectedTaskCount, address(taskMailbox), block.chainid, taskParams));
+        bytes32 expectedTaskHash =
+            keccak256(abi.encode(expectedTaskCount, address(taskMailbox), block.chainid, taskParams));
 
         // Expect event
         vm.expectEmit(true, true, true, true, address(taskMailbox));
@@ -299,7 +305,8 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         assertEq(taskHash, expectedTaskHash);
 
         // Verify global task count incremented by creating another task and checking its hash
-        bytes32 nextExpectedTaskHash = keccak256(abi.encode(expectedTaskCount + 1, address(taskMailbox), block.chainid, taskParams));
+        bytes32 nextExpectedTaskHash =
+            keccak256(abi.encode(expectedTaskCount + 1, address(taskMailbox), block.chainid, taskParams));
         vm.prank(creator);
         bytes32 nextTaskHash = taskMailbox.createTask(taskParams);
         assertEq(nextTaskHash, nextExpectedTaskHash);
@@ -408,7 +415,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     function test_Revert_ReentrancyOnCreateTask() public {
         // Deploy reentrant attacker as task hook
         ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
-        
+
         // Set up executor operator set with attacker as hook
         OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
@@ -435,8 +442,8 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
             bytes32(0),
             _createValidBN254Certificate(bytes32(0)),
             bytes(""),
-            true,  // attack on post
-            true   // attack createTask
+            true, // attack on post
+            true // attack createTask
         );
 
         // Try to create task - should revert on reentrancy
@@ -629,7 +636,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // First submit a valid result
         vm.warp(block.timestamp + 1);
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
-        
+
         vm.prank(aggregator);
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
 
@@ -642,7 +649,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
     function test_Revert_ReentrancyOnSubmitResult() public {
         // Deploy reentrant attacker as task hook
         ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
-        
+
         // Set up executor operator set with attacker as hook
         OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
@@ -667,14 +674,14 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Set up attack parameters
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(attackTaskHash);
-        
+
         attacker.setAttackParams(
             taskParams,
             attackTaskHash,
             cert,
             bytes("result"),
             false, // attack on handleTaskResultSubmission
-            false  // attack submitResult
+            false // attack submitResult
         );
 
         // Try to submit result - should revert on reentrancy
@@ -686,12 +693,12 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
     function test_Revert_ReentrancyOnSubmitResult_TryingToCreateTask() public {
         // Deploy reentrant attacker as task hook
         ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
-        
+
         // Give attacker tokens and approve
         mockToken.mint(address(attacker), 1000 ether);
         vm.prank(address(attacker));
         mockToken.approve(address(taskMailbox), type(uint256).max);
-        
+
         // Set up executor operator set with attacker as hook
         OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
@@ -716,14 +723,14 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Set up attack parameters
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(attackTaskHash);
-        
+
         attacker.setAttackParams(
             taskParams,
             attackTaskHash,
             cert,
             bytes("result"),
             false, // attack on handleTaskResultSubmission
-            true   // attack createTask
+            true // attack createTask
         );
 
         // Try to submit result - should revert on reentrancy
@@ -824,7 +831,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
     function test_getTaskStatus_Verified() public {
         vm.warp(block.timestamp + 1);
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
-        
+
         vm.prank(aggregator);
         taskMailbox.submitResult(taskHash, cert, bytes("result"));
 
@@ -845,7 +852,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         vm.warp(block.timestamp + taskSLA + 1);
 
         Task memory task = taskMailbox.getTaskInfo(taskHash);
-        
+
         // getTaskInfo should return Expired status
         assertEq(uint8(task.status), uint8(TaskStatus.Expired));
     }
@@ -855,7 +862,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         vm.warp(block.timestamp + 1);
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
         bytes memory expectedResult = bytes("test result");
-        
+
         vm.prank(aggregator);
         taskMailbox.submitResult(taskHash, cert, expectedResult);
 
@@ -898,7 +905,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
 
         // Create multiple tasks and verify the count through task hashes
         TaskParams memory taskParams = _createValidTaskParams();
-        
+
         // First task should have count 0
         bytes32 expectedHash0 = keccak256(abi.encode(0, address(taskMailbox), block.chainid, taskParams));
         vm.prank(creator);
@@ -920,7 +927,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
 
     function test_isExecutorOperatorSetRegistered() public {
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        
+
         // Initially not registered
         assertFalse(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
 
@@ -945,7 +952,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
 
         // Access config via getExecutorOperatorSetTaskConfig function
         ExecutorOperatorSetTaskConfig memory storedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
-        
+
         assertEq(storedConfig.certificateVerifier, config.certificateVerifier);
         assertEq(address(storedConfig.taskHook), address(config.taskHook));
         assertEq(address(storedConfig.feeToken), address(config.feeToken));
@@ -970,7 +977,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
 
         // Access task via getTaskInfo public function
         Task memory task = taskMailbox.getTaskInfo(taskHash);
-        
+
         assertEq(task.creator, creator);
         assertEq(task.creationTime, block.timestamp);
         assertEq(uint8(task.status), uint8(TaskStatus.Created));
