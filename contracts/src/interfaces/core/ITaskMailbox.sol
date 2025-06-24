@@ -271,6 +271,15 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
 
     /**
+     * @notice Checks if an executor operator set is registered
+     * @param operatorSetKey Key of the operator set to check
+     * @return True if the executor operator set is registered, false otherwise
+     */
+    function isExecutorOperatorSetRegistered(
+        bytes32 operatorSetKey
+    ) external view returns (bool);
+
+    /**
      * @notice Gets the task configuration for an executor operator set
      * @param operatorSet The operator set to get configuration for
      * @return Task configuration for the operator set
