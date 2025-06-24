@@ -21,8 +21,6 @@ import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
  * @notice Contract for managing the lifecycle of tasks that are executed by operator sets of task-based AVSs.
  */
 contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
-    // TODO: Decide if we want to make contract a transparent proxy with owner set up. And add Pausable and Ownable.
-
     using SafeERC20 for IERC20;
     using SafeCast for *;
 
@@ -33,13 +31,21 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
+    function registerExecutorOperatorSet(
+        OperatorSet memory operatorSet,
+        bool isRegistered
+    ) external {
+        // TODO: Only OperatorSetOwner can register executor operator set.
+
+        _registerExecutorOperatorSet(operatorSet, isRegistered);
+    }
+
+    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
-        // TODO: require checks - Figure out what checks are needed.
-        // 1. OperatorSet is valid
-        // 2. Only AVS delegated address can set config.
+        // TODO: Only OperatorSetOwner can set config.
 
         // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
@@ -47,6 +53,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         require(config.certificateVerifier != address(0), InvalidAddressZero());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
+
+        // If executor operator set is not registered, register it.
+        if (!isExecutorOperatorSetRegistered[operatorSet.key()]) {
+            _registerExecutorOperatorSet(operatorSet, true);
+        }
 
         executorOperatorSetTaskConfigs[operatorSet.key()] = config;
         emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
@@ -56,12 +67,10 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     function createTask(
         TaskParams memory taskParams
     ) external nonReentrant returns (bytes32) {
-        // TODO: require checks - Figure out what checks are needed
-        // 1. OperatorSet is valid
-        // TODO: Do we need a gasless version of this function?
         // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
 
         require(taskParams.payload.length > 0, PayloadIsEmpty());
+        require(isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered());
 
         ExecutorOperatorSetTaskConfig memory taskConfig =
             executorOperatorSetTaskConfigs[taskParams.executorOperatorSet.key()];
@@ -185,6 +194,19 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
             return TaskStatus.Expired;
         }
         return task.status;
+    }
+
+    /**
+     * @notice Registers an executor operator set with the TaskMailbox
+     * @param operatorSet The operator set to register
+     * @param isRegistered Whether the operator set is registered
+     */
+    function _registerExecutorOperatorSet(
+        OperatorSet memory operatorSet,
+        bool isRegistered
+    ) internal {
+        isExecutorOperatorSetRegistered[operatorSet.key()] = isRegistered;
+        emit ExecutorOperatorSetRegistered(msg.sender, operatorSet.avs, operatorSet.id, isRegistered);
     }
 
     /**

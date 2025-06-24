@@ -99,6 +99,9 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
     /// @notice Thrown when a certificate verification fails
     error CertificateVerificationFailed();
 
+    /// @notice Thrown when an executor operator set is not registered
+    error ExecutorOperatorSetNotRegistered();
+
     /// @notice Thrown when an executor operator set task config is not set
     error ExecutorOperatorSetTaskConfigNotSet();
 
@@ -128,6 +131,15 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
  * @notice Interface defining events emitted by the TaskMailbox
  */
 interface ITaskMailboxEvents is ITaskMailboxTypes {
+    /**
+     * @notice Emitted when an executor operator set is registered
+     * @param caller Address that called the registration function
+     * @param avs Address of the AVS being registered
+     * @param executorOperatorSetId ID of the executor operator set
+     * @param isRegistered Whether the operator set is registered
+     */
+    event ExecutorOperatorSetRegistered(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, bool isRegistered);
+    
     /**
      * @notice Emitted when an executor operator set task configuration is set
      * @param caller Address that called the configuration function
@@ -203,6 +215,16 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      *                         EXTERNAL FUNCTIONS
      *
      */
+
+    /**
+     * @notice Registers an executor operator set with the TaskMailbox
+     * @param operatorSet The operator set to register
+     * @param isRegistered Whether the operator set is registered
+     */
+    function registerExecutorOperatorSet(
+        OperatorSet memory operatorSet,
+        bool isRegistered
+    ) external;
 
     /**
      * @notice Sets the task configuration for an executor operator set

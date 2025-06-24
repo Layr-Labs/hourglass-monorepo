@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
@@ -23,8 +23,9 @@ import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
 import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
 import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {ReentrantAttacker} from "./mocks/ReentrantAttacker.sol";
 
-contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
+contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, ITaskMailboxEvents {
     using OperatorSetLib for OperatorSet;
 
     // Contracts
@@ -99,6 +100,45 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxErrors, ITaskMailboxEvents {
     }
 }
 
+// Test contract for registerExecutorOperatorSet
+contract TaskMailboxUnitTests_registerExecutorOperatorSet is TaskMailboxUnitTests {
+    function testFuzz_registerExecutorOperatorSet(
+        address fuzzAvs,
+        uint32 fuzzOperatorSetId,
+        bool fuzzIsRegistered
+    ) public {
+        OperatorSet memory operatorSet = OperatorSet(fuzzAvs, fuzzOperatorSetId);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true, address(taskMailbox));
+        emit ExecutorOperatorSetRegistered(fuzzAvs, fuzzAvs, fuzzOperatorSetId, fuzzIsRegistered);
+
+        // Register operator set
+        vm.prank(fuzzAvs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, fuzzIsRegistered);
+
+        // Verify registration status
+        assertEq(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()), fuzzIsRegistered);
+    }
+
+    function test_registerExecutorOperatorSet_Unregister() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+
+        // First register
+        vm.prank(avs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, true);
+        assertTrue(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+
+        // Then unregister
+        vm.expectEmit(true, true, true, true, address(taskMailbox));
+        emit ExecutorOperatorSetRegistered(avs, avs, executorOperatorSetId, false);
+
+        vm.prank(avs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, false);
+        assertFalse(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+    }
+}
+
 // Test contract for setExecutorOperatorSetTaskConfig
 contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUnitTests {
     function testFuzz_setExecutorOperatorSetTaskConfig(
@@ -127,7 +167,13 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
             taskMetadata: fuzzTaskMetadata
         });
 
-        // Expect event
+        // Expect registration event if not already registered
+        if (!taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key())) {
+            vm.expectEmit(true, true, true, true, address(taskMailbox));
+            emit ExecutorOperatorSetRegistered(avs, avs, executorOperatorSetId, true);
+        }
+
+        // Expect config event
         vm.expectEmit(true, true, true, true, address(taskMailbox));
         emit ExecutorOperatorSetTaskConfigSet(avs, avs, executorOperatorSetId, config);
 
@@ -145,6 +191,30 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(retrievedConfig.taskSLA, fuzzTaskSLA);
         assertEq(retrievedConfig.stakeProportionThreshold, fuzzStakeProportionThreshold);
         assertEq(retrievedConfig.taskMetadata, fuzzTaskMetadata);
+
+        // Verify operator set is registered
+        assertTrue(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+    }
+
+    function test_setExecutorOperatorSetTaskConfig_AlreadyRegistered() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+
+        // First register the operator set
+        vm.prank(avs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, true);
+
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+
+        // Should not emit registration event since already registered
+        vm.recordLogs();
+        
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Verify only one event was emitted (config set, not registration)
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        assertEq(entries.length, 1);
+        assertEq(entries[0].topics[0], keccak256("ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,address,address,address,uint96,uint16,bytes))"));
     }
 
     function test_Revert_WhenCertificateVerifierIsZero() public {
@@ -194,7 +264,8 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     function testFuzz_createTask(address fuzzRefundCollector, uint96 fuzzAvsFee, bytes memory fuzzPayload) public {
         // Bound inputs
         vm.assume(fuzzPayload.length > 0);
-        vm.assume(fuzzAvsFee <= mockToken.balanceOf(creator));
+        // We create two tasks in this test, so need at least 2x the fee
+        vm.assume(fuzzAvsFee <= mockToken.balanceOf(creator) / 2);
 
         TaskParams memory taskParams = TaskParams({
             refundCollector: fuzzRefundCollector,
@@ -203,11 +274,15 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
             payload: fuzzPayload
         });
 
-        // Expect event (check all indexed parameters except taskHash)
-        vm.expectEmit(true, false, true, true, address(taskMailbox));
+        // First task will have count 0
+        uint256 expectedTaskCount = 0;
+        bytes32 expectedTaskHash = keccak256(abi.encode(expectedTaskCount, address(taskMailbox), block.chainid, taskParams));
+
+        // Expect event
+        vm.expectEmit(true, true, true, true, address(taskMailbox));
         emit TaskCreated(
             creator,
-            bytes32(0), // We don't know the exact hash beforehand
+            expectedTaskHash,
             avs,
             executorOperatorSetId,
             fuzzRefundCollector,
@@ -216,9 +291,18 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
             fuzzPayload
         );
 
-        // Create task and capture the returned hash
+        // Create task
         vm.prank(creator);
         bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Verify task hash
+        assertEq(taskHash, expectedTaskHash);
+
+        // Verify global task count incremented by creating another task and checking its hash
+        bytes32 nextExpectedTaskHash = keccak256(abi.encode(expectedTaskCount + 1, address(taskMailbox), block.chainid, taskParams));
+        vm.prank(creator);
+        bytes32 nextTaskHash = taskMailbox.createTask(taskParams);
+        assertEq(nextTaskHash, nextExpectedTaskHash);
 
         // Verify task was created
         Task memory task = taskMailbox.getTaskInfo(taskHash);
@@ -229,12 +313,60 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         assertEq(task.executorOperatorSetId, executorOperatorSetId);
         assertEq(task.refundCollector, fuzzRefundCollector);
         assertEq(task.avsFee, fuzzAvsFee);
+        assertEq(task.feeSplit, 0);
         assertEq(task.payload, fuzzPayload);
 
         // Verify token transfer if fee > 0
+        // Note: We created two tasks with the same fee, so balance should be 2 * fuzzAvsFee
         if (fuzzAvsFee > 0) {
-            assertEq(mockToken.balanceOf(address(taskMailbox)), fuzzAvsFee);
+            assertEq(mockToken.balanceOf(address(taskMailbox)), fuzzAvsFee * 2);
         }
+    }
+
+    function test_createTask_ZeroFee() public {
+        TaskParams memory taskParams = _createValidTaskParams();
+        taskParams.avsFee = 0;
+
+        uint256 balanceBefore = mockToken.balanceOf(address(taskMailbox));
+
+        vm.prank(creator);
+        bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Verify no token transfer occurred
+        assertEq(mockToken.balanceOf(address(taskMailbox)), balanceBefore);
+
+        // Verify task was created with zero fee
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.avsFee, 0);
+    }
+
+    function test_createTask_NoFeeToken() public {
+        // Set up config without fee token
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = IERC20(address(0));
+
+        vm.prank(avs2);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            avsFee: 1 ether,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        uint256 balanceBefore = mockToken.balanceOf(address(taskMailbox));
+
+        vm.prank(creator);
+        bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Verify no token transfer occurred even with non-zero fee
+        assertEq(mockToken.balanceOf(address(taskMailbox)), balanceBefore);
+
+        // Verify task was created
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.avsFee, 1 ether);
     }
 
     function test_Revert_WhenPayloadIsEmpty() public {
@@ -246,12 +378,70 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         taskMailbox.createTask(taskParams);
     }
 
-    function test_Revert_WhenExecutorOperatorSetTaskConfigNotSet() public {
+    function test_Revert_WhenExecutorOperatorSetNotRegistered() public {
         TaskParams memory taskParams = _createValidTaskParams();
-        taskParams.executorOperatorSet.id = 99; // Unconfigured operator set
+        taskParams.executorOperatorSet.id = 99; // Unregistered operator set
+
+        vm.prank(creator);
+        vm.expectRevert(ExecutorOperatorSetNotRegistered.selector);
+        taskMailbox.createTask(taskParams);
+    }
+
+    function test_Revert_WhenExecutorOperatorSetTaskConfigNotSet() public {
+        // Register operator set without setting config
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        vm.prank(avs2);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, true);
+
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            avsFee: avsFee,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
 
         vm.prank(creator);
         vm.expectRevert(ExecutorOperatorSetTaskConfigNotSet.selector);
+        taskMailbox.createTask(taskParams);
+    }
+
+    function test_Revert_ReentrancyOnCreateTask() public {
+        // Deploy reentrant attacker as task hook
+        ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
+        
+        // Set up executor operator set with attacker as hook
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.taskHook = IAVSTaskHook(address(attacker));
+
+        vm.prank(avs2);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Give attacker tokens and approve
+        mockToken.mint(address(attacker), 1000 ether);
+        vm.prank(address(attacker));
+        mockToken.approve(address(taskMailbox), type(uint256).max);
+
+        // Set up attack parameters
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            avsFee: avsFee,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        attacker.setAttackParams(
+            taskParams,
+            bytes32(0),
+            _createValidBN254Certificate(bytes32(0)),
+            bytes(""),
+            true,  // attack on post
+            true   // attack createTask
+        );
+
+        // Try to create task - should revert on reentrancy
+        vm.prank(creator);
+        vm.expectRevert("ReentrancyGuard: reentrant call");
         taskMailbox.createTask(taskParams);
     }
 }
@@ -433,5 +623,363 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert(CertificateVerificationFailed.selector);
         taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
+    }
+
+    function test_submitResult_AlreadyVerified() public {
+        // First submit a valid result
+        vm.warp(block.timestamp + 1);
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        
+        vm.prank(aggregator);
+        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+
+        // Try to submit again
+        vm.prank(aggregator);
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Verified));
+        taskMailbox.submitResult(taskHash, cert, bytes("new result"));
+    }
+
+    function test_Revert_ReentrancyOnSubmitResult() public {
+        // Deploy reentrant attacker as task hook
+        ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
+        
+        // Set up executor operator set with attacker as hook
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.taskHook = IAVSTaskHook(address(attacker));
+
+        vm.prank(avs2);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            avsFee: avsFee,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        vm.prank(creator);
+        bytes32 attackTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Set up attack parameters
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(attackTaskHash);
+        
+        attacker.setAttackParams(
+            taskParams,
+            attackTaskHash,
+            cert,
+            bytes("result"),
+            false, // attack on handleTaskResultSubmission
+            false  // attack submitResult
+        );
+
+        // Try to submit result - should revert on reentrancy
+        vm.prank(aggregator);
+        vm.expectRevert("ReentrancyGuard: reentrant call");
+        taskMailbox.submitResult(attackTaskHash, cert, bytes("result"));
+    }
+
+    function test_Revert_ReentrancyOnSubmitResult_TryingToCreateTask() public {
+        // Deploy reentrant attacker as task hook
+        ReentrantAttacker attacker = new ReentrantAttacker(address(taskMailbox));
+        
+        // Give attacker tokens and approve
+        mockToken.mint(address(attacker), 1000 ether);
+        vm.prank(address(attacker));
+        mockToken.approve(address(taskMailbox), type(uint256).max);
+        
+        // Set up executor operator set with attacker as hook
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.taskHook = IAVSTaskHook(address(attacker));
+
+        vm.prank(avs2);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            avsFee: avsFee,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        vm.prank(creator);
+        bytes32 attackTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Set up attack parameters
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(attackTaskHash);
+        
+        attacker.setAttackParams(
+            taskParams,
+            attackTaskHash,
+            cert,
+            bytes("result"),
+            false, // attack on handleTaskResultSubmission
+            true   // attack createTask
+        );
+
+        // Try to submit result - should revert on reentrancy
+        vm.prank(aggregator);
+        vm.expectRevert("ReentrancyGuard: reentrant call");
+        taskMailbox.submitResult(attackTaskHash, cert, bytes("result"));
+    }
+}
+
+// Test contract for view functions
+contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
+    bytes32 public taskHash;
+    OperatorSet public operatorSet;
+
+    function setUp() public override {
+        super.setUp();
+
+        // Set up executor operator set task config
+        operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        taskHash = taskMailbox.createTask(taskParams);
+    }
+
+    function test_getExecutorOperatorSetTaskConfig() public {
+        ExecutorOperatorSetTaskConfig memory config = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+
+        assertEq(config.certificateVerifier, address(mockCertificateVerifier));
+        assertEq(address(config.taskHook), address(mockTaskHook));
+        assertEq(address(config.feeToken), address(mockToken));
+        assertEq(config.feeCollector, feeCollector);
+        assertEq(config.taskSLA, taskSLA);
+        assertEq(config.stakeProportionThreshold, stakeProportionThreshold);
+        assertEq(config.taskMetadata, bytes("test metadata"));
+    }
+
+    function test_getExecutorOperatorSetTaskConfig_Unregistered() public {
+        OperatorSet memory unregisteredSet = OperatorSet(avs2, 99);
+        ExecutorOperatorSetTaskConfig memory config = taskMailbox.getExecutorOperatorSetTaskConfig(unregisteredSet);
+
+        // Should return empty config
+        assertEq(config.certificateVerifier, address(0));
+        assertEq(address(config.taskHook), address(0));
+        assertEq(address(config.feeToken), address(0));
+        assertEq(config.feeCollector, address(0));
+        assertEq(config.taskSLA, 0);
+        assertEq(config.stakeProportionThreshold, 0);
+        assertEq(config.taskMetadata, bytes(""));
+    }
+
+    function test_getTaskInfo() public {
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+
+        assertEq(task.creator, creator);
+        assertEq(task.creationTime, block.timestamp);
+        assertEq(uint8(task.status), uint8(TaskStatus.Created));
+        assertEq(task.avs, avs);
+        assertEq(task.executorOperatorSetId, executorOperatorSetId);
+        assertEq(task.refundCollector, refundCollector);
+        assertEq(task.avsFee, avsFee);
+        assertEq(task.feeSplit, 0);
+        assertEq(task.payload, bytes("test payload"));
+        assertEq(task.result, bytes(""));
+    }
+
+    function test_getTaskInfo_NonExistentTask() public {
+        bytes32 nonExistentHash = keccak256("non-existent");
+        Task memory task = taskMailbox.getTaskInfo(nonExistentHash);
+
+        // Should return empty task with Expired status (due to _getTaskStatus logic)
+        assertEq(task.creator, address(0));
+        assertEq(task.creationTime, 0);
+        assertEq(uint8(task.status), uint8(TaskStatus.Expired)); // Non-existent tasks show as expired
+        assertEq(task.avs, address(0));
+        assertEq(task.executorOperatorSetId, 0);
+    }
+
+    function test_getTaskStatus_Created() public {
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Created));
+    }
+
+    function test_getTaskStatus_Canceled() public {
+        vm.warp(block.timestamp + 1);
+        vm.prank(creator);
+        taskMailbox.cancelTask(taskHash);
+
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Canceled));
+    }
+
+    function test_getTaskStatus_Verified() public {
+        vm.warp(block.timestamp + 1);
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        
+        vm.prank(aggregator);
+        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Verified));
+    }
+
+    function test_getTaskStatus_Expired() public {
+        // Advance time past SLA
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Expired));
+    }
+
+    function test_getTaskInfo_Expired() public {
+        // Advance time past SLA
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        
+        // getTaskInfo should return Expired status
+        assertEq(uint8(task.status), uint8(TaskStatus.Expired));
+    }
+
+    function test_getTaskResult() public {
+        // Submit result first
+        vm.warp(block.timestamp + 1);
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
+        bytes memory expectedResult = bytes("test result");
+        
+        vm.prank(aggregator);
+        taskMailbox.submitResult(taskHash, cert, expectedResult);
+
+        // Get result
+        bytes memory result = taskMailbox.getTaskResult(taskHash);
+        assertEq(result, expectedResult);
+    }
+
+    function test_Revert_getTaskResult_NotVerified() public {
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Created));
+        taskMailbox.getTaskResult(taskHash);
+    }
+
+    function test_Revert_getTaskResult_Canceled() public {
+        vm.warp(block.timestamp + 1);
+        vm.prank(creator);
+        taskMailbox.cancelTask(taskHash);
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Canceled));
+        taskMailbox.getTaskResult(taskHash);
+    }
+
+    function test_Revert_getTaskResult_Expired() public {
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Expired));
+        taskMailbox.getTaskResult(taskHash);
+    }
+}
+
+// Test contract for storage variables
+contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
+    function test_globalTaskCount() public {
+        // Set up executor operator set task config
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create multiple tasks and verify the count through task hashes
+        TaskParams memory taskParams = _createValidTaskParams();
+        
+        // First task should have count 0
+        bytes32 expectedHash0 = keccak256(abi.encode(0, address(taskMailbox), block.chainid, taskParams));
+        vm.prank(creator);
+        bytes32 taskHash0 = taskMailbox.createTask(taskParams);
+        assertEq(taskHash0, expectedHash0);
+
+        // Second task should have count 1
+        bytes32 expectedHash1 = keccak256(abi.encode(1, address(taskMailbox), block.chainid, taskParams));
+        vm.prank(creator);
+        bytes32 taskHash1 = taskMailbox.createTask(taskParams);
+        assertEq(taskHash1, expectedHash1);
+
+        // Third task should have count 2
+        bytes32 expectedHash2 = keccak256(abi.encode(2, address(taskMailbox), block.chainid, taskParams));
+        vm.prank(creator);
+        bytes32 taskHash2 = taskMailbox.createTask(taskParams);
+        assertEq(taskHash2, expectedHash2);
+    }
+
+    function test_isExecutorOperatorSetRegistered() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        
+        // Initially not registered
+        assertFalse(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+
+        // Register
+        vm.prank(avs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, true);
+        assertTrue(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+
+        // Unregister
+        vm.prank(avs);
+        taskMailbox.registerExecutorOperatorSet(operatorSet, false);
+        assertFalse(taskMailbox.isExecutorOperatorSetRegistered(operatorSet.key()));
+    }
+
+    function test_executorOperatorSetTaskConfigs() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+
+        // Set config
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Access config via getExecutorOperatorSetTaskConfig function
+        ExecutorOperatorSetTaskConfig memory storedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        
+        assertEq(storedConfig.certificateVerifier, config.certificateVerifier);
+        assertEq(address(storedConfig.taskHook), address(config.taskHook));
+        assertEq(address(storedConfig.feeToken), address(config.feeToken));
+        assertEq(storedConfig.feeCollector, config.feeCollector);
+        assertEq(storedConfig.taskSLA, config.taskSLA);
+        assertEq(storedConfig.stakeProportionThreshold, config.stakeProportionThreshold);
+        assertEq(storedConfig.taskMetadata, config.taskMetadata);
+    }
+
+    function test_tasks() public {
+        // Set up executor operator set task config
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Access task via getTaskInfo public function
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        
+        assertEq(task.creator, creator);
+        assertEq(task.creationTime, block.timestamp);
+        assertEq(uint8(task.status), uint8(TaskStatus.Created));
+        assertEq(task.avs, avs);
+        assertEq(task.executorOperatorSetId, executorOperatorSetId);
+        assertEq(task.refundCollector, refundCollector);
+        assertEq(task.avsFee, avsFee);
+        assertEq(task.feeSplit, 0);
+        assertEq(task.payload, bytes("test payload"));
+        assertEq(task.result, bytes(""));
     }
 }
