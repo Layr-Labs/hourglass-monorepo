@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	// TODO(seanmcgary): this will come from the AVSConfig eventually...
 	aggregatorOperatorSetId = 0
 )
 
@@ -114,8 +115,11 @@ func selectStakeWeightedLeader(aggregators *operatorManager.PeerWeight, mixHash 
 		if !exists || len(weights) == 0 {
 			continue
 		}
-		// Use first weight (primary quorum)
+		// The 0th element will be the sum of shares across all strategies in the opset
 		weight := weights[0]
+		if weight == nil {
+			weight = new(big.Int).SetInt64(0)
+		}
 		if weight.Cmp(big.NewInt(0)) > 0 {
 			operatorWeights[operator.OperatorAddress] = weight
 			totalWeight.Add(totalWeight, weight)
