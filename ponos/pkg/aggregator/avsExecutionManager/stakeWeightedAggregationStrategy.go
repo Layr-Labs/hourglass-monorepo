@@ -162,7 +162,7 @@ func calculateSeedFromMixHashAndAVS(mixHash string, avsAddress string) *big.Int 
 
 	// Create keccak256 hasher (equivalent to Solidity's keccak256)
 	hasher := sha3.NewLegacyKeccak256()
-	
+
 	// Write mixHash bytes (padded to 32 bytes like Solidity abi.encode)
 	mixHashBytes := make([]byte, 32)
 	if len(mixHash) > 0 {
@@ -176,7 +176,7 @@ func calculateSeedFromMixHashAndAVS(mixHash string, avsAddress string) *big.Int 
 		}
 	}
 	hasher.Write(mixHashBytes)
-	
+
 	// Write avsAddress bytes (padded to 32 bytes like Solidity abi.encode)
 	avsAddressBytes := make([]byte, 32)
 	if len(avsAddress) > 0 {
@@ -190,7 +190,7 @@ func calculateSeedFromMixHashAndAVS(mixHash string, avsAddress string) *big.Int 
 		}
 	}
 	hasher.Write(avsAddressBytes)
-	
+
 	hash := hasher.Sum(nil)
 
 	// Convert to big.Int
