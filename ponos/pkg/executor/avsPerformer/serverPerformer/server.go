@@ -2,6 +2,8 @@ package serverPerformer
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -19,15 +21,115 @@ import (
 	"go.uber.org/zap"
 )
 
+type ContainerStatus int
+
+const (
+	ContainerStatusPending ContainerStatus = iota
+	ContainerStatusActive
+	ContainerStatusExpired
+)
+
+func (cs ContainerStatus) String() string {
+	switch cs {
+	case ContainerStatusPending:
+		return "Pending"
+	case ContainerStatusActive:
+		return "Active"
+	case ContainerStatusExpired:
+		return "Expired"
+	default:
+		return "Unknown"
+	}
+}
+
+type ContainerHealthState int
+
+const (
+	ContainerHealthUnknown ContainerHealthState = iota
+	ContainerHealthHealthy
+	ContainerHealthUnhealthy
+	ContainerHealthStopped
+	ContainerHealthCrashed
+)
+
+func (chs ContainerHealthState) String() string {
+	switch chs {
+	case ContainerHealthHealthy:
+		return "Healthy"
+	case ContainerHealthUnhealthy:
+		return "Unhealthy"
+	case ContainerHealthStopped:
+		return "Stopped"
+	case ContainerHealthCrashed:
+		return "Crashed"
+	default:
+		return "Unknown"
+	}
+}
+
+type ApplicationHealthState int
+
+const (
+	AppHealthUnknown ApplicationHealthState = iota
+	AppHealthHealthy
+	AppHealthUnhealthy
+	AppHealthNotReady
+)
+
+func (ahs ApplicationHealthState) String() string {
+	switch ahs {
+	case AppHealthHealthy:
+		return "Healthy"
+	case AppHealthUnhealthy:
+		return "Unhealthy"
+	case AppHealthNotReady:
+		return "NotReady"
+	default:
+		return "Unknown"
+	}
+}
+
+type ContainerMetadata struct {
+	Info            *containerManager.ContainerInfo
+	Image           avsPerformer.PerformerImage
+	ActivationTime  int64
+	Status          ContainerStatus
+	Client          performerV1.PerformerServiceClient
+	Endpoint        string
+	DeploymentID    string
+	CreatedAt       time.Time
+	ActivatedAt     *time.Time
+	LastHealthCheck time.Time
+	RegistryURL     string
+	ArtifactDigest  string
+}
+
+type ContainerHealthStatus struct {
+	ContainerID       string
+	Status            ContainerStatus
+	ActivationTime    int64
+	ContainerHealth   ContainerHealthState
+	ApplicationHealth ApplicationHealthState
+	LastHealthCheck   time.Time
+	Endpoint          string
+	Image             string
+}
+
 type AvsPerformerServer struct {
 	config           *avsPerformer.AvsPerformerConfig
 	logger           *zap.Logger
 	containerManager containerManager.ContainerManager
-	containerInfo    *containerManager.ContainerInfo
-	performerClient  performerV1.PerformerServiceClient
 
-	peeringFetcher peering.IPeeringDataFetcher
+	// Legacy fields for backwards compatibility
+	containerInfo   *containerManager.ContainerInfo
+	performerClient performerV1.PerformerServiceClient
 
+	// New container management
+	containers       map[string]*ContainerMetadata
+	currentContainer string
+	containerMu      sync.RWMutex
+
+	peeringFetcher  peering.IPeeringDataFetcher
 	aggregatorPeers []*peering.OperatorPeerInfo
 
 	// Application health check cancellation
@@ -65,6 +167,7 @@ func NewAvsPerformerServer(
 		logger:           logger,
 		containerManager: containerMgr,
 		peeringFetcher:   peeringFetcher,
+		containers:       make(map[string]*ContainerMetadata),
 	}, nil
 }
 
@@ -154,6 +257,363 @@ func (aps *AvsPerformerServer) retryWithBackoff(ctx context.Context, operation f
 	return fmt.Errorf("failed %s after retries", operationName)
 }
 
+// generateDeploymentID creates a unique deployment ID
+func generateDeploymentID() string {
+	bytes := make([]byte, 8)
+	_, _ = rand.Read(bytes) // Error is safe to ignore for random bytes
+	return hex.EncodeToString(bytes)
+}
+
+// getActiveContainer returns the current active container metadata
+func (aps *AvsPerformerServer) getActiveContainer() *ContainerMetadata {
+	aps.containerMu.RLock()
+	defer aps.containerMu.RUnlock()
+
+	if aps.currentContainer == "" {
+		return nil
+	}
+	return aps.containers[aps.currentContainer]
+}
+
+// addPendingContainer adds a new container to the pending queue
+func (aps *AvsPerformerServer) addPendingContainer(container *ContainerMetadata) {
+	aps.containerMu.Lock()
+	defer aps.containerMu.Unlock()
+
+	aps.containers[container.Info.ID] = container
+	aps.logger.Info("Added pending container",
+		append(aps.logFields(),
+			zap.String("containerID", container.Info.ID),
+			zap.String("deploymentID", container.DeploymentID),
+			zap.Int64("activationTime", container.ActivationTime),
+		)...,
+	)
+}
+
+// checkAndActivatePendingContainer performs lazy container activation
+func (aps *AvsPerformerServer) checkAndActivatePendingContainer(currentTime int64) {
+	aps.containerMu.Lock()
+	defer aps.containerMu.Unlock()
+
+	// Find the container that should be active now
+	var targetContainer *ContainerMetadata
+	for _, container := range aps.containers {
+		if container.ActivationTime <= currentTime &&
+			container.Status == ContainerStatusPending {
+			if targetContainer == nil ||
+				container.ActivationTime > targetContainer.ActivationTime {
+				targetContainer = container
+			}
+		}
+	}
+
+	if targetContainer != nil && targetContainer.Info.ID != aps.currentContainer {
+		// Unlock before calling activateContainer to avoid deadlock
+		aps.containerMu.Unlock()
+		err := aps.activateContainer(targetContainer.Info.ID)
+		aps.containerMu.Lock()
+
+		if err != nil {
+			aps.logger.Error("Failed to activate pending container",
+				append(aps.logFields(),
+					zap.String("containerID", targetContainer.Info.ID),
+					zap.Error(err),
+				)...,
+			)
+		}
+	}
+}
+
+// activateContainer safely switches to a new active container
+func (aps *AvsPerformerServer) activateContainer(containerID string) error {
+	aps.containerMu.Lock()
+	defer aps.containerMu.Unlock()
+
+	// Verify container exists and is pending
+	metadata, exists := aps.containers[containerID]
+	if !exists {
+		return fmt.Errorf("container %s not found", containerID)
+	}
+
+	if metadata.Status != ContainerStatusPending {
+		return fmt.Errorf("container %s is not pending (status: %s)", containerID, metadata.Status)
+	}
+
+	// TODO: Add health checks here
+	// if !aps.isContainerHealthy(containerID) {
+	//     return fmt.Errorf("cannot activate unhealthy container %s", containerID)
+	// }
+
+	// Mark old container as expired
+	if aps.currentContainer != "" {
+		if oldContainer, exists := aps.containers[aps.currentContainer]; exists {
+			oldContainer.Status = ContainerStatusExpired
+		}
+	}
+
+	// Activate new container
+	aps.currentContainer = containerID
+	metadata.Status = ContainerStatusActive
+	now := time.Now()
+	metadata.ActivatedAt = &now
+
+	// Update legacy fields for backwards compatibility
+	aps.containerInfo = metadata.Info
+	aps.performerClient = metadata.Client
+
+	aps.logger.Info("Activated new container",
+		append(aps.logFields(),
+			zap.String("newContainerID", containerID),
+			zap.String("deploymentID", metadata.DeploymentID),
+		)...,
+	)
+
+	return nil
+}
+
+// DeployNewPerformerVersion deploys a new container version with scheduled activation
+func (aps *AvsPerformerServer) DeployNewPerformerVersion(
+	ctx context.Context,
+	registryURL string,
+	digest string,
+	activationTime int64,
+) (string, error) {
+	if activationTime <= time.Now().Unix() {
+		return "", fmt.Errorf("activation time must be in the future")
+	}
+
+	// Create image config from RPC parameters
+	image := avsPerformer.PerformerImage{
+		Repository: registryURL,
+		Tag:        digest,
+	}
+
+	// Create and start container
+	containerInfo, endpoint, err := aps.createAndStartContainerWithImage(ctx, image)
+	if err != nil {
+		return "", err
+	}
+
+	// Create client
+	client, err := aps.createPerformerClient(endpoint)
+	if err != nil {
+		aps.cleanupFailedContainer(ctx, containerInfo.ID)
+		return "", err
+	}
+
+	deploymentID := generateDeploymentID()
+
+	// Add to pending containers
+	container := &ContainerMetadata{
+		Info:           containerInfo,
+		Image:          image,
+		ActivationTime: activationTime,
+		Status:         ContainerStatusPending,
+		Client:         client,
+		Endpoint:       endpoint,
+		DeploymentID:   deploymentID,
+		CreatedAt:      time.Now(),
+		RegistryURL:    registryURL,
+		ArtifactDigest: digest,
+	}
+
+	aps.addPendingContainer(container)
+
+	aps.logger.Info("Deployed new performer version",
+		append(aps.logFields(),
+			zap.String("deploymentID", deploymentID),
+			zap.String("containerID", containerInfo.ID),
+			zap.String("registryURL", registryURL),
+			zap.String("digest", digest),
+			zap.Int64("activationTime", activationTime),
+		)...,
+	)
+
+	return deploymentID, nil
+}
+
+// GetAllContainerHealth returns comprehensive health status of all containers
+func (aps *AvsPerformerServer) GetAllContainerHealth(ctx context.Context) ([]ContainerHealthStatus, error) {
+	aps.containerMu.RLock()
+	defer aps.containerMu.RUnlock()
+
+	var statuses []ContainerHealthStatus
+	for containerID, metadata := range aps.containers {
+		status := ContainerHealthStatus{
+			ContainerID:     containerID,
+			Status:          metadata.Status,
+			ActivationTime:  metadata.ActivationTime,
+			Endpoint:        metadata.Endpoint,
+			Image:           fmt.Sprintf("%s:%s", metadata.Image.Repository, metadata.Image.Tag),
+			LastHealthCheck: metadata.LastHealthCheck,
+		}
+
+		// Get container-level health
+		status.ContainerHealth = aps.getContainerHealth(containerID)
+
+		// Get application-level health (only if container is running)
+		if status.ContainerHealth == ContainerHealthHealthy {
+			status.ApplicationHealth = aps.getApplicationHealth(ctx, metadata.Client)
+		}
+
+		statuses = append(statuses, status)
+	}
+	return statuses, nil
+}
+
+// getContainerHealth checks the container-level health
+func (aps *AvsPerformerServer) getContainerHealth(containerID string) ContainerHealthState {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Get container info from Docker
+	containerInfo, err := aps.containerManager.Inspect(ctx, containerID)
+	if err != nil {
+		return ContainerHealthUnknown
+	}
+
+	// Check container status
+	switch strings.ToLower(containerInfo.Status) {
+	case "running":
+		return ContainerHealthHealthy
+	case "exited", "dead":
+		return ContainerHealthCrashed
+	case "paused", "restarting":
+		return ContainerHealthUnhealthy
+	default:
+		return ContainerHealthUnknown
+	}
+}
+
+// getApplicationHealth checks the application-level health via gRPC
+func (aps *AvsPerformerServer) getApplicationHealth(ctx context.Context, client performerV1.PerformerServiceClient) ApplicationHealthState {
+	if client == nil {
+		return AppHealthNotReady
+	}
+
+	// Create a short timeout for health checks
+	healthCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	_, err := client.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
+	if err != nil {
+		return AppHealthUnhealthy
+	}
+
+	// If we got a response without error, consider it healthy
+	return AppHealthHealthy
+}
+
+
+// reapExpiredContainers removes containers that are no longer needed
+func (aps *AvsPerformerServer) reapExpiredContainers() {
+	aps.containerMu.Lock()
+	defer aps.containerMu.Unlock()
+
+	currentTime := time.Now().Unix()
+	expiredContainers := []string{}
+
+	for containerID, metadata := range aps.containers {
+		// Skip current active container
+		if containerID == aps.currentContainer {
+			continue
+		}
+
+		// Check if container has been superseded
+		if aps.isContainerExpired(metadata, currentTime) {
+			expiredContainers = append(expiredContainers, containerID)
+		}
+	}
+
+	// Clean up expired containers
+	for _, containerID := range expiredContainers {
+		aps.removeExpiredContainer(containerID)
+	}
+
+	if len(expiredContainers) > 0 {
+		aps.logger.Info("Reaped expired containers",
+			append(aps.logFields(),
+				zap.Int("count", len(expiredContainers)),
+				zap.Strings("containerIDs", expiredContainers),
+			)...,
+		)
+	}
+}
+
+// isContainerExpired checks if a container should be reaped
+func (aps *AvsPerformerServer) isContainerExpired(metadata *ContainerMetadata, currentTime int64) bool {
+	// 1. Pending container that's way past its activation time
+	if metadata.Status == ContainerStatusPending &&
+		currentTime > metadata.ActivationTime+3600 { // 1 hour grace period
+		return true
+	}
+
+	// 2. Previously active containers that have been replaced
+	if metadata.Status == ContainerStatusExpired {
+		return true
+	}
+
+	return false
+}
+
+// removeExpiredContainer stops and removes a container from the system
+func (aps *AvsPerformerServer) removeExpiredContainer(containerID string) {
+	metadata := aps.containers[containerID]
+
+	aps.logger.Info("Removing expired container",
+		append(aps.logFields(),
+			zap.String("containerID", containerID),
+			zap.String("deploymentID", metadata.DeploymentID),
+			zap.Int64("activationTime", metadata.ActivationTime),
+		)...,
+	)
+
+	// Stop and remove container
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := aps.containerManager.Stop(ctx, containerID, 10*time.Second); err != nil {
+		aps.logger.Error("Failed to stop expired container",
+			append(aps.logFields(),
+				zap.String("containerID", containerID),
+				zap.Error(err),
+			)...,
+		)
+	}
+	if err := aps.containerManager.Remove(ctx, containerID, true); err != nil {
+		aps.logger.Error("Failed to remove expired container",
+			append(aps.logFields(),
+				zap.String("containerID", containerID),
+				zap.Error(err),
+			)...,
+		)
+	}
+
+	// Remove from our store
+	delete(aps.containers, containerID)
+}
+
+// RemoveContainer allows manual removal of specific containers
+func (aps *AvsPerformerServer) RemoveContainer(containerID string) error {
+	aps.containerMu.Lock()
+	defer aps.containerMu.Unlock()
+
+	// Don't allow removal of active container
+	if containerID == aps.currentContainer {
+		return fmt.Errorf("cannot remove active container %s", containerID)
+	}
+
+	// Check if container exists
+	if _, exists := aps.containers[containerID]; !exists {
+		return fmt.Errorf("container %s not found", containerID)
+	}
+
+	// Remove the container
+	aps.removeExpiredContainer(containerID)
+
+	return nil
+}
+
 func (aps *AvsPerformerServer) fetchAggregatorPeerInfo(ctx context.Context) ([]*peering.OperatorPeerInfo, error) {
 	var result []*peering.OperatorPeerInfo
 	err := aps.retryWithBackoff(ctx, func() error {
@@ -169,11 +629,19 @@ func (aps *AvsPerformerServer) fetchAggregatorPeerInfo(ctx context.Context) ([]*
 
 // createAndStartContainer creates, starts, and initializes a container with proper error handling
 func (aps *AvsPerformerServer) createAndStartContainer(ctx context.Context) (*containerManager.ContainerInfo, string, error) {
+	return aps.createAndStartContainerWithImage(ctx, avsPerformer.PerformerImage{
+		Repository: aps.config.Image.Repository,
+		Tag:        aps.config.Image.Tag,
+	})
+}
+
+// createAndStartContainerWithImage creates, starts, and initializes a container with specific image
+func (aps *AvsPerformerServer) createAndStartContainerWithImage(ctx context.Context, image avsPerformer.PerformerImage) (*containerManager.ContainerInfo, string, error) {
 	// Create container configuration
 	containerConfig := containerManager.CreateDefaultContainerConfig(
 		aps.config.AvsAddress,
-		aps.config.Image.Repository,
-		aps.config.Image.Tag,
+		image.Repository,
+		image.Tag,
 		containerPort,
 		aps.config.PerformerNetworkName,
 	)
@@ -259,7 +727,7 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		append(aps.logFields(), zap.Any("aggregatorPeers", aps.aggregatorPeers))...,
 	)
 
-	// Create and start container
+	// Create and start initial container
 	containerInfo, endpoint, err := aps.createAndStartContainer(ctx)
 	if err != nil {
 		if shutdownErr := aps.Shutdown(); shutdownErr != nil {
@@ -267,7 +735,6 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		}
 		return err
 	}
-	aps.containerInfo = containerInfo
 
 	// Create performer client
 	perfClient, err := aps.createPerformerClient(endpoint)
@@ -277,6 +744,34 @@ func (aps *AvsPerformerServer) Initialize(ctx context.Context) error {
 		}
 		return err
 	}
+
+	// Create initial container metadata and add to store
+	initialContainer := &ContainerMetadata{
+		Info: containerInfo,
+		Image: avsPerformer.PerformerImage{
+			Repository: aps.config.Image.Repository,
+			Tag:        aps.config.Image.Tag,
+		},
+		ActivationTime: time.Now().Unix(), // Already active
+		Status:         ContainerStatusActive,
+		Client:         perfClient,
+		Endpoint:       endpoint,
+		DeploymentID:   "initial",
+		CreatedAt:      time.Now(),
+		RegistryURL:    aps.config.Image.Repository,
+		ArtifactDigest: aps.config.Image.Tag,
+	}
+	now := time.Now()
+	initialContainer.ActivatedAt = &now
+
+	// Add to container store and set as current
+	aps.containerMu.Lock()
+	aps.containers[containerInfo.ID] = initialContainer
+	aps.currentContainer = containerInfo.ID
+	aps.containerMu.Unlock()
+
+	// Set legacy fields for backwards compatibility
+	aps.containerInfo = containerInfo
 	aps.performerClient = perfClient
 
 	// Start liveness monitoring
@@ -523,6 +1018,10 @@ func (aps *AvsPerformerServer) startApplicationHealthCheck(ctx context.Context) 
 		consecutiveFailures := 0
 		const maxConsecutiveFailures = 3
 
+		// Add reaping counter - reap less frequently than health checks
+		reapCounter := 0
+		const reapInterval = 60 // Reap every 60 health checks (60 seconds)
+
 		for {
 			select {
 			case <-healthCtx.Done():
@@ -531,6 +1030,14 @@ func (aps *AvsPerformerServer) startApplicationHealthCheck(ctx context.Context) 
 				)
 				return
 			case <-ticker.C:
+				// 1. Perform container reaping periodically
+				reapCounter++
+				if reapCounter >= reapInterval {
+					aps.reapExpiredContainers()
+					reapCounter = 0
+				}
+
+				// 2. Continue with existing health check logic
 				if aps.performerClient == nil {
 					continue
 				}
@@ -654,9 +1161,18 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 }
 
 func (aps *AvsPerformerServer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
+	// 1. Lazy evaluation: activate pending containers if deadline reached
+	aps.checkAndActivatePendingContainer(time.Now().Unix())
+
+	// 2. Get current active container
+	activeContainer := aps.getActiveContainer()
+	if activeContainer == nil {
+		return nil, fmt.Errorf("no active container available")
+	}
+
 	aps.logger.Info("Processing task", append(aps.logFields(), zap.Any("task", task))...)
 
-	res, err := aps.performerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
+	res, err := activeContainer.Client.ExecuteTask(ctx, &performerV1.TaskRequest{
 		TaskId:  []byte(task.TaskID),
 		Payload: task.Payload,
 	})
@@ -674,31 +1190,52 @@ func (aps *AvsPerformerServer) Shutdown() error {
 	// Stop application health check first
 	aps.stopApplicationHealthCheck()
 
-	if aps.containerInfo == nil || aps.containerManager == nil {
+	if aps.containerManager == nil {
 		return nil
 	}
 
 	aps.logger.Info("Shutting down AVS performer server",
-		aps.logFieldsWithContainer()...,
+		aps.logFields()...,
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// Stop the container
-	if err := aps.containerManager.Stop(ctx, aps.containerInfo.ID, 10*time.Second); err != nil {
-		aps.logger.Error("Failed to stop container",
-			append(aps.logFieldsWithContainer(), zap.Error(err))...,
-		)
+	// Stop and remove all containers
+	aps.containerMu.Lock()
+	containerIDs := make([]string, 0, len(aps.containers))
+	for containerID := range aps.containers {
+		containerIDs = append(containerIDs, containerID)
+	}
+	aps.containerMu.Unlock()
+
+	for _, containerID := range containerIDs {
+		// Stop the container
+		if err := aps.containerManager.Stop(ctx, containerID, 10*time.Second); err != nil {
+			aps.logger.Error("Failed to stop container",
+				append(aps.logFields(),
+					zap.String("containerID", containerID),
+					zap.Error(err),
+				)...,
+			)
+		}
+
+		// Remove the container
+		if err := aps.containerManager.Remove(ctx, containerID, true); err != nil {
+			aps.logger.Error("Failed to remove container",
+				append(aps.logFields(),
+					zap.String("containerID", containerID),
+					zap.Error(err),
+				)...,
+			)
+		}
 	}
 
-	// Remove the container
-	if err := aps.containerManager.Remove(ctx, aps.containerInfo.ID, true); err != nil {
-		aps.logger.Error("Failed to remove container",
-			append(aps.logFieldsWithContainer(), zap.Error(err))...,
-		)
-		return err
-	}
+	// Clear container store
+	aps.containerMu.Lock()
+	aps.containers = make(map[string]*ContainerMetadata)
+	aps.currentContainer = ""
+	aps.containerMu.Unlock()
 
 	// Shutdown the container manager
 	if err := aps.containerManager.Shutdown(ctx); err != nil {
