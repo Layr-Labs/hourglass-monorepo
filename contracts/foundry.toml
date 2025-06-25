@@ -26,6 +26,12 @@ optimizer = true
 # and code execution cost (cost after deployment).
 optimizer_runs = 200
 
+# An array of file paths from which warnings should be ignored during compilation.
+ignored_warnings_from = [
+    "test",
+    "lib"
+]
+
 [rpc_endpoints]
 mainnet = "${RPC_MAINNET}"
 holesky = "${RPC_HOLESKY}"
