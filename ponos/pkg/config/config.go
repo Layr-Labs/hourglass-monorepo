@@ -57,9 +57,11 @@ var (
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
 		ChainId_EthereumHolesky: {
-			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
-			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
-			TaskMailbox:       "0xtaskMailbox",
+			AllocationManager:  "0xfdd5749e11977d60850e06bf5b13221ad95eb6b4",
+			DelegationManager:  "0x75dfe5b44c2e530568001400d3f704bc8ae350cc",
+			TaskMailbox:        "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
+			KeyRegistrar:       "0x1c84bb62fe7791e173014a879c706445fa893bbe",
+			CrossChainRegistry: "0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
 		},
 		ChainId_EthereumHoodi: {
 			AllocationManager: "",
