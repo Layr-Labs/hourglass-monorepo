@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import {IBN254CertificateVerifierTypes} from
     "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -14,8 +15,18 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  */
 interface ITaskMailboxTypes {
     /**
+     * @notice Configuration for certificate verifiers
+     * @param curveType The curve type for the verifier
+     * @param verifier Address of the certificate verifier contract
+     */
+    struct CertificateVerifierConfig {
+        IKeyRegistrarTypes.CurveType curveType;
+        address verifier;
+    }
+
+    /**
      * @notice Configuration for the executor operator set
-     * @param certificateVerifier Address of the certificate verifier contract
+     * @param curveType The curve type used for signature verification
      * @param taskHook Address of the AVS task hook contract
      * @param feeToken ERC20 token used for task fees
      * @param feeCollector Address to receive AVS fees
@@ -26,8 +37,7 @@ interface ITaskMailboxTypes {
     struct ExecutorOperatorSetTaskConfig {
         // TODO: Pack storage efficiently.
         // TODO: We need to support proportional, nominal, none and custom verifications.
-        // TODO: We also need to support BN254, ECDSA, BLS and custom curves.
-        address certificateVerifier;
+        IKeyRegistrarTypes.CurveType curveType;
         IAVSTaskHook taskHook;
         IERC20 feeToken;
         address feeCollector;
@@ -108,6 +118,9 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
     /// @notice Thrown when an input address is zero
     error InvalidAddressZero();
 
+    /// @notice Thrown when an invalid curve type is provided
+    error InvalidCurveType();
+
     /// @notice Thrown when a task creator is invalid
     error InvalidTaskCreator();
 
@@ -131,6 +144,13 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
  * @notice Interface defining events emitted by the TaskMailbox
  */
 interface ITaskMailboxEvents is ITaskMailboxTypes {
+    /**
+     * @notice Emitted when a certificate verifier is set
+     * @param curveType The curve type for the verifier
+     * @param certificateVerifier Address of the certificate verifier
+     */
+    event CertificateVerifierSet(IKeyRegistrarTypes.CurveType indexed curveType, address indexed certificateVerifier);
+
     /**
      * @notice Emitted when an executor operator set is registered
      * @param caller Address that called the registration function
@@ -219,6 +239,13 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
 
     /**
+     * @notice Sets a certificate verifier for a specific curve type
+     * @param curveType The curve type for the verifier
+     * @param certificateVerifier Address of the certificate verifier
+     */
+    function setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) external;
+
+    /**
      * @notice Registers an executor operator set with the TaskMailbox
      * @param operatorSet The operator set to register
      * @param isRegistered Whether the operator set is registered
@@ -278,6 +305,15 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function isExecutorOperatorSetRegistered(
         bytes32 operatorSetKey
     ) external view returns (bool);
+
+    /**
+     * @notice Gets the certificate verifier for a specific curve type
+     * @param curveType The curve type to get the verifier for
+     * @return Address of the certificate verifier
+     */
+    function getCertificateVerifier(
+        IKeyRegistrarTypes.CurveType curveType
+    ) external view returns (address);
 
     /**
      * @notice Gets the task configuration for an executor operator set

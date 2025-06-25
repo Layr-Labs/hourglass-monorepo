@@ -2,6 +2,7 @@
 pragma solidity ^0.8.27;
 
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
+import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
 /**
  * @title TaskMailboxStorage
@@ -20,4 +21,7 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
 
     /// @notice Mapping from executor operator set key to its task configuration
     mapping(bytes32 operatorSetKey => ExecutorOperatorSetTaskConfig config) public executorOperatorSetTaskConfigs;
+
+    /// @notice Mapping from curve type to certificate verifier address
+    mapping(IKeyRegistrarTypes.CurveType curveType => address verifier) public certificateVerifiers;
 }

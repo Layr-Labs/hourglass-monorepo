@@ -8,6 +8,7 @@ import {
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
+import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {TaskMailbox} from "../src/core/TaskMailbox.sol";
@@ -58,7 +59,13 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         mockToken = new MockERC20();
 
         // Deploy TaskMailbox
-        taskMailbox = new TaskMailbox();
+        ITaskMailboxTypes.CertificateVerifierConfig[] memory certificateVerifiers =
+            new ITaskMailboxTypes.CertificateVerifierConfig[](1);
+        certificateVerifiers[0] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            verifier: address(mockCertificateVerifier)
+        });
+        taskMailbox = new TaskMailbox(address(this), certificateVerifiers);
 
         // Give creator some tokens and approve TaskMailbox
         mockToken.mint(creator, 1000 ether);
@@ -77,7 +84,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
 
     function _createValidExecutorOperatorSetTaskConfig() internal view returns (ExecutorOperatorSetTaskConfig memory) {
         return ExecutorOperatorSetTaskConfig({
-            certificateVerifier: address(mockCertificateVerifier),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(address(mockTaskHook)),
             feeToken: IERC20(address(mockToken)),
             feeCollector: feeCollector,
@@ -97,6 +104,63 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
             apk: BN254.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)]),
             nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
         });
+    }
+}
+
+contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
+    function test_Constructor_WithCertificateVerifiers() public {
+        ITaskMailboxTypes.CertificateVerifierConfig[] memory configs =
+            new ITaskMailboxTypes.CertificateVerifierConfig[](2);
+        configs[0] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            verifier: address(0x1234)
+        });
+        configs[1] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.ECDSA,
+            verifier: address(0x5678)
+        });
+
+        TaskMailbox newTaskMailbox = new TaskMailbox(address(this), configs);
+
+        assertEq(newTaskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.BN254), address(0x1234));
+        assertEq(newTaskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA), address(0x5678));
+        assertEq(newTaskMailbox.owner(), address(this));
+    }
+
+    function test_Revert_Constructor_ZeroCertificateVerifier() public {
+        ITaskMailboxTypes.CertificateVerifierConfig[] memory configs =
+            new ITaskMailboxTypes.CertificateVerifierConfig[](1);
+        configs[0] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            verifier: address(0)
+        });
+
+        vm.expectRevert(InvalidAddressZero.selector);
+        new TaskMailbox(address(this), configs);
+    }
+}
+
+contract TaskMailboxUnitTests_setCertificateVerifier is TaskMailboxUnitTests {
+    function test_setCertificateVerifier() public {
+        address newVerifier = address(0x9999);
+
+        vm.expectEmit(true, true, true, true, address(taskMailbox));
+        emit CertificateVerifierSet(IKeyRegistrarTypes.CurveType.ECDSA, newVerifier);
+
+        taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA, newVerifier);
+
+        assertEq(taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA), newVerifier);
+    }
+
+    function test_Revert_setCertificateVerifier_NotOwner() public {
+        vm.prank(avs);
+        vm.expectRevert("Ownable: caller is not the owner");
+        taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA, address(0x9999));
+    }
+
+    function test_Revert_setCertificateVerifier_ZeroAddress() public {
+        vm.expectRevert(InvalidAddressZero.selector);
+        taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA, address(0));
     }
 }
 
@@ -158,7 +222,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
         ExecutorOperatorSetTaskConfig memory config = ExecutorOperatorSetTaskConfig({
-            certificateVerifier: fuzzCertificateVerifier,
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(fuzzTaskHook),
             feeToken: IERC20(fuzzFeeToken),
             feeCollector: fuzzFeeCollector,
@@ -184,7 +248,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         // Verify config was set
         ExecutorOperatorSetTaskConfig memory retrievedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
 
-        assertEq(retrievedConfig.certificateVerifier, fuzzCertificateVerifier);
+        assertEq(uint8(retrievedConfig.curveType), uint8(IKeyRegistrarTypes.CurveType.BN254));
         assertEq(address(retrievedConfig.taskHook), fuzzTaskHook);
         assertEq(address(retrievedConfig.feeToken), fuzzFeeToken);
         assertEq(retrievedConfig.feeCollector, fuzzFeeCollector);
@@ -217,18 +281,18 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(
             entries[0].topics[0],
             keccak256(
-                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,address,address,address,uint96,uint16,bytes))"
+                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(uint8,address,address,address,uint96,uint16,bytes))"
             )
         );
     }
 
-    function test_Revert_WhenCertificateVerifierIsZero() public {
+    function test_Revert_WhenCurveTypeIsNone() public {
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
-        config.certificateVerifier = address(0);
+        config.curveType = IKeyRegistrarTypes.CurveType.NONE;
 
         vm.prank(avs);
-        vm.expectRevert(InvalidAddressZero.selector);
+        vm.expectRevert(InvalidCurveType.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
     }
 
@@ -609,10 +673,12 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Create a custom mock that returns false for certificate verification
         MockBN254CertificateVerifierFailure mockFailingVerifier = new MockBN254CertificateVerifierFailure();
 
-        // Update the config with failing verifier
+        // Update the certificate verifier for BN254 curve type
+        taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.BN254, address(mockFailingVerifier));
+
+        // Set config
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
-        config.certificateVerifier = address(mockFailingVerifier);
 
         vm.prank(avs);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
@@ -629,6 +695,30 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         vm.prank(aggregator);
         vm.expectRevert(CertificateVerificationFailed.selector);
+        taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
+    }
+
+    function test_Revert_NoCertificateVerifierSet() public {
+        // Set up executor operator set task config with ECDSA curve type
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Warp time to after creation time
+        vm.warp(block.timestamp + 1);
+
+        // Try to submit result - should fail because no ECDSA certificate verifier is set
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = _createValidBN254Certificate(newTaskHash);
+
+        vm.expectRevert(InvalidAddressZero.selector);
         taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
     }
 
@@ -761,10 +851,18 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         taskHash = taskMailbox.createTask(taskParams);
     }
 
+    function test_getCertificateVerifier() public {
+        assertEq(
+            taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.BN254), address(mockCertificateVerifier)
+        );
+        assertEq(taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA), address(0));
+        assertEq(taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.NONE), address(0));
+    }
+
     function test_getExecutorOperatorSetTaskConfig() public {
         ExecutorOperatorSetTaskConfig memory config = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
 
-        assertEq(config.certificateVerifier, address(mockCertificateVerifier));
+        assertEq(uint8(config.curveType), uint8(IKeyRegistrarTypes.CurveType.BN254));
         assertEq(address(config.taskHook), address(mockTaskHook));
         assertEq(address(config.feeToken), address(mockToken));
         assertEq(config.feeCollector, feeCollector);
@@ -778,7 +876,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         ExecutorOperatorSetTaskConfig memory config = taskMailbox.getExecutorOperatorSetTaskConfig(unregisteredSet);
 
         // Should return empty config
-        assertEq(config.certificateVerifier, address(0));
+        assertEq(uint8(config.curveType), uint8(IKeyRegistrarTypes.CurveType.NONE));
         assertEq(address(config.taskHook), address(0));
         assertEq(address(config.feeToken), address(0));
         assertEq(config.feeCollector, address(0));
@@ -953,7 +1051,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
         // Access config via getExecutorOperatorSetTaskConfig function
         ExecutorOperatorSetTaskConfig memory storedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
 
-        assertEq(storedConfig.certificateVerifier, config.certificateVerifier);
+        assertEq(uint8(storedConfig.curveType), uint8(config.curveType));
         assertEq(address(storedConfig.taskHook), address(config.taskHook));
         assertEq(address(storedConfig.feeToken), address(config.feeToken));
         assertEq(storedConfig.feeCollector, config.feeCollector);

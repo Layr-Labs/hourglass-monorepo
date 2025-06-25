@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {Script, console} from "forge-std/Script.sol";
 
 import {TaskMailbox} from "../../src/core/TaskMailbox.sol";
+import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 
 contract DeployTaskMailbox is Script {
     function setUp() public {}
@@ -17,7 +18,12 @@ contract DeployTaskMailbox is Script {
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        TaskMailbox taskMailbox = new TaskMailbox();
+        // For now, deploy with empty certificate verifiers array
+        // The owner can set them later using setCertificateVerifier
+        ITaskMailboxTypes.CertificateVerifierConfig[] memory certificateVerifiers =
+            new ITaskMailboxTypes.CertificateVerifierConfig[](0);
+
+        TaskMailbox taskMailbox = new TaskMailbox(deployer, certificateVerifiers);
         console.log("TaskMailbox deployed to:", address(taskMailbox));
 
         vm.stopBroadcast();
