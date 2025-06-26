@@ -15,6 +15,13 @@ import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
  * @dev Used for testing certificate verification failure scenarios
  */
 contract MockBN254CertificateVerifierFailure is IBN254CertificateVerifier {
+    // Mapping to store operator set owners for testing
+    mapping(bytes32 => address) public operatorSetOwners;
+
+    function setOperatorSetOwner(OperatorSet memory operatorSet, address owner) external {
+        operatorSetOwners[keccak256(abi.encode(operatorSet.avs, operatorSet.id))] = owner;
+    }
+
     function updateOperatorTable(
         OperatorSet calldata, /*operatorSet*/
         uint32, /*referenceTimestamp*/
@@ -59,9 +66,11 @@ contract MockBN254CertificateVerifierFailure is IBN254CertificateVerifier {
     }
 
     function getOperatorSetOwner(
-        OperatorSet memory /*operatorSet*/
-    ) external pure returns (address) {
-        return address(0);
+        OperatorSet memory operatorSet
+    ) external view returns (address) {
+        // Return the configured owner, or the AVS address by default
+        address owner = operatorSetOwners[keccak256(abi.encode(operatorSet.avs, operatorSet.id))];
+        return owner != address(0) ? owner : operatorSet.avs;
     }
 
     function latestReferenceTimestamp(
