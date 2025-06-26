@@ -147,6 +147,7 @@ func (cc *ContractCaller) SubmitTaskResultRetryable(
 				return nil, fmt.Errorf("failed to submit task result: %w", err)
 			}
 			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
+				zap.Error(err),
 				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
 				zap.Int("attempt", i+1),
 			)
@@ -176,6 +177,7 @@ func (cc *ContractCaller) SubmitTaskResult(
 	cc.logger.Sugar().Infow("submitting task result",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
 		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
 	)
 
 	// Convert signature to G1 point in precompile format
@@ -216,7 +218,12 @@ func (cc *ContractCaller) SubmitTaskResult(
 		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{},
 	}
 
-	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, cert, aggCert.TaskResponse)
+	certBytes, err := cc.taskMailbox.GetBN254CertificateBytes(&bind.CallOpts{}, cert)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
+	}
+
+	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -437,7 +444,7 @@ func (cc *ContractCaller) CreateOperatorRegistrationPayload(
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
 func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType contractCaller.CurveType) (*types.Receipt, error) {
-	txOpts, err := cc.getTransactOpts(ctx)
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -454,7 +461,7 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddres
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EnsureTransactionEvaled(ctx, tx, "ConfigureOperatorSet")
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ConfigureOperatorSet")
 }
 
 func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
@@ -465,7 +472,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	signature *bn254.Signature,
 	keyData []byte,
 ) (*types.Receipt, error) {
-	txOpts, err := cc.getTransactOpts(ctx)
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -503,7 +510,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		return nil, fmt.Errorf("failed to register key: %w", err)
 	}
 
-	return cc.EnsureTransactionEvaled(ctx, tx, "RegisterKeyWithKeyRegistrar")
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ConfigureOperatorSet")
 }
 
 func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
@@ -604,7 +611,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	operatorSetIds []uint32,
 	socket string,
 ) (*types.Receipt, error) {
-	txOpts, err := cc.getTransactOpts(ctx)
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -624,9 +631,10 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EnsureTransactionEvaled(ctx, tx, "registerOperatorWithAvs")
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "registerOperatorWithAvs")
 }
 
+//nolint:unused
 func (cc *ContractCaller) getTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
 	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
 	if err != nil {
@@ -675,11 +683,14 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	return opts, nil
 }
 
-func (cc *ContractCaller) GetSupportChainsForMultichain(ctx context.Context, referenceBlockNumber uint64) ([]*big.Int, []common.Address, error) {
-	return cc.crossChainRegistry.GetSupportedChains(&bind.CallOpts{
-		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
-	})
+func (cc *ContractCaller) GetSupportChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
+	opts := &bind.CallOpts{
+		Context: ctx,
+	}
+	if referenceBlockNumber > 0 {
+		opts.BlockNumber = new(big.Int).SetUint64(uint64(referenceBlockNumber))
+	}
+	return cc.crossChainRegistry.GetSupportedChains(opts)
 }
 
 func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
@@ -687,7 +698,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	avsAddress common.Address,
 	operatorSetId uint32,
 	chainId config.ChainId,
-	referenceBlockNumber uint64,
+	atBlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
 	operatorSet := ICrossChainRegistry.OperatorSet{
 		Avs: avsAddress,
@@ -699,7 +710,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	)
 	otcAddr, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	}, operatorSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator table calculator address: %w", err)
@@ -719,14 +730,14 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	)
 	operatorWeights, err := opTableCalculator.GetOperatorWeights(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	}, IOperatorTableCalculator.OperatorSet(operatorSet))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator weights: %w", err)
 	}
 
 	cc.logger.Sugar().Infow("Fetching supported chains for multichain")
-	chainIds, tableUpdaterAddresses, err := cc.GetSupportChainsForMultichain(ctx, referenceBlockNumber)
+	chainIds, tableUpdaterAddresses, err := cc.GetSupportChainsForMultichain(ctx, int64(atBlockNumber))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get supported chains for multichain: %w", err)
 	}
@@ -736,16 +747,37 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	)
 
 	var tableUpdaterAddr common.Address
+	tableUpdaterAddressMap := make(map[uint64]common.Address)
 	for i, id := range chainIds {
-		if id.Uint64() == uint64(chainId) {
+		tableUpdaterAddressMap[id.Uint64()] = tableUpdaterAddresses[i]
+
+		if tableUpdaterAddr == (common.Address{}) && id.Uint64() == uint64(chainId) {
 			tableUpdaterAddr = tableUpdaterAddresses[i]
-			break
 		}
 	}
 	if tableUpdaterAddr == (common.Address{}) {
 		return nil, fmt.Errorf("no table updater address found for chain ID %d", chainId)
 	}
 
+	latestReferenceTimeAndBlock, err := cc.GetTableUpdaterReferenceTimeAndBlock(ctx, tableUpdaterAddr, atBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest reference time and block: %w", err)
+	}
+
+	return &contractCaller.OperatorTableData{
+		OperatorWeights:            operatorWeights.Weights,
+		Operators:                  operatorWeights.Operators,
+		LatestReferenceTimestamp:   latestReferenceTimeAndBlock.LatestReferenceTimestamp,
+		LatestReferenceBlockNumber: latestReferenceTimeAndBlock.LatestReferenceBlockNumber,
+		TableUpdaterAddresses:      tableUpdaterAddressMap,
+	}, nil
+}
+
+func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
+	ctx context.Context,
+	tableUpdaterAddr common.Address,
+	atBlockNumber uint64,
+) (*contractCaller.LatestReferenceTimeAndBlock, error) {
 	tableUpdater, err := IOperatorTableUpdater.NewIOperatorTableUpdater(tableUpdaterAddr, cc.ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create operator table updater: %w", err)
@@ -753,19 +785,79 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 
 	latestReferenceTimestamp, err := tableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference timestamp: %w", err)
 	}
+	latestReferenceBlockNumber, err := tableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{}, latestReferenceTimestamp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest reference block number: %w", err)
+	}
 
-	return &contractCaller.OperatorTableData{
-		OperatorWeights:          operatorWeights.Weights,
-		Operators:                operatorWeights.Operators,
-		LatestReferenceTimestamp: latestReferenceTimestamp,
+	return &contractCaller.LatestReferenceTimeAndBlock{
+		LatestReferenceTimestamp:   latestReferenceTimestamp,
+		LatestReferenceBlockNumber: latestReferenceBlockNumber,
 	}, nil
 }
 
 func (cc *ContractCaller) GetActiveGenerationReservations() ([]ICrossChainRegistry.OperatorSet, error) {
 	return cc.crossChainRegistry.GetActiveGenerationReservations(&bind.CallOpts{})
+}
+
+func (cc *ContractCaller) SetupTaskMailboxForAvs(
+	ctx context.Context,
+	avsAddress common.Address,
+	taskHookAddress common.Address,
+	executorOperatorSetIds []uint32,
+	curveTypes []string,
+) error {
+	for i, id := range executorOperatorSetIds {
+		curveTypeStr := curveTypes[i]
+
+		mailboxCfg := ITaskMailbox.ITaskMailboxTypesExecutorOperatorSetTaskConfig{
+			TaskHook: taskHookAddress,
+			//FeeToken:                 common.HexToAddress("0x"),
+			//FeeCollector:             common.HexToAddress("0x"),
+			TaskSLA:                  big.NewInt(60),
+			StakeProportionThreshold: 10_000,
+			TaskMetadata:             nil,
+		}
+
+		switch curveTypeStr {
+		case "ecdsa":
+			mailboxCfg.CurveType = 1
+		case "bn254":
+			mailboxCfg.CurveType = 2
+		default:
+			return fmt.Errorf("unsupported curve type: %s", curveTypeStr)
+		}
+
+		noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to build transaction options: %w", err)
+		}
+
+		tx, err := cc.taskMailbox.SetExecutorOperatorSetTaskConfig(
+			noSendTxOpts,
+			ITaskMailbox.OperatorSet{
+				Avs: avsAddress,
+				Id:  id,
+			},
+			mailboxCfg,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create transaction: %w", err)
+		}
+		receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SetupTaskMailboxForAvs")
+		if err != nil {
+			return fmt.Errorf("failed to send transaction: %w", err)
+		}
+		cc.logger.Sugar().Infow("Successfully set up task mailbox for AVS",
+			zap.String("avsAddress", avsAddress.String()),
+			zap.Uint32("executorOperatorSetId", id),
+			zap.String("transactionHash", receipt.TxHash.Hex()),
+		)
+	}
+	return nil
 }

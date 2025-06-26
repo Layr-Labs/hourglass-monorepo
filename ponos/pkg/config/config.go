@@ -9,11 +9,11 @@ import (
 type ChainId uint
 
 const (
-	ChainId_EthereumMainnet ChainId = 1
-	ChainId_EthereumHolesky ChainId = 17000
-	ChainId_EthereumHoodi   ChainId = 560048
-	ChainId_EthereumAnvil   ChainId = 31337
-	ChainId_BaseAnvil       ChainId = 31338
+	ChainId_EthereumMainnet  ChainId = 1
+	ChainId_EthereumHolesky  ChainId = 17000
+	ChainId_EthereumHoodi    ChainId = 560048
+	ChainId_EthereumAnvil    ChainId = 31337
+	ChainId_BaseSepoliaAnvil ChainId = 31338
 )
 
 const (
@@ -73,7 +73,7 @@ var (
 			KeyRegistrar:       "0x1c84bb62fe7791e173014a879c706445fa893bbe",
 			CrossChainRegistry: "0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
 		},
-		ChainId_BaseAnvil: {
+		ChainId_BaseSepoliaAnvil: {
 			TaskMailbox: "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
 		},
 	}
@@ -93,7 +93,7 @@ var (
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
 		ChainId_EthereumAnvil,
-		ChainId_BaseAnvil,
+		ChainId_BaseSepoliaAnvil,
 	}
 )
 

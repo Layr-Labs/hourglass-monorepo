@@ -33,9 +33,9 @@ import (
 
 const (
 	L1RPCUrl = "http://127.0.0.1:8545"
-	// L2RPCUrl = "http://127.0.0.1:9545"
-	//L2WSUrl  = "ws://127.0.0.1:9545"
-	L1WsUrl = "ws://127.0.0.1:8545"
+	L2RPCUrl = "http://127.0.0.1:9545"
+	L2WSUrl  = "ws://127.0.0.1:9545"
+	L1WsUrl  = "ws://127.0.0.1:8545"
 )
 
 // Test_Aggregator is an integration test for the Aggregator component of the system.
@@ -102,9 +102,11 @@ func Test_Aggregator(t *testing.T) {
 	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
 	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
-
-	// run the AVS on the L2 (base)
-	aggConfig.Avss[0].ChainIds = []uint{uint(config.ChainId_EthereumAnvil)}
+	aggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
+	aggConfig.Avss[0].ChainIds = []uint{
+		uint(config.ChainId_EthereumAnvil),
+		uint(config.ChainId_BaseSepoliaAnvil),
+	}
 
 	aggStoredKeys, err := keystore.ParseKeystoreJSON(aggConfig.Operator.SigningKeys.BLS.Keystore)
 	if err != nil {
@@ -132,88 +134,57 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
+	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L2RPCUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+
+	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+
 	startErrorsChan := make(chan error, 2)
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
+	defer anvilCancel()
 
 	anvilWg.Add(1)
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start Anvil: %v", err)
 	}
-
-	go func() {
-		defer anvilWg.Done()
-
-		for {
-			select {
-			// timeout of 60 seconds
-			case <-ctx.Done():
-				t.Logf("Failed to start l1Anvil: %v", ctx.Err())
-				return
-			case <-time.After(2 * time.Second):
-				t.Logf("Checking if l1Anvil is up and running...")
-				block, err := l1EthereumClient.GetLatestBlock(ctx)
-				if err != nil {
-					t.Logf("Failed to get latest block, will retry: %v", err)
-					continue
-				}
-				t.Logf("L1 Anvil is up and running, latest block: %v", block)
-				return
-			}
-		}
-	}()
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
 
 	// ------------------------------------------------------------------------
 	// L2Chain & l1Anvil setup
 	// ------------------------------------------------------------------------
-	// anvilWg.Add(1)
-	// l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-	// 	BaseUrl:   L2RPCUrl,
-	// 	BlockType: ethereum.BlockType_Latest,
-	// }, l)
-	//
-	// l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
-	// if err != nil {
-	// 	t.Fatalf("Failed to get Ethereum contract caller: %v", err)
-	// }
-	//
-	// l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
-	// if err != nil {
-	// 	t.Fatalf("Failed to start L2 Anvil: %v", err)
-	// }
-	// go func() {
-	// 	defer anvilWg.Done()
-	//
-	// 	for {
-	// 		select {
-	// 		// timeout of 60 seconds
-	// 		case <-ctx.Done():
-	// 			t.Logf("Failed to start l2Anvil: %v", ctx.Err())
-	// 			return
-	// 		case <-time.After(2 * time.Second):
-	// 			t.Logf("Checking if l2Anvil is up and running...")
-	// 			block, err := l2EthereumClient.GetLatestBlock(ctx)
-	// 			if err != nil {
-	// 				t.Logf("Failed to get latest block, will retry: %v", err)
-	// 				continue
-	// 			}
-	// 			t.Logf("L2 Anvil is up and running, latest block: %v", block)
-	// 			return
-	// 		}
-	// 	}
-	// }()
+	anvilWg.Add(1)
+	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L2 Anvil: %v", err)
+	}
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l2EthereumClient, startErrorsChan)
+
 	anvilWg.Wait()
 	close(startErrorsChan)
-
 	for err := range startErrorsChan {
 		if err != nil {
-			t.Fatalf("Anvil failed to start: %v", err)
+			anvilCancel()
+			t.Fatalf("Failed to start Anvil: %v", err)
 		}
 	}
+	anvilCancel()
 
 	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
 		t.Fatalf("failed to get L1 chain ID: %v", err)
 	}
+
+	l2ChainId, err := l2EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L2 chain ID: %v", err)
+	}
+	t.Logf("L2 Chain ID: %s", l2ChainId.String())
 
 	coreContracts, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
 	if err != nil {
@@ -306,13 +277,53 @@ func Test_Aggregator(t *testing.T) {
 	if err != nil {
 		t.Logf("Failed to create aggregator: %v", err)
 	}
-	_ = agg
 
-	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
+	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
 	// transport the tables for good measure
-	testUtils.TransportL1Tables(l)
+	testUtils.TransportStakeTables(l, true)
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
+
+	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
+	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
+		[]uint32{1},
+		[]string{"bn254"},
+		avsCcL1,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
+
+	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL2),
+		[]uint32{1},
+		[]string{"bn254"},
+		avsCcL2,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
 
 	// update current block to account for transport
 	currentBlock, err := l1EthClient.BlockNumber(ctx)
@@ -349,7 +360,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Listen for TaskVerified event to know that the test is done
 	// ------------------------------------------------------------------------
-	wsEthClient, err := l1EthereumClient.GetWebsocketConnection(L1WsUrl)
+	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
 	if err != nil {
 		t.Fatalf("Failed to get websocket connection: %v", err)
 	}
@@ -407,18 +418,18 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
-	l1AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 		KeyRegistrarAddress: coreContracts.KeyRegistrar,
-	}, l1EthClient, l)
+	}, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	task, err := l1AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
+	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to publish message to inbox: %v", err)
 	}
@@ -427,7 +438,7 @@ func Test_Aggregator(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
-	case <-time.After(120 * time.Second):
+	case <-time.After(150 * time.Second):
 		t.Logf("Timeout after 90 seconds")
 		cancel()
 	}
@@ -435,7 +446,7 @@ func Test_Aggregator(t *testing.T) {
 
 	t.Cleanup(func() {
 		_ = l1Anvil.Process.Kill()
-		// _ = l2Anvil.Process.Kill()
+		_ = l2Anvil.Process.Kill()
 		cancel()
 	})
 
@@ -508,7 +519,12 @@ chains:
     network: mainnet
     chainId: 31337
     rpcUrl: http://localhost:8545
-    pollIntervalSeconds: 10
+    pollIntervalSeconds: 2
+  - name: base
+    network: sepolia
+    chainId: 31338
+    rpcUrl: http://localhost:9545
+    pollIntervalSeconds: 2
 operator:
   address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
   operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
@@ -552,7 +568,7 @@ operator:
 avss:
   - address: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
     responseTimeout: 3000
-    chainIds: [31337]
+    chainIds: [31338]
     signingCurve: "bn254"
     avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
 `

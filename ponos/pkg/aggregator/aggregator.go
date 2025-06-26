@@ -144,6 +144,7 @@ func (a *Aggregator) Initialize() error {
 		om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
 			AvsAddress: avs.Address,
 			ChainIds:   supportedChains,
+			L1ChainId:  a.config.L1ChainId,
 		}, callers, a.peeringDataFetcher, a.logger)
 
 		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
@@ -283,6 +284,9 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 			return nil, fmt.Errorf("failed to initialize contract caller for chain %s: %w", chain.Name, err)
 		}
 		contractCallers[chain.ChainId] = cc
+	}
+	if _, ok := contractCallers[a.config.L1ChainId]; !ok {
+		return nil, fmt.Errorf("no contract caller initialized for L1 chain %d", a.config.L1ChainId)
 	}
 	return contractCallers, nil
 }

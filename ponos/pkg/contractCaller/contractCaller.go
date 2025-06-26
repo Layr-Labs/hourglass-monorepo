@@ -35,9 +35,16 @@ const (
 )
 
 type OperatorTableData struct {
-	OperatorWeights          [][]*big.Int
-	Operators                []common.Address
-	LatestReferenceTimestamp uint32
+	OperatorWeights            [][]*big.Int
+	Operators                  []common.Address
+	LatestReferenceTimestamp   uint32
+	LatestReferenceBlockNumber uint32
+	TableUpdaterAddresses      map[uint64]common.Address
+}
+
+type LatestReferenceTimeAndBlock struct {
+	LatestReferenceTimestamp   uint32
+	LatestReferenceBlockNumber uint32
 }
 
 type IContractCaller interface {
@@ -99,4 +106,20 @@ type IContractCaller interface {
 		chainId config.ChainId,
 		referenceBlocknumber uint64,
 	) (*OperatorTableData, error)
+
+	GetTableUpdaterReferenceTimeAndBlock(
+		ctx context.Context,
+		tableUpdaterAddr common.Address,
+		atBlockNumber uint64,
+	) (*LatestReferenceTimeAndBlock, error)
+
+	GetSupportChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
+
+	SetupTaskMailboxForAvs(
+		ctx context.Context,
+		avsAddress common.Address,
+		taskHookAddress common.Address,
+		executorOperatorSetIds []uint32,
+		curveTypes []string,
+	) error
 }

@@ -2,6 +2,7 @@ package tableTransporter
 
 import (
 	"context"
+	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/multichain-go/pkg/blsSigner"
 	"github.com/Layr-Labs/multichain-go/pkg/chainManager"
@@ -11,15 +12,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"math/big"
-	"time"
 )
 
 func TransportTable(
 	transporterPrivateKey string,
-	rpcUrl string,
-	chainId uint64,
+	l1RpcUrl string,
+	l1ChainId uint64,
+	l2RpcUrl string,
+	l2ChainId uint64,
 	crossChainRegistryAddress string,
 	blsPrivateKey string,
+	chainIdsToIgnore []*big.Int,
 	l *zap.Logger,
 ) {
 	ctx := context.Background()
@@ -27,8 +30,8 @@ func TransportTable(
 	cm := chainManager.NewChainManager()
 
 	holeskyAnvilConfig := &chainManager.ChainConfig{
-		ChainID: chainId,
-		RPCUrl:  rpcUrl,
+		ChainID: l1ChainId,
+		RPCUrl:  l1RpcUrl,
 	}
 	if err := cm.AddChain(holeskyAnvilConfig); err != nil {
 		l.Sugar().Fatalf("Failed to add chain: %v", err)
@@ -36,6 +39,19 @@ func TransportTable(
 	holeskyClient, err := cm.GetChainForId(holeskyAnvilConfig.ChainID)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to get chain for ID %d: %v", holeskyAnvilConfig.ChainID, err)
+	}
+
+	if l2RpcUrl != "" && l2ChainId != 0 {
+		l2ChainConfig := &chainManager.ChainConfig{
+			ChainID: l2ChainId,
+			RPCUrl:  l2RpcUrl,
+		}
+		if err := cm.AddChain(l2ChainConfig); err != nil {
+			l.Sugar().Fatalf("Failed to add L2 chain: %v", err)
+		}
+		l.Sugar().Infow("Added L2 chain",
+			zap.Any("chainConfig", l2ChainConfig),
+		)
 	}
 
 	txSign, err := txSigner.NewPrivateKeySigner(transporterPrivateKey)
@@ -69,12 +85,7 @@ func TransportTable(
 		l.Sugar().Fatalf("Failed to calculate stake table root: %v", err)
 	}
 
-	scheme := bn254.NewScheme()
-	genericPk, err := scheme.NewPrivateKeyFromHexString(blsPrivateKey)
-	if err != nil {
-		l.Sugar().Fatalf("Failed to create BLS private key: %v", err)
-	}
-	pk, err := bn254.NewPrivateKeyFromBytes(genericPk.Bytes())
+	pk, err := bn254.NewPrivateKeyFromHexString(blsPrivateKey)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to convert BLS private key: %v", err)
 	}
@@ -101,31 +112,32 @@ func TransportTable(
 	referenceTimestamp := uint32(block.Time())
 
 	err = stakeTransport.SignAndTransportGlobalTableRoot(
+		ctx,
 		root,
 		referenceTimestamp,
-		blockNumber,
-		[]*big.Int{new(big.Int).SetUint64(17000)},
+		block.NumberU64(),
+		chainIdsToIgnore,
 	)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to sign and transport global table root: %v", err)
 	}
-	l.Sugar().Infow("Successfully signed and transported global table root, sleeping for 10 seconds")
-	time.Sleep(10 * time.Second)
 
 	opsets := dist.GetOperatorSets()
 	if len(opsets) == 0 {
 		l.Sugar().Infow("No operator sets found, skipping AVS stake table transport")
 		return
 	}
+	fmt.Printf("Operatorsets to transport: %+v\n", opsets)
 	for _, opset := range opsets {
 		err = stakeTransport.SignAndTransportAvsStakeTable(
+			ctx,
 			referenceTimestamp,
-			blockNumber,
+			block.NumberU64(),
 			opset,
 			root,
 			tree,
 			dist,
-			[]*big.Int{new(big.Int).SetUint64(17000)},
+			chainIdsToIgnore,
 		)
 		if err != nil {
 			l.Sugar().Fatalf("Failed to sign and transport AVS stake table for opset %v: %v", opset, err)

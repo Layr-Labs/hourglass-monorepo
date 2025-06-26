@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"math/big"
-	"os"
+	"sync"
 	"testing"
 	"time"
 )
@@ -138,6 +138,15 @@ func debugOpsetData(
 			t.Fatalf("Failed to calculate operator table bytes for operator set %d: %v", opsetId, err)
 		}
 		fmt.Printf("Operator table bytes for operator set %d: %x\n", opsetId, tableBytes)
+
+		transportDest, err := ccr.GetTransportDestinations(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get transport destinations for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Transport destinations for avs/operator set %s %d: %+v\n", chainConfig.AVSAccountAddress, opsetId, transportDest)
 	}
 }
 
@@ -203,19 +212,28 @@ func Test_L1Mailbox(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	anvilWg := &sync.WaitGroup{}
+	anvilWg.Add(1)
+	startErrorsChan := make(chan error, 1)
+
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start L1 Anvil: %v", err)
 	}
 
-	if os.Getenv("CI") == "" {
-		fmt.Printf("Sleeping for 10 seconds\n\n")
-		time.Sleep(10 * time.Second)
-	} else {
-		fmt.Printf("Sleeping for 30 seconds\n\n")
-		time.Sleep(30 * time.Second)
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	defer anvilCancel()
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
+
+	anvilWg.Wait()
+	close(startErrorsChan)
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Fatalf("Failed to start Anvil: %v", err)
+		}
 	}
-	fmt.Println("Checking if l1Anvil is up and running...")
+	anvilCancel()
+	t.Logf("Anvil is running")
 
 	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
@@ -273,9 +291,30 @@ func Test_L1Mailbox(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 	// transport the tables for good measure
-	testUtils.TransportL1Tables(l)
+	testUtils.TransportStakeTables(l, false)
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
+
+	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
+	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
+		[]uint32{1},
+		[]string{"bn254"},
+		avsCc,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
 
 	// update current block to account for transport
 	currentBlock, err = l1EthClient.BlockNumber(ctx)
@@ -299,8 +338,6 @@ func Test_L1Mailbox(t *testing.T) {
 		t.Fatalf("Failed to get operator table data: %v", err)
 	}
 	fmt.Printf("Operator table data: %+v\n", tableData)
-
-	// TODO(seanmcgary): need to actually set up operators and their keys in order to pass the certificate verifier
 
 	hasErrors := false
 	go func() {

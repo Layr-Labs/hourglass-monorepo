@@ -63,9 +63,16 @@ type IBN254TableCalculatorTypesBN254OperatorInfo struct {
 	Weights []*big.Int
 }
 
+// IECDSACertificateVerifierTypesECDSACertificate is an auto generated low-level Go binding around an user-defined struct.
+type IECDSACertificateVerifierTypesECDSACertificate struct {
+	ReferenceTimestamp uint32
+	MessageHash        [32]byte
+	Sig                []byte
+}
+
 // ITaskMailboxTypesExecutorOperatorSetTaskConfig is an auto generated low-level Go binding around an user-defined struct.
 type ITaskMailboxTypesExecutorOperatorSetTaskConfig struct {
-	CertificateVerifier      common.Address
+	CurveType                uint8
 	TaskHook                 common.Address
 	FeeToken                 common.Address
 	FeeCollector             common.Address
@@ -105,7 +112,7 @@ type OperatorSet struct {
 
 // TaskMailboxStorageMetaData contains all meta data concerning the TaskMailboxStorage contract.
 var TaskMailboxStorageMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"cancelTask\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"createTask\",\"inputs\":[{\"name\":\"taskParams\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.TaskParams\",\"components\":[{\"name\":\"refundCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"executorOperatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"executorOperatorSetTaskConfigs\",\"inputs\":[{\"name\":\"operatorSetKey\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getExecutorOperatorSetTaskConfig\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskInfo\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.Task\",\"components\":[{\"name\":\"creator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"creationTime\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"status\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"refundCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"feeSplit\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"executorOperatorSetTaskConfig\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"result\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskResult\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskStatus\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isExecutorOperatorSetRegistered\",\"inputs\":[{\"name\":\"operatorSetKey\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"isRegistered\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerExecutorOperatorSet\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"isRegistered\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setExecutorOperatorSetTaskConfig\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"config\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"submitResult\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254Certificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"signature\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"apk\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"nonSignerWitnesses\",\"type\":\"tuple[]\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254OperatorInfoWitness[]\",\"components\":[{\"name\":\"operatorIndex\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"operatorInfoProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"operatorInfo\",\"type\":\"tuple\",\"internalType\":\"structIBN254TableCalculatorTypes.BN254OperatorInfo\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}]}]},{\"name\":\"result\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"ExecutorOperatorSetRegistered\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":true,\"internalType\":\"uint32\"},{\"name\":\"isRegistered\",\"type\":\"bool\",\"indexed\":false,\"internalType\":\"bool\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"ExecutorOperatorSetTaskConfigSet\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":true,\"internalType\":\"uint32\"},{\"name\":\"config\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskCanceled\",\"inputs\":[{\"name\":\"creator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskCreated\",\"inputs\":[{\"name\":\"creator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"refundCollector\",\"type\":\"address\",\"indexed\":false,\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"indexed\":false,\"internalType\":\"uint96\"},{\"name\":\"taskDeadline\",\"type\":\"uint256\",\"indexed\":false,\"internalType\":\"uint256\"},{\"name\":\"payload\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskVerified\",\"inputs\":[{\"name\":\"aggregator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"result\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"CertificateVerificationFailed\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ExecutorOperatorSetNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ExecutorOperatorSetTaskConfigNotSet\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidAddressZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidTaskCreator\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidTaskStatus\",\"inputs\":[{\"name\":\"expected\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"},{\"name\":\"actual\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"}]},{\"type\":\"error\",\"name\":\"PayloadIsEmpty\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"TaskSLAIsZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"TimestampAtCreation\",\"inputs\":[]}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"cancelTask\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"certificateVerifiers\",\"inputs\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"}],\"outputs\":[{\"name\":\"verifier\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"createTask\",\"inputs\":[{\"name\":\"taskParams\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.TaskParams\",\"components\":[{\"name\":\"refundCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"executorOperatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"executorOperatorSetTaskConfigs\",\"inputs\":[{\"name\":\"operatorSetKey\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getBN254CertificateBytes\",\"inputs\":[{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254Certificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"signature\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"apk\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"nonSignerWitnesses\",\"type\":\"tuple[]\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254OperatorInfoWitness[]\",\"components\":[{\"name\":\"operatorIndex\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"operatorInfoProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"operatorInfo\",\"type\":\"tuple\",\"internalType\":\"structIBN254TableCalculatorTypes.BN254OperatorInfo\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}]}]}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"getCertificateVerifier\",\"inputs\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"}],\"outputs\":[{\"name\":\"\",\"type\":\"address\",\"internalType\":\"address\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getECDSACertificateBytes\",\"inputs\":[{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIECDSACertificateVerifierTypes.ECDSACertificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"sig\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"pure\"},{\"type\":\"function\",\"name\":\"getExecutorOperatorSetTaskConfig\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskInfo\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.Task\",\"components\":[{\"name\":\"creator\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"creationTime\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"status\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"},{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"refundCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"feeSplit\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"executorOperatorSetTaskConfig\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"result\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskResult\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getTaskStatus\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"isExecutorOperatorSetRegistered\",\"inputs\":[{\"name\":\"operatorSetKey\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[{\"name\":\"isRegistered\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"registerExecutorOperatorSet\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"isRegistered\",\"type\":\"bool\",\"internalType\":\"bool\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setCertificateVerifier\",\"inputs\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"certificateVerifier\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"setExecutorOperatorSetTaskConfig\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"config\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"submitResult\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"result\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"event\",\"name\":\"CertificateVerifierSet\",\"inputs\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"indexed\":true,\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"certificateVerifier\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"ExecutorOperatorSetRegistered\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":true,\"internalType\":\"uint32\"},{\"name\":\"isRegistered\",\"type\":\"bool\",\"indexed\":false,\"internalType\":\"bool\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"ExecutorOperatorSetTaskConfigSet\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":true,\"internalType\":\"uint32\"},{\"name\":\"config\",\"type\":\"tuple\",\"indexed\":false,\"internalType\":\"structITaskMailboxTypes.ExecutorOperatorSetTaskConfig\",\"components\":[{\"name\":\"curveType\",\"type\":\"uint8\",\"internalType\":\"enumIKeyRegistrarTypes.CurveType\"},{\"name\":\"taskHook\",\"type\":\"address\",\"internalType\":\"contractIAVSTaskHook\"},{\"name\":\"feeToken\",\"type\":\"address\",\"internalType\":\"contractIERC20\"},{\"name\":\"feeCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskSLA\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"stakeProportionThreshold\",\"type\":\"uint16\",\"internalType\":\"uint16\"},{\"name\":\"taskMetadata\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskCanceled\",\"inputs\":[{\"name\":\"creator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskCreated\",\"inputs\":[{\"name\":\"creator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"refundCollector\",\"type\":\"address\",\"indexed\":false,\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"indexed\":false,\"internalType\":\"uint96\"},{\"name\":\"taskDeadline\",\"type\":\"uint256\",\"indexed\":false,\"internalType\":\"uint256\"},{\"name\":\"payload\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"event\",\"name\":\"TaskVerified\",\"inputs\":[{\"name\":\"aggregator\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"indexed\":true,\"internalType\":\"bytes32\"},{\"name\":\"avs\",\"type\":\"address\",\"indexed\":true,\"internalType\":\"address\"},{\"name\":\"executorOperatorSetId\",\"type\":\"uint32\",\"indexed\":false,\"internalType\":\"uint32\"},{\"name\":\"result\",\"type\":\"bytes\",\"indexed\":false,\"internalType\":\"bytes\"}],\"anonymous\":false},{\"type\":\"error\",\"name\":\"CertificateVerificationFailed\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ExecutorOperatorSetNotRegistered\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"ExecutorOperatorSetTaskConfigNotSet\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidAddressZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidCurveType\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidOperatorSetOwner\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidTaskCreator\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"InvalidTaskStatus\",\"inputs\":[{\"name\":\"expected\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"},{\"name\":\"actual\",\"type\":\"uint8\",\"internalType\":\"enumITaskMailboxTypes.TaskStatus\"}]},{\"type\":\"error\",\"name\":\"PayloadIsEmpty\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"TaskSLAIsZero\",\"inputs\":[]},{\"type\":\"error\",\"name\":\"TimestampAtCreation\",\"inputs\":[]}]",
 }
 
 // TaskMailboxStorageABI is the input ABI used to generate the binding from.
@@ -254,11 +261,42 @@ func (_TaskMailboxStorage *TaskMailboxStorageTransactorRaw) Transact(opts *bind.
 	return _TaskMailboxStorage.Contract.contract.Transact(opts, method, params...)
 }
 
+// CertificateVerifiers is a free data retrieval call binding the contract method 0xa1557f78.
+//
+// Solidity: function certificateVerifiers(uint8 curveType) view returns(address verifier)
+func (_TaskMailboxStorage *TaskMailboxStorageCaller) CertificateVerifiers(opts *bind.CallOpts, curveType uint8) (common.Address, error) {
+	var out []interface{}
+	err := _TaskMailboxStorage.contract.Call(opts, &out, "certificateVerifiers", curveType)
+
+	if err != nil {
+		return *new(common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+
+	return out0, err
+
+}
+
+// CertificateVerifiers is a free data retrieval call binding the contract method 0xa1557f78.
+//
+// Solidity: function certificateVerifiers(uint8 curveType) view returns(address verifier)
+func (_TaskMailboxStorage *TaskMailboxStorageSession) CertificateVerifiers(curveType uint8) (common.Address, error) {
+	return _TaskMailboxStorage.Contract.CertificateVerifiers(&_TaskMailboxStorage.CallOpts, curveType)
+}
+
+// CertificateVerifiers is a free data retrieval call binding the contract method 0xa1557f78.
+//
+// Solidity: function certificateVerifiers(uint8 curveType) view returns(address verifier)
+func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) CertificateVerifiers(curveType uint8) (common.Address, error) {
+	return _TaskMailboxStorage.Contract.CertificateVerifiers(&_TaskMailboxStorage.CallOpts, curveType)
+}
+
 // ExecutorOperatorSetTaskConfigs is a free data retrieval call binding the contract method 0x1c7edb17.
 //
-// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(address certificateVerifier, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
+// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(uint8 curveType, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
 func (_TaskMailboxStorage *TaskMailboxStorageCaller) ExecutorOperatorSetTaskConfigs(opts *bind.CallOpts, operatorSetKey [32]byte) (struct {
-	CertificateVerifier      common.Address
+	CurveType                uint8
 	TaskHook                 common.Address
 	FeeToken                 common.Address
 	FeeCollector             common.Address
@@ -270,7 +308,7 @@ func (_TaskMailboxStorage *TaskMailboxStorageCaller) ExecutorOperatorSetTaskConf
 	err := _TaskMailboxStorage.contract.Call(opts, &out, "executorOperatorSetTaskConfigs", operatorSetKey)
 
 	outstruct := new(struct {
-		CertificateVerifier      common.Address
+		CurveType                uint8
 		TaskHook                 common.Address
 		FeeToken                 common.Address
 		FeeCollector             common.Address
@@ -282,7 +320,7 @@ func (_TaskMailboxStorage *TaskMailboxStorageCaller) ExecutorOperatorSetTaskConf
 		return *outstruct, err
 	}
 
-	outstruct.CertificateVerifier = *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+	outstruct.CurveType = *abi.ConvertType(out[0], new(uint8)).(*uint8)
 	outstruct.TaskHook = *abi.ConvertType(out[1], new(common.Address)).(*common.Address)
 	outstruct.FeeToken = *abi.ConvertType(out[2], new(common.Address)).(*common.Address)
 	outstruct.FeeCollector = *abi.ConvertType(out[3], new(common.Address)).(*common.Address)
@@ -296,9 +334,9 @@ func (_TaskMailboxStorage *TaskMailboxStorageCaller) ExecutorOperatorSetTaskConf
 
 // ExecutorOperatorSetTaskConfigs is a free data retrieval call binding the contract method 0x1c7edb17.
 //
-// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(address certificateVerifier, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
+// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(uint8 curveType, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
 func (_TaskMailboxStorage *TaskMailboxStorageSession) ExecutorOperatorSetTaskConfigs(operatorSetKey [32]byte) (struct {
-	CertificateVerifier      common.Address
+	CurveType                uint8
 	TaskHook                 common.Address
 	FeeToken                 common.Address
 	FeeCollector             common.Address
@@ -311,9 +349,9 @@ func (_TaskMailboxStorage *TaskMailboxStorageSession) ExecutorOperatorSetTaskCon
 
 // ExecutorOperatorSetTaskConfigs is a free data retrieval call binding the contract method 0x1c7edb17.
 //
-// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(address certificateVerifier, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
+// Solidity: function executorOperatorSetTaskConfigs(bytes32 operatorSetKey) view returns(uint8 curveType, address taskHook, address feeToken, address feeCollector, uint96 taskSLA, uint16 stakeProportionThreshold, bytes taskMetadata)
 func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) ExecutorOperatorSetTaskConfigs(operatorSetKey [32]byte) (struct {
-	CertificateVerifier      common.Address
+	CurveType                uint8
 	TaskHook                 common.Address
 	FeeToken                 common.Address
 	FeeCollector             common.Address
@@ -324,9 +362,102 @@ func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) ExecutorOperatorSetT
 	return _TaskMailboxStorage.Contract.ExecutorOperatorSetTaskConfigs(&_TaskMailboxStorage.CallOpts, operatorSetKey)
 }
 
+// GetBN254CertificateBytes is a free data retrieval call binding the contract method 0x1ae370eb.
+//
+// Solidity: function getBN254CertificateBytes((uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetBN254CertificateBytes(opts *bind.CallOpts, cert IBN254CertificateVerifierTypesBN254Certificate) ([]byte, error) {
+	var out []interface{}
+	err := _TaskMailboxStorage.contract.Call(opts, &out, "getBN254CertificateBytes", cert)
+
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]byte)).(*[]byte)
+
+	return out0, err
+
+}
+
+// GetBN254CertificateBytes is a free data retrieval call binding the contract method 0x1ae370eb.
+//
+// Solidity: function getBN254CertificateBytes((uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageSession) GetBN254CertificateBytes(cert IBN254CertificateVerifierTypesBN254Certificate) ([]byte, error) {
+	return _TaskMailboxStorage.Contract.GetBN254CertificateBytes(&_TaskMailboxStorage.CallOpts, cert)
+}
+
+// GetBN254CertificateBytes is a free data retrieval call binding the contract method 0x1ae370eb.
+//
+// Solidity: function getBN254CertificateBytes((uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) GetBN254CertificateBytes(cert IBN254CertificateVerifierTypesBN254Certificate) ([]byte, error) {
+	return _TaskMailboxStorage.Contract.GetBN254CertificateBytes(&_TaskMailboxStorage.CallOpts, cert)
+}
+
+// GetCertificateVerifier is a free data retrieval call binding the contract method 0x6f728c50.
+//
+// Solidity: function getCertificateVerifier(uint8 curveType) view returns(address)
+func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetCertificateVerifier(opts *bind.CallOpts, curveType uint8) (common.Address, error) {
+	var out []interface{}
+	err := _TaskMailboxStorage.contract.Call(opts, &out, "getCertificateVerifier", curveType)
+
+	if err != nil {
+		return *new(common.Address), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(common.Address)).(*common.Address)
+
+	return out0, err
+
+}
+
+// GetCertificateVerifier is a free data retrieval call binding the contract method 0x6f728c50.
+//
+// Solidity: function getCertificateVerifier(uint8 curveType) view returns(address)
+func (_TaskMailboxStorage *TaskMailboxStorageSession) GetCertificateVerifier(curveType uint8) (common.Address, error) {
+	return _TaskMailboxStorage.Contract.GetCertificateVerifier(&_TaskMailboxStorage.CallOpts, curveType)
+}
+
+// GetCertificateVerifier is a free data retrieval call binding the contract method 0x6f728c50.
+//
+// Solidity: function getCertificateVerifier(uint8 curveType) view returns(address)
+func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) GetCertificateVerifier(curveType uint8) (common.Address, error) {
+	return _TaskMailboxStorage.Contract.GetCertificateVerifier(&_TaskMailboxStorage.CallOpts, curveType)
+}
+
+// GetECDSACertificateBytes is a free data retrieval call binding the contract method 0x1270a892.
+//
+// Solidity: function getECDSACertificateBytes((uint32,bytes32,bytes) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetECDSACertificateBytes(opts *bind.CallOpts, cert IECDSACertificateVerifierTypesECDSACertificate) ([]byte, error) {
+	var out []interface{}
+	err := _TaskMailboxStorage.contract.Call(opts, &out, "getECDSACertificateBytes", cert)
+
+	if err != nil {
+		return *new([]byte), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]byte)).(*[]byte)
+
+	return out0, err
+
+}
+
+// GetECDSACertificateBytes is a free data retrieval call binding the contract method 0x1270a892.
+//
+// Solidity: function getECDSACertificateBytes((uint32,bytes32,bytes) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageSession) GetECDSACertificateBytes(cert IECDSACertificateVerifierTypesECDSACertificate) ([]byte, error) {
+	return _TaskMailboxStorage.Contract.GetECDSACertificateBytes(&_TaskMailboxStorage.CallOpts, cert)
+}
+
+// GetECDSACertificateBytes is a free data retrieval call binding the contract method 0x1270a892.
+//
+// Solidity: function getECDSACertificateBytes((uint32,bytes32,bytes) cert) pure returns(bytes)
+func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) GetECDSACertificateBytes(cert IECDSACertificateVerifierTypesECDSACertificate) ([]byte, error) {
+	return _TaskMailboxStorage.Contract.GetECDSACertificateBytes(&_TaskMailboxStorage.CallOpts, cert)
+}
+
 // GetExecutorOperatorSetTaskConfig is a free data retrieval call binding the contract method 0x6bf6fad5.
 //
-// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((address,address,address,address,uint96,uint16,bytes))
+// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((uint8,address,address,address,uint96,uint16,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetExecutorOperatorSetTaskConfig(opts *bind.CallOpts, operatorSet OperatorSet) (ITaskMailboxTypesExecutorOperatorSetTaskConfig, error) {
 	var out []interface{}
 	err := _TaskMailboxStorage.contract.Call(opts, &out, "getExecutorOperatorSetTaskConfig", operatorSet)
@@ -343,21 +474,21 @@ func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetExecutorOperatorSetTaskC
 
 // GetExecutorOperatorSetTaskConfig is a free data retrieval call binding the contract method 0x6bf6fad5.
 //
-// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((address,address,address,address,uint96,uint16,bytes))
+// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((uint8,address,address,address,uint96,uint16,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageSession) GetExecutorOperatorSetTaskConfig(operatorSet OperatorSet) (ITaskMailboxTypesExecutorOperatorSetTaskConfig, error) {
 	return _TaskMailboxStorage.Contract.GetExecutorOperatorSetTaskConfig(&_TaskMailboxStorage.CallOpts, operatorSet)
 }
 
 // GetExecutorOperatorSetTaskConfig is a free data retrieval call binding the contract method 0x6bf6fad5.
 //
-// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((address,address,address,address,uint96,uint16,bytes))
+// Solidity: function getExecutorOperatorSetTaskConfig((address,uint32) operatorSet) view returns((uint8,address,address,address,uint96,uint16,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) GetExecutorOperatorSetTaskConfig(operatorSet OperatorSet) (ITaskMailboxTypesExecutorOperatorSetTaskConfig, error) {
 	return _TaskMailboxStorage.Contract.GetExecutorOperatorSetTaskConfig(&_TaskMailboxStorage.CallOpts, operatorSet)
 }
 
 // GetTaskInfo is a free data retrieval call binding the contract method 0x4ad52e02.
 //
-// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(address,address,address,address,uint96,uint16,bytes),bytes,bytes))
+// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(uint8,address,address,address,uint96,uint16,bytes),bytes,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetTaskInfo(opts *bind.CallOpts, taskHash [32]byte) (ITaskMailboxTypesTask, error) {
 	var out []interface{}
 	err := _TaskMailboxStorage.contract.Call(opts, &out, "getTaskInfo", taskHash)
@@ -374,14 +505,14 @@ func (_TaskMailboxStorage *TaskMailboxStorageCaller) GetTaskInfo(opts *bind.Call
 
 // GetTaskInfo is a free data retrieval call binding the contract method 0x4ad52e02.
 //
-// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(address,address,address,address,uint96,uint16,bytes),bytes,bytes))
+// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(uint8,address,address,address,uint96,uint16,bytes),bytes,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageSession) GetTaskInfo(taskHash [32]byte) (ITaskMailboxTypesTask, error) {
 	return _TaskMailboxStorage.Contract.GetTaskInfo(&_TaskMailboxStorage.CallOpts, taskHash)
 }
 
 // GetTaskInfo is a free data retrieval call binding the contract method 0x4ad52e02.
 //
-// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(address,address,address,address,uint96,uint16,bytes),bytes,bytes))
+// Solidity: function getTaskInfo(bytes32 taskHash) view returns((address,uint96,uint8,address,uint32,address,uint96,uint16,(uint8,address,address,address,uint96,uint16,bytes),bytes,bytes))
 func (_TaskMailboxStorage *TaskMailboxStorageCallerSession) GetTaskInfo(taskHash [32]byte) (ITaskMailboxTypesTask, error) {
 	return _TaskMailboxStorage.Contract.GetTaskInfo(&_TaskMailboxStorage.CallOpts, taskHash)
 }
@@ -542,46 +673,220 @@ func (_TaskMailboxStorage *TaskMailboxStorageTransactorSession) RegisterExecutor
 	return _TaskMailboxStorage.Contract.RegisterExecutorOperatorSet(&_TaskMailboxStorage.TransactOpts, operatorSet, isRegistered)
 }
 
-// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0x4e138f39.
+// SetCertificateVerifier is a paid mutator transaction binding the contract method 0x3c559a99.
 //
-// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (address,address,address,address,uint96,uint16,bytes) config) returns()
+// Solidity: function setCertificateVerifier(uint8 curveType, address certificateVerifier) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageTransactor) SetCertificateVerifier(opts *bind.TransactOpts, curveType uint8, certificateVerifier common.Address) (*types.Transaction, error) {
+	return _TaskMailboxStorage.contract.Transact(opts, "setCertificateVerifier", curveType, certificateVerifier)
+}
+
+// SetCertificateVerifier is a paid mutator transaction binding the contract method 0x3c559a99.
+//
+// Solidity: function setCertificateVerifier(uint8 curveType, address certificateVerifier) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageSession) SetCertificateVerifier(curveType uint8, certificateVerifier common.Address) (*types.Transaction, error) {
+	return _TaskMailboxStorage.Contract.SetCertificateVerifier(&_TaskMailboxStorage.TransactOpts, curveType, certificateVerifier)
+}
+
+// SetCertificateVerifier is a paid mutator transaction binding the contract method 0x3c559a99.
+//
+// Solidity: function setCertificateVerifier(uint8 curveType, address certificateVerifier) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageTransactorSession) SetCertificateVerifier(curveType uint8, certificateVerifier common.Address) (*types.Transaction, error) {
+	return _TaskMailboxStorage.Contract.SetCertificateVerifier(&_TaskMailboxStorage.TransactOpts, curveType, certificateVerifier)
+}
+
+// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0xdc024c93.
+//
+// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (uint8,address,address,address,uint96,uint16,bytes) config) returns()
 func (_TaskMailboxStorage *TaskMailboxStorageTransactor) SetExecutorOperatorSetTaskConfig(opts *bind.TransactOpts, operatorSet OperatorSet, config ITaskMailboxTypesExecutorOperatorSetTaskConfig) (*types.Transaction, error) {
 	return _TaskMailboxStorage.contract.Transact(opts, "setExecutorOperatorSetTaskConfig", operatorSet, config)
 }
 
-// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0x4e138f39.
+// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0xdc024c93.
 //
-// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (address,address,address,address,uint96,uint16,bytes) config) returns()
+// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (uint8,address,address,address,uint96,uint16,bytes) config) returns()
 func (_TaskMailboxStorage *TaskMailboxStorageSession) SetExecutorOperatorSetTaskConfig(operatorSet OperatorSet, config ITaskMailboxTypesExecutorOperatorSetTaskConfig) (*types.Transaction, error) {
 	return _TaskMailboxStorage.Contract.SetExecutorOperatorSetTaskConfig(&_TaskMailboxStorage.TransactOpts, operatorSet, config)
 }
 
-// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0x4e138f39.
+// SetExecutorOperatorSetTaskConfig is a paid mutator transaction binding the contract method 0xdc024c93.
 //
-// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (address,address,address,address,uint96,uint16,bytes) config) returns()
+// Solidity: function setExecutorOperatorSetTaskConfig((address,uint32) operatorSet, (uint8,address,address,address,uint96,uint16,bytes) config) returns()
 func (_TaskMailboxStorage *TaskMailboxStorageTransactorSession) SetExecutorOperatorSetTaskConfig(operatorSet OperatorSet, config ITaskMailboxTypesExecutorOperatorSetTaskConfig) (*types.Transaction, error) {
 	return _TaskMailboxStorage.Contract.SetExecutorOperatorSetTaskConfig(&_TaskMailboxStorage.TransactOpts, operatorSet, config)
 }
 
-// SubmitResult is a paid mutator transaction binding the contract method 0x55f0a2e9.
+// SubmitResult is a paid mutator transaction binding the contract method 0xa5fabc81.
 //
-// Solidity: function submitResult(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert, bytes result) returns()
-func (_TaskMailboxStorage *TaskMailboxStorageTransactor) SubmitResult(opts *bind.TransactOpts, taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate, result []byte) (*types.Transaction, error) {
+// Solidity: function submitResult(bytes32 taskHash, bytes cert, bytes result) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageTransactor) SubmitResult(opts *bind.TransactOpts, taskHash [32]byte, cert []byte, result []byte) (*types.Transaction, error) {
 	return _TaskMailboxStorage.contract.Transact(opts, "submitResult", taskHash, cert, result)
 }
 
-// SubmitResult is a paid mutator transaction binding the contract method 0x55f0a2e9.
+// SubmitResult is a paid mutator transaction binding the contract method 0xa5fabc81.
 //
-// Solidity: function submitResult(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert, bytes result) returns()
-func (_TaskMailboxStorage *TaskMailboxStorageSession) SubmitResult(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate, result []byte) (*types.Transaction, error) {
+// Solidity: function submitResult(bytes32 taskHash, bytes cert, bytes result) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageSession) SubmitResult(taskHash [32]byte, cert []byte, result []byte) (*types.Transaction, error) {
 	return _TaskMailboxStorage.Contract.SubmitResult(&_TaskMailboxStorage.TransactOpts, taskHash, cert, result)
 }
 
-// SubmitResult is a paid mutator transaction binding the contract method 0x55f0a2e9.
+// SubmitResult is a paid mutator transaction binding the contract method 0xa5fabc81.
 //
-// Solidity: function submitResult(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert, bytes result) returns()
-func (_TaskMailboxStorage *TaskMailboxStorageTransactorSession) SubmitResult(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate, result []byte) (*types.Transaction, error) {
+// Solidity: function submitResult(bytes32 taskHash, bytes cert, bytes result) returns()
+func (_TaskMailboxStorage *TaskMailboxStorageTransactorSession) SubmitResult(taskHash [32]byte, cert []byte, result []byte) (*types.Transaction, error) {
 	return _TaskMailboxStorage.Contract.SubmitResult(&_TaskMailboxStorage.TransactOpts, taskHash, cert, result)
+}
+
+// TaskMailboxStorageCertificateVerifierSetIterator is returned from FilterCertificateVerifierSet and is used to iterate over the raw logs and unpacked data for CertificateVerifierSet events raised by the TaskMailboxStorage contract.
+type TaskMailboxStorageCertificateVerifierSetIterator struct {
+	Event *TaskMailboxStorageCertificateVerifierSet // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *TaskMailboxStorageCertificateVerifierSetIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(TaskMailboxStorageCertificateVerifierSet)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(TaskMailboxStorageCertificateVerifierSet)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *TaskMailboxStorageCertificateVerifierSetIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *TaskMailboxStorageCertificateVerifierSetIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// TaskMailboxStorageCertificateVerifierSet represents a CertificateVerifierSet event raised by the TaskMailboxStorage contract.
+type TaskMailboxStorageCertificateVerifierSet struct {
+	CurveType           uint8
+	CertificateVerifier common.Address
+	Raw                 types.Log // Blockchain specific contextual infos
+}
+
+// FilterCertificateVerifierSet is a free log retrieval operation binding the contract event 0x7b79fdefbb3028fda7c6ff1de32acde67ed448675fed0a0c756190c06bb3b307.
+//
+// Solidity: event CertificateVerifierSet(uint8 indexed curveType, address indexed certificateVerifier)
+func (_TaskMailboxStorage *TaskMailboxStorageFilterer) FilterCertificateVerifierSet(opts *bind.FilterOpts, curveType []uint8, certificateVerifier []common.Address) (*TaskMailboxStorageCertificateVerifierSetIterator, error) {
+
+	var curveTypeRule []interface{}
+	for _, curveTypeItem := range curveType {
+		curveTypeRule = append(curveTypeRule, curveTypeItem)
+	}
+	var certificateVerifierRule []interface{}
+	for _, certificateVerifierItem := range certificateVerifier {
+		certificateVerifierRule = append(certificateVerifierRule, certificateVerifierItem)
+	}
+
+	logs, sub, err := _TaskMailboxStorage.contract.FilterLogs(opts, "CertificateVerifierSet", curveTypeRule, certificateVerifierRule)
+	if err != nil {
+		return nil, err
+	}
+	return &TaskMailboxStorageCertificateVerifierSetIterator{contract: _TaskMailboxStorage.contract, event: "CertificateVerifierSet", logs: logs, sub: sub}, nil
+}
+
+// WatchCertificateVerifierSet is a free log subscription operation binding the contract event 0x7b79fdefbb3028fda7c6ff1de32acde67ed448675fed0a0c756190c06bb3b307.
+//
+// Solidity: event CertificateVerifierSet(uint8 indexed curveType, address indexed certificateVerifier)
+func (_TaskMailboxStorage *TaskMailboxStorageFilterer) WatchCertificateVerifierSet(opts *bind.WatchOpts, sink chan<- *TaskMailboxStorageCertificateVerifierSet, curveType []uint8, certificateVerifier []common.Address) (event.Subscription, error) {
+
+	var curveTypeRule []interface{}
+	for _, curveTypeItem := range curveType {
+		curveTypeRule = append(curveTypeRule, curveTypeItem)
+	}
+	var certificateVerifierRule []interface{}
+	for _, certificateVerifierItem := range certificateVerifier {
+		certificateVerifierRule = append(certificateVerifierRule, certificateVerifierItem)
+	}
+
+	logs, sub, err := _TaskMailboxStorage.contract.WatchLogs(opts, "CertificateVerifierSet", curveTypeRule, certificateVerifierRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(TaskMailboxStorageCertificateVerifierSet)
+				if err := _TaskMailboxStorage.contract.UnpackLog(event, "CertificateVerifierSet", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
+}
+
+// ParseCertificateVerifierSet is a log parse operation binding the contract event 0x7b79fdefbb3028fda7c6ff1de32acde67ed448675fed0a0c756190c06bb3b307.
+//
+// Solidity: event CertificateVerifierSet(uint8 indexed curveType, address indexed certificateVerifier)
+func (_TaskMailboxStorage *TaskMailboxStorageFilterer) ParseCertificateVerifierSet(log types.Log) (*TaskMailboxStorageCertificateVerifierSet, error) {
+	event := new(TaskMailboxStorageCertificateVerifierSet)
+	if err := _TaskMailboxStorage.contract.UnpackLog(event, "CertificateVerifierSet", log); err != nil {
+		return nil, err
+	}
+	event.Raw = log
+	return event, nil
 }
 
 // TaskMailboxStorageExecutorOperatorSetRegisteredIterator is returned from FilterExecutorOperatorSetRegistered and is used to iterate over the raw logs and unpacked data for ExecutorOperatorSetRegistered events raised by the TaskMailboxStorage contract.
@@ -823,9 +1128,9 @@ type TaskMailboxStorageExecutorOperatorSetTaskConfigSet struct {
 	Raw                   types.Log // Blockchain specific contextual infos
 }
 
-// FilterExecutorOperatorSetTaskConfigSet is a free log retrieval operation binding the contract event 0xb4758fe2b1355bebcbc78c10619457fcaa54e85fb3b994318238b92a097f5425.
+// FilterExecutorOperatorSetTaskConfigSet is a free log retrieval operation binding the contract event 0xd24112b0542208bfc95bf644ada32b4e8d1be6e896d62fe5ce1d756656850a4a.
 //
-// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (address,address,address,address,uint96,uint16,bytes) config)
+// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (uint8,address,address,address,uint96,uint16,bytes) config)
 func (_TaskMailboxStorage *TaskMailboxStorageFilterer) FilterExecutorOperatorSetTaskConfigSet(opts *bind.FilterOpts, caller []common.Address, avs []common.Address, executorOperatorSetId []uint32) (*TaskMailboxStorageExecutorOperatorSetTaskConfigSetIterator, error) {
 
 	var callerRule []interface{}
@@ -848,9 +1153,9 @@ func (_TaskMailboxStorage *TaskMailboxStorageFilterer) FilterExecutorOperatorSet
 	return &TaskMailboxStorageExecutorOperatorSetTaskConfigSetIterator{contract: _TaskMailboxStorage.contract, event: "ExecutorOperatorSetTaskConfigSet", logs: logs, sub: sub}, nil
 }
 
-// WatchExecutorOperatorSetTaskConfigSet is a free log subscription operation binding the contract event 0xb4758fe2b1355bebcbc78c10619457fcaa54e85fb3b994318238b92a097f5425.
+// WatchExecutorOperatorSetTaskConfigSet is a free log subscription operation binding the contract event 0xd24112b0542208bfc95bf644ada32b4e8d1be6e896d62fe5ce1d756656850a4a.
 //
-// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (address,address,address,address,uint96,uint16,bytes) config)
+// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (uint8,address,address,address,uint96,uint16,bytes) config)
 func (_TaskMailboxStorage *TaskMailboxStorageFilterer) WatchExecutorOperatorSetTaskConfigSet(opts *bind.WatchOpts, sink chan<- *TaskMailboxStorageExecutorOperatorSetTaskConfigSet, caller []common.Address, avs []common.Address, executorOperatorSetId []uint32) (event.Subscription, error) {
 
 	var callerRule []interface{}
@@ -898,9 +1203,9 @@ func (_TaskMailboxStorage *TaskMailboxStorageFilterer) WatchExecutorOperatorSetT
 	}), nil
 }
 
-// ParseExecutorOperatorSetTaskConfigSet is a log parse operation binding the contract event 0xb4758fe2b1355bebcbc78c10619457fcaa54e85fb3b994318238b92a097f5425.
+// ParseExecutorOperatorSetTaskConfigSet is a log parse operation binding the contract event 0xd24112b0542208bfc95bf644ada32b4e8d1be6e896d62fe5ce1d756656850a4a.
 //
-// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (address,address,address,address,uint96,uint16,bytes) config)
+// Solidity: event ExecutorOperatorSetTaskConfigSet(address indexed caller, address indexed avs, uint32 indexed executorOperatorSetId, (uint8,address,address,address,uint96,uint16,bytes) config)
 func (_TaskMailboxStorage *TaskMailboxStorageFilterer) ParseExecutorOperatorSetTaskConfigSet(log types.Log) (*TaskMailboxStorageExecutorOperatorSetTaskConfigSet, error) {
 	event := new(TaskMailboxStorageExecutorOperatorSetTaskConfigSet)
 	if err := _TaskMailboxStorage.contract.UnpackLog(event, "ExecutorOperatorSetTaskConfigSet", log); err != nil {
