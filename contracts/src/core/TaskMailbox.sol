@@ -256,6 +256,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
      */
     function _setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) internal {
         require(certificateVerifier != address(0), InvalidAddressZero());
+        require(curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         certificateVerifiers[curveType] = certificateVerifier;
         emit CertificateVerifierSet(curveType, certificateVerifier);
     }

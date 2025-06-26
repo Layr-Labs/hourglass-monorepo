@@ -138,6 +138,18 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
         vm.expectRevert(InvalidAddressZero.selector);
         new TaskMailbox(address(this), configs);
     }
+
+    function test_Revert_Constructor_InvalidCurveType() public {
+        ITaskMailboxTypes.CertificateVerifierConfig[] memory configs =
+            new ITaskMailboxTypes.CertificateVerifierConfig[](1);
+        configs[0] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.NONE,
+            verifier: address(0x1234)
+        });
+
+        vm.expectRevert(InvalidCurveType.selector);
+        new TaskMailbox(address(this), configs);
+    }
 }
 
 contract TaskMailboxUnitTests_setCertificateVerifier is TaskMailboxUnitTests {
@@ -161,6 +173,11 @@ contract TaskMailboxUnitTests_setCertificateVerifier is TaskMailboxUnitTests {
     function test_Revert_setCertificateVerifier_ZeroAddress() public {
         vm.expectRevert(InvalidAddressZero.selector);
         taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA, address(0));
+    }
+
+    function test_Revert_setCertificateVerifier_InvalidCurveType() public {
+        vm.expectRevert(InvalidCurveType.selector);
+        taskMailbox.setCertificateVerifier(IKeyRegistrarTypes.CurveType.NONE, address(0x9999));
     }
 }
 
