@@ -11,9 +11,6 @@ import {ITaskMailbox, ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMa
 import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
 
 contract SetupAVSTaskMailboxConfig is Script {
-    // Eigenlayer Core Contracts
-    address public CERTIFICATE_VERIFIER = 0xf462d03A82C1F3496B0DFe27E978318eD1720E1f;
-
     function setUp() public {}
 
     function run(address taskMailbox, address taskHook) public {
@@ -23,9 +20,6 @@ contract SetupAVSTaskMailboxConfig is Script {
 
         vm.startBroadcast(avsPrivateKey);
         console.log("AVS address:", avs);
-
-        // First set the certificate verifier for BN254 curve type (assuming the owner does this)
-        // In production, this would be done by the TaskMailbox owner
 
         // Set the Executor Operator Set Task Config
         ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig = ITaskMailboxTypes
