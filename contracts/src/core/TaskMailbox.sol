@@ -107,8 +107,6 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function createTask(
         TaskParams memory taskParams
     ) external nonReentrant returns (bytes32) {
-        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
-
         require(taskParams.payload.length > 0, PayloadIsEmpty());
         require(
             isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered()
@@ -131,7 +129,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         tasks[taskHash] = Task(
             msg.sender,
             block.timestamp.toUint96(),
-            TaskStatus.Created,
+            TaskStatus.CREATED,
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
             taskParams.refundCollector,
@@ -170,7 +168,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
+        require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
         require(block.timestamp > task.creationTime, TimestampAtCreation());
 
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
@@ -200,7 +198,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         }
         require(isCertificateValid, CertificateVerificationFailed());
 
-        task.status = TaskStatus.Verified;
+        task.status = TaskStatus.VERIFIED;
         task.result = result;
 
         // Task result submission checks:
@@ -226,10 +224,10 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         Task memory task
     ) internal view returns (TaskStatus) {
         if (
-            task.status == TaskStatus.Created
+            task.status == TaskStatus.CREATED
                 && block.timestamp > (task.creationTime + task.executorOperatorSetTaskConfig.taskSLA)
         ) {
-            return TaskStatus.Expired;
+            return TaskStatus.EXPIRED;
         }
         return task.status;
     }
@@ -310,7 +308,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     ) external view returns (bytes memory) {
         Task memory task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Verified, InvalidTaskStatus(TaskStatus.Verified, status));
+        require(status == TaskStatus.VERIFIED, InvalidTaskStatus(TaskStatus.VERIFIED, status));
         return task.result;
     }
 

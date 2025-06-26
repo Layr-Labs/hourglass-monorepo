@@ -66,10 +66,11 @@ interface ITaskMailboxTypes {
      * @notice Status of a task in the system
      */
     enum TaskStatus {
-        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
-        Created,
-        Verified,
-        Expired
+        NONE, // 0 - Default value for uninitialized tasks
+        CREATED, // 1 - Task has been created
+        VERIFIED, // 2 - Task has been verified
+        EXPIRED // 3 - Task has expired
+
     }
 
     /**
