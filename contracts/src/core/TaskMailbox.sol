@@ -5,6 +5,7 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -54,18 +55,15 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /// @inheritdoc ITaskMailbox
-    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
-        // TODO: Only OperatorSetOwner can register executor operator set.
-
-        _registerExecutorOperatorSet(operatorSet, isRegistered);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
-        // TODO: Only OperatorSetOwner can set config.
+        require(
+            IBaseCertificateVerifier(certificateVerifiers[config.curveType]).getOperatorSetOwner(operatorSet)
+                == msg.sender,
+            InvalidOperatorSetOwner()
+        );
 
         // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
@@ -74,13 +72,31 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
 
+        executorOperatorSetTaskConfigs[operatorSet.key()] = config;
+        emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
+
         // If executor operator set is not registered, register it.
         if (!isExecutorOperatorSetRegistered[operatorSet.key()]) {
             _registerExecutorOperatorSet(operatorSet, true);
         }
+    }
 
-        executorOperatorSetTaskConfigs[operatorSet.key()] = config;
-        emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
+    /// @inheritdoc ITaskMailbox
+    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
+        ExecutorOperatorSetTaskConfig memory taskConfig = executorOperatorSetTaskConfigs[operatorSet.key()];
+
+        require(
+            taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
+                && taskConfig.taskSLA > 0,
+            ExecutorOperatorSetTaskConfigNotSet()
+        );
+        require(
+            IBaseCertificateVerifier(certificateVerifiers[taskConfig.curveType]).getOperatorSetOwner(operatorSet)
+                == msg.sender,
+            InvalidOperatorSetOwner()
+        );
+
+        _registerExecutorOperatorSet(operatorSet, isRegistered);
     }
 
     /// @inheritdoc ITaskMailbox

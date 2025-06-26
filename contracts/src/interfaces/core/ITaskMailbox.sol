@@ -137,6 +137,9 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when a timestamp is at creation
     error TimestampAtCreation();
+
+    /// @notice Thrown when an operator set owner is invalid
+    error InvalidOperatorSetOwner();
 }
 
 /**
@@ -246,13 +249,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) external;
 
     /**
-     * @notice Registers an executor operator set with the TaskMailbox
-     * @param operatorSet The operator set to register
-     * @param isRegistered Whether the operator set is registered
-     */
-    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
-
-    /**
      * @notice Sets the task configuration for an executor operator set
      * @param operatorSet The operator set to configure
      * @param config Task configuration for the operator set
@@ -261,6 +257,13 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external;
+
+    /**
+     * @notice Registers an executor operator set with the TaskMailbox
+     * @param operatorSet The operator set to register
+     * @param isRegistered Whether the operator set is registered
+     */
+    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
 
     /**
      * @notice Creates a new task
