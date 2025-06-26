@@ -437,13 +437,13 @@ func (cc *ContractCaller) CreateOperatorRegistrationPayload(
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
 func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType contractCaller.CurveType) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.getTransactOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
 	tx, err := cc.keyRegistrar.ConfigureOperatorSet(
-		noSendTxOpts,
+		txOpts,
 		IKeyRegistrar.OperatorSet{
 			Avs: avsAddress,
 			Id:  operatorSetId,
@@ -454,7 +454,7 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddres
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "ConfigureOperatorSet")
+	return cc.EnsureTransactionEvaled(ctx, tx, "ConfigureOperatorSet")
 }
 
 func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
@@ -465,7 +465,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	signature *bn254.Signature,
 	keyData []byte,
 ) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.getTransactOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -493,7 +493,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	)
 
 	tx, err := cc.keyRegistrar.RegisterKey(
-		noSendTxOpts,
+		txOpts,
 		operatorAddress,
 		operatorSet,
 		keyData,
@@ -503,7 +503,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		return nil, fmt.Errorf("failed to register key: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterKey")
+	return cc.EnsureTransactionEvaled(ctx, tx, "RegisterKeyWithKeyRegistrar")
 }
 
 func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
@@ -604,7 +604,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	operatorSetIds []uint32,
 	socket string,
 ) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.getTransactOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -614,7 +614,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to encode socket string: %w", err)
 	}
 
-	tx, err := cc.allocationManager.RegisterForOperatorSets(noSendTxOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
+	tx, err := cc.allocationManager.RegisterForOperatorSets(txOpts, operatorAddress, IAllocationManager.IAllocationManagerTypesRegisterParams{
 		Avs:            avsAddress,
 		OperatorSetIds: operatorSetIds,
 		Data:           encodedSocket,
@@ -624,7 +624,28 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterForOperatorSets")
+	return cc.EnsureTransactionEvaled(ctx, tx, "registerOperatorWithAvs")
+}
+
+func (cc *ContractCaller) getTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
+	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	chainId, err := cc.ethclient.ChainID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transactor: %w", err)
+	}
+
+	auth.Context = ctx
+
+	return auth, nil
 }
 
 func (cc *ContractCaller) buildNoSendOptsWithPrivateKey(ctx context.Context) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {

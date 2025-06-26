@@ -17,7 +17,7 @@ set -e
 L1_FORK_RPC_URL=https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/
 
 anvilL1ChinId=31337
-anvilL1StartBlock=4015731
+anvilL1StartBlock=4062800
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -28,7 +28,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/
 
 anvilL2ChinId=31338
-anvilL2StartBlock=30611001
+anvilL2StartBlock=32042430
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545

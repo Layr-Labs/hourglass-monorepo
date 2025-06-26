@@ -20,6 +20,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"math/big"
 	"os"
 	"testing"
@@ -27,12 +28,12 @@ import (
 )
 
 func Test_L2Mailbox(t *testing.T) {
+	t.Skip()
 	const (
 		L1RpcUrl = "http://127.0.0.1:8545"
 		L2RpcUrl = "http://127.0.0.1:9545"
 	)
 
-	t.Skip()
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -40,6 +41,16 @@ func Test_L2Mailbox(t *testing.T) {
 
 	root := testUtils.GetProjectRootPath()
 	t.Logf("Project root path: %s", root)
+
+	aggPrivateKey, _, err := bn254.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
 
 	chainConfig, err := testUtils.ReadChainConfig(root)
 	if err != nil {
@@ -126,13 +137,35 @@ func Test_L2Mailbox(t *testing.T) {
 	}
 	t.Logf("L2 Chain ID: %s", l2ChainId.String())
 
-	l2CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+	l1EigenlayerContractAddrs, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
+	if err != nil {
+		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
+	}
+
+	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 contract caller: %v", err)
+	}
+
+	l2CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey: chainConfig.AppAccountPrivateKey,
+		// AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
+		TaskMailboxAddress: chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
+	}
+
+	reservations, err := l1CC.GetActiveGenerationReservations()
+	if err != nil {
+		t.Fatalf("Failed to get active L1 generation reservations: %v", err)
+	}
+	for _, reservation := range reservations {
+		fmt.Printf("L1 active generation reservation: %+v\n", reservation)
 	}
 
 	if err := l1Poller.Start(ctx); err != nil {
@@ -144,10 +177,29 @@ func Test_L2Mailbox(t *testing.T) {
 		t.Fatalf("Failed to start EVM L2Chain Poller: %v", err)
 	}
 
-	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
+	l.Sugar().Infow("Setting up operator peering",
+		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
+	)
+	err = testUtils.SetupOperatorPeering(
+		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
+		l1EthClient,
+		aggPrivateKey,
+		execPrivateKey,
+		"localhost:9000",
+		l,
+	)
 	if err != nil {
-		t.Fatalf("Failed to generate key pair: %v", err)
+		t.Fatalf("Failed to set up operator peering: %v", err)
 	}
+
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+
+	debugOpsetData(t, chainConfig, l1EigenlayerContractAddrs, l1EthClient, currentBlock)
 
 	hasErrors := false
 	go func() {

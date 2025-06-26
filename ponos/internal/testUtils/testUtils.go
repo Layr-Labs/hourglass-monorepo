@@ -94,7 +94,7 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "4015731"
+	forkBlockNumber := "4062800"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -124,7 +124,7 @@ func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "30611001"
+	forkBlockNumber := "32042430"
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))

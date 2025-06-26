@@ -158,7 +158,7 @@ fmtcheck:
 anvil/start/l1:
 	anvil \
 		--fork-url https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/ \
-		--fork-block-number 4015731 \
+		--fork-block-number 4062800 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2
@@ -167,7 +167,7 @@ anvil/start/l1:
 anvil/start/l2:
 	anvil \
 		--fork-url https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/ \
-		--fork-block-number 30611001 \
+		--fork-block-number 32042430 \
 		--load-state ./internal/testData/anvil-l2-state.json \
 		--chain-id 31338 \
 		--port 9545 \

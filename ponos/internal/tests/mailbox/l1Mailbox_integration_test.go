@@ -24,6 +24,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"math/big"
@@ -31,6 +32,114 @@ import (
 	"testing"
 	"time"
 )
+
+func debugOpsetData(
+	t *testing.T,
+	chainConfig *testUtils.ChainConfig,
+	eigenlayerContractAddrs *config.CoreContractAddresses,
+	l1EthClient *ethclient.Client,
+	currentBlock uint64,
+) {
+
+	am, err := IAllocationManager.NewIAllocationManager(common.HexToAddress(eigenlayerContractAddrs.AllocationManager), l1EthClient)
+	if err != nil {
+		t.Fatalf("Failed to create allocation manager: %v", err)
+	}
+	ccr, err := ICrossChainRegistry.NewICrossChainRegistry(common.HexToAddress(eigenlayerContractAddrs.CrossChainRegistry), l1EthClient)
+	if err != nil {
+		t.Fatalf("Failed to create cross chain registry: %v", err)
+	}
+
+	kr, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(eigenlayerContractAddrs.KeyRegistrar), l1EthClient)
+	if err != nil {
+		t.Fatalf("Failed to create key registrar: %v", err)
+	}
+
+	for _, opsetId := range []uint32{0, 1} {
+		strategies, err := am.GetStrategiesInOperatorSet(&bind.CallOpts{}, IAllocationManager.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get strategies in operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Strategies in operator set %d: %+v\n", opsetId, strategies)
+
+		members, err := am.GetMembers(&bind.CallOpts{}, IAllocationManager.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get members in operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Members in operator set %d: %+v\n", opsetId, members)
+
+		minSlashableStake, err := am.GetMinimumSlashableStake(
+			&bind.CallOpts{},
+			IAllocationManager.OperatorSet{
+				Id:  opsetId,
+				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+			},
+			members,
+			strategies,
+			uint32(currentBlock+100),
+		)
+		if err != nil {
+			t.Fatalf("Failed to get minimum slashable stake for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("minimum slashable stake for operator set %d: %+v\n", opsetId, minSlashableStake)
+
+		tableCalcAddr, err := ccr.GetOperatorTableCalculator(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get operator table calculator for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Operator table calculator for operator set %d: %s\n", opsetId, tableCalcAddr.String())
+
+		cfg, err := ccr.GetOperatorSetConfig(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get operator set config for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Operator set config for operator set %d: %+v\n", opsetId, cfg)
+
+		curve, err := kr.GetOperatorSetCurveType(&bind.CallOpts{}, IKeyRegistrar.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get operator set curve type: %v", err)
+		}
+		fmt.Printf("Operator set curve type: %v\n", curve)
+
+		tableCalc, err := IBN254TableCalculator.NewIBN254TableCalculator(tableCalcAddr, l1EthClient)
+		if err != nil {
+			t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
+		}
+
+		weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get operator weights for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Operator weights for operator set %d: %+v\n", opsetId, weights)
+
+		tableBytes, err := tableCalc.CalculateOperatorTableBytes(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to calculate operator table bytes for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Operator table bytes for operator set %d: %x\n", opsetId, tableBytes)
+	}
+}
 
 func Test_L1Mailbox(t *testing.T) {
 	const (
@@ -138,11 +247,6 @@ func Test_L1Mailbox(t *testing.T) {
 		fmt.Printf("Active generation reservation: %+v\n", reservation)
 	}
 
-	kr, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(eigenlayerContractAddrs.KeyRegistrar), l1EthClient)
-	if err != nil {
-		t.Fatalf("Failed to create key registrar: %v", err)
-	}
-
 	l.Sugar().Infow("Setting up operator peering",
 		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
 	)
@@ -160,105 +264,12 @@ func Test_L1Mailbox(t *testing.T) {
 		t.Fatalf("Failed to set up operator peering: %v", err)
 	}
 
-	am, err := IAllocationManager.NewIAllocationManager(common.HexToAddress("0xfdd5749e11977d60850e06bf5b13221ad95eb6b4"), l1EthClient)
-	if err != nil {
-		t.Fatalf("Failed to create allocation manager: %v", err)
-	}
-	ccr, err := ICrossChainRegistry.NewICrossChainRegistry(common.HexToAddress(eigenlayerContractAddrs.CrossChainRegistry), l1EthClient)
-	if err != nil {
-		t.Fatalf("Failed to create cross chain registry: %v", err)
-	}
-
 	currentBlock, err := l1EthClient.BlockNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
 
-	for _, opsetId := range []uint32{0, 1} {
-		strategies, err := am.GetStrategiesInOperatorSet(&bind.CallOpts{}, IAllocationManager.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get strategies in operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Strategies in operator set %d: %+v\n", opsetId, strategies)
-
-		members, err := am.GetMembers(&bind.CallOpts{}, IAllocationManager.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get members in operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Members in operator set %d: %+v\n", opsetId, members)
-
-		minSlashableStake, err := am.GetMinimumSlashableStake(
-			&bind.CallOpts{},
-			IAllocationManager.OperatorSet{
-				Id:  opsetId,
-				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-			},
-			members,
-			strategies,
-			uint32(currentBlock+100),
-		)
-		if err != nil {
-			t.Fatalf("Failed to get minimum slashable stake for operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("minimum slashable stake for operator set %d: %+v\n", opsetId, minSlashableStake)
-
-		tableCalcAddr, err := ccr.GetOperatorTableCalculator(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get operator table calculator for operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Operator table calculator for operator set %d: %s\n", opsetId, tableCalcAddr.String())
-
-		cfg, err := ccr.GetOperatorSetConfig(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get operator set config for operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Operator set config for operator set %d: %+v\n", opsetId, cfg)
-
-		curve, err := kr.GetOperatorSetCurveType(&bind.CallOpts{}, IKeyRegistrar.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get operator set curve type: %v", err)
-		}
-		fmt.Printf("Operator set curve type: %v\n", curve)
-
-		tableCalc, err := IBN254TableCalculator.NewIBN254TableCalculator(tableCalcAddr, l1EthClient)
-		if err != nil {
-			t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
-		}
-
-		weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get operator weights for operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Operator weights for operator set %d: %+v\n", opsetId, weights)
-
-		tableBytes, err := tableCalc.CalculateOperatorTableBytes(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to calculate operator table bytes for operator set %d: %v", opsetId, err)
-		}
-		fmt.Printf("Operator table bytes for operator set %d: %x\n", opsetId, tableBytes)
-
-	}
+	debugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock)
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 	// transport the tables for good measure
