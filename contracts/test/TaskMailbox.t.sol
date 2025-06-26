@@ -468,7 +468,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         Task memory task = taskMailbox.getTaskInfo(taskHash);
         assertEq(task.creator, creator);
         assertEq(task.creationTime, block.timestamp);
-        assertEq(uint8(task.status), uint8(TaskStatus.Created));
+        assertEq(uint8(task.status), uint8(TaskStatus.CREATED));
         assertEq(task.avs, avs);
         assertEq(task.executorOperatorSetId, executorOperatorSetId);
         assertEq(task.refundCollector, fuzzRefundCollector);
@@ -643,7 +643,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Verify task was verified
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Verified));
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
 
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(taskHash);
@@ -682,7 +682,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Verify task was verified
         TaskStatus status = taskMailbox.getTaskStatus(newTaskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Verified));
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
 
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(newTaskHash);
@@ -705,8 +705,21 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
 
         vm.prank(aggregator);
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.CREATED, TaskStatus.EXPIRED));
         taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_Revert_WhenTaskDoesNotExist() public {
+        bytes32 nonExistentHash = keccak256("non-existent");
+
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(nonExistentHash);
+
+        vm.prank(aggregator);
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.CREATED, TaskStatus.NONE));
+        taskMailbox.submitResult(nonExistentHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_WhenCertificateVerificationFailed_BN254() public {
@@ -806,7 +819,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Try to submit again
         vm.prank(aggregator);
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Verified));
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.CREATED, TaskStatus.VERIFIED));
         taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("new result"));
     }
 
@@ -968,7 +981,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
 
         assertEq(task.creator, creator);
         assertEq(task.creationTime, block.timestamp);
-        assertEq(uint8(task.status), uint8(TaskStatus.Created));
+        assertEq(uint8(task.status), uint8(TaskStatus.CREATED));
         assertEq(task.avs, avs);
         assertEq(task.executorOperatorSetId, executorOperatorSetId);
         assertEq(task.refundCollector, refundCollector);
@@ -982,17 +995,17 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         bytes32 nonExistentHash = keccak256("non-existent");
         Task memory task = taskMailbox.getTaskInfo(nonExistentHash);
 
-        // Should return empty task with Expired status (due to _getTaskStatus logic)
+        // Should return empty task with NONE status (default for non-existent tasks)
         assertEq(task.creator, address(0));
         assertEq(task.creationTime, 0);
-        assertEq(uint8(task.status), uint8(TaskStatus.Expired)); // Non-existent tasks show as expired
+        assertEq(uint8(task.status), uint8(TaskStatus.NONE)); // Non-existent tasks show as NONE
         assertEq(task.avs, address(0));
         assertEq(task.executorOperatorSetId, 0);
     }
 
     function test_getTaskStatus_Created() public {
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Created));
+        assertEq(uint8(status), uint8(TaskStatus.CREATED));
     }
 
     function test_getTaskStatus_Verified() public {
@@ -1003,7 +1016,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
 
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Verified));
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
     }
 
     function test_getTaskStatus_Expired() public {
@@ -1011,7 +1024,14 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         vm.warp(block.timestamp + taskSLA + 1);
 
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Expired));
+        assertEq(uint8(status), uint8(TaskStatus.EXPIRED));
+    }
+
+    function test_getTaskStatus_None() public {
+        // Get status of non-existent task
+        bytes32 nonExistentHash = keccak256("non-existent");
+        TaskStatus status = taskMailbox.getTaskStatus(nonExistentHash);
+        assertEq(uint8(status), uint8(TaskStatus.NONE));
     }
 
     function test_getTaskInfo_Expired() public {
@@ -1021,7 +1041,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         Task memory task = taskMailbox.getTaskInfo(taskHash);
 
         // getTaskInfo should return Expired status
-        assertEq(uint8(task.status), uint8(TaskStatus.Expired));
+        assertEq(uint8(task.status), uint8(TaskStatus.EXPIRED));
     }
 
     function test_getTaskResult() public {
@@ -1039,15 +1059,22 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
     }
 
     function test_Revert_getTaskResult_NotVerified() public {
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Created));
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.VERIFIED, TaskStatus.CREATED));
         taskMailbox.getTaskResult(taskHash);
     }
 
     function test_Revert_getTaskResult_Expired() public {
         vm.warp(block.timestamp + taskSLA + 1);
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Expired));
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.VERIFIED, TaskStatus.EXPIRED));
         taskMailbox.getTaskResult(taskHash);
+    }
+
+    function test_Revert_getTaskResult_None() public {
+        bytes32 nonExistentHash = keccak256("non-existent");
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.VERIFIED, TaskStatus.NONE));
+        taskMailbox.getTaskResult(nonExistentHash);
     }
 }
 
@@ -1141,7 +1168,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
 
         assertEq(task.creator, creator);
         assertEq(task.creationTime, block.timestamp);
-        assertEq(uint8(task.status), uint8(TaskStatus.Created));
+        assertEq(uint8(task.status), uint8(TaskStatus.CREATED));
         assertEq(task.avs, avs);
         assertEq(task.executorOperatorSetId, executorOperatorSetId);
         assertEq(task.refundCollector, refundCollector);
