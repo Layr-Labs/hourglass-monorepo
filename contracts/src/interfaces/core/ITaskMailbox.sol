@@ -288,11 +288,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @param cert Certificate proving the validity of the result
      * @param result Task execution result data
      */
-    function submitResult(
-        bytes32 taskHash,
-        IBN254CertificateVerifierTypes.BN254Certificate memory cert,
-        bytes memory result
-    ) external;
+    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external;
 
     /**
      *

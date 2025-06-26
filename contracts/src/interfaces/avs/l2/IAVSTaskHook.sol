@@ -42,8 +42,5 @@ interface IAVSTaskHook {
      * @param cert Certificate proving the validity of the result
      * @dev This function can be used to perform additional validation or update AVS-specific state
      */
-    function handleTaskResultSubmission(
-        bytes32 taskHash,
-        IBN254CertificateVerifierTypes.BN254Certificate memory cert
-    ) external;
+    function handleTaskResultSubmission(bytes32 taskHash, bytes memory cert) external;
 }

@@ -22,10 +22,7 @@ contract MockAVSTaskHook is IAVSTaskHook {
         //TODO: Implement
     }
 
-    function handleTaskResultSubmission(
-        bytes32, /*taskHash*/
-        IBN254CertificateVerifierTypes.BN254Certificate memory /*cert*/
-    ) external {
+    function handleTaskResultSubmission(bytes32, /*taskHash*/ bytes memory /*cert*/ ) external {
         //TODO: Implement
     }
 }

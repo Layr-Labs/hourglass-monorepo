@@ -6,6 +6,10 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {
+    IECDSACertificateVerifier,
+    IECDSACertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
@@ -23,6 +27,8 @@ import {IAVSTaskHook} from "../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {MockAVSTaskHook} from "./mocks/MockAVSTaskHook.sol";
 import {MockBN254CertificateVerifier} from "./mocks/MockBN254CertificateVerifier.sol";
 import {MockBN254CertificateVerifierFailure} from "./mocks/MockBN254CertificateVerifierFailure.sol";
+import {MockECDSACertificateVerifier} from "./mocks/MockECDSACertificateVerifier.sol";
+import {MockECDSACertificateVerifierFailure} from "./mocks/MockECDSACertificateVerifierFailure.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {ReentrantAttacker} from "./mocks/ReentrantAttacker.sol";
 
@@ -32,7 +38,8 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
     // Contracts
     TaskMailbox public taskMailbox;
     MockAVSTaskHook public mockTaskHook;
-    MockBN254CertificateVerifier public mockCertificateVerifier;
+    MockBN254CertificateVerifier public mockBN254CertificateVerifier;
+    MockECDSACertificateVerifier public mockECDSACertificateVerifier;
     MockERC20 public mockToken;
 
     // Test addresses
@@ -55,15 +62,20 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
     function setUp() public virtual {
         // Deploy mock contracts
         mockTaskHook = new MockAVSTaskHook();
-        mockCertificateVerifier = new MockBN254CertificateVerifier();
+        mockBN254CertificateVerifier = new MockBN254CertificateVerifier();
+        mockECDSACertificateVerifier = new MockECDSACertificateVerifier();
         mockToken = new MockERC20();
 
         // Deploy TaskMailbox
         ITaskMailboxTypes.CertificateVerifierConfig[] memory certificateVerifiers =
-            new ITaskMailboxTypes.CertificateVerifierConfig[](1);
+            new ITaskMailboxTypes.CertificateVerifierConfig[](2);
         certificateVerifiers[0] = ITaskMailboxTypes.CertificateVerifierConfig({
             curveType: IKeyRegistrarTypes.CurveType.BN254,
-            verifier: address(mockCertificateVerifier)
+            verifier: address(mockBN254CertificateVerifier)
+        });
+        certificateVerifiers[1] = ITaskMailboxTypes.CertificateVerifierConfig({
+            curveType: IKeyRegistrarTypes.CurveType.ECDSA,
+            verifier: address(mockECDSACertificateVerifier)
         });
         taskMailbox = new TaskMailbox(address(this), certificateVerifiers);
 
@@ -103,6 +115,16 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
             signature: BN254.G1Point(0, 0),
             apk: BN254.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)]),
             nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+    }
+
+    function _createValidECDSACertificate(
+        bytes32 messageHash
+    ) internal view returns (IECDSACertificateVerifierTypes.ECDSACertificate memory) {
+        return IECDSACertificateVerifierTypes.ECDSACertificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: messageHash,
+            sig: bytes("")
         });
     }
 }
@@ -677,7 +699,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         taskHash = taskMailbox.createTask(taskParams);
     }
 
-    function testFuzz_submitResult(
+    function testFuzz_submitResult_WithBN254Certificate(
         bytes memory fuzzResult
     ) public {
         // Advance time by 1 second to pass TimestampAtCreation check
@@ -691,7 +713,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Submit result
         vm.prank(aggregator);
-        taskMailbox.submitResult(taskHash, cert, fuzzResult);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), fuzzResult);
 
         // Verify task was verified
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
@@ -699,6 +721,45 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(taskHash);
+        assertEq(storedResult, fuzzResult);
+    }
+
+    function testFuzz_submitResult_WithECDSACertificate(
+        bytes memory fuzzResult
+    ) public {
+        // Setup executor operator set with ECDSA curve type
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        // Create ECDSA certificate
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert = _createValidECDSACertificate(newTaskHash);
+
+        // Expect event
+        vm.expectEmit(true, true, true, true);
+        emit TaskVerified(aggregator, newTaskHash, avs, executorOperatorSetId, fuzzResult);
+
+        // Submit result with ECDSA certificate
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), fuzzResult);
+
+        // Verify task was verified
+        TaskStatus status = taskMailbox.getTaskStatus(newTaskHash);
+        assertEq(uint8(status), uint8(TaskStatus.Verified));
+
+        // Verify result was stored
+        bytes memory storedResult = taskMailbox.getTaskResult(newTaskHash);
         assertEq(storedResult, fuzzResult);
     }
 
@@ -712,7 +773,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         vm.prank(aggregator);
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
-        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_WhenTimestampAtCreation() public {
@@ -721,7 +782,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Don't advance time
         vm.prank(aggregator);
         vm.expectRevert(TimestampAtCreation.selector);
-        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_WhenTaskExpired() public {
@@ -732,10 +793,10 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         vm.prank(aggregator);
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
-        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
     }
 
-    function test_Revert_WhenCertificateVerificationFailed() public {
+    function test_Revert_WhenCertificateVerificationFailed_BN254() public {
         // Create a custom mock that returns false for certificate verification
         MockBN254CertificateVerifierFailure mockFailingVerifier = new MockBN254CertificateVerifierFailure();
 
@@ -761,21 +822,79 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         vm.prank(aggregator);
         vm.expectRevert(CertificateVerificationFailed.selector);
-        taskMailbox.submitResult(newTaskHash, cert, bytes("result"));
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
     }
 
-    function test_submitResult_AlreadyVerified() public {
+    function test_Revert_WhenCertificateVerificationFailed_ECDSA() public {
+        // Create a custom mock that returns false for certificate verification
+        MockECDSACertificateVerifierFailure mockECDSACertificateVerifierFailure =
+            new MockECDSACertificateVerifierFailure();
+        // Setup with failing ECDSA verifier
+        taskMailbox.setCertificateVerifier(
+            IKeyRegistrarTypes.CurveType.ECDSA, address(mockECDSACertificateVerifierFailure)
+        );
+
+        // Setup executor operator set with ECDSA curve type
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Create ECDSA certificate
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert = _createValidECDSACertificate(newTaskHash);
+
+        // Submit should fail
+        vm.prank(aggregator);
+        vm.expectRevert(CertificateVerificationFailed.selector);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_Revert_WhenInvalidCertificateEncoding() public {
+        // Setup executor operator set with ECDSA curve type
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Create invalid encoded certificate (not properly encoded ECDSA certificate)
+        bytes memory invalidCert = abi.encode("invalid", "certificate", "data");
+        bytes memory result = bytes("test result");
+
+        // Submit should fail due to decoding error
+        vm.prank(aggregator);
+        vm.expectRevert(); // Will revert during abi.decode
+        taskMailbox.submitResult(newTaskHash, invalidCert, result);
+    }
+
+    function test_Revert_AlreadyVerified() public {
         // First submit a valid result
         vm.warp(block.timestamp + 1);
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
 
         vm.prank(aggregator);
-        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
 
         // Try to submit again
         vm.prank(aggregator);
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Verified));
-        taskMailbox.submitResult(taskHash, cert, bytes("new result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("new result"));
     }
 
     function test_Revert_ReentrancyOnSubmitResult() public {
@@ -819,7 +938,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Try to submit result - should revert on reentrancy
         vm.prank(aggregator);
         vm.expectRevert("ReentrancyGuard: reentrant call");
-        taskMailbox.submitResult(attackTaskHash, cert, bytes("result"));
+        taskMailbox.submitResult(attackTaskHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_ReentrancyOnSubmitResult_TryingToCreateTask() public {
@@ -868,7 +987,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Try to submit result - should revert on reentrancy
         vm.prank(aggregator);
         vm.expectRevert("ReentrancyGuard: reentrant call");
-        taskMailbox.submitResult(attackTaskHash, cert, bytes("result"));
+        taskMailbox.submitResult(attackTaskHash, abi.encode(cert), bytes("result"));
     }
 }
 
@@ -895,9 +1014,13 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
 
     function test_getCertificateVerifier() public {
         assertEq(
-            taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.BN254), address(mockCertificateVerifier)
+            taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.BN254),
+            address(mockBN254CertificateVerifier)
         );
-        assertEq(taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA), address(0));
+        assertEq(
+            taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.ECDSA),
+            address(mockECDSACertificateVerifier)
+        );
         assertEq(taskMailbox.getCertificateVerifier(IKeyRegistrarTypes.CurveType.NONE), address(0));
     }
 
@@ -973,7 +1096,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
 
         vm.prank(aggregator);
-        taskMailbox.submitResult(taskHash, cert, bytes("result"));
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
 
         TaskStatus status = taskMailbox.getTaskStatus(taskHash);
         assertEq(uint8(status), uint8(TaskStatus.Verified));
@@ -1004,7 +1127,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         bytes memory expectedResult = bytes("test result");
 
         vm.prank(aggregator);
-        taskMailbox.submitResult(taskHash, cert, expectedResult);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), expectedResult);
 
         // Get result
         bytes memory result = taskMailbox.getTaskResult(taskHash);

@@ -5,6 +5,10 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {
+    IECDSACertificateVerifier,
+    IECDSACertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
 import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
@@ -179,13 +183,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /// @inheritdoc ITaskMailbox
-    function submitResult(
-        bytes32 taskHash,
-        IBN254CertificateVerifierTypes.BN254Certificate memory cert,
-        bytes memory result
-    ) external nonReentrant {
-        // TODO: Do we need a gasless version of this function?
-        // TODO: require checks - Figure out what checks are needed
+    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
@@ -195,19 +193,32 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
 
-        address verifier = certificateVerifiers[task.executorOperatorSetTaskConfig.curveType];
-        require(verifier != address(0), InvalidAddressZero());
+        address certificateVerifier = certificateVerifiers[task.executorOperatorSetTaskConfig.curveType];
+        require(certificateVerifier != address(0), InvalidAddressZero());
 
-        bool isCertificateValid = IBN254CertificateVerifier(verifier).verifyCertificateProportion(
-            executorOperatorSet, cert, totalStakeProportionThresholds
-        );
-
+        bool isCertificateValid;
+        if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
+            // BN254 Certificate verification
+            IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
+                abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
+            isCertificateValid = IBN254CertificateVerifier(certificateVerifier).verifyCertificateProportion(
+                executorOperatorSet, bn254Cert, totalStakeProportionThresholds
+            );
+        } else if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
+            // ECDSA Certificate verification
+            IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
+                abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
+            isCertificateValid = IECDSACertificateVerifier(certificateVerifier).verifyCertificateProportion(
+                executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
+            );
+        } else {
+            revert InvalidCurveType();
+        }
         require(isCertificateValid, CertificateVerificationFailed());
 
         task.status = TaskStatus.Verified;
         task.result = result;
 
-        // TODO: Check what happens if we re-ennter the other state transition functions.
         // Task result submission checks:
         // 1. AVS can validate the task result, params and certificate.
         // 2. It can update hook storage for task lifecycle if needed.
