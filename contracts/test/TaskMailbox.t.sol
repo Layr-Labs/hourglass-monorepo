@@ -605,80 +605,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     }
 }
 
-// Test contract for cancelTask
-contract TaskMailboxUnitTests_cancelTask is TaskMailboxUnitTests {
-    bytes32 public taskHash;
-
-    function setUp() public override {
-        super.setUp();
-
-        // Set up executor operator set task config
-        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
-        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
-
-        vm.prank(avs);
-        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
-
-        // Create a task
-        TaskParams memory taskParams = _createValidTaskParams();
-        vm.prank(creator);
-        taskHash = taskMailbox.createTask(taskParams);
-    }
-
-    function test_cancelTask() public {
-        // Advance time by 1 second to pass TimestampAtCreation check
-        vm.warp(block.timestamp + 1);
-
-        // Expect event
-        vm.expectEmit(true, true, true, true, address(taskMailbox));
-        emit TaskCanceled(creator, taskHash, avs, executorOperatorSetId);
-
-        // Cancel task
-        vm.prank(creator);
-        taskMailbox.cancelTask(taskHash);
-
-        // Verify task was canceled
-        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Canceled));
-    }
-
-    function test_Revert_WhenInvalidTaskStatus() public {
-        // Advance time and cancel task first
-        vm.warp(block.timestamp + 1);
-        vm.prank(creator);
-        taskMailbox.cancelTask(taskHash);
-
-        // Try to cancel again
-        vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
-        taskMailbox.cancelTask(taskHash);
-    }
-
-    function test_Revert_WhenInvalidTaskCreator() public {
-        vm.warp(block.timestamp + 1);
-
-        vm.prank(address(0x999)); // Different address
-        vm.expectRevert(InvalidTaskCreator.selector);
-        taskMailbox.cancelTask(taskHash);
-    }
-
-    function test_Revert_WhenTimestampAtCreation() public {
-        // Don't advance time
-        vm.prank(creator);
-        vm.expectRevert(TimestampAtCreation.selector);
-        taskMailbox.cancelTask(taskHash);
-    }
-
-    function test_Revert_WhenTaskExpired() public {
-        // Advance time past task SLA
-        vm.warp(block.timestamp + taskSLA + 1);
-
-        vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Expired));
-        taskMailbox.cancelTask(taskHash);
-    }
-}
-
 // Test contract for submitResult
 contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
     bytes32 public taskHash;
@@ -761,19 +687,6 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(newTaskHash);
         assertEq(storedResult, fuzzResult);
-    }
-
-    function test_Revert_WhenInvalidTaskStatus_NotCreated() public {
-        // Cancel task first
-        vm.warp(block.timestamp + 1);
-        vm.prank(creator);
-        taskMailbox.cancelTask(taskHash);
-
-        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
-
-        vm.prank(aggregator);
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Created, TaskStatus.Canceled));
-        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_WhenTimestampAtCreation() public {
@@ -1082,15 +995,6 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         assertEq(uint8(status), uint8(TaskStatus.Created));
     }
 
-    function test_getTaskStatus_Canceled() public {
-        vm.warp(block.timestamp + 1);
-        vm.prank(creator);
-        taskMailbox.cancelTask(taskHash);
-
-        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.Canceled));
-    }
-
     function test_getTaskStatus_Verified() public {
         vm.warp(block.timestamp + 1);
         IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(taskHash);
@@ -1136,15 +1040,6 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
 
     function test_Revert_getTaskResult_NotVerified() public {
         vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Created));
-        taskMailbox.getTaskResult(taskHash);
-    }
-
-    function test_Revert_getTaskResult_Canceled() public {
-        vm.warp(block.timestamp + 1);
-        vm.prank(creator);
-        taskMailbox.cancelTask(taskHash);
-
-        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.Verified, TaskStatus.Canceled));
         taskMailbox.getTaskResult(taskHash);
     }
 

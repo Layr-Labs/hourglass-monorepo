@@ -68,7 +68,6 @@ interface ITaskMailboxTypes {
     enum TaskStatus {
         // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
         Created,
-        Canceled,
         Verified,
         Expired
     }
@@ -204,17 +203,6 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
     );
 
     /**
-     * @notice Emitted when a task is canceled
-     * @param creator Address that created the task
-     * @param taskHash Unique identifier of the task
-     * @param avs Address of the AVS handling the task
-     * @param executorOperatorSetId ID of the executor operator set
-     */
-    event TaskCanceled(
-        address indexed creator, bytes32 indexed taskHash, address indexed avs, uint32 executorOperatorSetId
-    );
-
-    /**
      * @notice Emitted when a task is verified
      * @param aggregator Address that submitted the verification
      * @param taskHash Unique identifier of the task
@@ -275,14 +263,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function createTask(
         TaskParams memory taskParams
     ) external returns (bytes32 taskHash);
-
-    /**
-     * @notice Cancels a task that has been created but not yet verified
-     * @param taskHash Unique identifier of the task to cancel
-     */
-    function cancelTask(
-        bytes32 taskHash
-    ) external;
 
     /**
      * @notice Submits the result of a task execution

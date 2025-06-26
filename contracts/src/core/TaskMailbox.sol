@@ -167,22 +167,6 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /// @inheritdoc ITaskMailbox
-    function cancelTask(
-        bytes32 taskHash
-    ) external {
-        // TODO: Check if we even need this cancelTask function - Maybe have a flag with isCancelable in the AVS Task Config and further gate at the protocol level.
-        Task storage task = tasks[taskHash];
-        TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
-        require(msg.sender == task.creator, InvalidTaskCreator());
-        require(block.timestamp > task.creationTime, TimestampAtCreation());
-
-        task.status = TaskStatus.Canceled;
-
-        emit TaskCanceled(msg.sender, taskHash, task.avs, task.executorOperatorSetId);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
