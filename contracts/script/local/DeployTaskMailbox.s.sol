@@ -9,8 +9,8 @@ import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 
 contract DeployTaskMailbox is Script {
     // Eigenlayer Core Contracts
-    address public BN254_CERTIFICATE_VERIFIER = 0xf462d03A82C1F3496B0DFe27E978318eD1720E1f;
-    address public ECDSA_CERTIFICATE_VERIFIER = 0xF9BDd6af3Fb02659101cbb776DC7cb4879c93d8A;
+    address public BN254_CERTIFICATE_VERIFIER = 0x0E3a2eAd8f63A196391a7D46083d3f2b1925C2b3;
+    address public ECDSA_CERTIFICATE_VERIFIER = 0xfB7d94501E4d4ACC264833Ef4ede70a11517422B;
 
     function setUp() public {}
 
