@@ -166,6 +166,8 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
 
     /// @inheritdoc ITaskMailbox
     function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
+        // TODO: Handle case of anyone submitting a result with empty signature in the certificate.
+
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
