@@ -2,14 +2,13 @@
 pragma solidity ^0.8.27;
 
 import {
-    IBN254CertificateVerifier,
-    IBN254CertificateVerifierTypes
-} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
-import {IBN254TableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+    IECDSACertificateVerifier,
+    IECDSACertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
+import {IECDSATableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSATableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 
-contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
+contract MockECDSACertificateVerifierFailure is IECDSACertificateVerifier {
     // Mapping to store operator set owners for testing
     mapping(bytes32 => address) public operatorSetOwners;
 
@@ -20,31 +19,31 @@ contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
     function updateOperatorTable(
         OperatorSet calldata, /*operatorSet*/
         uint32, /*referenceTimestamp*/
-        IBN254TableCalculatorTypes.BN254OperatorSetInfo memory, /*operatorSetInfo*/
+        ECDSAOperatorInfo[] calldata, /*operatorInfos*/
         OperatorSetConfig calldata /*operatorSetConfig*/
     ) external pure {}
 
     function verifyCertificate(
-        OperatorSet memory, /*operatorSet*/
-        BN254Certificate memory /*cert*/
+        OperatorSet calldata, /*operatorSet*/
+        ECDSACertificate memory /*cert*/
     ) external pure returns (uint256[] memory signedStakes) {
         return new uint256[](0);
     }
 
     function verifyCertificateProportion(
-        OperatorSet memory, /*operatorSet*/
-        BN254Certificate memory, /*cert*/
+        OperatorSet calldata, /*operatorSet*/
+        ECDSACertificate memory, /*cert*/
         uint16[] memory /*totalStakeProportionThresholds*/
     ) external pure returns (bool) {
-        return true;
+        return false; // Always fail
     }
 
     function verifyCertificateNominal(
-        OperatorSet memory, /*operatorSet*/
-        BN254Certificate memory, /*cert*/
+        OperatorSet calldata, /*operatorSet*/
+        ECDSACertificate memory, /*cert*/
         uint256[] memory /*totalStakeNominalThresholds*/
     ) external pure returns (bool) {
-        return true;
+        return false; // Always fail
     }
 
     // Implement IBaseCertificateVerifier required functions
@@ -80,42 +79,51 @@ contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
         return 86_400;
     }
 
-    function trySignatureVerification(
-        bytes32, /*msgHash*/
-        BN254.G1Point memory, /*aggPubkey*/
-        BN254.G2Point memory, /*apkG2*/
-        BN254.G1Point memory /*signature*/
-    ) external pure returns (bool pairingSuccessful, bool signatureValid) {
-        return (true, true);
-    }
-
-    function getNonsignerOperatorInfo(
-        OperatorSet memory, /*operatorSet*/
-        uint32, /*referenceTimestamp*/
-        uint256 /*operatorIndex*/
-    ) external pure returns (IBN254TableCalculatorTypes.BN254OperatorInfo memory) {
-        uint256[] memory weights = new uint256[](0);
-        return IBN254TableCalculatorTypes.BN254OperatorInfo({pubkey: BN254.G1Point(0, 0), weights: weights});
-    }
-
-    function isNonsignerCached(
-        OperatorSet memory, /*operatorSet*/
-        uint32, /*referenceTimestamp*/
-        uint256 /*operatorIndex*/
-    ) external pure returns (bool) {
-        return false;
-    }
-
-    function getOperatorSetInfo(
-        OperatorSet memory, /*operatorSet*/
+    function getCachedSignerList(
+        OperatorSet calldata, /*operatorSet*/
         uint32 /*referenceTimestamp*/
-    ) external pure returns (IBN254TableCalculatorTypes.BN254OperatorSetInfo memory) {
-        uint256[] memory totalWeights = new uint256[](0);
-        return IBN254TableCalculatorTypes.BN254OperatorSetInfo({
-            operatorInfoTreeRoot: bytes32(0),
-            numOperators: 0,
-            aggregatePubkey: BN254.G1Point(0, 0),
-            totalWeights: totalWeights
-        });
+    ) external pure returns (address[] memory) {
+        return new address[](0);
+    }
+
+    function getOperatorInfos(
+        OperatorSet calldata, /*operatorSet*/
+        uint32 /*referenceTimestamp*/
+    ) external pure returns (ECDSAOperatorInfo[] memory) {
+        return new ECDSAOperatorInfo[](0);
+    }
+
+    function getOperatorInfo(
+        OperatorSet calldata, /*operatorSet*/
+        uint32, /*referenceTimestamp*/
+        uint32 /*operatorIndex*/
+    ) external pure returns (ECDSAOperatorInfo memory) {
+        uint256[] memory weights = new uint256[](0);
+        return ECDSAOperatorInfo({pubkey: address(0), weights: weights});
+    }
+
+    function getOperatorCount(
+        OperatorSet calldata, /*operatorSet*/
+        uint32 /*referenceTimestamp*/
+    ) external pure returns (uint32) {
+        return 0;
+    }
+
+    function getTotalStakes(
+        OperatorSet calldata, /*operatorSet*/
+        uint32 /*referenceTimestamp*/
+    ) external pure returns (uint256[] memory) {
+        return new uint256[](0);
+    }
+
+    function domainSeparator() external pure returns (bytes32) {
+        return bytes32(0);
+    }
+
+    function calculateCertificateDigest(
+        uint32, /*referenceTimestamp*/
+        bytes32 /*messageHash*/
+    ) external pure returns (bytes32) {
+        return bytes32(0);
     }
 }

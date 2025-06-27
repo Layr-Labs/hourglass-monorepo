@@ -5,8 +5,15 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {
+    IECDSACertificateVerifier,
+    IECDSACertificateVerifierTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
+import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
+import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
@@ -20,9 +27,22 @@ import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
  * @author Layr Labs, Inc.
  * @notice Contract for managing the lifecycle of tasks that are executed by operator sets of task-based AVSs.
  */
-contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
+contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     using SafeERC20 for IERC20;
     using SafeCast for *;
+
+    /**
+     * @notice Constructor for TaskMailbox
+     * @param _owner The owner of the contract
+     * @param _certificateVerifiers Array of certificate verifier configs
+     */
+    constructor(address _owner, CertificateVerifierConfig[] memory _certificateVerifiers) Ownable() {
+        _transferOwnership(_owner);
+
+        for (uint256 i = 0; i < _certificateVerifiers.length; i++) {
+            _setCertificateVerifier(_certificateVerifiers[i].curveType, _certificateVerifiers[i].verifier);
+        }
+    }
 
     /**
      *
@@ -31,10 +51,11 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
-    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
-        // TODO: Only OperatorSetOwner can register executor operator set.
-
-        _registerExecutorOperatorSet(operatorSet, isRegistered);
+    function setCertificateVerifier(
+        IKeyRegistrarTypes.CurveType curveType,
+        address certificateVerifier
+    ) external onlyOwner {
+        _setCertificateVerifier(curveType, certificateVerifier);
     }
 
     /// @inheritdoc ITaskMailbox
@@ -42,22 +63,44 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
-        // TODO: Only OperatorSetOwner can set config.
+        require(
+            IBaseCertificateVerifier(certificateVerifiers[config.curveType]).getOperatorSetOwner(operatorSet)
+                == msg.sender,
+            InvalidOperatorSetOwner()
+        );
 
         // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
 
-        require(config.certificateVerifier != address(0), InvalidAddressZero());
+        require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
+
+        executorOperatorSetTaskConfigs[operatorSet.key()] = config;
+        emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
 
         // If executor operator set is not registered, register it.
         if (!isExecutorOperatorSetRegistered[operatorSet.key()]) {
             _registerExecutorOperatorSet(operatorSet, true);
         }
+    }
 
-        executorOperatorSetTaskConfigs[operatorSet.key()] = config;
-        emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
+    /// @inheritdoc ITaskMailbox
+    function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
+        ExecutorOperatorSetTaskConfig memory taskConfig = executorOperatorSetTaskConfigs[operatorSet.key()];
+
+        require(
+            taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
+                && taskConfig.taskSLA > 0,
+            ExecutorOperatorSetTaskConfigNotSet()
+        );
+        require(
+            IBaseCertificateVerifier(certificateVerifiers[taskConfig.curveType]).getOperatorSetOwner(operatorSet)
+                == msg.sender,
+            InvalidOperatorSetOwner()
+        );
+
+        _registerExecutorOperatorSet(operatorSet, isRegistered);
     }
 
     /// @inheritdoc ITaskMailbox
@@ -74,7 +117,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         ExecutorOperatorSetTaskConfig memory taskConfig =
             executorOperatorSetTaskConfigs[taskParams.executorOperatorSet.key()];
         require(
-            taskConfig.certificateVerifier != address(0) && address(taskConfig.taskHook) != address(0)
+            taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
                 && taskConfig.taskSLA > 0,
             ExecutorOperatorSetTaskConfigNotSet()
         );
@@ -140,13 +183,7 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     }
 
     /// @inheritdoc ITaskMailbox
-    function submitResult(
-        bytes32 taskHash,
-        IBN254CertificateVerifierTypes.BN254Certificate memory cert,
-        bytes memory result
-    ) external nonReentrant {
-        // TODO: Do we need a gasless version of this function?
-        // TODO: require checks - Figure out what checks are needed
+    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
         Task storage task = tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
@@ -155,15 +192,33 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
-        bool isCertificateValid = IBN254CertificateVerifier(task.executorOperatorSetTaskConfig.certificateVerifier)
-            .verifyCertificateProportion(executorOperatorSet, cert, totalStakeProportionThresholds);
 
+        address certificateVerifier = certificateVerifiers[task.executorOperatorSetTaskConfig.curveType];
+        require(certificateVerifier != address(0), InvalidAddressZero());
+
+        bool isCertificateValid;
+        if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
+            // BN254 Certificate verification
+            IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
+                abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
+            isCertificateValid = IBN254CertificateVerifier(certificateVerifier).verifyCertificateProportion(
+                executorOperatorSet, bn254Cert, totalStakeProportionThresholds
+            );
+        } else if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
+            // ECDSA Certificate verification
+            IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
+                abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
+            isCertificateValid = IECDSACertificateVerifier(certificateVerifier).verifyCertificateProportion(
+                executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
+            );
+        } else {
+            revert InvalidCurveType();
+        }
         require(isCertificateValid, CertificateVerificationFailed());
 
         task.status = TaskStatus.Verified;
         task.result = result;
 
-        // TODO: Check what happens if we re-ennter the other state transition functions.
         // Task result submission checks:
         // 1. AVS can validate the task result, params and certificate.
         // 2. It can update hook storage for task lifecycle if needed.
@@ -206,10 +261,29 @@ contract TaskMailbox is ReentrancyGuard, TaskMailboxStorage {
     }
 
     /**
+     * @notice Sets a certificate verifier for a specific curve type
+     * @param curveType The curve type for the verifier
+     * @param certificateVerifier Address of the certificate verifier
+     */
+    function _setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) internal {
+        require(certificateVerifier != address(0), InvalidAddressZero());
+        require(curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
+        certificateVerifiers[curveType] = certificateVerifier;
+        emit CertificateVerifierSet(curveType, certificateVerifier);
+    }
+
+    /**
      *
      *                         VIEW FUNCTIONS
      *
      */
+
+    /// @inheritdoc ITaskMailbox
+    function getCertificateVerifier(
+        IKeyRegistrarTypes.CurveType curveType
+    ) external view returns (address) {
+        return certificateVerifiers[curveType];
+    }
 
     /// @inheritdoc ITaskMailbox
     function getExecutorOperatorSetTaskConfig(

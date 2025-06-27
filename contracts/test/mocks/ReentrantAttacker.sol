@@ -83,15 +83,12 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                     nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
                 });
                 // Try to reenter submitResult
-                taskMailbox.submitResult(attackTaskHash, cert, result);
+                taskMailbox.submitResult(attackTaskHash, abi.encode(cert), result);
             }
         }
     }
 
-    function handleTaskResultSubmission(
-        bytes32,
-        IBN254CertificateVerifierTypes.BN254Certificate memory
-    ) external override {
+    function handleTaskResultSubmission(bytes32, bytes memory) external {
         if (!attackOnPost) {
             if (attackCreateTask) {
                 // Reconstruct TaskParams for the attack
@@ -114,7 +111,7 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                     nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
                 });
                 // Try to reenter submitResult
-                taskMailbox.submitResult(attackTaskHash, cert, result);
+                taskMailbox.submitResult(attackTaskHash, abi.encode(cert), result);
             }
         }
     }
