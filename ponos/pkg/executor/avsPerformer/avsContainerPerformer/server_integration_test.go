@@ -40,18 +40,6 @@ func (tcm *testContainerManager) Create(ctx context.Context, config *containerMa
 	return tcm.ContainerManager.Create(ctx, &modifiedConfig)
 }
 
-// createTestContainerConfig creates a container config with optional task delay
-func createTestContainerConfig(avsAddress, imageRepo, imageTag string, containerPort int, networkName string, taskDelayMs int) *containerManager.ContainerConfig {
-	config := containerManager.CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
-
-	// Add task delay environment variable if specified
-	if taskDelayMs > 0 {
-		config.Env = []string{fmt.Sprintf("TASK_DELAY_MS=%d", taskDelayMs)}
-	}
-
-	return config
-}
-
 func TestPerformerDrainingIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
