@@ -683,7 +683,7 @@ func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) 
 	return opts, nil
 }
 
-func (cc *ContractCaller) GetSupportChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
+func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
 	opts := &bind.CallOpts{
 		Context: ctx,
 	}
@@ -737,7 +737,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	}
 
 	cc.logger.Sugar().Infow("Fetching supported chains for multichain")
-	chainIds, tableUpdaterAddresses, err := cc.GetSupportChainsForMultichain(ctx, int64(atBlockNumber))
+	chainIds, tableUpdaterAddresses, err := cc.GetSupportedChainsForMultichain(ctx, int64(atBlockNumber))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get supported chains for multichain: %w", err)
 	}

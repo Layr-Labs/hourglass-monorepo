@@ -113,7 +113,7 @@ type IContractCaller interface {
 		atBlockNumber uint64,
 	) (*LatestReferenceTimeAndBlock, error)
 
-	GetSupportChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
+	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
 
 	SetupTaskMailboxForAvs(
 		ctx context.Context,

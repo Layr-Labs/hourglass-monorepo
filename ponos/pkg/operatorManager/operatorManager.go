@@ -100,7 +100,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		// the main risk is someone changing their tableUpdaterAddress to something different
 		supportedChainsBlockRef = -1 // use latest block
 	}
-	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportChainsForMultichain(ctx, supportedChainsBlockRef)
+	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, supportedChainsBlockRef)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get supported chains for multichain",
 			zap.Uint64("BlockNumber", taskBlockNumber),

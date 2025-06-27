@@ -108,7 +108,6 @@ func WaitForAnvil(
 
 	for {
 		select {
-		// timeout of 60 seconds
 		case <-ctx.Done():
 			t.Logf("Failed to start l1Anvil: %v", ctx.Err())
 			errorsChan <- fmt.Errorf("failed to start l1Anvil: %w", ctx.Err())
