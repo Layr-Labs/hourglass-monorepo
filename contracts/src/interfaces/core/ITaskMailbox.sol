@@ -3,6 +3,8 @@ pragma solidity ^0.8.27;
 
 import {IBN254CertificateVerifierTypes} from
     "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {IECDSACertificateVerifierTypes} from
+    "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -349,4 +351,22 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function getTaskResult(
         bytes32 taskHash
     ) external view returns (bytes memory);
+
+    /**
+     * @notice Gets the bytes of a BN254 certificate
+     * @param cert The certificate to get the bytes of
+     * @return The bytes of the certificate
+     */
+    function getBN254CertificateBytes(
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert
+    ) external pure returns (bytes memory);
+
+    /**
+     * @notice Gets the bytes of a ECDSA certificate
+     * @param cert The certificate to get the bytes of
+     * @return The bytes of the certificate
+     */
+    function getECDSACertificateBytes(
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert
+    ) external pure returns (bytes memory);
 }
