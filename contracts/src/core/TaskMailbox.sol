@@ -329,4 +329,18 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         require(status == TaskStatus.Verified, InvalidTaskStatus(TaskStatus.Verified, status));
         return task.result;
     }
+
+    /// @inheritdoc ITaskMailbox
+    function getBN254CertificateBytes(
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert
+    ) external pure returns (bytes memory) {
+        return abi.encode(cert);
+    }
+
+    /// @inheritdoc ITaskMailbox
+    function getECDSACertificateBytes(
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert
+    ) external pure returns (bytes memory) {
+        return abi.encode(cert);
+    }
 }

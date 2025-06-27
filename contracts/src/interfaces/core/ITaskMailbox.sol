@@ -357,12 +357,16 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @param cert The certificate to get the bytes of
      * @return The bytes of the certificate
      */
-    function getBN254CertificateBytes(IBN254CertificateVerifierTypes.BN254Certificate memory cert) external pure returns (bytes memory);
+    function getBN254CertificateBytes(
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert
+    ) external pure returns (bytes memory);
 
     /**
      * @notice Gets the bytes of a ECDSA certificate
      * @param cert The certificate to get the bytes of
      * @return The bytes of the certificate
      */
-    function getECDSACertificateBytes(IECDSACertificateVerifierTypes.ECDSACertificate memory cert) external pure returns (bytes memory);
+    function getECDSACertificateBytes(
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert
+    ) external pure returns (bytes memory);
 }
