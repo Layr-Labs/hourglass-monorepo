@@ -127,7 +127,7 @@ The tests are designed to:
 
 ```go
 // Create a container manager
-dcm, err := NewDockerContainerManager(nil, logger)
+dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 require.NoError(t, err)
 defer dcm.Shutdown(context.Background())
 

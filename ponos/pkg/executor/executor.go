@@ -3,17 +3,19 @@ package executor
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/serverPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"strings"
-	"sync"
 )
 
 type Executor struct {
@@ -22,7 +24,6 @@ type Executor struct {
 	avsPerformers map[string]avsPerformer.IAvsPerformer
 	rpcServer     *rpcServer.RpcServer
 	signer        signer.ISigner
-
 	inflightTasks *sync.Map
 
 	peeringFetcher peering.IPeeringDataFetcher
@@ -63,9 +64,8 @@ func NewExecutor(
 	}
 }
 
-func (e *Executor) Initialize() error {
+func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
-
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
 		if _, ok := e.avsPerformers[avsAddress]; ok {
@@ -77,11 +77,10 @@ func (e *Executor) Initialize() error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := serverPerformer.NewAvsPerformerServer(
+			performer, err := avsContainerPerformer.NewAvsContainerPerformer(
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
 					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-					Image:                avsPerformer.PerformerImage{Repository: avs.Image.Repository, Tag: avs.Image.Tag},
 					WorkerCount:          avs.WorkerCount,
 					PerformerNetworkName: e.config.PerformerNetworkName,
 					SigningCurve:         avs.SigningCurve,
@@ -90,12 +89,34 @@ func (e *Executor) Initialize() error {
 				e.logger,
 			)
 			if err != nil {
-				e.logger.Sugar().Errorw("Failed to create AVS performer server",
+				return fmt.Errorf("failed to create AVS performer for %s: %v", avs.ProcessType, err)
+			}
+			err = performer.Initialize(ctx)
+			if err != nil {
+				return err
+			}
+
+			// Deploy container using the performer's Deploy method
+			image := avsPerformer.PerformerImage{
+				Repository: avs.Image.Repository,
+				Tag:        avs.Image.Tag,
+			}
+
+			result, err := performer.Deploy(ctx, image)
+			if err != nil {
+				e.logger.Sugar().Errorw("Failed to deploy container for AVS performer during startup",
 					zap.String("avsAddress", avsAddress),
 					zap.Error(err),
 				)
-				return fmt.Errorf("failed to create AVS performer server: %v", err)
+				return fmt.Errorf("failed to deploy container for AVS %s: %w", avsAddress, err)
 			}
+
+			e.logger.Sugar().Infow("AVS performer container deployed successfully",
+				zap.String("avsAddress", avsAddress),
+				zap.String("deploymentId", result.ID),
+				zap.String("performerId", result.PerformerID),
+			)
+
 			e.avsPerformers[avsAddress] = performer
 
 		default:
@@ -114,32 +135,19 @@ func (e *Executor) Initialize() error {
 		return fmt.Errorf("failed to register handlers: %v", err)
 	}
 
-	return nil
-}
-
-func (e *Executor) BootPerformers(ctx context.Context) error {
-	e.logger.Sugar().Infow("Booting AVS performers")
-	for avsAddress, performer := range e.avsPerformers {
-		if err := performer.Initialize(ctx); err != nil {
-			e.logger.Sugar().Errorw("Failed to initialize AVS performer",
-				zap.String("avsAddress", avsAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to initialize AVS performer: %v", err)
-		}
-	}
 	go func() {
 		<-ctx.Done()
 		e.logger.Sugar().Info("Shutting down AVS performers")
-		for avsAddress, performer := range e.avsPerformers {
-			if err := performer.Shutdown(); err != nil {
+		for avsAdd, perf := range e.avsPerformers {
+			if err := perf.Shutdown(); err != nil {
 				e.logger.Sugar().Errorw("Failed to shutdown AVS performer",
-					zap.String("avsAddress", avsAddress),
+					zap.String("avsAddress", avsAdd),
 					zap.Error(err),
 				)
 			}
 		}
 	}()
+
 	return nil
 }
 

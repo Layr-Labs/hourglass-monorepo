@@ -46,6 +46,52 @@ type DockerContainerManager struct {
 	mu sync.RWMutex
 }
 
+// DefaultContainerManagerConfig returns a ContainerManagerConfig with sensible defaults
+func DefaultContainerManagerConfig() *ContainerManagerConfig {
+	return &ContainerManagerConfig{
+		StartTimeout: DefaultStartTimeout,
+		StopTimeout:  DefaultStopTimeout,
+		HealthCheckConfig: &HealthCheckConfig{
+			Enabled:          DefaultHealthEnabled,
+			Interval:         DefaultHealthInterval,
+			Timeout:          DefaultHealthTimeout,
+			Retries:          DefaultHealthRetries,
+			StartPeriod:      DefaultStartTimeout,
+			FailureThreshold: DefaultFailureThreshold,
+		},
+		LivenessConfig: &LivenessConfig{
+			HealthCheckConfig: HealthCheckConfig{
+				Enabled:          DefaultHealthEnabled,
+				Interval:         DefaultHealthInterval,
+				Timeout:          DefaultHealthTimeout,
+				Retries:          DefaultHealthRetries,
+				StartPeriod:      DefaultHealthStartPeriod,
+				FailureThreshold: DefaultFailureThreshold,
+			},
+			RestartPolicy: RestartPolicy{
+				Enabled:            DefaultRestartEnabled,
+				MaxRestarts:        DefaultMaxRestarts,
+				RestartDelay:       DefaultRestartDelay,
+				BackoffMultiplier:  DefaultBackoffMultiplier,
+				MaxBackoffDelay:    DefaultMaxBackoffDelay,
+				RestartTimeout:     DefaultRestartTimeout,
+				RestartOnCrash:     DefaultRestartOnCrash,
+				RestartOnOOM:       DefaultRestartOnOOM,
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy,
+			},
+			ResourceThresholds: ResourceThresholds{
+				CPUThreshold:    DefaultCPUThreshold,
+				MemoryThreshold: DefaultMemoryThreshold,
+				RestartOnCPU:    DefaultResourceRestartOnCPU,
+				RestartOnMemory: DefaultRestartOnMemory,
+			},
+			MonitorEvents:         DefaultMonitorEvents,
+			ResourceMonitoring:    DefaultResourceMonitoring,
+			ResourceCheckInterval: DefaultResourceInterval,
+		},
+	}
+}
+
 // NewDockerContainerManager creates a new Docker-based container manager
 func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logger) (*DockerContainerManager, error) {
 	dockerClient, err := client.NewClientWithOpts(client.FromEnv)
@@ -53,49 +99,49 @@ func NewDockerContainerManager(config *ContainerManagerConfig, logger *zap.Logge
 		return nil, errors.Wrap(err, "failed to create Docker client")
 	}
 
-	// Set default values if not provided
 	if config == nil {
-		config = &ContainerManagerConfig{}
+		return nil, errors.New("config is required")
 	}
-	if config.DefaultStartTimeout == 0 {
-		config.DefaultStartTimeout = 30 * time.Second
+
+	if config.StartTimeout == 0 {
+		config.StartTimeout = DefaultStartTimeout
 	}
-	if config.DefaultStopTimeout == 0 {
-		config.DefaultStopTimeout = 10 * time.Second
+	if config.StopTimeout == 0 {
+		config.StopTimeout = DefaultStopTimeout
 	}
-	if config.DefaultHealthCheckConfig == nil {
-		config.DefaultHealthCheckConfig = &HealthCheckConfig{
-			Enabled:          true,
-			Interval:         5 * time.Second,
-			Timeout:          2 * time.Second,
-			Retries:          3,
-			StartPeriod:      10 * time.Second,
-			FailureThreshold: 3,
+	if config.HealthCheckConfig == nil {
+		config.HealthCheckConfig = &HealthCheckConfig{
+			Enabled:          DefaultHealthEnabled,
+			Interval:         DefaultHealthInterval,
+			Timeout:          DefaultHealthTimeout,
+			Retries:          DefaultHealthRetries,
+			StartPeriod:      DefaultStartTimeout,
+			FailureThreshold: DefaultFailureThreshold,
 		}
 	}
-	if config.DefaultLivenessConfig == nil {
-		config.DefaultLivenessConfig = &LivenessConfig{
-			HealthCheckConfig: *config.DefaultHealthCheckConfig,
+	if config.LivenessConfig == nil {
+		config.LivenessConfig = &LivenessConfig{
+			HealthCheckConfig: *config.HealthCheckConfig,
 			RestartPolicy: RestartPolicy{
-				Enabled:            true,
-				MaxRestarts:        5,
-				RestartDelay:       2 * time.Second,
-				BackoffMultiplier:  2.0,
-				MaxBackoffDelay:    30 * time.Second,
-				RestartTimeout:     60 * time.Second,
-				RestartOnCrash:     true,
-				RestartOnOOM:       true,
-				RestartOnUnhealthy: false, // Let application decide
+				Enabled:            DefaultRestartEnabled,
+				MaxRestarts:        DefaultMaxRestarts,
+				RestartDelay:       DefaultRestartDelay,
+				BackoffMultiplier:  DefaultBackoffMultiplier,
+				MaxBackoffDelay:    DefaultMaxBackoffDelay,
+				RestartTimeout:     DefaultRestartTimeout,
+				RestartOnCrash:     DefaultRestartOnCrash,
+				RestartOnOOM:       DefaultRestartOnOOM,
+				RestartOnUnhealthy: DefaultRestartOnUnhealthy,
 			},
 			ResourceThresholds: ResourceThresholds{
-				CPUThreshold:    90.0,
-				MemoryThreshold: 90.0,
-				RestartOnCPU:    false,
-				RestartOnMemory: false,
+				CPUThreshold:    DefaultCPUThreshold,
+				MemoryThreshold: DefaultMemoryThreshold,
+				RestartOnCPU:    DefaultResourceRestartOnCPU,
+				RestartOnMemory: DefaultRestartOnMemory,
 			},
-			MonitorEvents:         true,
-			ResourceMonitoring:    true,
-			ResourceCheckInterval: 30 * time.Second,
+			MonitorEvents:         DefaultMonitorEvents,
+			ResourceMonitoring:    DefaultResourceMonitoring,
+			ResourceCheckInterval: DefaultResourceInterval,
 		}
 	}
 
@@ -216,7 +262,7 @@ func (dcm *DockerContainerManager) Stop(ctx context.Context, containerID string,
 	dcm.StopHealthCheck(containerID)
 
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStopTimeout
+		timeout = dcm.config.StopTimeout
 	}
 
 	timeoutSeconds := int(timeout.Seconds())
@@ -287,7 +333,7 @@ func (dcm *DockerContainerManager) IsRunning(ctx context.Context, containerID st
 // WaitForRunning waits for a container to be running with ports exposed
 func (dcm *DockerContainerManager) WaitForRunning(ctx context.Context, containerID string, timeout time.Duration) error {
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStartTimeout
+		timeout = dcm.config.StartTimeout
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -422,17 +468,17 @@ func (dcm *DockerContainerManager) RemoveNetwork(ctx context.Context, networkNam
 // StartHealthCheck starts a health check routine for a container
 func (dcm *DockerContainerManager) StartHealthCheck(ctx context.Context, containerID string, config *HealthCheckConfig) (<-chan bool, error) {
 	if config == nil {
-		config = dcm.config.DefaultHealthCheckConfig
+		config = dcm.config.HealthCheckConfig
 	} else {
 		// Merge with defaults for any zero values
 		if config.Interval == 0 {
-			config.Interval = dcm.config.DefaultHealthCheckConfig.Interval
+			config.Interval = dcm.config.HealthCheckConfig.Interval
 		}
 		if config.FailureThreshold == 0 {
-			config.FailureThreshold = dcm.config.DefaultHealthCheckConfig.FailureThreshold
+			config.FailureThreshold = dcm.config.HealthCheckConfig.FailureThreshold
 		}
 		if config.Timeout == 0 {
-			config.Timeout = dcm.config.DefaultHealthCheckConfig.Timeout
+			config.Timeout = dcm.config.HealthCheckConfig.Timeout
 		}
 	}
 
@@ -557,17 +603,17 @@ func (dcm *DockerContainerManager) Shutdown(ctx context.Context) error {
 // StartLivenessMonitoring starts comprehensive container monitoring with auto-restart
 func (dcm *DockerContainerManager) StartLivenessMonitoring(ctx context.Context, containerID string, config *LivenessConfig) (<-chan ContainerEvent, error) {
 	if config == nil {
-		config = dcm.config.DefaultLivenessConfig
+		config = dcm.config.LivenessConfig
 	} else {
 		// Merge with defaults for any zero values
 		if config.HealthCheckConfig.Interval == 0 {
-			config.HealthCheckConfig.Interval = dcm.config.DefaultLivenessConfig.HealthCheckConfig.Interval
+			config.HealthCheckConfig.Interval = dcm.config.LivenessConfig.HealthCheckConfig.Interval
 		}
 		if config.HealthCheckConfig.FailureThreshold == 0 {
-			config.HealthCheckConfig.FailureThreshold = dcm.config.DefaultLivenessConfig.HealthCheckConfig.FailureThreshold
+			config.HealthCheckConfig.FailureThreshold = dcm.config.LivenessConfig.HealthCheckConfig.FailureThreshold
 		}
 		if config.ResourceCheckInterval == 0 {
-			config.ResourceCheckInterval = dcm.config.DefaultLivenessConfig.ResourceCheckInterval
+			config.ResourceCheckInterval = dcm.config.LivenessConfig.ResourceCheckInterval
 		}
 	}
 
@@ -679,7 +725,7 @@ func (dcm *DockerContainerManager) GetContainerState(ctx context.Context, contai
 // RestartContainer restarts a container with the specified timeout
 func (dcm *DockerContainerManager) RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error {
 	if timeout == 0 {
-		timeout = dcm.config.DefaultStopTimeout
+		timeout = dcm.config.StopTimeout
 	}
 
 	// TODO: Emit metric for manual container restart
@@ -1112,7 +1158,7 @@ func (dcm *DockerContainerManager) attemptRestart(ctx context.Context, monitor *
 	}
 
 	// Perform the restart
-	if err := dcm.RestartContainer(restartCtx, monitor.containerID, dcm.config.DefaultStopTimeout); err != nil {
+	if err := dcm.RestartContainer(restartCtx, monitor.containerID, dcm.config.StopTimeout); err != nil {
 		// Check if container doesn't exist, in which case we need to recreate it
 		if strings.Contains(err.Error(), "No such container") {
 			dcm.logger.Info("Container doesn't exist, recreation needed but not supported in container manager",
@@ -1250,8 +1296,8 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 		zap.Any("attributes", dockerEvent.Actor.Attributes),
 	)
 
-	switch string(dockerEvent.Action) {
-	case "die":
+	switch dockerEvent.Action {
+	case events.ActionDie:
 		// Container crashed or was stopped
 		exitCode := 0
 		if exitCodeStr, exists := dockerEvent.Actor.Attributes["exitCode"]; exists {
@@ -1322,7 +1368,7 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			}
 		}
 
-	case "oom":
+	case events.ActionOOM:
 		// OOM event (may come before die event)
 		dcm.logger.Warn("Container OOM event detected",
 			zap.String("containerID", monitor.containerID),
@@ -1336,6 +1382,22 @@ func (dcm *DockerContainerManager) handleDockerEvent(ctx context.Context, monito
 			State: ContainerState{
 				OOMKilled:    true,
 				RestartCount: monitor.restartCount,
+			},
+		}
+
+		select {
+		case monitor.eventChan <- event:
+		default:
+		}
+
+	case events.ActionHealthStatusHealthy:
+		event := ContainerEvent{
+			ContainerID: monitor.containerID,
+			Type:        EventHealthy,
+			Timestamp:   time.Now(),
+			Message:     "Container received healthy signal",
+			State: ContainerState{
+				Status: "healthy",
 			},
 		}
 
@@ -1364,7 +1426,7 @@ func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageN
 		}
 	}
 
-	// Image not found locally, pull it
+	// image not found locally, pull it
 	dcm.logger.Info("Pulling image", zap.String("image", imageName))
 
 	pullOptions := image.PullOptions{}

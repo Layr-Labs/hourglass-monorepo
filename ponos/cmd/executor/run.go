@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -24,7 +26,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"time"
 )
 
 var runCmd = &cobra.Command{
@@ -141,14 +142,10 @@ var runCmd = &cobra.Command{
 
 		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
 
-		if err := exec.Initialize(); err != nil {
-			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
-		}
-
 		ctx, cancel := context.WithCancel(context.Background())
 
-		if err := exec.BootPerformers(ctx); err != nil {
-			l.Sugar().Fatalw("Failed to boot performers", zap.Error(err))
+		if err := exec.Initialize(ctx); err != nil {
+			l.Sugar().Fatalw("Failed to initialize executor", zap.Error(err))
 		}
 
 		go func() {

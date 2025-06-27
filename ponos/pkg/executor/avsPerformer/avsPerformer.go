@@ -2,6 +2,8 @@ package avsPerformer
 
 import (
 	"context"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
 
@@ -17,18 +19,99 @@ type PerformerImage struct {
 	Tag        string
 }
 
+// PerformerStatus represents the health status of a performer container
+type PerformerStatus int
+
+const (
+	PerformerHealthUnknown PerformerStatus = iota
+	PerformerHealthy
+	PerformerUnhealthy
+)
+
+// PerformerStatusEvent contains status information sent to deployment watchers
+type PerformerStatusEvent struct {
+	Status      PerformerStatus
+	PerformerID string
+	Message     string
+	Timestamp   time.Time
+}
+
+// PerformerHealth tracks the health state of a container
+type PerformerHealth struct {
+	ContainerIsHealthy                   bool
+	ApplicationIsHealthy                 bool
+	ConsecutiveApplicationHealthFailures int
+	LastHealthCheck                      time.Time
+}
+
+// PerformerResourceStatus represents the deployment status of a performer container
+type PerformerResourceStatus string
+
+const (
+	PerformerResourceStatusInService PerformerResourceStatus = "InService"
+	PerformerResourceStatusStaged    PerformerResourceStatus = "Staged"
+)
+
+// PerformerMetadata holds information about a performer container
+type PerformerMetadata struct {
+	PerformerID        string
+	AvsAddress         string
+	ResourceID         string
+	Status             PerformerResourceStatus
+	ArtifactRegistry   string
+	ArtifactDigest     string
+	ContainerHealthy   bool
+	ApplicationHealthy bool
+	LastHealthCheck    time.Time
+}
+
 type AvsPerformerConfig struct {
-	AvsAddress           string
-	ProcessType          AvsProcessType
-	Image                PerformerImage
-	WorkerCount          int
-	PerformerNetworkName string
-	SigningCurve         string // bn254, bls381, etc
+	AvsAddress                     string
+	ProcessType                    AvsProcessType
+	Image                          PerformerImage
+	WorkerCount                    int
+	PerformerNetworkName           string
+	SigningCurve                   string        // bn254, bls381, etc
+	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
+}
+
+// DeploymentStatus represents the current state of a deployment
+type DeploymentStatus string
+
+const (
+	DeploymentStatusPending    DeploymentStatus = "pending"
+	DeploymentStatusInProgress DeploymentStatus = "in_progress"
+	DeploymentStatusFailed     DeploymentStatus = "failed"
+	DeploymentStatusCompleted  DeploymentStatus = "completed"
+	DeploymentStatusCancelled  DeploymentStatus = "cancelled"
+)
+
+// DeploymentResult contains the result of a deployment operation
+type DeploymentResult struct {
+	ID          string
+	PerformerID string
+	Status      DeploymentStatus
+	Image       PerformerImage
+	StartTime   time.Time
+	EndTime     time.Time
+	Message     string
+	Error       error
+}
+
+// PerformerCreationResult contains information about a deployed performer
+type PerformerCreationResult struct {
+	PerformerID string
+	StatusChan  <-chan PerformerStatusEvent
 }
 
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
 	ValidateTaskSignature(task *performerTask.PerformerTask) error
+	Deploy(ctx context.Context, image PerformerImage) (*DeploymentResult, error)
+	CreatePerformer(ctx context.Context, image PerformerImage) (*PerformerCreationResult, error)
+	PromotePerformer(ctx context.Context, performerID string) error
+	RemovePerformer(ctx context.Context, performerID string) error
+	ListPerformers() []PerformerMetadata
 	Shutdown() error
 }

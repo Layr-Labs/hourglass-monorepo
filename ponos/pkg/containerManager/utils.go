@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/docker/go-connections/nat"
 )
@@ -18,10 +19,15 @@ func HashAvsAddress(avsAddress string) string {
 
 // CreateDefaultContainerConfig creates a default container configuration for AVS performers
 func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag string, containerPort int, networkName string) *ContainerConfig {
+	// Use predictable hostname for DNS resolution in Docker networks
 	hostname := fmt.Sprintf("avs-performer-%s", HashAvsAddress(avsAddress))
 
+	// Add timestamp to hostname to ensure uniqueness for blue-green deployments
+	timestamp := time.Now().Unix()
+	uniqueHostname := fmt.Sprintf("%s-%d", hostname, timestamp)
+
 	return &ContainerConfig{
-		Hostname: hostname,
+		Hostname: uniqueHostname,
 		Image:    fmt.Sprintf("%s:%s", imageRepo, imageTag),
 		ExposedPorts: nat.PortSet{
 			nat.Port(fmt.Sprintf("%d/tcp", containerPort)): struct{}{},
@@ -60,4 +66,40 @@ func GetContainerEndpoint(info *ContainerInfo, containerPort int, networkName st
 	}
 
 	return "", fmt.Errorf("no port mapping found for container port %d", containerPort)
+}
+
+// NewDefaultAvsPerformerLivenessConfig creates a default liveness configuration
+// optimized for AVS performer containers with aggressive health monitoring
+// and auto-restart capabilities
+func NewDefaultAvsPerformerLivenessConfig() *LivenessConfig {
+	return &LivenessConfig{
+		HealthCheckConfig: HealthCheckConfig{
+			Enabled:          true,
+			Interval:         DefaultHealthInterval,
+			Timeout:          DefaultHealthTimeout,
+			Retries:          DefaultHealthRetries,
+			StartPeriod:      DefaultHealthStartPeriod,
+			FailureThreshold: DefaultFailureThreshold,
+		},
+		RestartPolicy: RestartPolicy{
+			Enabled:            DefaultRestartEnabled,
+			MaxRestarts:        DefaultMaxRestarts,
+			RestartDelay:       DefaultRestartDelay,
+			BackoffMultiplier:  DefaultBackoffMultiplier,
+			MaxBackoffDelay:    DefaultMaxBackoffDelay,
+			RestartTimeout:     DefaultRestartTimeout,
+			RestartOnCrash:     DefaultRestartOnCrash,
+			RestartOnOOM:       DefaultRestartOnOOM,
+			RestartOnUnhealthy: DefaultRestartOnUnhealthy,
+		},
+		ResourceThresholds: ResourceThresholds{
+			CPUThreshold:    DefaultCPUThreshold,
+			MemoryThreshold: DefaultMemoryThreshold,
+			RestartOnCPU:    DefaultResourceRestartOnCPU,
+			RestartOnMemory: DefaultRestartOnMemory,
+		},
+		MonitorEvents:         DefaultMonitorEvents,
+		ResourceMonitoring:    DefaultResourceMonitoring,
+		ResourceCheckInterval: DefaultResourceInterval,
+	}
 }

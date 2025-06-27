@@ -183,12 +183,12 @@ type ContainerManagerConfig struct {
 	DockerVersion string
 
 	// Default timeouts
-	DefaultStartTimeout time.Duration
-	DefaultStopTimeout  time.Duration
+	StartTimeout time.Duration
+	StopTimeout  time.Duration
 
 	// Health check defaults (legacy)
-	DefaultHealthCheckConfig *HealthCheckConfig
+	HealthCheckConfig *HealthCheckConfig
 
 	// Liveness monitoring defaults
-	DefaultLivenessConfig *LivenessConfig
+	LivenessConfig *LivenessConfig
 }

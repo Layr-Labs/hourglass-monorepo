@@ -17,21 +17,21 @@ func (cb *ConfigBuilder) BuildContainerManagerConfig(config *ContainerManagerCon
 	}
 
 	// Set default timeouts
-	if config.DefaultStartTimeout == 0 {
-		config.DefaultStartTimeout = DefaultStartTimeout
+	if config.StartTimeout == 0 {
+		config.StartTimeout = DefaultStartTimeout
 	}
-	if config.DefaultStopTimeout == 0 {
-		config.DefaultStopTimeout = DefaultStopTimeout
+	if config.StopTimeout == 0 {
+		config.StopTimeout = DefaultStopTimeout
 	}
 
 	// Build default health check config
-	if config.DefaultHealthCheckConfig == nil {
-		config.DefaultHealthCheckConfig = cb.BuildHealthCheckConfig(nil)
+	if config.HealthCheckConfig == nil {
+		config.HealthCheckConfig = cb.BuildHealthCheckConfig(nil)
 	}
 
 	// Build default liveness config
-	if config.DefaultLivenessConfig == nil {
-		config.DefaultLivenessConfig = cb.BuildLivenessConfig(nil, config.DefaultHealthCheckConfig)
+	if config.LivenessConfig == nil {
+		config.LivenessConfig = cb.BuildLivenessConfig(nil, config.HealthCheckConfig)
 	}
 
 	return config
@@ -169,21 +169,21 @@ func (cb *ConfigBuilder) mergeHealthCheckConfig(userConfig, defaultConfig *Healt
 
 // ValidateConfig validates a container manager configuration
 func (cb *ConfigBuilder) ValidateConfig(config *ContainerManagerConfig) error {
-	if config.DefaultStartTimeout < 0 {
+	if config.StartTimeout < 0 {
 		return ErrInvalidStartTimeout
 	}
-	if config.DefaultStopTimeout < 0 {
+	if config.StopTimeout < 0 {
 		return ErrInvalidStopTimeout
 	}
 
-	if config.DefaultHealthCheckConfig != nil {
-		if err := cb.ValidateHealthCheckConfig(config.DefaultHealthCheckConfig); err != nil {
+	if config.HealthCheckConfig != nil {
+		if err := cb.ValidateHealthCheckConfig(config.HealthCheckConfig); err != nil {
 			return err
 		}
 	}
 
-	if config.DefaultLivenessConfig != nil {
-		if err := cb.ValidateLivenessConfig(config.DefaultLivenessConfig); err != nil {
+	if config.LivenessConfig != nil {
+		if err := cb.ValidateLivenessConfig(config.LivenessConfig); err != nil {
 			return err
 		}
 	}

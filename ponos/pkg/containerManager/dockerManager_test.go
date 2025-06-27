@@ -16,14 +16,10 @@ func TestNewDockerContainerManager(t *testing.T) {
 		config *ContainerManagerConfig
 	}{
 		{
-			name:   "nil config should use defaults",
-			config: nil,
-		},
-		{
 			name: "custom config should be used",
 			config: &ContainerManagerConfig{
-				DefaultStartTimeout: 60 * time.Second,
-				DefaultStopTimeout:  20 * time.Second,
+				StartTimeout: 60 * time.Second,
+				StopTimeout:  20 * time.Second,
 			},
 		},
 	}
@@ -43,10 +39,10 @@ func TestNewDockerContainerManager(t *testing.T) {
 
 			// Verify defaults are set
 			if tt.config == nil {
-				assert.Equal(t, 30*time.Second, dcm.config.DefaultStartTimeout)
-				assert.Equal(t, 10*time.Second, dcm.config.DefaultStopTimeout)
-				assert.NotNil(t, dcm.config.DefaultHealthCheckConfig)
-				assert.NotNil(t, dcm.config.DefaultLivenessConfig)
+				assert.Equal(t, 30*time.Second, dcm.config.StartTimeout)
+				assert.Equal(t, 10*time.Second, dcm.config.StopTimeout)
+				assert.NotNil(t, dcm.config.HealthCheckConfig)
+				assert.NotNil(t, dcm.config.LivenessConfig)
 			}
 		})
 	}
@@ -54,7 +50,7 @@ func TestNewDockerContainerManager(t *testing.T) {
 
 func TestDockerContainerManager_Configuration(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -68,7 +64,7 @@ func TestDockerContainerManager_Configuration(t *testing.T) {
 
 func TestDockerContainerManager_StartLivenessMonitoring(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -116,7 +112,7 @@ func TestDockerContainerManager_StartLivenessMonitoring(t *testing.T) {
 
 func TestDockerContainerManager_TriggerRestart(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -158,7 +154,7 @@ func TestDockerContainerManager_TriggerRestart(t *testing.T) {
 
 func TestDockerContainerManager_RestartPolicyOperations(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -204,7 +200,7 @@ func TestDockerContainerManager_RestartPolicyOperations(t *testing.T) {
 
 func TestDockerContainerManager_HealthCheckOperations(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -240,7 +236,7 @@ func TestDockerContainerManager_HealthCheckOperations(t *testing.T) {
 
 func TestDockerContainerManager_ShutdownOperations(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
 	ctx := context.Background()

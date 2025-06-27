@@ -99,7 +99,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 
 	// filter the list of Operators down to those that are in the operator set and have Weights
 	operators = util.Filter(operators, func(op *peering.OperatorPeerInfo) bool {
-		for opAddr, _ := range operatorWeights {
+		for opAddr := range operatorWeights {
 			if strings.EqualFold(opAddr, op.OperatorAddress) && op.IncludesOperatorSetId(operatorSetId) {
 				return true
 			}

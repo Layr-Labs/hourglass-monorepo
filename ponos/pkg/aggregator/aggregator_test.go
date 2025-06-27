@@ -4,6 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
@@ -24,10 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"math/big"
-	"sync"
-	"testing"
-	"time"
 )
 
 const (
@@ -323,15 +324,11 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Boot up everything
 	// ------------------------------------------------------------------------
-	if err := exec.Initialize(); err != nil {
+	if err := exec.Initialize(ctx); err != nil {
 		t.Logf("Failed to initialize executor: %v", err)
 		cancel()
 	}
 
-	if err := exec.BootPerformers(ctx); err != nil {
-		t.Logf("Failed to boot performers: %v", err)
-		cancel()
-	}
 	if err := exec.Run(ctx); err != nil {
 		t.Logf("Failed to run executor: %v", err)
 		cancel()

@@ -19,7 +19,7 @@ func TestDockerContainerManager_ImagePulling(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
@@ -55,7 +55,7 @@ func TestDockerContainerManager_CreateWithImagePull(t *testing.T) {
 	}
 
 	logger := zaptest.NewLogger(t)
-	dcm, err := NewDockerContainerManager(nil, logger)
+	dcm, err := NewDockerContainerManager(DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 	defer func() { _ = dcm.Shutdown(context.Background()) }()
 
