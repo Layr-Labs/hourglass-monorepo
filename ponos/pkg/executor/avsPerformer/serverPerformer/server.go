@@ -674,6 +674,10 @@ func (aps *AvsPerformerServer) ValidateTaskSignature(t *performerTask.PerformerT
 		)
 		return err
 	}
+
+	// TODO(seanmcgary): this should query for aggregator peers on demand to ensure we have the latest set
+	// stake weight or chain doesnt particularly matter here, we just want to make sure its any aggregator in
+	// the aggregator operator set.
 	peer := util.Find(aps.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
 		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
 	})
