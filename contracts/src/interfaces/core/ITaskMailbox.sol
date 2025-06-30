@@ -150,13 +150,6 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
  */
 interface ITaskMailboxEvents is ITaskMailboxTypes {
     /**
-     * @notice Emitted when a certificate verifier is set
-     * @param curveType The curve type for the verifier
-     * @param certificateVerifier Address of the certificate verifier
-     */
-    event CertificateVerifierSet(IKeyRegistrarTypes.CurveType indexed curveType, address indexed certificateVerifier);
-
-    /**
      * @notice Emitted when an executor operator set is registered
      * @param caller Address that called the registration function
      * @param avs Address of the AVS being registered
@@ -233,13 +226,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
 
     /**
-     * @notice Sets a certificate verifier for a specific curve type
-     * @param curveType The curve type for the verifier
-     * @param certificateVerifier Address of the certificate verifier
-     */
-    function setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) external;
-
-    /**
      * @notice Sets the task configuration for an executor operator set
      * @param operatorSet The operator set to configure
      * @param config Task configuration for the operator set
@@ -287,15 +273,6 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function isExecutorOperatorSetRegistered(
         bytes32 operatorSetKey
     ) external view returns (bool);
-
-    /**
-     * @notice Gets the certificate verifier for a specific curve type
-     * @param curveType The curve type to get the verifier for
-     * @return Address of the certificate verifier
-     */
-    function getCertificateVerifier(
-        IKeyRegistrarTypes.CurveType curveType
-    ) external view returns (address);
 
     /**
      * @notice Gets the task configuration for an executor operator set

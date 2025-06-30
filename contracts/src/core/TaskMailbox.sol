@@ -34,14 +34,15 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     /**
      * @notice Constructor for TaskMailbox
      * @param _owner The owner of the contract
-     * @param _certificateVerifiers Array of certificate verifier configs
+     * @param _bn254CertificateVerifier Address of the BN254 certificate verifier
+     * @param _ecdsaCertificateVerifier Address of the ECDSA certificate verifier
      */
-    constructor(address _owner, CertificateVerifierConfig[] memory _certificateVerifiers) Ownable() {
+    constructor(
+        address _owner,
+        address _bn254CertificateVerifier,
+        address _ecdsaCertificateVerifier
+    ) Ownable() TaskMailboxStorage(_bn254CertificateVerifier, _ecdsaCertificateVerifier) {
         _transferOwnership(_owner);
-
-        for (uint256 i = 0; i < _certificateVerifiers.length; i++) {
-            _setCertificateVerifier(_certificateVerifiers[i].curveType, _certificateVerifiers[i].verifier);
-        }
     }
 
     /**
@@ -51,21 +52,13 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
-    function setCertificateVerifier(
-        IKeyRegistrarTypes.CurveType curveType,
-        address certificateVerifier
-    ) external onlyOwner {
-        _setCertificateVerifier(curveType, certificateVerifier);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
+        address certificateVerifier = _getCertificateVerifier(config.curveType);
         require(
-            IBaseCertificateVerifier(certificateVerifiers[config.curveType]).getOperatorSetOwner(operatorSet)
-                == msg.sender,
+            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
             InvalidOperatorSetOwner()
         );
 
@@ -94,9 +87,9 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
                 && taskConfig.taskSLA > 0,
             ExecutorOperatorSetTaskConfigNotSet()
         );
+        address certificateVerifier = _getCertificateVerifier(taskConfig.curveType);
         require(
-            IBaseCertificateVerifier(certificateVerifiers[taskConfig.curveType]).getOperatorSetOwner(operatorSet)
-                == msg.sender,
+            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
             InvalidOperatorSetOwner()
         );
 
@@ -177,22 +170,19 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
 
-        address certificateVerifier = certificateVerifiers[task.executorOperatorSetTaskConfig.curveType];
-        require(certificateVerifier != address(0), InvalidAddressZero());
-
         bool isCertificateValid;
         if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
             // BN254 Certificate verification
             IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
                 abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
-            isCertificateValid = IBN254CertificateVerifier(certificateVerifier).verifyCertificateProportion(
+            isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                 executorOperatorSet, bn254Cert, totalStakeProportionThresholds
             );
         } else if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
             // ECDSA Certificate verification
             IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
                 abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
-            isCertificateValid = IECDSACertificateVerifier(certificateVerifier).verifyCertificateProportion(
+            isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                 executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
             );
         } else {
@@ -245,15 +235,20 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /**
-     * @notice Sets a certificate verifier for a specific curve type
+     * @notice Gets the certificate verifier for a specific curve type
      * @param curveType The curve type for the verifier
-     * @param certificateVerifier Address of the certificate verifier
+     * @return The address of the certificate verifier
      */
-    function _setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) internal {
-        require(certificateVerifier != address(0), InvalidAddressZero());
-        require(curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
-        certificateVerifiers[curveType] = certificateVerifier;
-        emit CertificateVerifierSet(curveType, certificateVerifier);
+    function _getCertificateVerifier(
+        IKeyRegistrarTypes.CurveType curveType
+    ) internal view returns (address) {
+        if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
+            return BN254_CERTIFICATE_VERIFIER;
+        } else if (curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
+            return ECDSA_CERTIFICATE_VERIFIER;
+        } else {
+            revert InvalidCurveType();
+        }
     }
 
     /**
@@ -261,13 +256,6 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
      *                         VIEW FUNCTIONS
      *
      */
-
-    /// @inheritdoc ITaskMailbox
-    function getCertificateVerifier(
-        IKeyRegistrarTypes.CurveType curveType
-    ) external view returns (address) {
-        return certificateVerifiers[curveType];
-    }
 
     /// @inheritdoc ITaskMailbox
     function getExecutorOperatorSetTaskConfig(

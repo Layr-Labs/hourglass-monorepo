@@ -10,6 +10,12 @@ import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces
  * @notice Storage contract for the TaskMailbox contract.
  */
 abstract contract TaskMailboxStorage is ITaskMailbox {
+    /// @notice Immutable BN254 certificate verifier
+    address public immutable BN254_CERTIFICATE_VERIFIER;
+
+    /// @notice Immutable ECDSA certificate verifier
+    address public immutable ECDSA_CERTIFICATE_VERIFIER;
+
     /// @notice Global counter for tasks created across the TaskMailbox
     uint256 internal globalTaskCount;
 
@@ -22,6 +28,13 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     /// @notice Mapping from executor operator set key to its task configuration
     mapping(bytes32 operatorSetKey => ExecutorOperatorSetTaskConfig config) public executorOperatorSetTaskConfigs;
 
-    /// @notice Mapping from curve type to certificate verifier address
-    mapping(IKeyRegistrarTypes.CurveType curveType => address verifier) public certificateVerifiers;
+    /**
+     * @notice Constructor for TaskMailboxStorage
+     * @param _bn254CertificateVerifier Address of the BN254 certificate verifier
+     * @param _ecdsaCertificateVerifier Address of the ECDSA certificate verifier
+     */
+    constructor(address _bn254CertificateVerifier, address _ecdsaCertificateVerifier) {
+        BN254_CERTIFICATE_VERIFIER = _bn254CertificateVerifier;
+        ECDSA_CERTIFICATE_VERIFIER = _ecdsaCertificateVerifier;
+    }
 }
