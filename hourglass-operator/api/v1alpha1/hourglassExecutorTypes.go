@@ -9,13 +9,13 @@ import (
 type ChainConfig struct {
 	// Name is the identifier for this chain (e.g., "ethereum", "base")
 	Name string `json:"name"`
-	
+
 	// RPC endpoint for this chain
 	RPC string `json:"rpc"`
-	
+
 	// ChainID for this blockchain network
 	ChainID int64 `json:"chainId"`
-	
+
 	// TaskMailbox contract address on this chain
 	TaskMailboxAddress string `json:"taskMailboxAddress"`
 }
