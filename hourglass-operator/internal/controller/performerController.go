@@ -188,9 +188,7 @@ func (r *PerformerReconciler) reconcilePod(ctx context.Context, performer *v1alp
 		// Apply scheduling constraints
 		if performer.Spec.Scheduling != nil {
 			pod.Spec.NodeSelector = performer.Spec.Scheduling.NodeSelector
-			pod.Spec.Affinity = &corev1.Affinity{
-				NodeAffinity: performer.Spec.Scheduling.NodeAffinity,
-			}
+			pod.Spec.Affinity = performer.Spec.Scheduling.Affinity
 			pod.Spec.Tolerations = performer.Spec.Scheduling.Tolerations
 			if performer.Spec.Scheduling.RuntimeClass != nil {
 				pod.Spec.RuntimeClassName = performer.Spec.Scheduling.RuntimeClass

@@ -5,7 +5,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// SchedulingConfig defines advanced scheduling requirements
+// +kubebuilder:object:generate=true
+type SchedulingConfig struct {
+	// NodeSelector is a map of node selector labels for scheduling
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// Tolerations allow the performer to tolerate node taints
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// Affinity defines node affinity scheduling rules
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// RuntimeClass specifies the container runtime class
+	RuntimeClass *string `json:"runtimeClass,omitempty"`
+
+	// PriorityClassName indicates the priority class for scheduling
+	PriorityClassName *string `json:"priorityClassName,omitempty"`
+}
+
 // HardwareRequirements defines specialized hardware needs
+// +kubebuilder:object:generate=true
 type HardwareRequirements struct {
 	// GPUType specifies the required GPU type (e.g., "nvidia-tesla-v100", "nvidia-a100")
 	GPUType string `json:"gpuType,omitempty"`
@@ -25,6 +45,7 @@ type HardwareRequirements struct {
 }
 
 // PerformerSpec defines the desired state of Performer
+// +kubebuilder:object:generate=true
 type PerformerSpec struct {
 	// AVSAddress is the unique identifier for this AVS
 	// +kubebuilder:validation:Required
@@ -36,9 +57,6 @@ type PerformerSpec struct {
 
 	// Version is the container image version for upgrade tracking
 	Version string `json:"version,omitempty"`
-
-	// ExecutorRef is a reference to the parent HourglassExecutor
-	ExecutorRef string `json:"executorRef,omitempty"`
 
 	// Config contains performer-specific configuration
 	Config PerformerConfig `json:"config,omitempty"`
@@ -57,6 +75,7 @@ type PerformerSpec struct {
 }
 
 // PerformerConfig contains configuration for the performer
+// +kubebuilder:object:generate=true
 type PerformerConfig struct {
 	// GRPCPort is the port on which the performer serves gRPC requests
 	// +kubebuilder:default=9090
@@ -75,6 +94,7 @@ type PerformerConfig struct {
 }
 
 // PerformerStatus defines the observed state of Performer
+// +kubebuilder:object:generate=true
 type PerformerStatus struct {
 	// Phase represents the current performer lifecycle phase
 	// +kubebuilder:validation:Enum=Pending;Running;Upgrading;Terminating;Failed
