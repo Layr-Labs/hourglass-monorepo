@@ -64,7 +64,7 @@ func (om *OperatorManager) GetOperatorSetData(
 	uint32,
 	error,
 ) {
-	l1Cc, err := om.getContractCallerForChainId(chainId)
+	l1Cc, err := om.getContractCallerForChainId(om.config.L1ChainId)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get contract caller for chain ID",
 			zap.Uint32("ChainId", uint32(chainId)),
@@ -89,10 +89,10 @@ func (om *OperatorManager) GetOperatorSetData(
 
 	// no Weights found, go get the latest Weights
 	om.logger.Sugar().Debugw("No Weights found for chain",
-		zap.Uint32("ChainId", uint32(chainId)),
-		zap.String("AvsAddress", om.config.AvsAddress),
-		zap.Uint64("BlockNumber", taskBlockNumber),
-		zap.Uint32("OperatorSetId", operatorSetId),
+		zap.Uint32("chainId", uint32(chainId)),
+		zap.String("avsAddress", om.config.AvsAddress),
+		zap.Uint64("blockNumber", taskBlockNumber),
+		zap.Uint32("operatorSetId", operatorSetId),
 	)
 
 	var supportedChainsBlockRef int64
@@ -107,7 +107,10 @@ func (om *OperatorManager) GetOperatorSetData(
 	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, supportedChainsBlockRef)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get supported chains for multichain",
-			zap.Uint64("BlockNumber", taskBlockNumber),
+			zap.Uint64("blockNumber", taskBlockNumber),
+			zap.String("avsAddress", om.config.AvsAddress),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.Uint32("chainId", uint32(chainId)),
 			zap.Error(err),
 		)
 		return nil, nil, 0, err
@@ -218,7 +221,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 ) (*PeerWeight, error) {
 	_, operatorWeights, referenceTimestamp, err := om.GetOperatorSetData(ctx, chainId, atBlockNumber, operatorSetId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get operator set data: %w", err)
 	}
 
 	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress)
@@ -244,7 +247,7 @@ func (om *OperatorManager) GetAggregatorPeersAndWeightsForBlock(
 ) (*PeerWeight, error) {
 	_, operatorWeights, referenceTimestamp, err := om.GetOperatorSetData(ctx, chainId, atBlockNumber, operatorSetId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get operator set data: %w", err)
 	}
 
 	operators, err := om.peeringDataFetcher.ListAggregatorOperators(ctx, om.config.AvsAddress)

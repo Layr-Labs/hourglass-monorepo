@@ -227,6 +227,12 @@ func InitializeContractCaller(
 	isL1Chain bool,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
+	logger.Sugar().Infow("Initializing contract caller for chain",
+		zap.String("chainName", chain.Name),
+		zap.Uint64("chainId", uint64(chain.ChainId)),
+		zap.String("rpcUrl", chain.RpcURL),
+		zap.Bool("isL1Chain", isL1Chain),
+	)
 	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   chain.RpcURL,
 		BlockType: ethereum.BlockType_Latest,

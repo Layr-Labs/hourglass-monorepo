@@ -159,8 +159,9 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			)
 			if err := em.handleTask(ctx, task); err != nil {
 				em.logger.Sugar().Errorw("Failed to handle task",
-					"taskId", task.TaskId,
-					"error", err,
+					zap.String("taskId", task.TaskId),
+					zap.Any("task", task),
+					zap.Error(err),
 				)
 			}
 		case <-ctx.Done():
