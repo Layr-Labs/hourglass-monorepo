@@ -17,10 +17,10 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     address public immutable ECDSA_CERTIFICATE_VERIFIER;
 
     /// @notice Global counter for tasks created across the TaskMailbox
-    uint256 internal globalTaskCount;
+    uint256 internal _globalTaskCount;
 
     /// @notice Mapping from task hash to task details
-    mapping(bytes32 taskHash => Task task) internal tasks;
+    mapping(bytes32 taskHash => Task task) internal _tasks;
 
     /// @notice Mapping to track registered executor operator sets by their keys
     mapping(bytes32 operatorSetKey => bool isRegistered) public isExecutorOperatorSetRegistered;

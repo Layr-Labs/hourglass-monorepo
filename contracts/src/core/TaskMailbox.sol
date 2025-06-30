@@ -116,10 +116,10 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         // Pre-task submission checks: AVS can validate the caller, operator set and task payload
         taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams.executorOperatorSet, taskParams.payload);
 
-        bytes32 taskHash = keccak256(abi.encode(globalTaskCount, address(this), block.chainid, taskParams));
-        globalTaskCount = globalTaskCount + 1;
+        bytes32 taskHash = keccak256(abi.encode(_globalTaskCount, address(this), block.chainid, taskParams));
+        _globalTaskCount = _globalTaskCount + 1;
 
-        tasks[taskHash] = Task(
+        _tasks[taskHash] = Task(
             msg.sender,
             block.timestamp.toUint96(),
             TaskStatus.CREATED,
@@ -161,7 +161,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
         // TODO: Handle case of anyone submitting a result with empty signature in the certificate.
 
-        Task storage task = tasks[taskHash];
+        Task storage task = _tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
         require(block.timestamp > task.creationTime, TimestampAtCreation());
@@ -268,7 +268,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskInfo(
         bytes32 taskHash
     ) external view returns (Task memory) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         return Task(
             task.creator,
             task.creationTime,
@@ -288,7 +288,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskStatus(
         bytes32 taskHash
     ) external view returns (TaskStatus) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         return _getTaskStatus(task);
     }
 
@@ -296,7 +296,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskResult(
         bytes32 taskHash
     ) external view returns (bytes memory) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.VERIFIED, InvalidTaskStatus(TaskStatus.VERIFIED, status));
         return task.result;
