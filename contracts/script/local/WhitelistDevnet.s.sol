@@ -20,16 +20,19 @@ contract SetupAVSMultichain is Script {
     function run() public {
         address ownerAddr = address(0xDA29BB71669f46F2a779b4b62f03644A84eE3479);
         uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
+        uint256 l2ChainId = uint256(vm.envUint("L2_CHAIN_ID"));
 
-        // TODO(seanmcgary): update to use later
-        // uint32 l2ChainId = uint32(vm.envUint("L2_CHAIN_ID"));
         // Holesky is 17000, but when we run anvil it becomes 31337, so we need to whitelist 31337 as valid
         vm.startBroadcast();
-        uint256[] memory chainIds = new uint256[](1);
+        uint256[] memory chainIds = new uint256[](2);
         chainIds[0] = l1ChainId;
+        chainIds[1] = l2ChainId;
 
-        address[] memory tableUpdaters = new address[](1);
+        address[] memory tableUpdaters = new address[](2);
+        // preprod holesky
         tableUpdaters[0] = address(0xd7230B89E5E2ed1FD068F0FF9198D7960243f12a);
+        // base sepolia
+        tableUpdaters[1] = address(0x798EB817B7C109c6780264D5161183809C817216);
 
         CROSS_CHAIN_REGISTRY.addChainIDsToWhitelist(chainIds, tableUpdaters);
 

@@ -4,9 +4,9 @@ go 1.23.6
 
 require (
 	github.com/Layr-Labs/crypto-libs v0.0.3
-	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250616202559-70e3fc0e60c8
+	github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250624142947-245d5fee7463
 	github.com/Layr-Labs/hourglass-monorepo/contracts v0.0.0-20250603132723-b0a53eef24e1
-	github.com/Layr-Labs/multichain-go v0.0.3
+	github.com/Layr-Labs/multichain-go v0.0.6-0.20250627041002-e6d73ee06afd
 	github.com/Layr-Labs/protocol-apis v1.14.0
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0

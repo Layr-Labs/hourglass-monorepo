@@ -29,40 +29,6 @@ var (
 	_ = abi.ConvertType
 )
 
-// BN254G1Point is an auto generated low-level Go binding around an user-defined struct.
-type BN254G1Point struct {
-	X *big.Int
-	Y *big.Int
-}
-
-// BN254G2Point is an auto generated low-level Go binding around an user-defined struct.
-type BN254G2Point struct {
-	X [2]*big.Int
-	Y [2]*big.Int
-}
-
-// IBN254CertificateVerifierTypesBN254Certificate is an auto generated low-level Go binding around an user-defined struct.
-type IBN254CertificateVerifierTypesBN254Certificate struct {
-	ReferenceTimestamp uint32
-	MessageHash        [32]byte
-	Signature          BN254G1Point
-	Apk                BN254G2Point
-	NonSignerWitnesses []IBN254CertificateVerifierTypesBN254OperatorInfoWitness
-}
-
-// IBN254CertificateVerifierTypesBN254OperatorInfoWitness is an auto generated low-level Go binding around an user-defined struct.
-type IBN254CertificateVerifierTypesBN254OperatorInfoWitness struct {
-	OperatorIndex     uint32
-	OperatorInfoProof []byte
-	OperatorInfo      IBN254TableCalculatorTypesBN254OperatorInfo
-}
-
-// IBN254TableCalculatorTypesBN254OperatorInfo is an auto generated low-level Go binding around an user-defined struct.
-type IBN254TableCalculatorTypesBN254OperatorInfo struct {
-	Pubkey  BN254G1Point
-	Weights []*big.Int
-}
-
 // OperatorSet is an auto generated low-level Go binding around an user-defined struct.
 type OperatorSet struct {
 	Avs common.Address
@@ -71,7 +37,7 @@ type OperatorSet struct {
 
 // IAVSTaskHookMetaData contains all meta data concerning the IAVSTaskHook contract.
 var IAVSTaskHookMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"handlePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"handleTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"tuple\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254Certificate\",\"components\":[{\"name\":\"referenceTimestamp\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"messageHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"signature\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"apk\",\"type\":\"tuple\",\"internalType\":\"structBN254.G2Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"},{\"name\":\"Y\",\"type\":\"uint256[2]\",\"internalType\":\"uint256[2]\"}]},{\"name\":\"nonSignerWitnesses\",\"type\":\"tuple[]\",\"internalType\":\"structIBN254CertificateVerifierTypes.BN254OperatorInfoWitness[]\",\"components\":[{\"name\":\"operatorIndex\",\"type\":\"uint32\",\"internalType\":\"uint32\"},{\"name\":\"operatorInfoProof\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"operatorInfo\",\"type\":\"tuple\",\"internalType\":\"structIBN254TableCalculatorTypes.BN254OperatorInfo\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}]}]}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"handlePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"handleTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"}]",
 }
 
 // IAVSTaskHookABI is the input ABI used to generate the binding from.
@@ -270,23 +236,23 @@ func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandlePostTaskCreation(taskH
 	return _IAVSTaskHook.Contract.HandlePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactor) HandleTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactor) HandleTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte, cert []byte) (*types.Transaction, error) {
 	return _IAVSTaskHook.contract.Transact(opts, "handleTaskResultSubmission", taskHash, cert)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookSession) HandleTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) HandleTaskResultSubmission(taskHash [32]byte, cert []byte) (*types.Transaction, error) {
 	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0x77edc4ac.
+// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, (uint32,bytes32,(uint256,uint256),(uint256[2],uint256[2]),(uint32,bytes,((uint256,uint256),uint256[]))[]) cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandleTaskResultSubmission(taskHash [32]byte, cert IBN254CertificateVerifierTypesBN254Certificate) (*types.Transaction, error) {
+// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandleTaskResultSubmission(taskHash [32]byte, cert []byte) (*types.Transaction, error) {
 	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
 }

@@ -158,7 +158,7 @@ fmtcheck:
 anvil/start/l1:
 	anvil \
 		--fork-url https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/ \
-		--fork-block-number 4015731 \
+		--fork-block-number 4070297 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2
@@ -166,8 +166,8 @@ anvil/start/l1:
 .PHONY: anvil/start
 anvil/start/l2:
 	anvil \
-		--fork-url https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/ \
-		--fork-block-number 30611001 \
+		--fork-url https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/ \
+		--fork-block-number 27614707 \
 		--load-state ./internal/testData/anvil-l2-state.json \
 		--chain-id 31338 \
 		--port 9545 \

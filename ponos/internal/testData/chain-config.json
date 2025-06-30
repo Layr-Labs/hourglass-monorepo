@@ -16,7 +16,9 @@
       "mailboxContractAddressL1": "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
       "mailboxContractAddressL2": "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
       "avsTaskRegistrarAddress": "0x5897a9b8b746c78e0cae876962796949832e3357",
-      "taskHookAddressL1": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
-      "taskHookAddressL2": "0x5897a9b8b746c78e0cae876962796949832e3357",
-      "destinationEnv": "anvil"
+      "avsTaskHookAddressL1": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+      "avsTaskHookAddressL2": "0x5897a9b8b746c78e0cae876962796949832e3357",
+      "destinationEnv": "anvil",
+      "forkL1Block": 4070297,
+      "forkL2Block": 27614707
 }

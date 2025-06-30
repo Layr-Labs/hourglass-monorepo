@@ -8,13 +8,9 @@ import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces
 import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 
 contract DeployTaskMailbox is Script {
-    // Eigenlayer Core Contracts
-    address public BN254_CERTIFICATE_VERIFIER = 0x824604a31b580Aec16D8Dd7ae9A27661Dc65cBA3;
-    address public ECDSA_CERTIFICATE_VERIFIER = 0x95A49cB0aED0e8f299223Da3A8A335440f5F00E7;
-
     function setUp() public {}
 
-    function run() public {
+    function run(address bn254CertVerifier, address ecdsaCertVerifier) public {
         // Load the private key from the environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOYER");
         address deployer = vm.addr(deployerPrivateKey);
@@ -27,11 +23,11 @@ contract DeployTaskMailbox is Script {
             new ITaskMailboxTypes.CertificateVerifierConfig[](2);
         certificateVerifiers[0] = ITaskMailboxTypes.CertificateVerifierConfig({
             curveType: IKeyRegistrarTypes.CurveType.BN254,
-            verifier: BN254_CERTIFICATE_VERIFIER
+            verifier: bn254CertVerifier
         });
         certificateVerifiers[1] = ITaskMailboxTypes.CertificateVerifierConfig({
             curveType: IKeyRegistrarTypes.CurveType.ECDSA,
-            verifier: ECDSA_CERTIFICATE_VERIFIER
+            verifier: ecdsaCertVerifier
         });
 
         TaskMailbox taskMailbox = new TaskMailbox(deployer, certificateVerifiers);

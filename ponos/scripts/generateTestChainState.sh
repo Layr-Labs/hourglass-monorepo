@@ -16,8 +16,8 @@ set -e
 # ethereum holesky
 L1_FORK_RPC_URL=https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/
 
-anvilL1ChinId=31337
-anvilL1StartBlock=4015731
+anvilL1ChainId=31337
+anvilL1StartBlock=4070297
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -25,10 +25,10 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 
 
 # base mainnet
-L2_FORK_RPC_URL=https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/
+L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
-anvilL2ChinId=31338
-anvilL2StartBlock=30611001
+anvilL2ChainId=31338
+anvilL2StartBlock=27614707
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -43,7 +43,7 @@ anvil \
     --fork-url $L1_FORK_RPC_URL \
     --dump-state $anvilL1DumpStatePath \
     --config-out $anvilL1ConfigPath \
-    --chain-id $anvilL1ChinId \
+    --chain-id $anvilL1ChainId \
     --port $anvilL1RpcPort \
     --block-time 2 \
     --fork-block-number $anvilL1StartBlock &
@@ -58,23 +58,32 @@ anvil \
     --fork-url $L2_FORK_RPC_URL \
     --dump-state $anvilL2DumpStatePath \
     --config-out $anvilL2ConfigPath \
-    --chain-id $anvilL2ChinId \
+    --chain-id $anvilL2ChainId \
     --port $anvilL2RpcPort \
     --fork-block-number $anvilL2StartBlock &
 anvilL2Pid=$!
 sleep 3
+
+function fundAccount() {
+    address=$1
+    echo "Funding address $address on L1"
+    cast rpc --rpc-url $anvilL1RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
+
+    echo "Funding address $address on L2"
+    cast rpc --rpc-url $anvilL2RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
+}
 
 # loop over the seed accounts (json array) and fund the accounts
 numAccounts=$(echo $seedAccounts | jq '. | length - 1')
 for i in $(seq 0 $numAccounts); do
     account=$(echo $seedAccounts | jq -r ".[$i]")
     address=$(echo $account | jq -r '.address')
-    echo "Funding address $address on L1"
-    cast rpc --rpc-url $anvilL1RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
 
-    echo "Funding address $address on L2"
-    cast rpc --rpc-url $anvilL2RpcUrl anvil_setBalance $address '0x21E19E0C9BAB2400000' # 10,000 ETH
+    fundAccount $address
 done
+
+# fund the account used for table transport
+fundAccount "0xD638d3779456898dff17EBFe5D62F5B7a92D61d7"
 
 
 # deployer account
@@ -132,13 +141,13 @@ export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
 echo "Deploying mailbox contract to L1..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
-mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" "0xf462d03A82C1F3496B0DFe27E978318eD1720E1f" "0xF9BDd6af3Fb02659101cbb776DC7cb4879c93d8A"
+mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddressL1"
 
 echo "Deploying mailbox contract to L2..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
-mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" "0x824604a31b580Aec16D8Dd7ae9A27661Dc65cBA3" "0x95A49cB0aED0e8f299223Da3A8A335440f5F00E7"
+mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddressL2"
 
 # -----------------------------------------------------------------------------
@@ -147,7 +156,7 @@ echo "Mailbox contract address: $mailboxContractAddressL2"
 echo "Deploying L1 AVS contract..."
 forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
 
-avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 echo "L1 AVS contract address: $l1ContractAddress"
 
 # -----------------------------------------------------------------------------
@@ -160,7 +169,8 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 # Setup L1 multichain
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
-export L1_CHAIN_ID=$anvilL1ChinId
+export L1_CHAIN_ID=$anvilL1ChainId
+export L2_CHAIN_ID=$anvilL2ChainId
 cast rpc anvil_impersonateAccount "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --rpc-url $L1_RPC_URL
 forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --unlocked --broadcast --sig "run()"
 forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
@@ -170,25 +180,11 @@ forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL 
 # -----------------------------------------------------------------------------
 echo "Deploying L2 contracts on L1..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
-taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
+taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 
 echo "Deploying L2 contracts on L2..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
-taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChinId/run-latest.json | jq -r '.transactions[0].contractAddress')
-
-# -----------------------------------------------------------------------------
-# Setup L1 task mailbox config
-# -----------------------------------------------------------------------------
-echo "Setting up L1 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL1 $taskHookAddressL1
-
-echo "Setting up L2 AVS..."
-forge script script/local/SetupAVSTaskMailboxConfig.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL2 $taskHookAddressL2
-
-# -----------------------------------------------------------------------------
-# Create test task
-# -----------------------------------------------------------------------------
-# forge script script/CreateTask.s.sol --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $mailboxContractAddressL1 $avsAccountAddress
+taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 
 # -----------------------------------------------------------------------------
 # Create operators
@@ -215,6 +211,7 @@ forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 
 
 cast rpc --rpc-url $L1_RPC_URL anvil_mine 10
+cast rpc --rpc-url $L2_RPC_URL anvil_mine 10
 
 echo "Ended at block number: "
 cast block-number
@@ -262,7 +259,9 @@ cat <<EOF > internal/testData/chain-config.json
       "mailboxContractAddressL1": "$mailboxContractAddressL1",
       "mailboxContractAddressL2": "$mailboxContractAddressL2",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
-      "taskHookAddressL1": "$taskHookAddressL1",
-      "taskHookAddressL2": "$taskHookAddressL2",
-      "destinationEnv": "anvil"
+      "avsTaskHookAddressL1": "$taskHookAddressL1",
+      "avsTaskHookAddressL2": "$taskHookAddressL2",
+      "destinationEnv": "anvil",
+      "forkL1Block": $anvilL1StartBlock,
+      "forkL2Block": $anvilL2StartBlock
 }

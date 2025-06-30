@@ -24,143 +24,24 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"math/big"
-	"os"
+	"sync"
 	"testing"
 	"time"
 )
 
-func Test_L1Mailbox(t *testing.T) {
-	const (
-		L1RpcUrl = "http://127.0.0.1:8545"
-	)
+func debugOpsetData(
+	t *testing.T,
+	chainConfig *testUtils.ChainConfig,
+	eigenlayerContractAddrs *config.CoreContractAddresses,
+	l1EthClient *ethclient.Client,
+	currentBlock uint64,
+) {
 
-	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
-	if err != nil {
-		t.Fatalf("Failed to create logger: %v", err)
-	}
-
-	root := testUtils.GetProjectRootPath()
-	t.Logf("Project root path: %s", root)
-
-	aggPrivateKey, _, err := bn254.GenerateKeyPair()
-	if err != nil {
-		t.Fatalf("Failed to generate key pair: %v", err)
-	}
-
-	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
-	if err != nil {
-		t.Fatalf("Failed to generate key pair: %v", err)
-	}
-
-	chainConfig, err := testUtils.ReadChainConfig(root)
-	if err != nil {
-		t.Fatalf("Failed to read chain config: %v", err)
-	}
-
-	coreContracts, err := eigenlayer.LoadContracts()
-	if err != nil {
-		t.Fatalf("Failed to load core contracts: %v", err)
-	}
-
-	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
-
-	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
-		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
-	}
-
-	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
-
-	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L1RpcUrl,
-		BlockType: ethereum.BlockType_Latest,
-	}, l)
-
-	logsChan := make(chan *chainPoller.LogWithBlock)
-
-	l1Poller := EVMChainPoller.NewEVMChainPoller(l1EthereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
-		ChainId:              config.ChainId_EthereumAnvil,
-		PollingInterval:      time.Duration(10) * time.Second,
-		InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
-	}, l)
-
-	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
-	if err != nil {
-		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
-	if err != nil {
-		t.Fatalf("Failed to start L1 Anvil: %v", err)
-	}
-
-	if os.Getenv("CI") == "" {
-		fmt.Printf("Sleeping for 10 seconds\n\n")
-		time.Sleep(10 * time.Second)
-	} else {
-		fmt.Printf("Sleeping for 30 seconds\n\n")
-		time.Sleep(30 * time.Second)
-	}
-	fmt.Println("Checking if l1Anvil is up and running...")
-
-	l1ChainId, err := l1EthClient.ChainID(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get L1 chain ID: %v", err)
-	}
-	t.Logf("L1 Chain ID: %s", l1ChainId.String())
-
-	eigenlayerContractAddrs, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
-	if err != nil {
-		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
-	}
-
-	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:                chainConfig.AppAccountPrivateKey,
-		AVSRegistrarAddress:       chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:        chainConfig.MailboxContractAddressL2,
-		CrossChainRegistryAddress: eigenlayerContractAddrs.CrossChainRegistry,
-		KeyRegistrarAddress:       eigenlayerContractAddrs.KeyRegistrar,
-	}, l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L2 contract caller: %v", err)
-	}
-
-	reservations, err := l1CC.GetActiveGenerationReservations()
-	if err != nil {
-		t.Fatalf("Failed to get active generation reservations: %v", err)
-	}
-	for _, reservation := range reservations {
-		fmt.Printf("Active generation reservation: %+v\n", reservation)
-	}
-
-	kr, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(eigenlayerContractAddrs.KeyRegistrar), l1EthClient)
-	if err != nil {
-		t.Fatalf("Failed to create key registrar: %v", err)
-	}
-
-	l.Sugar().Infow("Setting up operator peering",
-		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
-	)
-	err = testUtils.SetupOperatorPeering(
-		ctx,
-		chainConfig,
-		config.ChainId(l1ChainId.Uint64()),
-		l1EthClient,
-		aggPrivateKey,
-		execPrivateKey,
-		"localhost:9000",
-		l,
-	)
-	if err != nil {
-		t.Fatalf("Failed to set up operator peering: %v", err)
-	}
-
-	am, err := IAllocationManager.NewIAllocationManager(common.HexToAddress("0xfdd5749e11977d60850e06bf5b13221ad95eb6b4"), l1EthClient)
+	am, err := IAllocationManager.NewIAllocationManager(common.HexToAddress(eigenlayerContractAddrs.AllocationManager), l1EthClient)
 	if err != nil {
 		t.Fatalf("Failed to create allocation manager: %v", err)
 	}
@@ -169,9 +50,9 @@ func Test_L1Mailbox(t *testing.T) {
 		t.Fatalf("Failed to create cross chain registry: %v", err)
 	}
 
-	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	kr, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(eigenlayerContractAddrs.KeyRegistrar), l1EthClient)
 	if err != nil {
-		t.Fatalf("Failed to get current block number: %v", err)
+		t.Fatalf("Failed to create key registrar: %v", err)
 	}
 
 	for _, opsetId := range []uint32{0, 1} {
@@ -258,13 +139,182 @@ func Test_L1Mailbox(t *testing.T) {
 		}
 		fmt.Printf("Operator table bytes for operator set %d: %x\n", opsetId, tableBytes)
 
+		transportDest, err := ccr.GetTransportDestinations(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
+			Id:  opsetId,
+			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
+		})
+		if err != nil {
+			t.Fatalf("Failed to get transport destinations for operator set %d: %v", opsetId, err)
+		}
+		fmt.Printf("Transport destinations for avs/operator set %s %d: %+v\n", chainConfig.AVSAccountAddress, opsetId, transportDest)
 	}
+}
+
+func Test_L1Mailbox(t *testing.T) {
+	const (
+		L1RpcUrl = "http://127.0.0.1:8545"
+	)
+
+	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	if err != nil {
+		t.Fatalf("Failed to create logger: %v", err)
+	}
+
+	root := testUtils.GetProjectRootPath()
+	t.Logf("Project root path: %s", root)
+
+	aggPrivateKey, _, err := bn254.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("Failed to generate key pair: %v", err)
+	}
+
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
+	coreContracts, err := eigenlayer.LoadContracts()
+	if err != nil {
+		t.Fatalf("Failed to load core contracts: %v", err)
+	}
+
+	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
+
+	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
+		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
+	}
+
+	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
+
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RpcUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+
+	logsChan := make(chan *chainPoller.LogWithBlock)
+
+	l1Poller := EVMChainPoller.NewEVMChainPoller(l1EthereumClient, logsChan, tlp, &EVMChainPoller.EVMChainPollerConfig{
+		ChainId:              config.ChainId_EthereumAnvil,
+		PollingInterval:      time.Duration(10) * time.Second,
+		InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
+	}, l)
+
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	anvilWg := &sync.WaitGroup{}
+	anvilWg.Add(1)
+	startErrorsChan := make(chan error, 1)
+
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L1 Anvil: %v", err)
+	}
+
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	defer anvilCancel()
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
+
+	anvilWg.Wait()
+	close(startErrorsChan)
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Fatalf("Failed to start Anvil: %v", err)
+		}
+	}
+	anvilCancel()
+	t.Logf("Anvil is running")
+
+	l1ChainId, err := l1EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L1 chain ID: %v", err)
+	}
+	t.Logf("L1 Chain ID: %s", l1ChainId.String())
+
+	eigenlayerContractAddrs, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
+	if err != nil {
+		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
+	}
+
+	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:                chainConfig.AppAccountPrivateKey,
+		AVSRegistrarAddress:       chainConfig.AVSTaskRegistrarAddress, // technically not used...
+		TaskMailboxAddress:        chainConfig.MailboxContractAddressL2,
+		CrossChainRegistryAddress: eigenlayerContractAddrs.CrossChainRegistry,
+		KeyRegistrarAddress:       eigenlayerContractAddrs.KeyRegistrar,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 contract caller: %v", err)
+	}
+
+	reservations, err := l1CC.GetActiveGenerationReservations()
+	if err != nil {
+		t.Fatalf("Failed to get active generation reservations: %v", err)
+	}
+	for _, reservation := range reservations {
+		fmt.Printf("Active generation reservation: %+v\n", reservation)
+	}
+
+	l.Sugar().Infow("Setting up operator peering",
+		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
+	)
+	err = testUtils.SetupOperatorPeering(
+		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
+		l1EthClient,
+		aggPrivateKey,
+		execPrivateKey,
+		"localhost:9000",
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up operator peering: %v", err)
+	}
+
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+
+	debugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock)
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 	// transport the tables for good measure
-	testUtils.TransportL1Tables(l)
+	testUtils.TransportStakeTables(l, false)
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
+
+	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
+	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
+		[]uint32{1},
+		[]string{"bn254"},
+		avsCc,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
 
 	// update current block to account for transport
 	currentBlock, err = l1EthClient.BlockNumber(ctx)
@@ -288,8 +338,6 @@ func Test_L1Mailbox(t *testing.T) {
 		t.Fatalf("Failed to get operator table data: %v", err)
 	}
 	fmt.Printf("Operator table data: %+v\n", tableData)
-
-	// TODO(seanmcgary): need to actually set up operators and their keys in order to pass the certificate verifier
 
 	hasErrors := false
 	go func() {

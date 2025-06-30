@@ -5,16 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
+	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sync"
+	"testing"
 	"time"
 )
 
@@ -56,6 +60,8 @@ type ChainConfig struct {
 	MailboxContractAddressL1   string `json:"mailboxContractAddressL1"`
 	MailboxContractAddressL2   string `json:"mailboxContractAddressL2"`
 	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
+	AVSTaskHookAddressL1       string `json:"avsTaskHookAddressL1"`
+	AVSTaskHookAddressL2       string `json:"avsTaskHookAddressL2"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
@@ -90,11 +96,40 @@ func ReadTenderlyChainConfig(projectRoot string) (*ChainConfig, error) {
 	return cf, nil
 }
 
+func WaitForAnvil(
+	anvilWg *sync.WaitGroup,
+	ctx context.Context,
+	t *testing.T,
+	ethereumClient *ethereum.Client,
+	errorsChan chan error,
+) {
+	defer anvilWg.Done()
+	time.Sleep(2 * time.Second) // give anvil some time to start
+
+	for {
+		select {
+		case <-ctx.Done():
+			t.Logf("Failed to start l1Anvil: %v", ctx.Err())
+			errorsChan <- fmt.Errorf("failed to start l1Anvil: %w", ctx.Err())
+			return
+		case <-time.After(2 * time.Second):
+			t.Logf("Checking if anvil is up and running...")
+			block, err := ethereumClient.GetLatestBlock(ctx)
+			if err != nil {
+				t.Logf("Failed to get latest block, will retry: %v", err)
+				continue
+			}
+			t.Logf("L1 Anvil is up and running, latest block: %v", block)
+			return
+		}
+	}
+}
+
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "4015731"
+	forkBlockNumber := "4070297"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -121,10 +156,10 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 }
 
 func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	forkUrl := "https://few-sly-dew.base-mainnet.quiknode.pro/eaecd36554bb2845570742c4e7aeda6f7dd0d5c1/"
+	forkUrl := "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "30611001"
+	forkBlockNumber := "27614707"
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
@@ -238,14 +273,14 @@ func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chain
 	}
 
 	existingL2MailboxContract := util.Find(allContracts, func(c *contracts.Contract) bool {
-		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_BaseAnvil
+		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_BaseSepoliaAnvil
 	})
 	if existingL2MailboxContract == nil {
 		return fmt.Errorf("existing mailbox contract not found for chain ID %d", config.ChainId_EthereumAnvil)
 	}
-	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_BaseAnvil}, &contracts.Contract{
+	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_BaseSepoliaAnvil}, &contracts.Contract{
 		Address:     chainConfig.MailboxContractAddressL2,
-		AbiVersions: existingL1MailboxContract.AbiVersions,
+		AbiVersions: existingL2MailboxContract.AbiVersions,
 	}); err != nil {
 		return fmt.Errorf("failed to override mailbox contract: %w", err)
 	}
@@ -257,13 +292,29 @@ const (
 	transportBlsPrivateKey   = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
 )
 
-func TransportL1Tables(l *zap.Logger) {
+func TransportStakeTables(l *zap.Logger, includeL2 bool) {
+	chainIdsToIgnore := []*big.Int{
+		new(big.Int).SetUint64(17000), // holesky
+		new(big.Int).SetUint64(84532), // base sepolia
+	}
+
+	var l2RpcUrl string
+	var l2ChainId uint64
+	if includeL2 {
+		l2RpcUrl = "http://localhost:9545"
+		l2ChainId = 31338
+	} else {
+		chainIdsToIgnore = append(chainIdsToIgnore, new(big.Int).SetUint64(31338))
+	}
 	tableTransporter.TransportTable(
 		transportEcdsaPrivateKey,
 		"http://localhost:8545",
 		31337,
+		l2RpcUrl,
+		l2ChainId,
 		"0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
 		transportBlsPrivateKey,
+		chainIdsToIgnore,
 		l,
 	)
 }
