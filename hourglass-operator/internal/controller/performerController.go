@@ -106,9 +106,9 @@ func (r *PerformerReconciler) reconcilePod(ctx context.Context, performer *v1alp
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pod, func() error {
 		// Generate labels for pod
 		labels := map[string]string{
-			"app":                                "hourglass-performer",
-			"hourglass.eigenlayer.io/performer":  performer.Name,
-			"hourglass.eigenlayer.io/avs":        r.sanitizeLabel(performer.Spec.AVSAddress),
+			"app":                               "hourglass-performer",
+			"hourglass.eigenlayer.io/performer": performer.Name,
+			"hourglass.eigenlayer.io/avs":       r.sanitizeLabel(performer.Spec.AVSAddress),
 		}
 
 		pod.Labels = labels
@@ -188,7 +188,9 @@ func (r *PerformerReconciler) reconcilePod(ctx context.Context, performer *v1alp
 		// Apply scheduling constraints
 		if performer.Spec.Scheduling != nil {
 			pod.Spec.NodeSelector = performer.Spec.Scheduling.NodeSelector
-			pod.Spec.NodeAffinity = performer.Spec.Scheduling.NodeAffinity
+			pod.Spec.Affinity = &corev1.Affinity{
+				NodeAffinity: performer.Spec.Scheduling.NodeAffinity,
+			}
 			pod.Spec.Tolerations = performer.Spec.Scheduling.Tolerations
 			if performer.Spec.Scheduling.RuntimeClass != nil {
 				pod.Spec.RuntimeClassName = performer.Spec.Scheduling.RuntimeClass
@@ -269,7 +271,7 @@ func (r *PerformerReconciler) updateStatus(ctx context.Context, performer *v1alp
 
 	// Set service information
 	performer.Status.ServiceName = r.getServiceName(performer)
-	performer.Status.GRPCEndpoint = fmt.Sprintf("%s.%s.svc.cluster.local", 
+	performer.Status.GRPCEndpoint = fmt.Sprintf("%s.%s.svc.cluster.local",
 		performer.Status.ServiceName, performer.Namespace)
 
 	return r.Status().Update(ctx, performer)
@@ -308,7 +310,7 @@ func (r *PerformerReconciler) applyHardwareRequirements(container *corev1.Contai
 			// Use specific GPU type resource if specified
 			gpuResource = corev1.ResourceName(fmt.Sprintf("nvidia.com/%s", hw.GPUType))
 		}
-		
+
 		gpuQuantity := resource.MustParse(fmt.Sprintf("%d", hw.GPUCount))
 		container.Resources.Limits[gpuResource] = gpuQuantity
 		container.Resources.Requests[gpuResource] = gpuQuantity
