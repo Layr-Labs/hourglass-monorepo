@@ -791,7 +791,7 @@ func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.Perform
 		)
 		return err
 	}
-	
+
 	// TODO(seanmcgary): this should query for aggregator peers on demand to ensure we have the latest set
 	// stake weight or chain doesnt particularly matter here, we just want to make sure its any aggregator in
 	// the aggregator operator set.
