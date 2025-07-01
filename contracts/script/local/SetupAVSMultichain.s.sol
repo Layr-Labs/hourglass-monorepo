@@ -10,11 +10,16 @@ import {
 } from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
 import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {IECDSATableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSATableCalculator.sol";
+import {BLSApkRegistry} from "../../lib/eigenlayer-middleware/src/BLSApkRegistry.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
     IBN254TableCalculator public BN254_TABLE_CALCULATOR =
-        IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
+        IBN254TableCalculator(0xc2c0bc13571aC5115709C332dc7AE666606b08E8);
+
+    IECDSATableCalculator public ECDSA_TABLE_CALCULATOR =
+        IECDSATableCalculator(0x5612Fd146C2d40f1269E0e73945A534ec706dCDc);
 
     function setUp() public {}
 
@@ -41,7 +46,13 @@ contract SetupAVSMultichain is Script {
                 maxStalenessPeriod: 604_800 // 1 week
             });
 
-            CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config, chainIds);
+            // aggregator is bn254, executor is ecdsa
+            if (i == 0) {
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config, chainIds);
+            } else {
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config, chainIds);
+            }
+
             console.log("Generation reservation created for operator set", i);
         }
 

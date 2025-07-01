@@ -6,7 +6,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {IDelegationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 
 contract SetupOperators is Script {
-    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x75dfE5B44C2E530568001400D3f704bC8AE350CC);
+    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
 
     function setUp() public {}
 
@@ -17,13 +17,15 @@ contract SetupOperators is Script {
         uint256 executorPrivateKey = vm.envUint("EXECUTOR_PRIVATE_KEY");
         address executorAddr = vm.addr(executorPrivateKey);
 
+        address zeroAddress = address(0);
+
         vm.startBroadcast(aggregatorPrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(aggregatorAddr, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
         console.log("Aggregator registered as operator:", aggregatorAddr);
         vm.stopBroadcast();
 
         vm.startBroadcast(executorPrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(executorAddr, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
         console.log("Executor registered as operator:", executorAddr);
         vm.stopBroadcast();
 

@@ -3,85 +3,199 @@ package executor
 import (
 	"context"
 	"fmt"
-
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"math/big"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
-	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Executor(t *testing.T) {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+const (
+	L1RpcUrl = "http://127.0.0.1:8545"
+)
+
+func testWithKeyType(
+	t *testing.T,
+	curveType config.CurveType,
+	executorConfigYaml string,
+	aggregatorConfigYaml string,
+) {
+	t.Logf("Running test with curve type: %s", curveType)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(240*time.Second))
 
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 
-	// executor setup
+	root := testUtils.GetProjectRootPath()
+	t.Logf("Project root path: %s", root)
+
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
+	// ------------------------------------------------------------------------
+	// Executor setup
+	// ------------------------------------------------------------------------
 	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(executorConfigYaml))
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
+	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
+	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
-	storedKeys, err := keystore.ParseKeystoreJSON(execConfig.Operator.SigningKeys.BLS.Keystore)
+	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
 	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
+	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, config.CurveTypeECDSA)
 
-	privateSigningKey, err := storedKeys.GetBN254PrivateKey(execConfig.Operator.SigningKeys.BLS.Password)
-	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
-	}
-
-	execSigner := inMemorySigner.NewInMemorySigner(privateSigningKey)
-
-	// aggregator setup
+	// ------------------------------------------------------------------------
+	// Aggregator setup
+	// ------------------------------------------------------------------------
 	simAggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggregatorConfigYaml))
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
+	simAggConfig.Operator.SigningKeys.ECDSA = chainConfig.OperatorAccountPrivateKey
+	simAggConfig.Operator.Address = chainConfig.OperatorAccountAddress
+	simAggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
+	simAggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 
-	aggStoredKeys, err := keystore.ParseKeystoreJSON(simAggConfig.Operator.SigningKeys.BLS.Keystore)
+	aggBn254PrivateSigningKey, _, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(simAggConfig.Operator, config.CurveTypeBN254)
 	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
+	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, config.CurveTypeBN254)
 
-	aggPrivateSigningKey, err := aggStoredKeys.GetBN254PrivateKey(simAggConfig.Operator.SigningKeys.BLS.Password)
-	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
-	}
-
-	pubKey := aggPrivateSigningKey.Public()
-	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-		AggregatorPeers: []*peering.OperatorPeerInfo{
-			{
-				OperatorAddress: simAggConfig.Operator.Address,
-				OperatorSets: []*peering.OperatorSet{
-					{
-						OperatorSetID:  0,
-						PublicKey:      pubKey,
-						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
-					},
-				},
-			},
-		},
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RpcUrl,
+		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
-	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf)
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get L1 Ethereum contract caller: %v", err)
+	}
+
+	anvilWg := &sync.WaitGroup{}
+	anvilWg.Add(1)
+	startErrorsChan := make(chan error, 1)
+
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	defer anvilCancel()
+
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L1 Anvil: %v", err)
+	}
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
+
+	anvilWg.Wait()
+	close(startErrorsChan)
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Fatalf("Failed to start Anvil: %v", err)
+		}
+	}
+	anvilCancel()
+	t.Logf("Anvil is running")
+
+	l1ChainId, err := l1EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L1 chain ID: %v", err)
+	}
+	t.Logf("L1 Chain ID: %s", l1ChainId.String())
+
+	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AppAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 contract caller: %v", err)
+	}
+
+	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
+	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
+	aggOpsetId := uint32(0)
+	execOpsetId := uint32(1)
+
+	err = testUtils.SetupOperatorPeering(
+		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
+		l1EthClient,
+		// aggregator is BN254
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			SigningPrivateKey:     aggBn254PrivateSigningKey,
+			Curve:                 config.CurveTypeBN254,
+			OperatorSetIds:        []uint32{aggOpsetId},
+		},
+		// executor is ecdsa
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
+			SigningPrivateKey:     execEcdsaPrivateSigningKey,
+			Curve:                 config.CurveTypeECDSA,
+			OperatorSetIds:        []uint32{execOpsetId},
+		},
+		"localhost:9000",
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up operator peering: %v", err)
+	}
+
+	err = testUtils.DelegateStakeToOperators(
+		t,
+		ctx,
+		&testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.AggStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			OperatorAddress:    chainConfig.OperatorAccountAddress,
+			OperatorSetId:      0,
+			StrategyAddress:    testUtils.Strategy_WETH,
+		},
+		&testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.ExecStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.ExecOperatorAccountPk,
+			OperatorAddress:    chainConfig.ExecOperatorAccountAddress,
+			OperatorSetId:      1,
+			StrategyAddress:    testUtils.Strategy_STETH,
+		},
+		chainConfig.AVSAccountAddress,
+		l1EthClient,
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to operators: %v", err)
+	}
+
+	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
+
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf, l1CC)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
@@ -89,8 +203,6 @@ func Test_Executor(t *testing.T) {
 	if err := exec.Initialize(ctx); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
 	}
-
-	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
 
 	success := atomic.Bool{}
 	success.Store(false)
@@ -111,14 +223,18 @@ func Test_Executor(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
+	payloadHash := util.GetKeccak256Digest(payloadJsonBytes)
 
+	payloadSig, err := aggSigner.SignMessage(payloadHash[:])
 	if err != nil {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
 
+	taskId := "0x0000000000000000000000000000000000000000000000000000000000000001"
+
+	// send the task to the executor
 	taskResult, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-		TaskId:            "0x1234taskId",
+		TaskId:            taskId,
 		AggregatorAddress: simAggConfig.Operator.Address,
 		AvsAddress:        simAggConfig.Avss[0].Address,
 		Payload:           payloadJsonBytes,
@@ -131,11 +247,30 @@ func Test_Executor(t *testing.T) {
 	}
 	assert.NotNil(t, taskResult)
 
-	sig, err := bn254.NewSignatureFromBytes(taskResult.Signature)
-	assert.Nil(t, err)
-
-	digest := util.GetKeccak256Digest(taskResult.Output)
-	verified, err := sig.VerifySolidityCompatible(privateSigningKey.Public(), digest)
+	verified := false
+	if curveType == config.CurveTypeBN254 {
+		sig, err := bn254.NewSignatureFromBytes(taskResult.Signature)
+		assert.Nil(t, err)
+		var outputDigest [32]byte
+		copy(outputDigest[:], taskResult.OutputDigest)
+		verified, err = sig.VerifySolidityCompatible(execBn254PrivateSigningKey.Public(), outputDigest)
+		if err != nil {
+			t.Errorf("Failed to verify BLS signature: %v", err)
+		}
+	} else if curveType == config.CurveTypeECDSA {
+		sig, err := cryptoLibsEcdsa.NewSignatureFromBytes(taskResult.Signature)
+		assert.Nil(t, err)
+		derivedAddress, err := execEcdsaPrivateSigningKey.DeriveAddress()
+		if err != nil {
+			t.Errorf("Failed to derive ECDSA address: %v", err)
+		}
+		verified, err = sig.VerifyWithAddress(taskResult.OutputDigest, derivedAddress)
+		if err != nil {
+			t.Errorf("Failed to verify ECDSA signature: %v", err)
+		}
+	} else {
+		t.Errorf("Unsupported curve type: %s", curveType)
+	}
 	assert.Nil(t, err)
 	assert.True(t, verified)
 	cancel()
@@ -143,7 +278,19 @@ func Test_Executor(t *testing.T) {
 
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
-	time.Sleep(3 * time.Second)
+
+	_ = l1Anvil.Process.Kill()
+}
+
+func Test_Executor(t *testing.T) {
+	// t.Run("BN254", func(t *testing.T) {
+	// 	t.Skip("Executor is only setup as ECDSA for now")
+	// 	testWithKeyType(t, config.CurveTypeBN254, executorConfigYaml, aggregatorConfigYaml)
+	// })
+	t.Run("ECDSA", func(t *testing.T) {
+		testWithKeyType(t, config.CurveTypeECDSA, executorConfigYaml, aggregatorConfigYaml)
+	})
+
 }
 
 const (

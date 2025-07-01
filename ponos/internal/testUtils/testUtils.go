@@ -49,19 +49,23 @@ func GetProjectRootPath() string {
 }
 
 type ChainConfig struct {
-	AVSAccountAddress          string `json:"avsAccountAddress"`
-	AVSAccountPrivateKey       string `json:"avsAccountPk"`
-	AppAccountAddress          string `json:"appAccountAddress"`
-	AppAccountPrivateKey       string `json:"appAccountPk"`
-	OperatorAccountPrivateKey  string `json:"operatorAccountPk"`
-	OperatorAccountAddress     string `json:"operatorAccountAddress"`
-	ExecOperatorAccountPk      string `json:"execOperatorAccountPk"`
-	ExecOperatorAccountAddress string `json:"execOperatorAccountAddress"`
-	MailboxContractAddressL1   string `json:"mailboxContractAddressL1"`
-	MailboxContractAddressL2   string `json:"mailboxContractAddressL2"`
-	AVSTaskRegistrarAddress    string `json:"avsTaskRegistrarAddress"`
-	AVSTaskHookAddressL1       string `json:"avsTaskHookAddressL1"`
-	AVSTaskHookAddressL2       string `json:"avsTaskHookAddressL2"`
+	AVSAccountAddress           string `json:"avsAccountAddress"`
+	AVSAccountPrivateKey        string `json:"avsAccountPk"`
+	AppAccountAddress           string `json:"appAccountAddress"`
+	AppAccountPrivateKey        string `json:"appAccountPk"`
+	OperatorAccountPrivateKey   string `json:"operatorAccountPk"`
+	OperatorAccountAddress      string `json:"operatorAccountAddress"`
+	ExecOperatorAccountPk       string `json:"execOperatorAccountPk"`
+	ExecOperatorAccountAddress  string `json:"execOperatorAccountAddress"`
+	MailboxContractAddressL1    string `json:"mailboxContractAddressL1"`
+	MailboxContractAddressL2    string `json:"mailboxContractAddressL2"`
+	AVSTaskRegistrarAddress     string `json:"avsTaskRegistrarAddress"`
+	AVSTaskHookAddressL1        string `json:"avsTaskHookAddressL1"`
+	AVSTaskHookAddressL2        string `json:"avsTaskHookAddressL2"`
+	AggStakerAccountPrivateKey  string `json:"aggStakerAccountPk"`
+	AggStakerAccountAddress     string `json:"aggStakerAccountAddress"`
+	ExecStakerAccountPrivateKey string `json:"execStakerAccountPk"`
+	ExecStakerAccountAddress    string `json:"execStakerAccountAddress"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
@@ -126,10 +130,10 @@ func WaitForAnvil(
 }
 
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	forkUrl := "https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/"
+	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "4070297"
+	forkBlockNumber := "8712202"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -159,7 +163,7 @@ func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "27614707"
+	forkBlockNumber := "28063258"
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
@@ -287,15 +291,20 @@ func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chain
 	return nil
 }
 
-const (
-	transportEcdsaPrivateKey = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
-	transportBlsPrivateKey   = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
-)
+// var (
+// 	transportEcdsaPrivateKey = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
+// )
 
 func TransportStakeTables(l *zap.Logger, includeL2 bool) {
+	transportBlsPrivateKey := os.Getenv("HOURGLASS_TRANSPORT_BLS_KEY")
+	if transportBlsPrivateKey == "" {
+		panic("HOURGLASS_TRANSPORT_BLS_KEY environment variable is not set")
+	}
+	transportEcdsaPrivateKey := transportBlsPrivateKey
 	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(17000), // holesky
-		new(big.Int).SetUint64(84532), // base sepolia
+		new(big.Int).SetUint64(11155111), // eth sepolia
+		new(big.Int).SetUint64(17000),    // holesky
+		new(big.Int).SetUint64(84532),    // base sepolia
 	}
 
 	var l2RpcUrl string
@@ -312,7 +321,7 @@ func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 		31337,
 		l2RpcUrl,
 		l2ChainId,
-		"0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
+		"0xe850D8A178777b483D37fD492a476e3E6004C816",
 		transportBlsPrivateKey,
 		chainIdsToIgnore,
 		l,

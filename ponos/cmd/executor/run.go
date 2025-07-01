@@ -62,7 +62,8 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to get private key: %w", err)
 		}
 
-		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
+		// TODO(seanmcgary): update this
+		sig := inMemorySigner.NewInMemorySigner(privateSigningKey, config.CurveTypeBN254)
 
 		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 			GrpcPort: Config.GrpcPort,
@@ -101,9 +102,24 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		protocolContractAddresses, err := config.GetCoreContractsForChainId(Config.L1Chain.ChainId)
+		ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+			BaseUrl: Config.L1Chain.RpcUrl,
+		}, l)
+
+		mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
+			return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
+		})
+		if mailboxContract == nil {
+			return fmt.Errorf("task mailbox contract not found")
+		}
+
+		cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
+			PrivateKey:          "",
+			AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
+			TaskMailboxAddress:  mailboxContract.Address,
+		}, ethereumClient, l)
 		if err != nil {
-			l.Sugar().Fatalw("Failed to get protocol contract addresses", zap.Error(err))
+			return fmt.Errorf("failed to initialize contract caller: %w", err)
 		}
 
 		var pdf peering.IPeeringDataFetcher
@@ -116,31 +132,11 @@ var runCmd = &cobra.Command{
 				AggregatorPeers: simulatedPeers,
 			}, l)
 		} else {
-			ethereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-				BaseUrl: Config.L1Chain.RpcUrl,
-			}, l)
-
-			mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
-				return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
-			})
-			if mailboxContract == nil {
-				return fmt.Errorf("task mailbox contract not found")
-			}
-
-			cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-				PrivateKey:          "",
-				AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
-				TaskMailboxAddress:  mailboxContract.Address,
-				KeyRegistrarAddress: protocolContractAddresses.KeyRegistrar,
-			}, ethereumClient, l)
-			if err != nil {
-				return fmt.Errorf("failed to initialize contract caller: %w", err)
-			}
 
 			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf, cc)
 
 		ctx, cancel := context.WithCancel(context.Background())
 

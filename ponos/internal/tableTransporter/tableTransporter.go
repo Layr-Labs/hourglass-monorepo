@@ -29,16 +29,16 @@ func TransportTable(
 
 	cm := chainManager.NewChainManager()
 
-	holeskyAnvilConfig := &chainManager.ChainConfig{
+	l1AnvilConfig := &chainManager.ChainConfig{
 		ChainID: l1ChainId,
 		RPCUrl:  l1RpcUrl,
 	}
-	if err := cm.AddChain(holeskyAnvilConfig); err != nil {
+	if err := cm.AddChain(l1AnvilConfig); err != nil {
 		l.Sugar().Fatalf("Failed to add chain: %v", err)
 	}
-	holeskyClient, err := cm.GetChainForId(holeskyAnvilConfig.ChainID)
+	holeskyClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
 	if err != nil {
-		l.Sugar().Fatalf("Failed to get chain for ID %d: %v", holeskyAnvilConfig.ChainID, err)
+		l.Sugar().Fatalf("Failed to get chain for ID %d: %v", l1AnvilConfig.ChainID, err)
 	}
 
 	if l2RpcUrl != "" && l2ChainId != 0 {

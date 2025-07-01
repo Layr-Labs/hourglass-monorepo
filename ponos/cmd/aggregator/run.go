@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -59,7 +60,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to get private key: %w", err)
 		}
 
-		sig := inMemorySigner.NewInMemorySigner(privateSigningKey)
+		sig := inMemorySigner.NewInMemorySigner(privateSigningKey, config.CurveTypeBN254)
 
 		// load the contracts and create the store
 		var coreContracts []*contracts.Contract

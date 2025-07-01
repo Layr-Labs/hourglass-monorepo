@@ -74,6 +74,7 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           
           echo "Running tests"
+          export HOURGLASS_TRANSPORT_BLS_KEY="${{ secrets.HOURGLASS_TRANSPORT_BLS_KEY }}"
           make ci-test
   build-container:
     runs-on: protocol-gha-runners-hourglass

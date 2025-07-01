@@ -6,6 +6,47 @@ import (
 	"slices"
 )
 
+type CurveType string
+
+func (c CurveType) String() string {
+	return string(c)
+}
+func (c CurveType) Uint8() (uint8, error) {
+	return ConvertCurveTypeToSolidityEnum(c)
+}
+
+const (
+	CurveTypeUnknown CurveType = "unknown"
+	CurveTypeECDSA   CurveType = "ecdsa"
+	CurveTypeBN254   CurveType = "bn254" // BN254 is the only supported curve type for now
+)
+
+func ConvertCurveTypeToSolidityEnum(curveType CurveType) (uint8, error) {
+	switch curveType {
+	case CurveTypeUnknown:
+		return 0, nil
+	case CurveTypeECDSA:
+		return 1, nil
+	case CurveTypeBN254:
+		return 2, nil
+	default:
+		return 0, fmt.Errorf("unsupported curve type: %s", curveType)
+	}
+}
+
+func ConvertSolidityEnumToCurveType(enumValue uint8) (CurveType, error) {
+	switch enumValue {
+	case 0:
+		return CurveTypeUnknown, nil
+	case 1:
+		return CurveTypeECDSA, nil
+	case 2:
+		return CurveTypeBN254, nil
+	default:
+		return "", fmt.Errorf("unsupported curve type enum value: %d", enumValue)
+	}
+}
+
 type ChainId uint
 
 const (
@@ -28,7 +69,7 @@ const (
 )
 
 var EthereumSimulationContracts = CoreContractAddresses{
-	AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
+	AllocationManager: "0x42583067658071247ec8CE0A516A58f682002d07",
 	TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 }
 
@@ -42,18 +83,20 @@ func IsL1Chain(chainId ChainId) bool {
 }
 
 type CoreContractAddresses struct {
-	AllocationManager  string
-	DelegationManager  string
-	TaskMailbox        string
-	KeyRegistrar       string
-	CrossChainRegistry string
+	AllocationManager        string
+	DelegationManager        string
+	TaskMailbox              string
+	KeyRegistrar             string
+	CrossChainRegistry       string
+	ECDSACertificateVerifier string
+	BN254CertificateVerifier string
 }
 
 var (
 	CoreContracts = map[ChainId]*CoreContractAddresses{
 		ChainId_EthereumMainnet: {
-			AllocationManager: "0x948a420b8cc1d6bfd0b6087c2e7c344a2cd0bc39",
-			DelegationManager: "0x39053d51b77dc0d36036fc1fcc8cb819df8ef37a",
+			AllocationManager: "0x42583067658071247ec8CE0A516A58f682002d07",
+			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
 			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
 		ChainId_EthereumHolesky: {
@@ -66,15 +109,20 @@ var (
 			DelegationManager: "",
 			TaskMailbox:       "0xtaskMailbox",
 		},
+		// fork of ethereum sepolia
 		ChainId_EthereumAnvil: {
-			AllocationManager:  "0xfdd5749e11977d60850e06bf5b13221ad95eb6b4",
-			DelegationManager:  "0x75dfe5b44c2e530568001400d3f704bc8ae350cc",
-			TaskMailbox:        "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
-			KeyRegistrar:       "0x1c84bb62fe7791e173014a879c706445fa893bbe",
-			CrossChainRegistry: "0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F",
+			AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
+			DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+			TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+			KeyRegistrar:             "0x78de554ac8dff368e3caa73b3df8acccfd92928a",
+			CrossChainRegistry:       "0xe850d8a178777b483d37fd492a476e3e6004c816",
+			ECDSACertificateVerifier: "0xad2f58a551bd0e77fa20b5531da96ef440c392bf",
+			BN254CertificateVerifier: "0x998535833f3fee44ce720440e735554699f728a5",
 		},
 		ChainId_BaseSepoliaAnvil: {
-			TaskMailbox: "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
+			TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+			ECDSACertificateVerifier: "0xad2f58a551bd0e77fa20b5531da96ef440c392bf",
+			BN254CertificateVerifier: "0x998535833f3fee44ce720440e735554699f728a5",
 		},
 	}
 )
@@ -111,9 +159,11 @@ func GetContractsMapForChain(chainId ChainId) *CoreContractAddresses {
 }
 
 type OperatorConfig struct {
-	Address            string      `json:"address" yaml:"address"`
-	OperatorPrivateKey string      `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
-	SigningKeys        SigningKeys `json:"signingKeys" yaml:"signingKeys"`
+	Address string `json:"address" yaml:"address"`
+	// OperatorPrivateKey is the private key of the operator used for signing transactions
+	OperatorPrivateKey string `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
+	// SigningKeys contains the signing keys for the operator (BLS or ECDSA)
+	SigningKeys SigningKeys `json:"signingKeys" yaml:"signingKeys"`
 }
 
 func (oc *OperatorConfig) Validate() error {
@@ -153,7 +203,8 @@ func (sk *SigningKey) Validate() error {
 }
 
 type SigningKeys struct {
-	BLS *SigningKey `json:"bls"`
+	BLS   *SigningKey `json:"bls"`
+	ECDSA string      `json:"ecdsa"`
 }
 
 func (sk *SigningKeys) Validate() error {

@@ -1,7 +1,11 @@
 package util
 
 import (
+	"crypto/ecdsa"
 	"encoding/base64"
+	"fmt"
+	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"strings"
@@ -153,4 +157,19 @@ func BigIntToHex(i *big.Int) []byte {
 		hexStr = "0" + hexStr
 	}
 	return []byte("0x" + hexStr)
+}
+
+func DeriveAddressFromECDSAPrivateKeyString(key string) (common.Address, error) {
+	pk, err := cryptoUtils.StringToECDSAPrivateKey(key)
+	if err != nil {
+		return common.Address{0}, fmt.Errorf("failed to convert operator private key: %v", err)
+	}
+	return DeriveAddressFromECDSAPrivateKey(pk)
+}
+
+func DeriveAddressFromECDSAPrivateKey(pk *ecdsa.PrivateKey) (common.Address, error) {
+	if pk == nil {
+		return common.Address{0}, fmt.Errorf("private key is nil")
+	}
+	return cryptoUtils.DeriveAddress(pk.PublicKey), nil
 }

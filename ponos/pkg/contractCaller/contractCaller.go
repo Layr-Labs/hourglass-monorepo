@@ -16,24 +16,6 @@ type AVSConfig struct {
 	ExecutorOperatorSetIds  []uint32
 }
 
-type ExecutorOperatorSetTaskConfig struct {
-	CertificateVerifier      string
-	TaskHook                 string
-	FeeToken                 string
-	FeeCollector             string
-	TaskSLA                  *big.Int
-	StakeProportionThreshold uint16
-	TaskMetadata             []byte
-}
-
-type CurveType uint8
-
-const (
-	CurveTypeUnknown CurveType = 0 // Unknown curve type
-	CurveTypeECDSA   CurveType = 1
-	CurveTypeBN254   CurveType = 2 // BN254 is the only supported curve type for now
-)
-
 type OperatorTableData struct {
 	OperatorWeights            [][]*big.Int
 	Operators                  []common.Address
@@ -48,56 +30,39 @@ type LatestReferenceTimeAndBlock struct {
 }
 
 type IContractCaller interface {
-	SubmitTaskResult(
+	SubmitBN254TaskResult(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedCertificate,
+		aggCert *aggregation.AggregatedBN254Certificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	SubmitTaskResultRetryable(
+	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedCertificate,
+		aggCert *aggregation.AggregatedBN254Certificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SubmitECDSATaskResult(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedECDSACertificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SubmitECDSATaskResultRetryable(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedECDSACertificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
+
+	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error)
 
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
 
 	GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error)
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
-
-	GetOperatorRegistrationMessageHash(
-		ctx context.Context,
-		operatorAddress common.Address,
-		avsAddress common.Address,
-		operatorSetId uint32,
-		keyData []byte,
-	) ([32]byte, error)
-
-	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType CurveType) (*ethereumTypes.Receipt, error)
-
-	RegisterKeyWithKeyRegistrar(
-		ctx context.Context,
-		operatorAddress common.Address,
-		avsAddress common.Address,
-		operatorSetId uint32,
-		signature *bn254.Signature,
-		keyData []byte,
-	) (*ethereumTypes.Receipt, error)
-
-	CreateOperatorAndRegisterWithAvs(
-		ctx context.Context,
-		avsAddress common.Address,
-		operatorAddress common.Address,
-		operatorSetIds []uint32,
-		socket string,
-		allocationDelay uint32,
-		metadataUri string,
-	) (*ethereumTypes.Receipt, error)
-
-	EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error)
 
 	GetOperatorTableDataForOperatorSet(
 		ctx context.Context,
@@ -115,11 +80,56 @@ type IContractCaller interface {
 
 	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
 
+	CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error)
+
+	// ------------------------------------------------------------------------
+	// Helper functions for test setup
+	// ------------------------------------------------------------------------
+
+	GetOperatorBN254KeyRegistrationMessageHash(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		keyData []byte,
+	) ([32]byte, error)
+
+	GetOperatorECDSAKeyRegistrationMessageHash(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		signingKeyAddress common.Address,
+	) ([32]byte, error)
+
+	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType) (*ethereumTypes.Receipt, error)
+
+	RegisterKeyWithKeyRegistrar(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		sigBytes []byte,
+		keyData []byte,
+	) (*ethereumTypes.Receipt, error)
+
+	CreateOperatorAndRegisterWithAvs(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorAddress common.Address,
+		operatorSetIds []uint32,
+		socket string,
+		allocationDelay uint32,
+		metadataUri string,
+	) (*ethereumTypes.Receipt, error)
+
+	EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error)
+
 	SetupTaskMailboxForAvs(
 		ctx context.Context,
 		avsAddress common.Address,
 		taskHookAddress common.Address,
 		executorOperatorSetIds []uint32,
-		curveTypes []string,
+		curveTypes []config.CurveType,
 	) error
 }

@@ -21,6 +21,6 @@ func StringToECDSAPrivateKey(pk string) (*ecdsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-func DeriveAddress(pk *ecdsa.PrivateKey) common.Address {
-	return crypto.PubkeyToAddress(pk.PublicKey)
+func DeriveAddress(pk ecdsa.PublicKey) common.Address {
+	return crypto.PubkeyToAddress(pk)
 }

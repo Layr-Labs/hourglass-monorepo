@@ -208,9 +208,15 @@ func (a *Aggregator) initializePollers() error {
 			BlockType: ethereum.BlockType_Latest,
 		}, a.logger)
 
+		pollInterval := chain.PollIntervalSeconds
+		if pollInterval <= 0 {
+			a.logger.Sugar().Warnw("Invalid poll interval for chain", "chainId", chain.ChainId, "pollInterval", pollInterval)
+			pollInterval = 10 // default to 10 seconds if not set or invalid
+		}
+
 		pCfg := &EVMChainPoller.EVMChainPollerConfig{
 			ChainId:              chain.ChainId,
-			PollingInterval:      time.Duration(chain.PollIntervalSeconds) * time.Second,
+			PollingInterval:      time.Duration(pollInterval) * time.Second,
 			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 		}
 
@@ -253,15 +259,6 @@ func InitializeContractCaller(
 		PrivateKey:          privateKey,
 		AVSRegistrarAddress: avsRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
-	}
-	if isL1Chain {
-		protocolContractAddresses, err := config.GetCoreContractsForChainId(chain.ChainId)
-		if err != nil {
-			logger.Sugar().Errorw("failed to get protocol contract addresses", "error", err)
-			return nil, fmt.Errorf("failed to get protocol contract addresses for chain %s: %w", chain.Name, err)
-		}
-		callerConfig.KeyRegistrarAddress = protocolContractAddresses.KeyRegistrar
-		callerConfig.CrossChainRegistryAddress = protocolContractAddresses.CrossChainRegistry
 	}
 
 	return caller.NewContractCaller(callerConfig, ethereumContractCaller, logger)

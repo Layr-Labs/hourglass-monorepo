@@ -14,8 +14,8 @@ import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/l
 
 contract RegisterOperator is Script {
     // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
-    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
+    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
 
     function setUp() public {}
 
@@ -34,7 +34,8 @@ contract RegisterOperator is Script {
         console.log("Operator address:", operator);
 
         // 1. Register the operator
-        DELEGATION_MANAGER.registerAsOperator(operator, allocationDelay, metadataURI);
+        // set the
+        DELEGATION_MANAGER.registerAsOperator(0, allocationDelay, metadataURI);
         console.log("Operator registered:", operator, DELEGATION_MANAGER.isOperator(operator));
 
         // 2. Register for operator set

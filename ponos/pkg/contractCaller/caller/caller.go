@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IECDSACertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableCalculator"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
@@ -34,11 +35,10 @@ import (
 )
 
 type ContractCallerConfig struct {
-	PrivateKey                string
-	AVSRegistrarAddress       string
-	TaskMailboxAddress        string
-	KeyRegistrarAddress       string
-	CrossChainRegistryAddress string
+	PrivateKey          string
+	AVSRegistrarAddress string
+	TaskMailboxAddress  string
+	KeyRegistrarAddress string
 }
 
 type ContractCaller struct {
@@ -48,6 +48,7 @@ type ContractCaller struct {
 	delegationManager  *IDelegationManager.IDelegationManager
 	crossChainRegistry *ICrossChainRegistry.ICrossChainRegistry
 	keyRegistrar       *IKeyRegistrar.IKeyRegistrar
+	ecdsaCertVerifier  *IECDSACertificateVerifier.IECDSACertificateVerifier
 	ethclient          *ethclient.Client
 	config             *ContractCallerConfig
 	logger             *zap.Logger
@@ -86,11 +87,6 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to create TaskMailbox: %w", err)
 	}
 
-	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(cfg.KeyRegistrarAddress), ethclient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create KeyRegistrar: %w", err)
-	}
-
 	chainId, err := ethclient.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
@@ -101,12 +97,17 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to get core contracts: %w", err)
 	}
 
+	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(common.HexToAddress(coreContracts.KeyRegistrar), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create KeyRegistrar: %w", err)
+	}
+
 	allocationManager, err := IAllocationManager.NewIAllocationManager(common.HexToAddress(coreContracts.AllocationManager), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AllocationManager: %w", err)
 	}
 
-	crossChainRegistry, err := ICrossChainRegistry.NewICrossChainRegistry(common.HexToAddress(cfg.CrossChainRegistryAddress), ethclient)
+	crossChainRegistry, err := ICrossChainRegistry.NewICrossChainRegistry(common.HexToAddress(coreContracts.CrossChainRegistry), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CrossChainRegistry: %w", err)
 	}
@@ -116,6 +117,11 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to create DelegationManager transactor: %w", err)
 	}
 
+	ecdsaCertVerifier, err := IECDSACertificateVerifier.NewIECDSACertificateVerifier(common.HexToAddress(coreContracts.ECDSACertificateVerifier), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ECDSACertificateVerifier: %w", err)
+	}
+
 	return &ContractCaller{
 		avsRegistrarCaller: avsRegistrarCaller,
 		taskMailbox:        taskMailbox,
@@ -123,6 +129,7 @@ func NewContractCaller(
 		keyRegistrar:       keyRegistrar,
 		delegationManager:  delegationManager,
 		crossChainRegistry: crossChainRegistry,
+		ecdsaCertVerifier:  ecdsaCertVerifier,
 		ethclient:          ethclient,
 		coreContracts:      coreContracts,
 		config:             cfg,
@@ -130,14 +137,14 @@ func NewContractCaller(
 	}, nil
 }
 
-func (cc *ContractCaller) SubmitTaskResultRetryable(
+func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedCertificate,
+	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitTaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitBN254TaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
@@ -159,9 +166,9 @@ func (cc *ContractCaller) SubmitTaskResultRetryable(
 	return nil, fmt.Errorf("failed to submit task result after retries")
 }
 
-func (cc *ContractCaller) SubmitTaskResult(
+func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedCertificate,
+	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
@@ -231,6 +238,86 @@ func (cc *ContractCaller) SubmitTaskResult(
 	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
 }
 
+func (cc *ContractCaller) SubmitECDSATaskResultRetryable(
+	ctx context.Context,
+	aggCert *aggregation.AggregatedECDSACertificate,
+	globalTableRootReferenceTimestamp uint32,
+) (*types.Receipt, error) {
+	backoffs := []int{1, 3, 5, 10, 20}
+	for i, backoff := range backoffs {
+		res, err := cc.SubmitECDSATaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		if err != nil {
+			if i == len(backoffs)-1 {
+				cc.logger.Sugar().Errorw("failed to submit task result after retries",
+					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to submit task result: %w", err)
+			}
+			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
+				zap.Error(err),
+				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.Int("attempt", i+1),
+			)
+			time.Sleep(time.Second * time.Duration(backoff))
+			continue
+		}
+		return res, nil
+	}
+	return nil, fmt.Errorf("failed to submit task result after retries")
+}
+
+func (cc *ContractCaller) SubmitECDSATaskResult(
+	ctx context.Context,
+	aggCert *aggregation.AggregatedECDSACertificate,
+	globalTableRootReferenceTimestamp uint32,
+) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	if len(aggCert.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+	}
+	var taskId [32]byte
+	copy(taskId[:], aggCert.TaskId)
+
+	finalSig, err := aggCert.GetFinalSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get final signature: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("submitting task result",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
+		zap.String("finalSig", hexutil.Encode(finalSig[:])),
+	)
+
+	cert := ITaskMailbox.IECDSACertificateVerifierTypesECDSACertificate{
+		ReferenceTimestamp: globalTableRootReferenceTimestamp,
+		MessageHash:        aggCert.GetTaskMessageHash(),
+		Sig:                finalSig,
+	}
+
+	certBytes, err := cc.taskMailbox.GetECDSACertificateBytes(&bind.CallOpts{}, cert)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
+	}
+
+	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
+}
+
+func (cc *ContractCaller) CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error) {
+	return cc.ecdsaCertVerifier.CalculateCertificateDigest(&bind.CallOpts{}, referenceTimestamp, messageHash)
+}
+
 func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	avsAddress string,
 	operatorSetId uint32,
@@ -251,7 +338,6 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			return nil, err
 		}
-
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			OperatorAddress: operatorSetStringAddrs[i],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
@@ -265,53 +351,76 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
-	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, opset)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
-		return nil, err
-	}
-	// bn254 curve is the only supported curve type for now
-	if curveType != 2 {
-		return nil, fmt.Errorf("unsupported curve type %d for operator set %d", curveType, operatorSetId)
-	}
-
-	solidityPubKey, err := cc.keyRegistrar.GetBN254Key(&bind.CallOpts{}, opset, operatorAddress)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
-		return nil, err
-	}
-
-	pubKey, err := bn254.NewPublicKeyFromSolidity(
-		&bn254.SolidityBN254G1Point{
-			X: solidityPubKey.G1Point.X,
-			Y: solidityPubKey.G1Point.Y,
-		},
-		&bn254.SolidityBN254G2Point{
-			X: [2]*big.Int{
-				solidityPubKey.G2Point.X[0],
-				solidityPubKey.G2Point.X[1],
-			},
-			Y: [2]*big.Int{
-				solidityPubKey.G2Point.Y[0],
-				solidityPubKey.G2Point.Y[1],
-			},
-		},
-	)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
-		return nil, err
-	}
 
 	socket, err := cc.avsRegistrarCaller.GetOperatorSocket(&bind.CallOpts{}, operatorAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
 
-	return &peering.OperatorSet{
+	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, opset)
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
+		return nil, err
+	}
+
+	curveType, err := config.ConvertSolidityEnumToCurveType(curveTypeSolidity)
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to convert curve type: %v", err)
+		return nil, fmt.Errorf("failed to convert curve type: %w", err)
+	}
+
+	peeringOpset := &peering.OperatorSet{
 		OperatorSetID:  operatorSetId,
-		PublicKey:      pubKey,
 		NetworkAddress: socket,
-	}, nil
+		CurveType:      curveType,
+	}
+
+	if curveType == config.CurveTypeBN254 {
+		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(&bind.CallOpts{}, opset, operatorAddress)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
+			return nil, err
+		}
+
+		pubKey, err := bn254.NewPublicKeyFromSolidity(
+			&bn254.SolidityBN254G1Point{
+				X: solidityPubKey.G1Point.X,
+				Y: solidityPubKey.G1Point.Y,
+			},
+			&bn254.SolidityBN254G2Point{
+				X: [2]*big.Int{
+					solidityPubKey.G2Point.X[0],
+					solidityPubKey.G2Point.X[1],
+				},
+				Y: [2]*big.Int{
+					solidityPubKey.G2Point.Y[0],
+					solidityPubKey.G2Point.Y[1],
+				},
+			},
+		)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
+			return nil, err
+		}
+		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+			PublicKey: pubKey,
+		}
+		return peeringOpset, nil
+	}
+
+	if curveType == config.CurveTypeECDSA {
+		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(&bind.CallOpts{}, opset, operatorAddress)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
+			return nil, err
+		}
+		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+			ECDSAAddress: ecdsaAddr,
+		}
+		return peeringOpset, nil
+	}
+	cc.logger.Sugar().Errorf("unsupported curve type: %s", curveType)
+	return nil, fmt.Errorf("unsupported curve type: %s", curveType)
 }
 
 func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
@@ -336,6 +445,18 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
 		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
 	}, nil
+}
+
+func (cc *ContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
+	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, IKeyRegistrar.OperatorSet{
+		Avs: common.HexToAddress(avsAddress),
+		Id:  operatorSetId,
+	})
+	if err != nil {
+		return config.CurveTypeUnknown, fmt.Errorf("failed to get operator set curve type: %w", err)
+	}
+
+	return config.ConvertSolidityEnumToCurveType(curveType)
 }
 
 func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*types.Receipt, error) {
@@ -380,7 +501,7 @@ func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress 
 	return receipt, nil
 }
 
-func (cc *ContractCaller) GetOperatorRegistrationMessageHash(
+func (cc *ContractCaller) GetOperatorBN254KeyRegistrationMessageHash(
 	ctx context.Context,
 	operatorAddress common.Address,
 	avsAddress common.Address,
@@ -391,6 +512,25 @@ func (cc *ContractCaller) GetOperatorRegistrationMessageHash(
 		Avs: avsAddress,
 		Id:  operatorSetId,
 	}, keyData)
+}
+
+func (cc *ContractCaller) GetOperatorECDSAKeyRegistrationMessageHash(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	signingKeyAddress common.Address,
+) ([32]byte, error) {
+	cc.logger.Sugar().Infow("Getting ECDSA key registration message hash",
+		zap.String("operatorAddress", operatorAddress.String()),
+		zap.String("avsAddress", avsAddress.Hex()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("signingKeyAddress", signingKeyAddress.String()),
+	)
+	return cc.keyRegistrar.GetECDSAKeyRegistrationMessageHash(&bind.CallOpts{Context: ctx}, operatorAddress, IKeyRegistrar.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}, signingKeyAddress)
 }
 
 func (cc *ContractCaller) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error) {
@@ -443,19 +583,35 @@ func (cc *ContractCaller) CreateOperatorRegistrationPayload(
 // ConfigureAVSOperatorSet is called on the KeyRegistry to configure an operator set for a given AVS,
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
-func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType contractCaller.CurveType) (*types.Receipt, error) {
+func (cc *ContractCaller) ConfigureAVSOperatorSet(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	curveType config.CurveType,
+) (*types.Receipt, error) {
 	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
+	solidityCurveType, err := curveType.Uint8()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert curve type to uint8: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("configuring AVS operator set",
+		zap.String("avsAddress", avsAddress.String()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("curveType", curveType.String()),
+		zap.Uint8("solidityCurveType", solidityCurveType),
+	)
 	tx, err := cc.keyRegistrar.ConfigureOperatorSet(
 		txOpts,
 		IKeyRegistrar.OperatorSet{
 			Avs: avsAddress,
 			Id:  operatorSetId,
 		},
-		uint8(curveType),
+		solidityCurveType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
@@ -469,7 +625,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	operatorAddress common.Address,
 	avsAddress common.Address,
 	operatorSetId uint32,
-	signature *bn254.Signature,
+	sigBytes []byte,
 	keyData []byte,
 ) (*types.Receipt, error) {
 	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
@@ -483,20 +639,12 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		Id:  operatorSetId,
 	}
 
-	g1Point := &bn254.G1Point{
-		G1Affine: signature.GetG1Point(),
-	}
-	g1Bytes, err := g1Point.ToPrecompileFormat()
-	if err != nil {
-		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
-	}
-
 	cc.logger.Sugar().Debugw("Registering key with KeyRegistrar",
 		"operatorAddress:", operatorAddress.String(),
 		"avsAddress:", avsAddress.String(),
 		"operatorSetId:", operatorSetId,
 		"keyData", hexutil.Encode(keyData),
-		"g1Bytes:", hexutil.Encode(g1Bytes),
+		"sigButes:", hexutil.Encode(sigBytes),
 	)
 
 	tx, err := cc.keyRegistrar.RegisterKey(
@@ -504,7 +652,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		operatorAddress,
 		operatorSet,
 		keyData,
-		g1Bytes,
+		sigBytes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register key: %w", err)
@@ -579,7 +727,7 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 
 	tx, err := cc.delegationManager.RegisterAsOperator(
 		noSendTxOpts,
-		operatorAddress,
+		common.Address{},
 		allocationDelay,
 		metadataUri,
 	)
@@ -707,6 +855,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	cc.logger.Sugar().Infow("Fetching operator table data",
 		zap.String("avsAddress", avsAddress.String()),
 		zap.Uint32("operatorSetId", operatorSetId),
+		zap.Uint64("atBlockNumber", atBlockNumber),
 	)
 	otcAddr, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
 		Context:     ctx,
@@ -810,7 +959,7 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 	avsAddress common.Address,
 	taskHookAddress common.Address,
 	executorOperatorSetIds []uint32,
-	curveTypes []string,
+	curveTypes []config.CurveType,
 ) error {
 	for i, id := range executorOperatorSetIds {
 		curveTypeStr := curveTypes[i]
@@ -824,14 +973,11 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 			TaskMetadata:             nil,
 		}
 
-		switch curveTypeStr {
-		case "ecdsa":
-			mailboxCfg.CurveType = 1
-		case "bn254":
-			mailboxCfg.CurveType = 2
-		default:
-			return fmt.Errorf("unsupported curve type: %s", curveTypeStr)
+		solidityCurveType, err := curveTypeStr.Uint8()
+		if err != nil {
+			return fmt.Errorf("failed to convert curve type to uint8: %w", err)
 		}
+		mailboxCfg.CurveType = solidityCurveType
 
 		noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 		if err != nil {
@@ -860,4 +1006,137 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 		)
 	}
 	return nil
+}
+
+func (cc *ContractCaller) DelegateToOperator(
+	ctx context.Context,
+	stakerAddress common.Address,
+	operatorAddress common.Address,
+) (*types.Receipt, error) {
+
+	approver, err := cc.delegationManager.DelegationApprover(&bind.CallOpts{}, operatorAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get delegation approver: %w", err)
+	}
+	cc.logger.Sugar().Infow("Delegation approver for operator",
+		zap.String("operatorAddress", operatorAddress.String()),
+		zap.String("delegationApprover", approver.String()),
+	)
+
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+	cc.logger.Sugar().Infow("Delegating to operator",
+		zap.String("operatorAddress", operatorAddress.String()),
+		zap.Any("txOpts", txOpts),
+	)
+
+	approvalSignature := IDelegationManager.ISignatureUtilsMixinTypesSignatureWithExpiry{
+		Signature: nil,
+		Expiry:    big.NewInt(0),
+	}
+	var salt [32]byte
+
+	tx, err := cc.delegationManager.DelegateTo(txOpts, operatorAddress, approvalSignature, salt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "DelegateToOperator")
+}
+
+func (cc *ContractCaller) ModifyAllocations(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	strategy common.Address,
+) (interface{}, error) {
+	cc.logger.Sugar().Infow("Modifying allocations",
+		zap.String("operatorAddress", operatorAddress.String()),
+		zap.String("avsAddress", avsAddress.String()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("strategy", strategy.String()),
+	)
+	alloactionDelay, err := cc.allocationManager.GetAllocationDelay(&bind.CallOpts{}, operatorAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get allocation delay: %w", err)
+	}
+	cc.logger.Sugar().Infow("allocation delay:",
+		zap.Any("allocationDelay", alloactionDelay),
+		zap.String("operatorAddress", operatorAddress.String()),
+	)
+
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := cc.allocationManager.ModifyAllocations(txOpts, operatorAddress, []IAllocationManager.IAllocationManagerTypesAllocateParams{
+		{
+			OperatorSet: IAllocationManager.OperatorSet{
+				Avs: avsAddress,
+				Id:  operatorSetId,
+			},
+			Strategies:    []common.Address{strategy},
+			NewMagnitudes: []uint64{1e18},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ModifyAllocations")
+}
+
+func (cc *ContractCaller) VerifyECDSACertificate(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	aggCert *aggregation.AggregatedECDSACertificate,
+	globalTableRootReferenceTimestamp uint32,
+	threshold uint16,
+) (*types.Receipt, error) {
+	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	if len(aggCert.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+	}
+	var taskId [32]byte
+	copy(taskId[:], aggCert.TaskId)
+
+	finalSig, err := aggCert.GetFinalSignature()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get final signature: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("verifying ECDSA certificate",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
+		zap.String("finalSig", hexutil.Encode(finalSig[:])),
+	)
+
+	cert := IECDSACertificateVerifier.IECDSACertificateVerifierTypesECDSACertificate{
+		ReferenceTimestamp: globalTableRootReferenceTimestamp,
+		MessageHash:        aggCert.GetTaskMessageHash(),
+		Sig:                finalSig,
+	}
+
+	tx, err := cc.ecdsaCertVerifier.VerifyCertificateProportion(
+		txOpts,
+		IECDSACertificateVerifier.OperatorSet{
+			Avs: avsAddress,
+			Id:  operatorSetId,
+		},
+		cert,
+		[]uint16{threshold},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "VerifyECDSACertificate")
 }
