@@ -16,24 +16,6 @@ type AVSConfig struct {
 	ExecutorOperatorSetIds  []uint32
 }
 
-type ExecutorOperatorSetTaskConfig struct {
-	CertificateVerifier      string
-	TaskHook                 string
-	FeeToken                 string
-	FeeCollector             string
-	TaskSLA                  *big.Int
-	StakeProportionThreshold uint16
-	TaskMetadata             []byte
-}
-
-type CurveType uint8
-
-const (
-	CurveTypeUnknown CurveType = 0 // Unknown curve type
-	CurveTypeECDSA   CurveType = 1
-	CurveTypeBN254   CurveType = 2 // BN254 is the only supported curve type for now
-)
-
 type OperatorTableData struct {
 	OperatorWeights            [][]*big.Int
 	Operators                  []common.Address
@@ -67,6 +49,26 @@ type IContractCaller interface {
 	GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error)
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
+
+	GetOperatorTableDataForOperatorSet(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		chainId config.ChainId,
+		referenceBlocknumber uint64,
+	) (*OperatorTableData, error)
+
+	GetTableUpdaterReferenceTimeAndBlock(
+		ctx context.Context,
+		tableUpdaterAddr common.Address,
+		atBlockNumber uint64,
+	) (*LatestReferenceTimeAndBlock, error)
+
+	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
+
+	// ------------------------------------------------------------------------
+	// Helper functions for test setup
+	// ------------------------------------------------------------------------
 
 	GetOperatorBN254KeyRegistrationMessageHash(
 		ctx context.Context,
@@ -105,22 +107,6 @@ type IContractCaller interface {
 	) (*ethereumTypes.Receipt, error)
 
 	EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error)
-
-	GetOperatorTableDataForOperatorSet(
-		ctx context.Context,
-		avsAddress common.Address,
-		operatorSetId uint32,
-		chainId config.ChainId,
-		referenceBlocknumber uint64,
-	) (*OperatorTableData, error)
-
-	GetTableUpdaterReferenceTimeAndBlock(
-		ctx context.Context,
-		tableUpdaterAddr common.Address,
-		atBlockNumber uint64,
-	) (*LatestReferenceTimeAndBlock, error)
-
-	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
 
 	SetupTaskMailboxForAvs(
 		ctx context.Context,
