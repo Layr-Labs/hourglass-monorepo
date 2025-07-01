@@ -12,7 +12,8 @@ remappings = [
     "forge-std/=lib/forge-std/src/",
     "@eigenlayer-middleware/=lib/eigenlayer-middleware/",
     "@eigenlayer-contracts/=lib/eigenlayer-middleware/lib/eigenlayer-contracts/",
-    "@openzeppelin/=lib/eigenlayer-middleware/lib/openzeppelin-contracts/"
+    "@openzeppelin/=lib/eigenlayer-middleware/lib/openzeppelin-contracts/",
+    "@openzeppelin-upgrades/=lib/eigenlayer-middleware/lib/openzeppelin-contracts-upgradeable/"
 ]
 
 # Specifies the exact version of Solidity to use, overriding auto-detection.

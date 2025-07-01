@@ -2,6 +2,8 @@
 pragma solidity ^0.8.27;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
@@ -37,6 +39,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
 
     // Contracts
     TaskMailbox public taskMailbox;
+    ProxyAdmin public proxyAdmin;
     MockAVSTaskHook public mockTaskHook;
     MockBN254CertificateVerifier public mockBN254CertificateVerifier;
     MockECDSACertificateVerifier public mockECDSACertificateVerifier;
@@ -66,9 +69,16 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         mockECDSACertificateVerifier = new MockECDSACertificateVerifier();
         mockToken = new MockERC20();
 
-        // Deploy TaskMailbox
-        taskMailbox =
-            new TaskMailbox(address(this), address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier));
+        // Deploy TaskMailbox with proxy pattern
+        proxyAdmin = new ProxyAdmin();
+        TaskMailbox taskMailboxImpl =
+            new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "1.0.0");
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskMailboxImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+        );
+        taskMailbox = TaskMailbox(address(proxy));
 
         // Give creator some tokens and approve TaskMailbox
         mockToken.mint(creator, 1000 ether);
@@ -125,7 +135,15 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
         address bn254Verifier = address(0x1234);
         address ecdsaVerifier = address(0x5678);
 
-        TaskMailbox newTaskMailbox = new TaskMailbox(address(this), bn254Verifier, ecdsaVerifier);
+        // Deploy with proxy pattern
+        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        TaskMailbox taskMailboxImpl = new TaskMailbox(bn254Verifier, ecdsaVerifier, "1.0.0");
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskMailboxImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+        );
+        TaskMailbox newTaskMailbox = TaskMailbox(address(proxy));
 
         assertEq(newTaskMailbox.BN254_CERTIFICATE_VERIFIER(), bn254Verifier);
         assertEq(newTaskMailbox.ECDSA_CERTIFICATE_VERIFIER(), ecdsaVerifier);
@@ -140,6 +158,8 @@ contract TaskMailboxUnitTests_registerExecutorOperatorSet is TaskMailboxUnitTest
         uint32 fuzzOperatorSetId,
         bool fuzzIsRegistered
     ) public {
+        // Skip if fuzzAvs is the proxy admin to avoid proxy admin access issues
+        vm.assume(fuzzAvs != address(proxyAdmin));
         OperatorSet memory operatorSet = OperatorSet(fuzzAvs, fuzzOperatorSetId);
         ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
 
@@ -664,9 +684,16 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Create a custom mock that returns false for certificate verification
         MockBN254CertificateVerifierFailure mockFailingVerifier = new MockBN254CertificateVerifierFailure();
 
-        // Deploy a new TaskMailbox with the failing verifier
-        TaskMailbox failingTaskMailbox =
-            new TaskMailbox(address(this), address(mockFailingVerifier), address(mockECDSACertificateVerifier));
+        // Deploy a new TaskMailbox with the failing verifier using proxy pattern
+        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        TaskMailbox taskMailboxImpl =
+            new TaskMailbox(address(mockFailingVerifier), address(mockECDSACertificateVerifier), "1.0.0");
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskMailboxImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+        );
+        TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
         // Give creator tokens and approve the new TaskMailbox
         vm.prank(creator);
@@ -699,10 +726,17 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         MockECDSACertificateVerifierFailure mockECDSACertificateVerifierFailure =
             new MockECDSACertificateVerifierFailure();
 
-        // Deploy a new TaskMailbox with the failing ECDSA verifier
-        TaskMailbox failingTaskMailbox = new TaskMailbox(
-            address(this), address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifierFailure)
+        // Deploy a new TaskMailbox with the failing ECDSA verifier using proxy pattern
+        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        TaskMailbox taskMailboxImpl = new TaskMailbox(
+            address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifierFailure), "1.0.0"
         );
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskMailboxImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+        );
+        TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
         // Give creator tokens and approve the new TaskMailbox
         vm.prank(creator);
