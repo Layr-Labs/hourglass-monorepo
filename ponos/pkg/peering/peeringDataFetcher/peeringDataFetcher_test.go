@@ -135,8 +135,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}
 
-			testOperatorAddress := common.HexToAddress(tc.address)
-
 			pk, _, err := bn254.GenerateKeyPair()
 			if err != nil {
 				t.Fatalf("Failed to generate key pair: %v", err)
@@ -147,13 +145,18 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				ctx,
 				avsCc,
 				operatorCc,
-				testOperatorAddress,
 				common.HexToAddress(chainConfig.AVSAccountAddress),
 				tc.operatorSets,
-				pk,
-				socket,
-				7200,
-				"http://localhost:8545",
+				&operator.Operator{
+					TransactionPrivateKey: tc.privateKey,
+					SigningPrivateKey:     pk,
+					Curve:                 config.CurveTypeBN254,
+				},
+				&operator.RegistrationConfig{
+					Socket:          socket,
+					MetadataUri:     "https://some-metadata-uri.com",
+					AllocationDelay: 7200,
+				},
 				l,
 			)
 			assert.Nil(t, err)

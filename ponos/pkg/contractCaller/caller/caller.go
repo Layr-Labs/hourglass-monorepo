@@ -380,7 +380,7 @@ func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress 
 	return receipt, nil
 }
 
-func (cc *ContractCaller) GetOperatorRegistrationMessageHash(
+func (cc *ContractCaller) GetOperatorBN254KeyRegistrationMessageHash(
 	ctx context.Context,
 	operatorAddress common.Address,
 	avsAddress common.Address,
@@ -391,6 +391,18 @@ func (cc *ContractCaller) GetOperatorRegistrationMessageHash(
 		Avs: avsAddress,
 		Id:  operatorSetId,
 	}, keyData)
+}
+
+func (cc *ContractCaller) GetOperatorECDSAKeyRegistrationMessageHash(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetId uint32,
+) ([32]byte, error) {
+	return cc.keyRegistrar.GetECDSAKeyRegistrationMessageHash(&bind.CallOpts{Context: ctx}, operatorAddress, IKeyRegistrar.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}, operatorAddress)
 }
 
 func (cc *ContractCaller) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error) {
@@ -443,10 +455,20 @@ func (cc *ContractCaller) CreateOperatorRegistrationPayload(
 // ConfigureAVSOperatorSet is called on the KeyRegistry to configure an operator set for a given AVS,
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
-func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType contractCaller.CurveType) (*types.Receipt, error) {
+func (cc *ContractCaller) ConfigureAVSOperatorSet(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	curveType config.CurveType,
+) (*types.Receipt, error) {
 	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	solidityCurveType, err := curveType.Uint8()
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert curve type to uint8: %w", err)
 	}
 
 	tx, err := cc.keyRegistrar.ConfigureOperatorSet(
@@ -455,7 +477,7 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(ctx context.Context, avsAddres
 			Avs: avsAddress,
 			Id:  operatorSetId,
 		},
-		uint8(curveType),
+		solidityCurveType,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
@@ -469,7 +491,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	operatorAddress common.Address,
 	avsAddress common.Address,
 	operatorSetId uint32,
-	signature *bn254.Signature,
+	sigBytes []byte,
 	keyData []byte,
 ) (*types.Receipt, error) {
 	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
@@ -483,20 +505,12 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		Id:  operatorSetId,
 	}
 
-	g1Point := &bn254.G1Point{
-		G1Affine: signature.GetG1Point(),
-	}
-	g1Bytes, err := g1Point.ToPrecompileFormat()
-	if err != nil {
-		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
-	}
-
 	cc.logger.Sugar().Debugw("Registering key with KeyRegistrar",
 		"operatorAddress:", operatorAddress.String(),
 		"avsAddress:", avsAddress.String(),
 		"operatorSetId:", operatorSetId,
 		"keyData", hexutil.Encode(keyData),
-		"g1Bytes:", hexutil.Encode(g1Bytes),
+		"sigButes:", hexutil.Encode(sigBytes),
 	)
 
 	tx, err := cc.keyRegistrar.RegisterKey(
@@ -504,7 +518,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		operatorAddress,
 		operatorSet,
 		keyData,
-		g1Bytes,
+		sigBytes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register key: %w", err)

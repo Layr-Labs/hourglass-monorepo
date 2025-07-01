@@ -68,7 +68,7 @@ type IContractCaller interface {
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorRegistrationMessageHash(
+	GetOperatorBN254KeyRegistrationMessageHash(
 		ctx context.Context,
 		operatorAddress common.Address,
 		avsAddress common.Address,
@@ -76,14 +76,21 @@ type IContractCaller interface {
 		keyData []byte,
 	) ([32]byte, error)
 
-	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType CurveType) (*ethereumTypes.Receipt, error)
+	GetOperatorECDSAKeyRegistrationMessageHash(
+		ctx context.Context,
+		operatorAddress common.Address,
+		avsAddress common.Address,
+		operatorSetId uint32,
+	) ([32]byte, error)
+
+	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType) (*ethereumTypes.Receipt, error)
 
 	RegisterKeyWithKeyRegistrar(
 		ctx context.Context,
 		operatorAddress common.Address,
 		avsAddress common.Address,
 		operatorSetId uint32,
-		signature *bn254.Signature,
+		sigBytes []byte,
 		keyData []byte,
 	) (*ethereumTypes.Receipt, error)
 

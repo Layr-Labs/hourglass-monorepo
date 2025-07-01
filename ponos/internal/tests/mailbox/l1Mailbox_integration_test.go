@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
@@ -273,8 +274,16 @@ func Test_L1Mailbox(t *testing.T) {
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		aggPrivateKey,
-		execPrivateKey,
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			SigningPrivateKey:     aggPrivateKey,
+			Curve:                 config.CurveTypeBN254,
+		},
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
+			SigningPrivateKey:     execPrivateKey,
+			Curve:                 config.CurveTypeBN254,
+		},
 		"localhost:9000",
 		l,
 	)

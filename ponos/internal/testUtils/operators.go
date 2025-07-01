@@ -3,15 +3,12 @@ package testUtils
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
-	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"strings"
 )
 
 func SetupOperatorPeering(
@@ -19,28 +16,19 @@ func SetupOperatorPeering(
 	chainConfig *ChainConfig,
 	chainId config.ChainId,
 	ethClient *ethclient.Client,
-	aggregatorPrivateBLSKey *bn254.PrivateKey,
-	executorPrivateBLSKey *bn254.PrivateKey,
+	aggregator *operator.Operator,
+	executor *operator.Operator,
 	socket string,
 	l *zap.Logger,
 ) error {
-	aggOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.OperatorAccountPrivateKey)
+	aggOperatorAddress, err := aggregator.DeriveAddress()
 	if err != nil {
 		return fmt.Errorf("failed to convert aggregator operator private key: %v", err)
 	}
-	aggOperatorAddress := cryptoUtils.DeriveAddress(aggOperatorPrivateKey)
-	if !strings.EqualFold(aggOperatorAddress.String(), chainConfig.OperatorAccountAddress) {
-		return fmt.Errorf("aggregator operator address mismatch: expected %s, got %s", chainConfig.OperatorAccountAddress, aggOperatorAddress.String())
-	}
 
-	// executor operator
-	execOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.ExecOperatorAccountPk)
+	execOperatorAddress, err := executor.DeriveAddress()
 	if err != nil {
-		return fmt.Errorf("failed to convert exec operator private key: %v", err)
-	}
-	execOperatorAddress := cryptoUtils.DeriveAddress(execOperatorPrivateKey)
-	if !strings.EqualFold(execOperatorAddress.String(), chainConfig.ExecOperatorAccountAddress) {
-		return fmt.Errorf("executor operator address mismatch: expected %s, got %s", chainConfig.ExecOperatorAccountAddress, execOperatorAddress.String())
+		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
 	coreContracts, err := config.GetCoreContractsForChainId(chainId)
@@ -74,13 +62,14 @@ func SetupOperatorPeering(
 		ctx,
 		avsCc,
 		aggregatorCc,
-		aggOperatorAddress,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		[]uint32{0},
-		aggregatorPrivateBLSKey,
-		"",
-		7200,
-		"https://some-metadata-uri.com",
+		aggregator,
+		&operator.RegistrationConfig{
+			Socket:          "",
+			MetadataUri:     "https://some-metadata-uri.com",
+			AllocationDelay: 7200,
+		},
 		l,
 	)
 	if err != nil {
@@ -107,20 +96,21 @@ func SetupOperatorPeering(
 		ctx,
 		avsCc,
 		executorCc,
-		execOperatorAddress,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		[]uint32{1},
-		executorPrivateBLSKey,
-		socket,
-		7200,
-		"https://some-metadata-uri.com",
+		executor,
+		&operator.RegistrationConfig{
+			Socket:          socket,
+			MetadataUri:     "https://some-metadata-uri.com",
+			AllocationDelay: 7200,
+		},
 		l,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to register executor operator: %v", err)
 	}
 	l.Sugar().Infow("Executor operator registered successfully",
-		zap.String("operatorAddress", aggOperatorAddress.String()),
+		zap.String("operatorAddress", execOperatorAddress.String()),
 		zap.String("transactionHash", result.TxHash.String()),
 	)
 	return nil
