@@ -30,19 +30,33 @@ type LatestReferenceTimeAndBlock struct {
 }
 
 type IContractCaller interface {
-	SubmitTaskResult(
+	SubmitBN254TaskResult(
 		ctx context.Context,
 		aggCert *aggregation.AggregatedBN254Certificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	SubmitTaskResultRetryable(
+	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
 		aggCert *aggregation.AggregatedBN254Certificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SubmitECDSATaskResult(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedECDSACertificate,
+		globalTableRootReferenceTimestamp uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SubmitECDSATaskResultRetryable(
+		ctx context.Context,
+		aggCert *aggregation.AggregatedECDSACertificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	GetAVSConfig(avsAddress string) (*AVSConfig, error)
+
+	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error)
 
 	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
 

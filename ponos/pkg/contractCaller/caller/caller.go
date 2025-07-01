@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	cryptoLibEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
@@ -130,14 +131,14 @@ func NewContractCaller(
 	}, nil
 }
 
-func (cc *ContractCaller) SubmitTaskResultRetryable(
+func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
 	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitTaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitBN254TaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
@@ -159,7 +160,7 @@ func (cc *ContractCaller) SubmitTaskResultRetryable(
 	return nil, fmt.Errorf("failed to submit task result after retries")
 }
 
-func (cc *ContractCaller) SubmitTaskResult(
+func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
 	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
@@ -231,6 +232,78 @@ func (cc *ContractCaller) SubmitTaskResult(
 	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
 }
 
+func (cc *ContractCaller) SubmitECDSATaskResultRetryable(
+	ctx context.Context,
+	aggCert *aggregation.AggregatedECDSACertificate,
+	globalTableRootReferenceTimestamp uint32,
+) (*types.Receipt, error) {
+	backoffs := []int{1, 3, 5, 10, 20}
+	for i, backoff := range backoffs {
+		res, err := cc.SubmitECDSATaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		if err != nil {
+			if i == len(backoffs)-1 {
+				cc.logger.Sugar().Errorw("failed to submit task result after retries",
+					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to submit task result: %w", err)
+			}
+			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
+				zap.Error(err),
+				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.Int("attempt", i+1),
+			)
+			time.Sleep(time.Second * time.Duration(backoff))
+			continue
+		}
+		return res, nil
+	}
+	return nil, fmt.Errorf("failed to submit task result after retries")
+}
+
+func (cc *ContractCaller) SubmitECDSATaskResult(
+	ctx context.Context,
+	aggCert *aggregation.AggregatedECDSACertificate,
+	globalTableRootReferenceTimestamp uint32,
+) (*types.Receipt, error) {
+	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	if len(aggCert.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+	}
+	var taskId [32]byte
+	copy(taskId[:], aggCert.TaskId)
+	cc.logger.Sugar().Infow("submitting task result",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
+	)
+
+	var digest [32]byte
+	copy(digest[:], aggCert.TaskResponseDigest)
+
+	cert := ITaskMailbox.IECDSACertificateVerifierTypesECDSACertificate{
+		ReferenceTimestamp: globalTableRootReferenceTimestamp,
+		MessageHash:        digest,
+		Sig:                nil,
+	}
+
+	certBytes, err := cc.taskMailbox.GetECDSACertificateBytes(&bind.CallOpts{}, cert)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
+	}
+
+	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
+}
+
 func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	avsAddress string,
 	operatorSetId uint32,
@@ -265,53 +338,78 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
-	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, opset)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
-		return nil, err
-	}
-	// bn254 curve is the only supported curve type for now
-	if curveType != 2 {
-		return nil, fmt.Errorf("unsupported curve type %d for operator set %d", curveType, operatorSetId)
-	}
-
-	solidityPubKey, err := cc.keyRegistrar.GetBN254Key(&bind.CallOpts{}, opset, operatorAddress)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
-		return nil, err
-	}
-
-	pubKey, err := bn254.NewPublicKeyFromSolidity(
-		&bn254.SolidityBN254G1Point{
-			X: solidityPubKey.G1Point.X,
-			Y: solidityPubKey.G1Point.Y,
-		},
-		&bn254.SolidityBN254G2Point{
-			X: [2]*big.Int{
-				solidityPubKey.G2Point.X[0],
-				solidityPubKey.G2Point.X[1],
-			},
-			Y: [2]*big.Int{
-				solidityPubKey.G2Point.Y[0],
-				solidityPubKey.G2Point.Y[1],
-			},
-		},
-	)
-	if err != nil {
-		cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
-		return nil, err
-	}
 
 	socket, err := cc.avsRegistrarCaller.GetOperatorSocket(&bind.CallOpts{}, operatorAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
 
-	return &peering.OperatorSet{
+	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, opset)
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
+		return nil, err
+	}
+
+	curveType, err := config.ConvertSolidityEnumToCurveType(curveTypeSolidity)
+	if err != nil {
+		cc.logger.Sugar().Errorf("failed to convert curve type: %v", err)
+		return nil, fmt.Errorf("failed to convert curve type: %w", err)
+	}
+
+	peeringOpset := &peering.OperatorSet{
 		OperatorSetID:  operatorSetId,
-		PublicKey:      pubKey,
 		NetworkAddress: socket,
-	}, nil
+		CurveType:      curveType,
+	}
+
+	if curveType == config.CurveTypeBN254 {
+		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(&bind.CallOpts{}, opset, operatorAddress)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
+			return nil, err
+		}
+
+		pubKey, err := bn254.NewPublicKeyFromSolidity(
+			&bn254.SolidityBN254G1Point{
+				X: solidityPubKey.G1Point.X,
+				Y: solidityPubKey.G1Point.Y,
+			},
+			&bn254.SolidityBN254G2Point{
+				X: [2]*big.Int{
+					solidityPubKey.G2Point.X[0],
+					solidityPubKey.G2Point.X[1],
+				},
+				Y: [2]*big.Int{
+					solidityPubKey.G2Point.Y[0],
+					solidityPubKey.G2Point.Y[1],
+				},
+			},
+		)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
+			return nil, err
+		}
+		peeringOpset.PublicKey = pubKey
+		return peeringOpset, nil
+	}
+
+	if curveType == config.CurveTypeECDSA {
+		solidityPubKey, err := cc.keyRegistrar.GetECDSAKey(&bind.CallOpts{}, opset, operatorAddress)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
+			return nil, err
+		}
+
+		pubKey, err := cryptoLibEcdsa.NewPublicKeyFromBytes(solidityPubKey)
+		if err != nil {
+			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
+			return nil, err
+		}
+		peeringOpset.PublicKey = pubKey
+		return peeringOpset, nil
+	}
+	cc.logger.Sugar().Errorf("unsupported curve type: %s", curveType)
+	return nil, fmt.Errorf("unsupported curve type: %s", curveType)
 }
 
 func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
@@ -336,6 +434,18 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 		AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
 		ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
 	}, nil
+}
+
+func (cc *ContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
+	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, IKeyRegistrar.OperatorSet{
+		Avs: common.HexToAddress(avsAddress),
+		Id:  operatorSetId,
+	})
+	if err != nil {
+		return config.CurveTypeUnknown, fmt.Errorf("failed to get operator set curve type: %w", err)
+	}
+
+	return config.ConvertSolidityEnumToCurveType(curveType)
 }
 
 func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*types.Receipt, error) {

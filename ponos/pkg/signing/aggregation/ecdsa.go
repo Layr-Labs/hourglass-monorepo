@@ -24,16 +24,16 @@ type AggregatedECDSACertificate struct {
 	TaskResponseDigest []byte
 
 	// public keys for all operators that did not sign the task
-	NonSignersPubKeys []*ecdsa.PublicKey
+	NonSignersPubKeys []signing.PublicKey
 
 	// public keys for all operators that were selected to participate in the task
-	AllOperatorsPubKeys []*ecdsa.PublicKey
+	AllOperatorsPubKeys []signing.PublicKey
 
 	// aggregated signature of the signers
 	SignersSignatures [][]byte
 
 	// aggregated public key of the signers
-	SignersPublicKeys []*ecdsa.PublicKey
+	SignersPublicKeys []signing.PublicKey
 
 	// the time the certificate was signed
 	SignedAt *time.Time
@@ -47,7 +47,7 @@ type ReceivedECDSAResponseWithDigest struct {
 	TaskResult *types.TaskResult
 
 	// signature is the signature of the task result from the operator signed with their bls key
-	Signature *signing.Signature
+	Signature *ecdsa.Signature
 
 	// digest is a keccak256 hash of the task result
 	Digest []byte
@@ -55,7 +55,7 @@ type ReceivedECDSAResponseWithDigest struct {
 
 type aggregatedECDSAOperators struct {
 	// aggregated public keys of signers
-	signersPublicKeys []*ecdsa.PublicKey
+	signersPublicKeys []signing.PublicKey
 
 	// aggregated signatures of signers
 	signersSignatures [][]byte
@@ -77,10 +77,10 @@ type ECDSATaskResultAggregator struct {
 	ThresholdPercentage uint8
 	TaskData            []byte
 	TaskExpirationTime  *time.Time
-	Operators           []*Operator[ecdsa.PublicKey]
+	Operators           []*Operator[signing.PublicKey]
 	ReceivedSignatures  map[string]*ReceivedECDSAResponseWithDigest // operator address -> signature
 
-	AggregatePublicKeys []*ecdsa.PublicKey
+	AggregatePublicKeys []signing.PublicKey
 
 	aggregatedOperators *aggregatedECDSAOperators
 	// Add more fields as needed for aggregation
@@ -94,7 +94,7 @@ func NewECDSATaskResultAggregator(
 	thresholdPercentage uint8,
 	taskData []byte,
 	taskExpirationTime *time.Time,
-	operators []*Operator[ecdsa.PublicKey],
+	operators []*Operator[signing.PublicKey],
 ) (*ECDSATaskResultAggregator, error) {
 	if len(taskId) == 0 {
 		return nil, ErrInvalidTaskId
@@ -106,7 +106,7 @@ func NewECDSATaskResultAggregator(
 		return nil, ErrInvalidThreshold
 	}
 
-	aggPub := util.Map(operators, func(o *Operator[ecdsa.PublicKey], i uint64) *ecdsa.PublicKey {
+	aggPub := util.Map(operators, func(o *Operator[signing.PublicKey], i uint64) signing.PublicKey {
 		return o.PublicKey
 	})
 
@@ -132,7 +132,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	defer tra.mu.Unlock()
 
 	// Validate operator is in the allowed set
-	operator := util.Find(tra.Operators, func(op *Operator[ecdsa.PublicKey]) bool {
+	operator := util.Find(tra.Operators, func(op *Operator[signing.PublicKey]) bool {
 		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
 	})
 	if operator == nil {
@@ -177,7 +177,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	if tra.aggregatedOperators == nil {
 		// no signers yet, initialize the aggregated operators
 		tra.aggregatedOperators = &aggregatedECDSAOperators{
-			signersPublicKeys: []*ecdsa.PublicKey{operator.PublicKey},
+			signersPublicKeys: []signing.PublicKey{operator.PublicKey},
 
 			signersSignatures: [][]byte{taskResponse.Signature},
 
@@ -214,7 +214,7 @@ func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 }
 
 // TODO(seanmcgary): update this
-func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[ecdsa.PublicKey]) (*signing.Signature, []byte, error) {
+func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[signing.PublicKey]) (*ecdsa.Signature, []byte, error) {
 	/*
 		digestBytes := util.GetKeccak256Digest(taskResponse.Output)
 		sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)
@@ -232,7 +232,7 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *type
 }
 
 func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECDSACertificate, error) {
-	nonSignerOperatorIds := make([]*Operator[ecdsa.PublicKey], 0)
+	nonSignerOperatorIds := make([]*Operator[signing.PublicKey], 0)
 	for _, operator := range tra.Operators {
 		if _, ok := tra.aggregatedOperators.signersOperatorSet[operator.Address]; !ok {
 			nonSignerOperatorIds = append(nonSignerOperatorIds, operator)
@@ -247,15 +247,15 @@ func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECD
 	// 	return iOprInt.Cmp(jOprInt) == -1
 	// })
 
-	nonSignerPublicKeys := make([]*ecdsa.PublicKey, 0)
+	nonSignerPublicKeys := make([]signing.PublicKey, 0)
 	for _, operatorId := range nonSignerOperatorIds {
-		operator := util.Find(tra.Operators, func(op *Operator[ecdsa.PublicKey]) bool {
+		operator := util.Find(tra.Operators, func(op *Operator[signing.PublicKey]) bool {
 			return strings.EqualFold(op.Address, operatorId.Address)
 		})
 		nonSignerPublicKeys = append(nonSignerPublicKeys, operator.PublicKey)
 	}
 
-	allPublicKeys := util.Map(tra.Operators, func(o *Operator[ecdsa.PublicKey], i uint64) *ecdsa.PublicKey {
+	allPublicKeys := util.Map(tra.Operators, func(o *Operator[signing.PublicKey], i uint64) signing.PublicKey {
 		return o.PublicKey
 	})
 

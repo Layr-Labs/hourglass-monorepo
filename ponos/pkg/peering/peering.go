@@ -3,25 +3,15 @@ package peering
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 )
 
 type OperatorSet struct {
-	OperatorSetID  uint32           `json:"operatorSetId"`
-	PublicKey      *bn254.PublicKey `json:"publicKey"`
-	NetworkAddress string           `json:"networkAddress"`
-}
-
-func (os *OperatorSet) Clone() (*OperatorSet, error) {
-	pk, err := bn254.NewPublicKeyFromBytes(os.PublicKey.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy public key: %w", err)
-	}
-	return &OperatorSet{
-		OperatorSetID:  os.OperatorSetID,
-		PublicKey:      pk,
-		NetworkAddress: os.NetworkAddress,
-	}, nil
+	OperatorSetID  uint32            `json:"operatorSetId"`
+	PublicKey      signing.PublicKey `json:"publicKey"`
+	NetworkAddress string            `json:"networkAddress"`
+	CurveType      config.CurveType  `json:"curveType"`
 }
 
 type OperatorPeerInfo struct {
@@ -53,21 +43,6 @@ func (opi *OperatorPeerInfo) IncludesOperatorSetId(operatorSetId uint32) bool {
 		}
 	}
 	return false
-}
-
-func (opi *OperatorPeerInfo) Clone() (*OperatorPeerInfo, error) {
-	clonedOperatorSets := make([]*OperatorSet, len(opi.OperatorSets))
-	for i, os := range opi.OperatorSets {
-		clonedSet, err := os.Clone()
-		if err != nil {
-			return nil, fmt.Errorf("failed to clone operator set: %w", err)
-		}
-		clonedOperatorSets[i] = clonedSet
-	}
-	return &OperatorPeerInfo{
-		OperatorAddress: opi.OperatorAddress,
-		OperatorSets:    clonedOperatorSets,
-	}, nil
 }
 
 type IPeeringDataFetcher interface {

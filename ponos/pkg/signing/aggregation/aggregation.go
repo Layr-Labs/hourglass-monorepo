@@ -22,7 +22,7 @@ type ITaskResultAggregator[SigT, CertT, PubKeyT any] interface {
 
 type Operator[PubKeyT any] struct {
 	Address   string
-	PublicKey *PubKeyT
+	PublicKey PubKeyT
 }
 
 // Error variables for input validation

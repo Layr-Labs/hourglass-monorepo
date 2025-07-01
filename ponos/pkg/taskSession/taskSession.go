@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
@@ -40,14 +42,14 @@ func NewBN254TaskSession(
 	aggregatorSignature []byte,
 	operatorPeersWeight *operatorManager.PeerWeight,
 	logger *zap.Logger,
-) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, bn254.PublicKey], error) {
-	operators := []*aggregation.Operator[bn254.PublicKey]{}
+) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey], error) {
+	operators := []*aggregation.Operator[signing.PublicKey]{}
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
-		operators = append(operators, &aggregation.Operator[bn254.PublicKey]{
+		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
 			Address:   peer.OperatorAddress,
 			PublicKey: opset.PublicKey,
 		})
@@ -66,7 +68,59 @@ func NewBN254TaskSession(
 	if err != nil {
 		return nil, err
 	}
-	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, bn254.PublicKey]{
+	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey]{
+		Task:                task,
+		aggregatorAddress:   aggregatorAddress,
+		aggregatorSignature: aggregatorSignature,
+		results:             sync.Map{},
+		context:             ctx,
+		contextCancel:       cancel,
+		logger:              logger,
+		taskAggregator:      ta,
+		operatorPeersWeight: operatorPeersWeight,
+		thresholdMet:        atomic.Bool{},
+	}
+	ts.resultsCount.Store(0)
+	ts.thresholdMet.Store(false)
+
+	return ts, nil
+}
+
+func NewECDSATaskSession(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	task *types.Task,
+	aggregatorAddress string,
+	aggregatorSignature []byte,
+	operatorPeersWeight *operatorManager.PeerWeight,
+	logger *zap.Logger,
+) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, signing.PublicKey], error) {
+	operators := []*aggregation.Operator[signing.PublicKey]{}
+	for _, peer := range operatorPeersWeight.Operators {
+		opset, err := peer.GetOperatorSet(task.OperatorSetId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
+		}
+		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
+			Address:   peer.OperatorAddress,
+			PublicKey: opset.PublicKey,
+		})
+	}
+
+	ta, err := aggregation.NewECDSATaskResultAggregator(
+		ctx,
+		task.TaskId,
+		task.BlockNumber,
+		task.OperatorSetId,
+		100,
+		task.Payload,
+		task.DeadlineUnixSeconds,
+		operators,
+	)
+	if err != nil {
+		return nil, err
+	}
+	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, signing.PublicKey]{
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		aggregatorSignature: aggregatorSignature,

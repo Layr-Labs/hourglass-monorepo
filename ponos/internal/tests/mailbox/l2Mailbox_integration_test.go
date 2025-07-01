@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	chainPoller2 "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -350,7 +351,7 @@ func Test_L2Mailbox(t *testing.T) {
 				return
 			}
 
-			operators := []*aggregation.Operator[bn254.PublicKey]{
+			operators := []*aggregation.Operator[signing.PublicKey]{
 				{
 					Address:   chainConfig.ExecOperatorAccountAddress,
 					PublicKey: execPublicKey,
@@ -430,7 +431,7 @@ func Test_L2Mailbox(t *testing.T) {
 
 			fmt.Printf("Submitting task result to AVS\n\n\n")
 			fmt.Printf("Using timestamp: %d\n", tableData.LatestReferenceTimestamp)
-			receipt, err := avsCc.SubmitTaskResult(ctx, cert, tableData.LatestReferenceTimestamp)
+			receipt, err := avsCc.SubmitBN254TaskResult(ctx, cert, tableData.LatestReferenceTimestamp)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to submit task result: %v", err)

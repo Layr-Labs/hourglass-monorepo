@@ -270,7 +270,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 
 		em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(ts.Task.ChainId)))
 
-		receipt, err := chainCC.SubmitTaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
 		if err != nil {
 			// TODO: emit metric
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)

@@ -3,7 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
-
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -75,6 +75,7 @@ func Test_Executor(t *testing.T) {
 						OperatorSetID:  0,
 						PublicKey:      pubKey,
 						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
+						CurveType:      config.CurveTypeBN254,
 					},
 				},
 			},
@@ -112,7 +113,6 @@ func Test_Executor(t *testing.T) {
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
-
 	if err != nil {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
