@@ -95,4 +95,4 @@ require (
 
 replace github.com/Layr-Labs/hourglass-monorepo/contracts => ../contracts
 
-replace github.com/Layr-Labs/crypto-libs => /Users/seanmcgary/Code/crypto-libs
+replace github.com/Layr-Labs/crypto-libs v0.0.3 => /Users/seanmcgary/Code/crypto-libs

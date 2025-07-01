@@ -2,9 +2,9 @@ package aggregation
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,6 +39,20 @@ type AggregatedECDSACertificate struct {
 	SignedAt *time.Time
 }
 
+type ReceivedECDSAResponseWithDigest struct {
+	// TaskId is the unique identifier for the task
+	TaskId string
+
+	// The full task result from the operator
+	TaskResult *types.TaskResult
+
+	// signature is the signature of the task result from the operator signed with their bls key
+	Signature *signing.Signature
+
+	// digest is a keccak256 hash of the task result
+	Digest []byte
+}
+
 type aggregatedECDSAOperators struct {
 	// aggregated public keys of signers
 	signersPublicKeys []*ecdsa.PublicKey
@@ -52,7 +66,7 @@ type aggregatedECDSAOperators struct {
 	// simple count of signers. eventually this could represent stake weight or something
 	totalSigners int
 
-	lastReceivedResponse *ReceivedResponseWithDigest
+	lastReceivedResponse *ReceivedECDSAResponseWithDigest
 }
 
 type ECDSATaskResultAggregator struct {
@@ -64,7 +78,7 @@ type ECDSATaskResultAggregator struct {
 	TaskData            []byte
 	TaskExpirationTime  *time.Time
 	Operators           []*Operator[ecdsa.PublicKey]
-	ReceivedSignatures  map[string]*ReceivedResponseWithDigest // operator address -> signature
+	ReceivedSignatures  map[string]*ReceivedECDSAResponseWithDigest // operator address -> signature
 
 	AggregatePublicKeys []*ecdsa.PublicKey
 
@@ -131,7 +145,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 
 	// Initialize map if nil
 	if tra.ReceivedSignatures == nil {
-		tra.ReceivedSignatures = make(map[string]*ReceivedResponseWithDigest)
+		tra.ReceivedSignatures = make(map[string]*ReceivedECDSAResponseWithDigest)
 	}
 
 	// check to see if the operator has already submitted a signature
@@ -145,7 +159,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
 
-	rr := &ReceivedResponseWithDigest{
+	rr := &ReceivedECDSAResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
@@ -200,7 +214,7 @@ func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 }
 
 // TODO(seanmcgary): update this
-func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[ecdsa.PublicKey]) (*bn254.Signature, []byte, error) {
+func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[ecdsa.PublicKey]) (*signing.Signature, []byte, error) {
 	/*
 		digestBytes := util.GetKeccak256Digest(taskResponse.Output)
 		sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)

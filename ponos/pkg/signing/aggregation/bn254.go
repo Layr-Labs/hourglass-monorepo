@@ -48,7 +48,7 @@ type BN254TaskResultAggregator struct {
 	TaskData            []byte
 	TaskExpirationTime  *time.Time
 	Operators           []*Operator[bn254.PublicKey]
-	ReceivedSignatures  map[string]*ReceivedResponseWithDigest // operator address -> signature
+	ReceivedSignatures  map[string]*ReceivedBN254ResponseWithDigest // operator address -> signature
 	AggregatePublicKey  *bn254.PublicKey
 
 	aggregatedOperators *aggregatedBN254Operators
@@ -97,7 +97,7 @@ func NewBN254TaskResultAggregator(
 	return cert, nil
 }
 
-type ReceivedResponseWithDigest struct {
+type ReceivedBN254ResponseWithDigest struct {
 	// TaskId is the unique identifier for the task
 	TaskId string
 
@@ -124,7 +124,7 @@ type aggregatedBN254Operators struct {
 	// simple count of signers. eventually this could represent stake weight or something
 	totalSigners int
 
-	lastReceivedResponse *ReceivedResponseWithDigest
+	lastReceivedResponse *ReceivedBN254ResponseWithDigest
 }
 
 func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
@@ -163,7 +163,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 
 	// Initialize map if nil
 	if tra.ReceivedSignatures == nil {
-		tra.ReceivedSignatures = make(map[string]*ReceivedResponseWithDigest)
+		tra.ReceivedSignatures = make(map[string]*ReceivedBN254ResponseWithDigest)
 	}
 
 	// check to see if the operator has already submitted a signature
@@ -177,7 +177,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
 
-	rr := &ReceivedResponseWithDigest{
+	rr := &ReceivedBN254ResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
