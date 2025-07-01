@@ -2,81 +2,16 @@
 
 This document provides detailed API reference for the Hourglass Kubernetes Operator custom resources.
 
+**Architecture**: The operator implements a **singleton pattern** managing only Performer resources. Executors are deployed independently by users as StatefulSets.
+
 ## API Groups
 
 - **Group**: `hourglass.eigenlayer.io`
 - **Version**: `v1alpha1`
 
-## HourglassExecutor
-
-The HourglassExecutor resource manages the aggregation and execution layer of the Hourglass system.
-
-### Resource Definition
-
-```yaml
-apiVersion: hourglass.eigenlayer.io/v1alpha1
-kind: HourglassExecutor
-metadata:
-  name: string
-  namespace: string
-spec:
-  # HourglassExecutorSpec
-status:
-  # HourglassExecutorStatus
-```
-
-### HourglassExecutorSpec
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `image` | string | Yes | Container image for the executor |
-| `replicas` | *int32 | No | Number of executor instances (default: 1) |
-| `config` | HourglassExecutorConfig | Yes | Executor configuration |
-| `resources` | corev1.ResourceRequirements | No | Resource requirements |
-| `nodeSelector` | map[string]string | No | Node selection constraints |
-| `tolerations` | []corev1.Toleration | No | Pod tolerations |
-| `imagePullSecrets` | []corev1.LocalObjectReference | No | Image pull secrets |
-
-### HourglassExecutorConfig
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `aggregatorEndpoint` | string | Yes | gRPC endpoint of the aggregator service |
-| `operatorKeys` | map[string]string | Yes | BLS and ECDSA private keys |
-| `chains` | []ChainConfig | Yes | Blockchain network configurations |
-| `performerMode` | string | No | Deployment mode: "docker" or "kubernetes" (default: "kubernetes") |
-| `kubernetes` | *KubernetesConfig | No | Kubernetes-specific configuration |
-| `logLevel` | string | No | Logging level (default: "info") |
-
-### ChainConfig
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Chain identifier (e.g., "ethereum", "base") |
-| `rpc` | string | Yes | RPC endpoint URL |
-| `chainId` | int64 | Yes | Blockchain network ID |
-| `taskMailboxAddress` | string | Yes | TaskMailbox contract address |
-
-### KubernetesConfig
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `namespace` | string | No | Target namespace for performers (default: "default") |
-| `defaultScheduling` | *SchedulingConfig | No | Default scheduling constraints for performers |
-
-### HourglassExecutorStatus
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `phase` | string | Current deployment phase: "Pending", "Running", "Stopped" |
-| `replicas` | int32 | Total number of replicas |
-| `readyReplicas` | int32 | Number of ready replicas |
-| `conditions` | []metav1.Condition | Detailed status conditions |
-| `lastConfigUpdate` | *metav1.Time | Timestamp of last configuration update |
-
 ## Performer
 
-The Performer resource manages individual AVS workload containers with advanced scheduling capabilities.
+The Performer resource manages individual AVS workload containers with advanced scheduling and hardware requirements. This is the **only** custom resource managed by the singleton operator.
 
 ### Resource Definition
 
@@ -99,12 +34,13 @@ status:
 | `avsAddress` | string | Yes | Unique identifier for the AVS |
 | `image` | string | Yes | Container image for the performer |
 | `version` | string | No | Image version for upgrade tracking |
-| `executorRef` | string | No | Reference to parent HourglassExecutor |
 | `config` | PerformerConfig | No | Performer-specific configuration |
 | `resources` | corev1.ResourceRequirements | No | Resource requirements |
 | `scheduling` | *SchedulingConfig | No | Advanced scheduling constraints |
 | `hardwareRequirements` | *HardwareRequirements | No | Specialized hardware needs |
 | `imagePullSecrets` | []corev1.LocalObjectReference | No | Image pull secrets |
+
+**Note**: The `executorRef` field has been **removed** in the singleton architecture. Performers are created directly by user-managed Executors.
 
 ### PerformerConfig
 
@@ -120,9 +56,12 @@ status:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `nodeSelector` | map[string]string | No | Basic node selection labels |
-| `nodeAffinity` | *corev1.NodeAffinity | No | Advanced node affinity rules |
 | `tolerations` | []corev1.Toleration | No | Pod tolerations for tainted nodes |
-| `runtimeClass` | *string | No | Container runtime class |
+| `affinity` | *corev1.Affinity | No | Full Kubernetes affinity specification |
+| `runtimeClass` | *string | No | Container runtime class (e.g., "gvisor", "kata") |
+| `priorityClassName` | *string | No | Priority class for pod scheduling |
+
+**Important**: The field is now `affinity` (not `nodeAffinity`) to support the full Kubernetes affinity specification including node, pod, and anti-affinity rules.
 
 ### HardwareRequirements
 
@@ -146,6 +85,18 @@ status:
 | `lastUpgrade` | *metav1.Time | Timestamp of last upgrade |
 | `readyTime` | *metav1.Time | When the performer became ready |
 
+## Service Discovery
+
+The operator creates stable DNS names for performers following the pattern:
+
+```
+performer-{performer-name}.{namespace}.svc.cluster.local:{grpcPort}
+```
+
+**Examples:**
+- `performer-example.avs-project-a.svc.cluster.local:9090`
+- `performer-ml-worker.production.svc.cluster.local:8080`
+
 ## Common Fields
 
 ### ResourceRequirements
@@ -164,25 +115,29 @@ resources:
     nvidia.com/gpu: "1"
 ```
 
-### NodeAffinity
+### Affinity
 
-Standard Kubernetes node affinity:
+Full Kubernetes affinity specification (node, pod, and anti-affinity):
 
 ```yaml
-nodeAffinity:
-  requiredDuringSchedulingIgnoredDuringExecution:
-    nodeSelectorTerms:
-    - matchExpressions:
-      - key: "kubernetes.io/arch"
-        operator: In
-        values: ["amd64"]
-  preferredDuringSchedulingIgnoredDuringExecution:
-  - weight: 100
-    preference:
-      matchExpressions:
-      - key: "node.kubernetes.io/instance-type"
-        operator: In
-        values: ["m5.large", "m5.xlarge"]
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: "app"
+            operator: In
+            values: ["performer"]
+        topologyKey: "kubernetes.io/hostname"
 ```
 
 ### Tolerations
@@ -202,18 +157,9 @@ tolerations:
 
 ## Validation Rules
 
-### HourglassExecutor Validation
-
-- `image` must be a valid container image reference
-- `replicas` must be >= 1 if specified
-- `config.aggregatorEndpoint` must be a valid endpoint
-- `config.chains` must contain at least one chain
-- Each chain must have a unique `name`
-- `config.performerMode` must be "docker" or "kubernetes"
-
 ### Performer Validation
 
-- `avsAddress` must be a valid Ethereum address format
+- `avsAddress` must be a valid Ethereum address format (0x followed by 40 hex characters)
 - `image` must be a valid container image reference
 - `config.grpcPort` must be in range 1-65535
 - `hardwareRequirements.gpuCount` must be >= 0
@@ -221,7 +167,7 @@ tolerations:
 
 ## Status Conditions
 
-Both resources support standard Kubernetes condition types:
+Performers support standard Kubernetes condition types:
 
 ### Common Condition Types
 
@@ -231,46 +177,19 @@ Both resources support standard Kubernetes condition types:
 | `Progressing` | True/False | Various | Resource is being updated |
 | `Degraded` | True/False | Various | Resource is degraded but functional |
 
-### HourglassExecutor Conditions
+### Performer Condition Reasons
 
 | Reason | Description |
 |--------|-------------|
-| `DeploymentAvailable` | Underlying deployment is available |
-| `ConfigMapReady` | Configuration has been applied |
-| `RollingUpdate` | Rolling update in progress |
-
-### Performer Conditions
-
-| Reason | Description |
-|--------|-------------|
-| `PodReady` | Performer pod is ready |
-| `ServiceReady` | Service is created and ready |
-| `Scheduled` | Pod has been scheduled to a node |
+| `PodReady` | Performer pod is ready and running |
+| `ServiceReady` | Service is created and endpoints are ready |
+| `Scheduled` | Pod has been successfully scheduled to a node |
 | `ImagePullFailed` | Failed to pull container image |
-| `SchedulingFailed` | Failed to find suitable node |
+| `SchedulingFailed` | Failed to find suitable node for constraints |
+| `HardwareUnavailable` | Required hardware (GPU/TEE) not available |
+| `UpgradeInProgress` | Performer is being upgraded to new version |
 
 ## Examples
-
-### Minimal HourglassExecutor
-
-```yaml
-apiVersion: hourglass.eigenlayer.io/v1alpha1
-kind: HourglassExecutor
-metadata:
-  name: minimal-executor
-spec:
-  image: "hourglass/executor:latest"
-  config:
-    aggregatorEndpoint: "aggregator.example.com:9090"
-    operatorKeys:
-      ecdsa: "0x..."
-      bls: "0x..."
-    chains:
-    - name: "ethereum"
-      rpc: "https://mainnet.infura.io/v3/YOUR_KEY"
-      chainId: 1
-      taskMailboxAddress: "0x..."
-```
 
 ### Minimal Performer
 
@@ -279,9 +198,81 @@ apiVersion: hourglass.eigenlayer.io/v1alpha1
 kind: Performer
 metadata:
   name: minimal-performer
+  namespace: my-avs-project
 spec:
   avsAddress: "0x1234567890abcdef1234567890abcdef12345678"
   image: "myavs/performer:latest"
+```
+
+### GPU-Enabled Performer
+
+```yaml
+apiVersion: hourglass.eigenlayer.io/v1alpha1
+kind: Performer
+metadata:
+  name: gpu-performer
+  namespace: ml-workloads
+spec:
+  avsAddress: "0xabcdef1234567890abcdef1234567890abcdef12"
+  image: "myavs/ml-performer:v3.0.0"
+  version: "v3.0.0"
+  config:
+    grpcPort: 9090
+    environment:
+      CUDA_VISIBLE_DEVICES: "0,1"
+      LOG_LEVEL: "info"
+  resources:
+    requests:
+      nvidia.com/gpu: "2"
+      cpu: "4"
+      memory: "8Gi"
+    limits:
+      nvidia.com/gpu: "2"
+      cpu: "8"
+      memory: "16Gi"
+  scheduling:
+    nodeSelector:
+      accelerator: "nvidia-tesla-a100"
+    tolerations:
+    - key: "nvidia.com/gpu"
+      operator: "Exists"
+      effect: "NoSchedule"
+  hardwareRequirements:
+    gpuType: "nvidia-a100"
+    gpuCount: 2
+```
+
+### TEE-Enabled Performer
+
+```yaml
+apiVersion: hourglass.eigenlayer.io/v1alpha1
+kind: Performer
+metadata:
+  name: tee-performer
+  namespace: secure-compute
+spec:
+  avsAddress: "0x9876543210987654321098765432109876543210"
+  image: "myavs/secure-performer:v1.5.0"
+  version: "v1.5.0"
+  config:
+    grpcPort: 8080
+    environment:
+      SGX_MODE: "HW"
+      SECURITY_LEVEL: "high"
+  scheduling:
+    nodeSelector:
+      intel.feature.node.kubernetes.io/sgx: "true"
+    tolerations:
+    - key: "sgx"
+      operator: "Equal"
+      value: "enabled"
+      effect: "NoSchedule"
+    runtimeClass: "kata"
+  hardwareRequirements:
+    teeRequired: true
+    teeType: "sgx"
+    customLabels:
+      sgx.intel.com/epc: "128Mi"
 ```
 
 ### Complex Performer with All Features
@@ -291,50 +282,115 @@ apiVersion: hourglass.eigenlayer.io/v1alpha1
 kind: Performer
 metadata:
   name: complex-performer
+  namespace: production
 spec:
-  avsAddress: "0x1234567890abcdef1234567890abcdef12345678"
-  image: "myavs/performer:v2.0.0"
-  version: "v2.0.0"
-  executorRef: "main-executor"
+  avsAddress: "0x1111222233334444555566667777888899990000"
+  image: "myavs/performer:v2.1.0"
+  version: "v2.1.0"
   config:
     grpcPort: 9090
     environment:
       LOG_LEVEL: "debug"
-      WORKER_THREADS: "4"
+      WORKER_THREADS: "8"
+      CACHE_SIZE: "1GB"
     command: ["/usr/bin/performer"]
-    args: ["--config", "/etc/config.yaml"]
+    args: 
+      - "--config=/etc/performer/config.yaml"
+      - "--enable-metrics"
+      - "--metrics-port=8080"
   resources:
     requests:
-      cpu: "2"
-      memory: "4Gi"
+      cpu: "4"
+      memory: "8Gi"
     limits:
-      cpu: "8"
-      memory: "16Gi"
+      cpu: "16"
+      memory: "32Gi"
   scheduling:
     nodeSelector:
-      node.kubernetes.io/instance-type: "m5.2xlarge"
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: "kubernetes.io/arch"
-            operator: In
-            values: ["amd64"]
+      node.kubernetes.io/instance-type: "m5.4xlarge"
+      workload-type: "compute-intensive"
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: "kubernetes.io/arch"
+              operator: In
+              values: ["amd64"]
+            - key: "node.kubernetes.io/instance-type"
+              operator: In
+              values: ["m5.4xlarge", "m5.8xlarge", "c5.4xlarge"]
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+            - key: "zone"
+              operator: In
+              values: ["us-west-2a", "us-west-2b"]
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: "app"
+                operator: In
+                values: ["performer"]
+            topologyKey: "kubernetes.io/hostname"
     tolerations:
     - key: "dedicated"
       operator: "Equal"
       value: "avs-workloads"
       effect: "NoSchedule"
+    - key: "high-memory"
+      operator: "Exists"
+      effect: "NoSchedule"
     runtimeClass: "gvisor"
+    priorityClassName: "high-priority"
   hardwareRequirements:
-    gpuType: "nvidia-a100"
-    gpuCount: 2
-    teeRequired: true
-    teeType: "sgx"
     customLabels:
-      intel.sgx.version: "2.0"
+      performance-tier: "premium"
+      network-bandwidth: "10gbps"
   imagePullSecrets:
-  - name: private-registry
+  - name: private-registry-secret
+```
+
+## User-Managed Executor Integration
+
+Since Executors are now deployed by users as StatefulSets, they create Performer CRDs using the Kubernetes API. Here's how Executors typically interact with Performers:
+
+### Executor Environment Variables
+
+```yaml
+# In Executor StatefulSet
+env:
+- name: DEPLOYMENT_MODE
+  value: "kubernetes"
+- name: KUBERNETES_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: PERFORMER_SERVICE_PATTERN
+  value: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+```
+
+### Executor RBAC
+
+Executors need permissions to manage Performers in their namespace:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: my-avs-project
+  name: executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
 ```
 
 ## kubectl Commands
@@ -342,50 +398,96 @@ spec:
 ### List Resources
 
 ```bash
-# List all executors
-kubectl get hourglassexecutors
+# List all performers across cluster (operator manages cluster-wide)
+kubectl get performers --all-namespaces
 
-# List all performers
-kubectl get performers
+# List performers in specific namespace
+kubectl get performers -n my-avs-project
 
-# List both with custom columns
-kubectl get hourglassexecutors,performers -o custom-columns=\
+# List with custom columns
+kubectl get performers -o custom-columns=\
 NAME:.metadata.name,\
+NAMESPACE:.metadata.namespace,\
+AVS:.spec.avsAddress,\
 PHASE:.status.phase,\
-READY:.status.readyReplicas,\
+ENDPOINT:.status.grpcEndpoint,\
 AGE:.metadata.creationTimestamp
 ```
 
 ### Describe Resources
 
 ```bash
-# Describe executor
-kubectl describe hourglassexecutor my-executor
-
 # Describe performer
-kubectl describe performer my-performer
+kubectl describe performer my-performer -n my-avs-project
+
+# Check performer status across all namespaces
+kubectl get performers --all-namespaces -o wide
 ```
 
 ### Edit Resources
 
 ```bash
-# Edit executor
-kubectl edit hourglassexecutor my-executor
+# Edit performer
+kubectl edit performer my-performer -n my-avs-project
 
 # Patch performer image
-kubectl patch performer my-performer --type='merge' \
+kubectl patch performer my-performer -n my-avs-project --type='merge' \
   -p='{"spec":{"image":"myavs/performer:v2.1.0","version":"v2.1.0"}}'
+
+# Scale resources
+kubectl patch performer my-performer -n my-avs-project --type='merge' \
+  -p='{"spec":{"resources":{"requests":{"cpu":"2","memory":"4Gi"}}}}'
 ```
 
 ### Status and Logs
 
 ```bash
-# Check executor status
-kubectl get hourglassexecutor my-executor -o yaml
+# Check performer status
+kubectl get performer my-performer -n my-avs-project -o yaml
 
-# Check performer logs
-kubectl logs performer-my-performer
+# Check performer logs (via pod)
+kubectl logs -l "app=performer,performer-name=my-performer" -n my-avs-project
 
 # Follow logs
-kubectl logs -f deployment/my-executor
+kubectl logs -f $(kubectl get pod -l "app=performer,performer-name=my-performer" -n my-avs-project -o jsonpath='{.items[0].metadata.name}') -n my-avs-project
+
+# Check service endpoints
+kubectl get endpoints -l "app=performer" -n my-avs-project
+
+# Test DNS resolution from executor
+kubectl exec -it <executor-pod> -n my-avs-project -- \
+  nslookup performer-my-performer.my-avs-project.svc.cluster.local
 ```
+
+### Multi-Namespace Operations
+
+```bash
+# Monitor all performers across multiple AVS projects
+kubectl get performers --all-namespaces --watch
+
+# Count performers per namespace
+kubectl get performers --all-namespaces --no-headers | awk '{print $1}' | sort | uniq -c
+
+# Find performers by AVS address
+kubectl get performers --all-namespaces -o json | \
+  jq -r '.items[] | select(.spec.avsAddress=="0x1234...") | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+## Migration Notes
+
+### From Previous Architecture
+
+If migrating from a version with HourglassExecutor CRDs:
+
+1. **Remove executorRef**: The `executorRef` field is no longer supported
+2. **Update RBAC**: Executors need permissions to manage Performers in their namespace
+3. **Service Discovery**: DNS names remain the same (`performer-{name}.{namespace}.svc.cluster.local`)
+4. **Status Monitoring**: Use namespace-scoped queries for executor-specific monitoring
+
+### API Changes
+
+| Field | Old Architecture | New Architecture | Notes |
+|-------|------------------|------------------|-------|
+| `executorRef` | Required reference | **Removed** | No longer needed |
+| `scheduling.nodeAffinity` | Separate field | Part of `affinity` | Use full Kubernetes affinity spec |
+| RBAC scope | Operator manages all | User executors manage per-namespace | Better isolation |

@@ -1,15 +1,16 @@
 # Process Flow Diagrams
 
-This document contains detailed process flow diagrams showing how the Hourglass Kubernetes Operator manages resource lifecycles.
+This document contains detailed process flow diagrams showing how the **singleton** Hourglass Kubernetes Operator manages resource lifecycles across multiple user-deployed Executors.
 
-## Overall System Flow
+## Overall System Flow (Singleton Architecture)
 
 ```mermaid
 graph TB
     subgraph "User Actions"
-        UA[User applies CR]
-        UU[User updates CR]
-        UD[User deletes CR]
+        UA[User deploys Executor StatefulSet]
+        UU[User updates Executor]
+        UP[User creates/updates Performer]
+        UD[User deletes resources]
     end
     
     subgraph "Kubernetes Control Plane"
@@ -18,25 +19,38 @@ graph TB
         SCHED[Kubernetes Scheduler]
     end
     
-    subgraph "Hourglass Operator"
+    subgraph "Singleton Operator"
         OP[Operator Manager]
-        EC[Executor Controller]
-        PC[Performer Controller]
+        PC[Performer Controller Only]
         WQ[Work Queue]
     end
     
-    subgraph "Worker Nodes"
-        subgraph "Node 1"
-            EP1[Executor Pod 1]
-            EP2[Executor Pod 2]
+    subgraph "Namespace: avs-project-a"
+        subgraph "User-Managed Resources A"
+            EA[Executor StatefulSet A]
+            EPA[Executor Pod A]
         end
         
-        subgraph "Node 2 (GPU)"
-            PP1[GPU Performer Pod]
+        subgraph "Operator-Managed Resources A"
+            PA1[Performer A1]
+            PA2[Performer A2]
+            PPA1[Performer Pod A1]
+            PPA2[Performer Pod A2]
+            PSA1[Performer Service A1]
+            PSA2[Performer Service A2]
+        end
+    end
+    
+    subgraph "Namespace: avs-project-b"
+        subgraph "User-Managed Resources B"
+            EB[Executor StatefulSet B]
+            EPB[Executor Pod B]
         end
         
-        subgraph "Node 3 (TEE)"
-            PP2[TEE Performer Pod]
+        subgraph "Operator-Managed Resources B"
+            PB1[Performer B1]
+            PPB1[Performer Pod B1]
+            PSB1[Performer Service B1]
         end
     end
     
@@ -48,66 +62,85 @@ graph TB
     
     UA --> API
     UU --> API
+    UP --> API
     UD --> API
     
     API --> ETCD
     API --> OP
     
     OP --> WQ
-    WQ --> EC
     WQ --> PC
-    
-    EC --> API
     PC --> API
     
     API --> SCHED
-    SCHED --> EP1
-    SCHED --> EP2
-    SCHED --> PP1
-    SCHED --> PP2
+    SCHED --> EPA
+    SCHED --> EPB
+    SCHED --> PPA1
+    SCHED --> PPA2
+    SCHED --> PPB1
     
-    EP1 --> AGG
-    EP2 --> AGG
-    EP1 --> ETH
-    EP2 --> ETH
-    EP1 --> BASE
-    EP2 --> BASE
+    EPA -->|Creates| PA1
+    EPA -->|Creates| PA2
+    EPB -->|Creates| PB1
     
-    EP1 -.->|gRPC| PP1
-    EP2 -.->|gRPC| PP1
-    EP1 -.->|gRPC| PP2
-    EP2 -.->|gRPC| PP2
+    PC -->|Watches All| PA1
+    PC -->|Watches All| PA2
+    PC -->|Watches All| PB1
+    
+    PC -->|Manages| PPA1
+    PC -->|Manages| PPA2
+    PC -->|Manages| PPB1
+    PC -->|Manages| PSA1
+    PC -->|Manages| PSA2
+    PC -->|Manages| PSB1
+    
+    EPA --> AGG
+    EPB --> AGG
+    EPA --> ETH
+    EPB --> ETH
+    EPA --> BASE
+    EPB --> BASE
+    
+    EPA -.->|gRPC| PSA1
+    EPA -.->|gRPC| PSA2
+    EPB -.->|gRPC| PSB1
+    
+    PSA1 --> PPA1
+    PSA2 --> PPA2
+    PSB1 --> PPB1
 ```
 
-## HourglassExecutor Lifecycle
+## User-Managed Executor Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Pending
+    [*] --> UserDeploys
     
-    Pending --> Creating : Controller starts reconciliation
-    Creating --> ConfigMapCreation : Create/Update ConfigMap
-    ConfigMapCreation --> DeploymentCreation : ConfigMap ready
-    DeploymentCreation --> PodScheduling : Deployment created
-    PodScheduling --> PodCreation : Pods scheduled
-    PodCreation --> Running : All pods ready
+    UserDeploys --> StatefulSetCreated : User applies StatefulSet YAML
+    StatefulSetCreated --> PodScheduling : K8s schedules pods
+    PodScheduling --> PodStartup : Pods starting
+    PodStartup --> ExecutorRunning : Executor process ready
     
-    Running --> Updating : Spec changes detected
-    Updating --> ConfigMapUpdate : Update configuration
-    ConfigMapUpdate --> RollingUpdate : ConfigMap updated
-    RollingUpdate --> Running : Rolling update complete
+    ExecutorRunning --> PerformerCreation : Executor creates Performer CRDs
+    PerformerCreation --> OperatorWatch : Singleton operator watches CRDs
+    OperatorWatch --> PerformerManagement : Operator manages performer resources
+    PerformerManagement --> FullyOperational : System fully operational
     
-    Running --> Scaling : Replica count changes
-    Scaling --> Running : Scaling complete
+    FullyOperational --> UserUpdates : User updates Executor config
+    UserUpdates --> RollingUpdate : StatefulSet rolling update
+    RollingUpdate --> FullyOperational : Update complete
     
-    Running --> Terminating : Resource deleted
-    Terminating --> Cleanup : Finalizer processing
-    Cleanup --> [*] : Resources cleaned up
+    FullyOperational --> UserScales : User scales replicas
+    UserScales --> FullyOperational : Scaling complete
     
-    Creating --> Failed : Creation error
-    Updating --> Failed : Update error
-    Scaling --> Failed : Scaling error
-    Failed --> Creating : Retry
+    FullyOperational --> UserDeletes : User deletes StatefulSet
+    UserDeletes --> PerformerCleanup : Executor cleans up Performers
+    PerformerCleanup --> [*] : Resources cleaned up
+    
+    PodScheduling --> Failed : Scheduling failure
+    PodStartup --> Failed : Startup failure
+    Failed --> UserFixes : User fixes configuration
+    UserFixes --> StatefulSetCreated : Redeploy
 ```
 
 ## Performer Lifecycle
@@ -143,81 +176,91 @@ stateDiagram-v2
     Failed --> Creating : Retry with backoff
 ```
 
-## Controller Reconciliation Loop
+## Singleton Performer Controller Reconciliation Loop
 
 ```mermaid
 flowchart TD
-    Start([Reconcile Request]) --> GetResource[Get Resource from API]
-    GetResource --> ResourceExists{Resource Exists?}
+    Start([Performer Reconcile Request<br/>Any Namespace]) --> GetPerformer[Get Performer from Namespace]
+    GetPerformer --> ResourceExists{Performer Exists?}
     
-    ResourceExists -->|No| End([End - Resource Deleted])
+    ResourceExists -->|No| End([End - Performer Deleted])
     ResourceExists -->|Yes| CheckDeletion{DeletionTimestamp Set?}
     
-    CheckDeletion -->|Yes| HandleDeletion[Handle Deletion]
-    HandleDeletion --> RemoveFinalizer[Remove Finalizer]
+    CheckDeletion -->|Yes| HandleDeletion[Handle Deletion in Namespace]
+    HandleDeletion --> CleanupPod[Delete Performer Pod]
+    CleanupPod --> CleanupService[Delete Performer Service]
+    CleanupService --> RemoveFinalizer[Remove Finalizer]
     RemoveFinalizer --> End
     
     CheckDeletion -->|No| AddFinalizer[Add Finalizer if Missing]
-    AddFinalizer --> ReconcileResources[Reconcile Owned Resources]
+    AddFinalizer --> ReconcileResources[Reconcile Performer Resources]
     
-    subgraph "Resource Reconciliation"
-        ReconcileResources --> ConfigMap[ConfigMap/Pod Creation]
-        ConfigMap --> Deployment[Deployment/Service Creation]
-        Deployment --> OwnerRef[Set Owner References]
-        OwnerRef --> StatusUpdate[Update Resource Status]
+    subgraph "Namespace-Scoped Resource Reconciliation"
+        ReconcileResources --> PodCreation[Create/Update Performer Pod]
+        PodCreation --> ApplyScheduling[Apply Scheduling Constraints]
+        ApplyScheduling --> ApplyHardware[Apply Hardware Requirements]
+        ApplyHardware --> ServiceCreation[Create/Update Performer Service]
+        ServiceCreation --> OwnerRef[Set Owner References]
+        OwnerRef --> StatusUpdate[Update Performer Status]
     end
     
     StatusUpdate --> CheckRequeue{Need Requeue?}
-    CheckRequeue -->|Yes| RequeueAfter[Requeue After Interval]
+    CheckRequeue -->|Yes| RequeueAfter[Requeue After 2 Minutes]
     CheckRequeue -->|No| End
     RequeueAfter --> End
     
-    GetResource -->|Error| ErrorHandler[Handle API Error]
+    GetPerformer -->|Error| ErrorHandler[Handle API Error]
     ErrorHandler --> RetryDecision{Retry?}
     RetryDecision -->|Yes| RequeueImmediate[Immediate Requeue]
     RetryDecision -->|No| End
     RequeueImmediate --> End
 ```
 
-## Advanced Scheduling Flow
+## Advanced Scheduling Flow (Singleton Operator)
 
 ```mermaid
 sequenceDiagram
-    participant User
+    participant Executor as User Executor Pod
     participant API as Kubernetes API
-    participant Controller as Performer Controller
+    participant Controller as Singleton Performer Controller
     participant Scheduler as K8s Scheduler
     participant Node1 as Regular Node
     participant Node2 as GPU Node
     participant Node3 as TEE Node
     
-    User->>API: Apply Performer with GPU requirements
-    API->>Controller: Watch event triggered
-    Controller->>API: Get Performer resource
-    Controller->>Controller: Build pod specification
+    Note over Executor: User-deployed Executor needs GPU performer
+    Executor->>API: Create Performer CRD with GPU requirements
+    API->>Controller: Watch event triggered (any namespace)
+    Controller->>API: Get Performer resource from namespace
+    Controller->>Controller: Build pod specification with constraints
     
-    Note over Controller: Apply nodeSelector, affinity, tolerations, hardware requirements
+    Note over Controller: Apply nodeSelector, GPU affinity, tolerations, hardware requirements
     
-    Controller->>API: Create Pod with scheduling constraints
-    API->>Scheduler: Schedule pod
+    Controller->>API: Create Pod in performer's namespace
+    API->>Scheduler: Schedule pod with constraints
     
     Scheduler->>Node1: Check node compatibility
     Node1-->>Scheduler: No GPU available
     
-    Scheduler->>Node2: Check node compatibility
+    Scheduler->>Node2: Check node compatibility  
     Node2-->>Scheduler: GPU available, constraints satisfied
     
     Scheduler->>API: Bind pod to Node2
-    API->>Node2: Create pod
+    API->>Node2: Create pod in namespace
     Node2->>Node2: Pull image and start container
     
     Node2-->>API: Pod status update
     API->>Controller: Pod status change event
-    Controller->>API: Update Performer status
+    Controller->>API: Update Performer status in namespace
     
-    Controller->>API: Create Service
+    Controller->>API: Create Service in namespace
     API->>Controller: Service created
     Controller->>API: Update Performer with gRPC endpoint
+    
+    Note over Executor: Connect to performer via stable DNS
+    Executor->>API: Query Performer status
+    API-->>Executor: Performer ready, endpoint available
+    Executor->>Node2: Connect via performer-{name}.{namespace}.svc.cluster.local
 ```
 
 ## Hardware Requirements Processing
@@ -258,37 +301,59 @@ flowchart TD
     Retry --> SchedulerEval
 ```
 
-## Service Discovery Flow
+## Service Discovery Flow (Multi-Namespace)
 
 ```mermaid
 sequenceDiagram
-    participant Executor as Executor Pod
+    participant ExecutorA as Executor A<br/>(Namespace A)
+    participant ExecutorB as Executor B<br/>(Namespace B)
     participant DNS as Cluster DNS
-    participant Service as Performer Service
-    participant Pod as Performer Pod
-    participant Controller as Performer Controller
+    participant ServiceA as Performer Service A<br/>(Namespace A)
+    participant ServiceB as Performer Service B<br/>(Namespace B)
+    participant PodA as Performer Pod A<br/>(Namespace A)
+    participant PodB as Performer Pod B<br/>(Namespace B)
+    participant Controller as Singleton Performer Controller
     
-    Note over Controller: Performer controller creates service
-    Controller->>Service: Create service with stable name
-    Controller->>Pod: Create performer pod
-    Controller->>Controller: Update Performer status with gRPC endpoint
+    Note over Controller: Singleton controller manages all performers
+    Controller->>ServiceA: Create service with stable name in Namespace A
+    Controller->>PodA: Create performer pod in Namespace A
+    Controller->>ServiceB: Create service with stable name in Namespace B
+    Controller->>PodB: Create performer pod in Namespace B
+    Controller->>Controller: Update Performer statuses with gRPC endpoints
     
-    Note over Executor: Executor needs to connect to performer
-    Executor->>DNS: Resolve performer-{name}.{namespace}.svc.cluster.local
-    DNS-->>Executor: Return service IP
+    Note over ExecutorA: Executor A connects to its performers
+    ExecutorA->>DNS: Resolve performer-a1.namespace-a.svc.cluster.local
+    DNS-->>ExecutorA: Return service A IP
     
-    Executor->>Service: Connect via gRPC (port 9090)
-    Service->>Pod: Route traffic to performer pod
-    Pod-->>Service: gRPC response
-    Service-->>Executor: Forward response
+    Note over ExecutorB: Executor B connects to its performers
+    ExecutorB->>DNS: Resolve performer-b1.namespace-b.svc.cluster.local
+    DNS-->>ExecutorB: Return service B IP
     
-    Note over Executor,Pod: Persistent gRPC connection established
+    ExecutorA->>ServiceA: Connect via gRPC (port 9090)
+    ServiceA->>PodA: Route traffic to performer pod A
+    PodA-->>ServiceA: gRPC response
+    ServiceA-->>ExecutorA: Forward response
     
-    loop Continuous Communication
-        Executor->>Service: Send task requests
-        Service->>Pod: Forward to performer
-        Pod-->>Service: Task responses
-        Service-->>Executor: Forward responses
+    ExecutorB->>ServiceB: Connect via gRPC (port 9090)
+    ServiceB->>PodB: Route traffic to performer pod B
+    PodB-->>ServiceB: gRPC response
+    ServiceB-->>ExecutorB: Forward response
+    
+    Note over ExecutorA,PodA: Namespace A communication
+    Note over ExecutorB,PodB: Namespace B communication
+    
+    loop Continuous Communication (Namespace A)
+        ExecutorA->>ServiceA: Send task requests
+        ServiceA->>PodA: Forward to performer A
+        PodA-->>ServiceA: Task responses
+        ServiceA-->>ExecutorA: Forward responses
+    end
+    
+    loop Continuous Communication (Namespace B)
+        ExecutorB->>ServiceB: Send task requests
+        ServiceB->>PodB: Forward to performer B
+        PodB-->>ServiceB: Task responses
+        ServiceB-->>ExecutorB: Forward responses
     end
 ```
 
@@ -323,51 +388,100 @@ flowchart TD
     UpdateStatusFailed --> End
 ```
 
-## Multi-Chain Executor Configuration
+## Multi-Namespace Deployment Flow
 
 ```mermaid
-flowchart LR
-    subgraph "HourglassExecutor"
-        Config[Executor Config]
-        Chain1[Ethereum Chain Config]
-        Chain2[Base Chain Config]
-        Chain3[Arbitrum Chain Config]
-    end
+sequenceDiagram
+    participant Admin as Cluster Admin
+    participant UserA as AVS Team A
+    participant UserB as AVS Team B
+    participant API as Kubernetes API
+    participant Operator as Singleton Operator
+    participant NSA as Namespace A
+    participant NSB as Namespace B
     
-    subgraph "Generated ConfigMap"
-        YAML[executor-config.yaml]
-    end
+    Note over Admin: Deploy singleton operator once
+    Admin->>API: Deploy operator to hourglass-system namespace
+    API->>Operator: Operator starts watching cluster-wide
     
-    subgraph "Executor Pod"
-        Process[Executor Process]
-        ETHClient[Ethereum Client]
-        BaseClient[Base Client]
-        ArbClient[Arbitrum Client]
-    end
+    Note over UserA: Deploy AVS project A
+    UserA->>API: Create namespace avs-project-a
+    UserA->>NSA: Deploy Executor StatefulSet A
+    UserA->>NSA: Deploy Executor config and secrets
+    NSA->>API: Executor A creates Performer CRDs
+    API->>Operator: Watch events from namespace A
+    Operator->>NSA: Create Performer pods and services in namespace A
     
-    subgraph "External Networks"
-        ETH[Ethereum Mainnet]
-        BASE[Base Network]
-        ARB[Arbitrum One]
-    end
+    Note over UserB: Deploy AVS project B (independent)
+    UserB->>API: Create namespace avs-project-b
+    UserB->>NSB: Deploy Executor StatefulSet B
+    UserB->>NSB: Deploy Executor config and secrets
+    NSB->>API: Executor B creates Performer CRDs
+    API->>Operator: Watch events from namespace B
+    Operator->>NSB: Create Performer pods and services in namespace B
     
-    Config --> YAML
-    Chain1 --> YAML
-    Chain2 --> YAML
-    Chain3 --> YAML
+    Note over Operator: Single operator manages both namespaces
+    Operator->>Operator: Reconcile performers from both namespaces
     
-    YAML -->|Mount| Process
-    Process --> ETHClient
-    Process --> BaseClient
-    Process --> ArbClient
-    
-    ETHClient --> ETH
-    BaseClient --> BASE
-    ArbClient --> ARB
-    
-    ETH -.->|Events| ETHClient
-    BASE -.->|Events| BaseClient
-    ARB -.->|Events| ArbClient
+    Note over NSA,NSB: Isolated operations
+    NSA->>NSA: Executor A ↔ Performer A communication
+    NSB->>NSB: Executor B ↔ Performer B communication
 ```
 
-These diagrams provide a comprehensive view of how the Hourglass Kubernetes Operator orchestrates complex workflows involving multiple chains, specialized hardware, and service discovery patterns.
+## Singleton Operator Benefits Flow
+
+```mermaid
+graph TB
+    subgraph "Traditional Architecture"
+        TA[Executor A + Operator A]
+        TB[Executor B + Operator B]
+        TC[Executor C + Operator C]
+        
+        TA --> RA[Resource Usage A]
+        TB --> RB[Resource Usage B]
+        TC --> RC[Resource Usage C]
+        
+        RA --> TotalOld[Total: 3x Operator Overhead]
+        RB --> TotalOld
+        RC --> TotalOld
+    end
+    
+    subgraph "Singleton Architecture"
+        SA[User Executor A]
+        SB[User Executor B] 
+        SC[User Executor C]
+        SO[Single Operator]
+        
+        SA --> SO
+        SB --> SO
+        SC --> SO
+        
+        SO --> RSingle[Minimal Operator Overhead]
+        SA --> RANew[User Executor Resources A]
+        SB --> RBNew[User Executor Resources B]
+        SC --> RCNew[User Executor Resources C]
+        
+        RSingle --> TotalNew[Total: 1x Operator + User Control]
+        RANew --> TotalNew
+        RBNew --> TotalNew
+        RCNew --> TotalNew
+    end
+    
+    TotalOld -->|Efficiency Gain| TotalNew
+    
+    subgraph "Benefits"
+        B1[Reduced Resource Usage]
+        B2[User Autonomy]
+        B3[Centralized Management]
+        B4[Namespace Isolation]
+        B5[Easier Maintenance]
+    end
+    
+    TotalNew --> B1
+    TotalNew --> B2
+    TotalNew --> B3
+    TotalNew --> B4
+    TotalNew --> B5
+```
+
+These diagrams provide a comprehensive view of how the **singleton** Hourglass Kubernetes Operator orchestrates complex workflows across multiple user-managed executors, specialized hardware scheduling, and multi-namespace service discovery patterns while maintaining operational efficiency and user autonomy.
