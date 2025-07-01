@@ -94,3 +94,5 @@ require (
 )
 
 replace github.com/Layr-Labs/hourglass-monorepo/contracts => ../contracts
+
+replace github.com/Layr-Labs/crypto-libs => /Users/seanmcgary/Code/crypto-libs

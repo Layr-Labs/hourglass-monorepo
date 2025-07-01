@@ -15,12 +15,12 @@ import (
 
 func Test_Aggregation(t *testing.T) {
 	// Create test operators with key pairs
-	operators := make([]*Operator, 4) // Changed to 4 operators
+	operators := make([]*Operator[bn254.PublicKey], 4) // Changed to 4 operators
 	privateKeys := make([]*bn254.PrivateKey, 4)
 	for i := 0; i < 4; i++ {
 		privKey, pubKey, err := bn254.GenerateKeyPair()
 		require.NoError(t, err)
-		operators[i] = &Operator{
+		operators[i] = &Operator[bn254.PublicKey]{
 			Address:   fmt.Sprintf("0x%d", i+1), // Simple address format for testing
 			PublicKey: pubKey,
 		}
@@ -33,7 +33,7 @@ func Test_Aggregation(t *testing.T) {
 
 	deadline := time.Now().Add(10 * time.Minute)
 
-	agg, err := NewTaskResultAggregator(
+	agg, err := NewBN254TaskResultAggregator(
 		context.Background(),
 		taskId,
 		100, // taskCreatedBlock

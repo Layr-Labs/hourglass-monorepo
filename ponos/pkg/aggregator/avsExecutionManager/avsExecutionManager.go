@@ -214,7 +214,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
 
-	ts, err := taskSession.NewTaskSession(
+	ts, err := taskSession.NewBN254TaskSession(
 		ctx,
 		cancel,
 		task,

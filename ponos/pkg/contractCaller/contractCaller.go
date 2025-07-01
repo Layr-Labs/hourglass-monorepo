@@ -32,13 +32,13 @@ type LatestReferenceTimeAndBlock struct {
 type IContractCaller interface {
 	SubmitTaskResult(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedCertificate,
+		aggCert *aggregation.AggregatedBN254Certificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitTaskResultRetryable(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedCertificate,
+		aggCert *aggregation.AggregatedBN254Certificate,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 

@@ -4,8 +4,6 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg6
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=
 github.com/DataDog/zstd v1.4.5/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
-github.com/Layr-Labs/crypto-libs v0.0.3 h1:n5jcvmaBLcjhxL7hcnL8ar0MiycPl6s3OMsuUCn2OEg=
-github.com/Layr-Labs/crypto-libs v0.0.3/go.mod h1:PWjHsuxgk5MNopPr3QLhpP/RJerbjh98qCCSivnVPHE=
 github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250624142947-245d5fee7463 h1:PA2tR7SiX/6EEzfmoMNzmMJ6CXj/RHbfFI/gWJp37ug=
 github.com/Layr-Labs/eigenlayer-contracts v1.6.0-rc.0.0.20250624142947-245d5fee7463/go.mod h1:Ie8YE3EQkTHqG6/tnUS0He7/UPMkXPo/3OFXwSy0iRo=
 github.com/Layr-Labs/multichain-go v0.0.6-0.20250627041002-e6d73ee06afd h1:jp1t4A/0XiDFP7VhM4zl7744IxfUQMDMi3PqtJlBAMw=

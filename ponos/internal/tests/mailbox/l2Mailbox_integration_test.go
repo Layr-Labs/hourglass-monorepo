@@ -350,14 +350,14 @@ func Test_L2Mailbox(t *testing.T) {
 				return
 			}
 
-			operators := []*aggregation.Operator{
+			operators := []*aggregation.Operator[bn254.PublicKey]{
 				{
 					Address:   chainConfig.ExecOperatorAccountAddress,
 					PublicKey: execPublicKey,
 				},
 			}
 
-			resultAgg, err := aggregation.NewTaskResultAggregator(
+			resultAgg, err := aggregation.NewBN254TaskResultAggregator(
 				ctx,
 				task.TaskId,
 				task.BlockNumber,

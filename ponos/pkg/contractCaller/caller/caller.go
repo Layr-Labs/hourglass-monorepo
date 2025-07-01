@@ -132,7 +132,7 @@ func NewContractCaller(
 
 func (cc *ContractCaller) SubmitTaskResultRetryable(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedCertificate,
+	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
@@ -161,7 +161,7 @@ func (cc *ContractCaller) SubmitTaskResultRetryable(
 
 func (cc *ContractCaller) SubmitTaskResult(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedCertificate,
+	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)

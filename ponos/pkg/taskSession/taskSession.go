@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
@@ -15,7 +16,7 @@ import (
 	"sync/atomic"
 )
 
-type TaskSession struct {
+type TaskSession[SigT, CertT, PubKeyT any] struct {
 	Task                *types.Task
 	aggregatorSignature []byte
 	context             context.Context
@@ -27,11 +28,11 @@ type TaskSession struct {
 
 	operatorPeersWeight *operatorManager.PeerWeight
 
-	taskAggregator *aggregation.TaskResultAggregator
+	taskAggregator aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
 	thresholdMet   atomic.Bool
 }
 
-func NewTaskSession(
+func NewBN254TaskSession(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	task *types.Task,
@@ -39,20 +40,20 @@ func NewTaskSession(
 	aggregatorSignature []byte,
 	operatorPeersWeight *operatorManager.PeerWeight,
 	logger *zap.Logger,
-) (*TaskSession, error) {
-	operators := []*aggregation.Operator{}
+) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, bn254.PublicKey], error) {
+	operators := []*aggregation.Operator[bn254.PublicKey]{}
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
-		operators = append(operators, &aggregation.Operator{
+		operators = append(operators, &aggregation.Operator[bn254.PublicKey]{
 			Address:   peer.OperatorAddress,
 			PublicKey: opset.PublicKey,
 		})
 	}
 
-	ta, err := aggregation.NewTaskResultAggregator(
+	ta, err := aggregation.NewBN254TaskResultAggregator(
 		ctx,
 		task.TaskId,
 		task.BlockNumber,
@@ -65,7 +66,7 @@ func NewTaskSession(
 	if err != nil {
 		return nil, err
 	}
-	ts := &TaskSession{
+	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, bn254.PublicKey]{
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		aggregatorSignature: aggregatorSignature,
@@ -83,12 +84,12 @@ func NewTaskSession(
 	return ts, nil
 }
 
-func (ts *TaskSession) Process() (*aggregation.AggregatedCertificate, error) {
+func (ts *TaskSession[SigT, CertT, PubKeyT]) Process() (*CertT, error) {
 	ts.logger.Sugar().Infow("task session started",
 		zap.String("taskId", ts.Task.TaskId),
 	)
 
-	certChan := make(chan *aggregation.AggregatedCertificate, 1)
+	certChan := make(chan *CertT, 1)
 	errChan := make(chan error, 1)
 
 	go func() {
@@ -119,7 +120,7 @@ func (ts *TaskSession) Process() (*aggregation.AggregatedCertificate, error) {
 	}
 }
 
-func (ts *TaskSession) Broadcast() (*aggregation.AggregatedCertificate, error) {
+func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	ts.logger.Sugar().Infow("task session broadcast started",
 		zap.String("taskId", ts.Task.TaskId),
 		zap.Any("recipientOperators", ts.operatorPeersWeight.Operators),
