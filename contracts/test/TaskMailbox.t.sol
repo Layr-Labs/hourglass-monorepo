@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
@@ -147,6 +148,7 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
 
         assertEq(newTaskMailbox.BN254_CERTIFICATE_VERIFIER(), bn254Verifier);
         assertEq(newTaskMailbox.ECDSA_CERTIFICATE_VERIFIER(), ecdsaVerifier);
+        assertEq(newTaskMailbox.version(), "1.0.0");
         assertEq(newTaskMailbox.owner(), address(this));
     }
 }
@@ -924,6 +926,8 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         // Test that we can read the immutable certificate verifiers
         assertEq(taskMailbox.BN254_CERTIFICATE_VERIFIER(), address(mockBN254CertificateVerifier));
         assertEq(taskMailbox.ECDSA_CERTIFICATE_VERIFIER(), address(mockECDSACertificateVerifier));
+        assertEq(taskMailbox.version(), "1.0.0");
+        assertEq(taskMailbox.owner(), address(this));
     }
 
     function test_getExecutorOperatorSetTaskConfig() public {
@@ -1154,5 +1158,122 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
         assertEq(task.payload, bytes("test payload"));
         assertEq(task.executorCert, bytes(""));
         assertEq(task.result, bytes(""));
+    }
+}
+
+// Test contract for upgradeable functionality
+contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
+    function test_Initialize_OnlyOnce() public {
+        // Try to initialize again, should revert
+        vm.expectRevert("Initializable: contract is already initialized");
+        taskMailbox.initialize(address(0x9999));
+    }
+
+    function test_Implementation_CannotBeInitialized() public {
+        // Deploy a new implementation
+        TaskMailbox newImpl =
+            new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "1.0.1");
+
+        // Try to initialize the implementation directly, should revert
+        vm.expectRevert("Initializable: contract is already initialized");
+        newImpl.initialize(address(this));
+    }
+
+    function test_ProxyUpgrade() public {
+        address newOwner = address(0x1234);
+
+        // Deploy new implementation with different version
+        TaskMailbox newImpl =
+            new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "2.0.0");
+
+        // Check version before upgrade
+        assertEq(taskMailbox.version(), "1.0.0");
+
+        // Upgrade proxy to new implementation
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(taskMailbox)), address(newImpl));
+
+        // Check version after upgrade
+        assertEq(taskMailbox.version(), "2.0.0");
+
+        // Verify state is preserved (owner should still be the same)
+        assertEq(taskMailbox.owner(), address(this));
+    }
+
+    function test_ProxyAdmin_OnlyOwnerCanUpgrade() public {
+        address attacker = address(0x9999);
+
+        // Deploy new implementation
+        TaskMailbox newImpl =
+            new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "2.0.0");
+
+        // Try to upgrade from non-owner, should revert
+        vm.prank(attacker);
+        vm.expectRevert("Ownable: caller is not the owner");
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(taskMailbox)), address(newImpl));
+    }
+
+    function test_ProxyAdmin_CannotCallImplementation() public {
+        // ProxyAdmin should not be able to call implementation functions
+        vm.prank(address(proxyAdmin));
+        vm.expectRevert("TransparentUpgradeableProxy: admin cannot fallback to proxy target");
+        TaskMailbox(payable(address(taskMailbox))).owner();
+    }
+
+    function test_StorageSlotConsistency_AfterUpgrade() public {
+        address newOwner = address(0x1234);
+
+        // First, make some state changes
+        taskMailbox.transferOwnership(newOwner);
+        assertEq(taskMailbox.owner(), newOwner);
+
+        // Set up an executor operator set
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Verify config is set
+        ExecutorOperatorSetTaskConfig memory retrievedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        assertEq(address(retrievedConfig.taskHook), address(config.taskHook));
+
+        // Deploy new implementation
+        TaskMailbox newImpl =
+            new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "2.0.0");
+
+        // Upgrade
+        vm.prank(address(this)); // proxyAdmin owner
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(taskMailbox)), address(newImpl));
+
+        // Verify all state is preserved after upgrade
+        assertEq(taskMailbox.owner(), newOwner);
+        assertEq(taskMailbox.version(), "2.0.0");
+
+        // Verify the executor operator set config is still there
+        ExecutorOperatorSetTaskConfig memory configAfterUpgrade =
+            taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        assertEq(address(configAfterUpgrade.taskHook), address(config.taskHook));
+        assertEq(configAfterUpgrade.taskSLA, config.taskSLA);
+        assertEq(configAfterUpgrade.stakeProportionThreshold, config.stakeProportionThreshold);
+    }
+
+    function test_InitializerModifier_PreventsReinitialization() public {
+        // Deploy a new proxy without initialization data
+        TransparentUpgradeableProxy uninitializedProxy = new TransparentUpgradeableProxy(
+            address(
+                new TaskMailbox(address(mockBN254CertificateVerifier), address(mockECDSACertificateVerifier), "1.0.0")
+            ),
+            address(new ProxyAdmin()),
+            ""
+        );
+
+        TaskMailbox uninitializedTaskMailbox = TaskMailbox(address(uninitializedProxy));
+
+        // Initialize it once
+        uninitializedTaskMailbox.initialize(address(this));
+        assertEq(uninitializedTaskMailbox.owner(), address(this));
+
+        // Try to initialize again, should fail
+        vm.expectRevert("Initializable: contract is already initialized");
+        uninitializedTaskMailbox.initialize(address(0x9999));
     }
 }
