@@ -19,18 +19,7 @@ contract DeployTaskMailbox is Script {
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        ITaskMailboxTypes.CertificateVerifierConfig[] memory certificateVerifiers =
-            new ITaskMailboxTypes.CertificateVerifierConfig[](2);
-        certificateVerifiers[0] = ITaskMailboxTypes.CertificateVerifierConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
-            verifier: bn254CertVerifier
-        });
-        certificateVerifiers[1] = ITaskMailboxTypes.CertificateVerifierConfig({
-            curveType: IKeyRegistrarTypes.CurveType.ECDSA,
-            verifier: ecdsaCertVerifier
-        });
-
-        TaskMailbox taskMailbox = new TaskMailbox(deployer, certificateVerifiers);
+        TaskMailbox taskMailbox = new TaskMailbox(deployer, bn254CertVerifier, ecdsaCertVerifier);
         console.log("TaskMailbox deployed to:", address(taskMailbox));
 
         vm.stopBroadcast();

@@ -34,14 +34,15 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     /**
      * @notice Constructor for TaskMailbox
      * @param _owner The owner of the contract
-     * @param _certificateVerifiers Array of certificate verifier configs
+     * @param _bn254CertificateVerifier Address of the BN254 certificate verifier
+     * @param _ecdsaCertificateVerifier Address of the ECDSA certificate verifier
      */
-    constructor(address _owner, CertificateVerifierConfig[] memory _certificateVerifiers) Ownable() {
+    constructor(
+        address _owner,
+        address _bn254CertificateVerifier,
+        address _ecdsaCertificateVerifier
+    ) Ownable() TaskMailboxStorage(_bn254CertificateVerifier, _ecdsaCertificateVerifier) {
         _transferOwnership(_owner);
-
-        for (uint256 i = 0; i < _certificateVerifiers.length; i++) {
-            _setCertificateVerifier(_certificateVerifiers[i].curveType, _certificateVerifiers[i].verifier);
-        }
     }
 
     /**
@@ -51,27 +52,17 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
      */
 
     /// @inheritdoc ITaskMailbox
-    function setCertificateVerifier(
-        IKeyRegistrarTypes.CurveType curveType,
-        address certificateVerifier
-    ) external onlyOwner {
-        _setCertificateVerifier(curveType, certificateVerifier);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
+        address certificateVerifier = _getCertificateVerifier(config.curveType);
         require(
-            IBaseCertificateVerifier(certificateVerifiers[config.curveType]).getOperatorSetOwner(operatorSet)
-                == msg.sender,
+            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
             InvalidOperatorSetOwner()
         );
 
-        // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
-
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
@@ -94,9 +85,9 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
                 && taskConfig.taskSLA > 0,
             ExecutorOperatorSetTaskConfigNotSet()
         );
+        address certificateVerifier = _getCertificateVerifier(taskConfig.curveType);
         require(
-            IBaseCertificateVerifier(certificateVerifiers[taskConfig.curveType]).getOperatorSetOwner(operatorSet)
-                == msg.sender,
+            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
             InvalidOperatorSetOwner()
         );
 
@@ -107,8 +98,6 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function createTask(
         TaskParams memory taskParams
     ) external nonReentrant returns (bytes32) {
-        // TODO: `Created` status cannot be enum value 0 since that is the default value. Figure out how to handle this.
-
         require(taskParams.payload.length > 0, PayloadIsEmpty());
         require(
             isExecutorOperatorSetRegistered[taskParams.executorOperatorSet.key()], ExecutorOperatorSetNotRegistered()
@@ -122,16 +111,18 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             ExecutorOperatorSetTaskConfigNotSet()
         );
 
-        // Pre-task submission checks: AVS can validate the caller, operator set and task payload
-        taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams.executorOperatorSet, taskParams.payload);
+        // Pre-task submission checks:
+        // 1. AVS can validate the caller and task params.
+        // 2. AVS can design fee markets to validate their avsFee against.
+        taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams);
 
-        bytes32 taskHash = keccak256(abi.encode(globalTaskCount, address(this), block.chainid, taskParams));
-        globalTaskCount = globalTaskCount + 1;
+        bytes32 taskHash = keccak256(abi.encode(_globalTaskCount, address(this), block.chainid, taskParams));
+        _globalTaskCount = _globalTaskCount + 1;
 
-        tasks[taskHash] = Task(
+        _tasks[taskHash] = Task(
             msg.sender,
             block.timestamp.toUint96(),
-            TaskStatus.Created,
+            TaskStatus.CREATED,
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
             taskParams.refundCollector,
@@ -139,6 +130,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             0, // TODO: Update with fee split % variable
             taskConfig,
             taskParams.payload,
+            bytes(""),
             bytes("")
         );
 
@@ -148,9 +140,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             taskConfig.feeToken.safeTransferFrom(msg.sender, address(this), taskParams.avsFee);
         }
 
-        // Post-task submission checks:
-        // 1. AVS can write to storage in their hook for validating task lifecycle
-        // 2. AVS can design fee markets to validate their avsFee against.
+        // Post-task submission checks: AVS can write to storage in their hook for validating task lifecycle
         taskConfig.taskHook.handlePostTaskCreation(taskHash);
 
         emit TaskCreated(
@@ -167,48 +157,34 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /// @inheritdoc ITaskMailbox
-    function cancelTask(
-        bytes32 taskHash
-    ) external {
-        // TODO: Check if we even need this cancelTask function - Maybe have a flag with isCancelable in the AVS Task Config and further gate at the protocol level.
-        Task storage task = tasks[taskHash];
-        TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
-        require(msg.sender == task.creator, InvalidTaskCreator());
-        require(block.timestamp > task.creationTime, TimestampAtCreation());
-
-        task.status = TaskStatus.Canceled;
-
-        emit TaskCanceled(msg.sender, taskHash, task.avs, task.executorOperatorSetId);
-    }
-
-    /// @inheritdoc ITaskMailbox
     function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
-        Task storage task = tasks[taskHash];
+        // TODO: Handle case of anyone submitting a result with empty signature in the certificate.
+
+        Task storage task = _tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Created, InvalidTaskStatus(TaskStatus.Created, status));
+        require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
         require(block.timestamp > task.creationTime, TimestampAtCreation());
+
+        // Pre-task result submission checks: AVS can validate the caller, task result, params and certificate.
+        task.executorOperatorSetTaskConfig.taskHook.validatePreTaskResultSubmission(msg.sender, taskHash, cert, result);
 
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
+
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
-
-        address certificateVerifier = certificateVerifiers[task.executorOperatorSetTaskConfig.curveType];
-        require(certificateVerifier != address(0), InvalidAddressZero());
-
         bool isCertificateValid;
         if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
             // BN254 Certificate verification
             IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
                 abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
-            isCertificateValid = IBN254CertificateVerifier(certificateVerifier).verifyCertificateProportion(
+            isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                 executorOperatorSet, bn254Cert, totalStakeProportionThresholds
             );
         } else if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
             // ECDSA Certificate verification
             IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
                 abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
-            isCertificateValid = IECDSACertificateVerifier(certificateVerifier).verifyCertificateProportion(
+            isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                 executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
             );
         } else {
@@ -216,15 +192,14 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         }
         require(isCertificateValid, CertificateVerificationFailed());
 
-        task.status = TaskStatus.Verified;
+        task.status = TaskStatus.VERIFIED;
+        task.executorCert = cert;
         task.result = result;
 
-        // Task result submission checks:
-        // 1. AVS can validate the task result, params and certificate.
-        // 2. It can update hook storage for task lifecycle if needed.
-        task.executorOperatorSetTaskConfig.taskHook.handleTaskResultSubmission(taskHash, cert);
+        // Task result submission checks: AVS can update hook storage for task lifecycle if needed.
+        task.executorOperatorSetTaskConfig.taskHook.handlePostTaskResultSubmission(taskHash);
 
-        emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.result);
+        emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.executorCert, task.result);
     }
 
     /**
@@ -242,10 +217,10 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         Task memory task
     ) internal view returns (TaskStatus) {
         if (
-            task.status == TaskStatus.Created
+            task.status == TaskStatus.CREATED
                 && block.timestamp > (task.creationTime + task.executorOperatorSetTaskConfig.taskSLA)
         ) {
-            return TaskStatus.Expired;
+            return TaskStatus.EXPIRED;
         }
         return task.status;
     }
@@ -261,15 +236,20 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     }
 
     /**
-     * @notice Sets a certificate verifier for a specific curve type
+     * @notice Gets the certificate verifier for a specific curve type
      * @param curveType The curve type for the verifier
-     * @param certificateVerifier Address of the certificate verifier
+     * @return The address of the certificate verifier
      */
-    function _setCertificateVerifier(IKeyRegistrarTypes.CurveType curveType, address certificateVerifier) internal {
-        require(certificateVerifier != address(0), InvalidAddressZero());
-        require(curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
-        certificateVerifiers[curveType] = certificateVerifier;
-        emit CertificateVerifierSet(curveType, certificateVerifier);
+    function _getCertificateVerifier(
+        IKeyRegistrarTypes.CurveType curveType
+    ) internal view returns (address) {
+        if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
+            return BN254_CERTIFICATE_VERIFIER;
+        } else if (curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
+            return ECDSA_CERTIFICATE_VERIFIER;
+        } else {
+            revert InvalidCurveType();
+        }
     }
 
     /**
@@ -277,13 +257,6 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
      *                         VIEW FUNCTIONS
      *
      */
-
-    /// @inheritdoc ITaskMailbox
-    function getCertificateVerifier(
-        IKeyRegistrarTypes.CurveType curveType
-    ) external view returns (address) {
-        return certificateVerifiers[curveType];
-    }
 
     /// @inheritdoc ITaskMailbox
     function getExecutorOperatorSetTaskConfig(
@@ -296,7 +269,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskInfo(
         bytes32 taskHash
     ) external view returns (Task memory) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         return Task(
             task.creator,
             task.creationTime,
@@ -308,6 +281,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             task.feeSplit,
             task.executorOperatorSetTaskConfig,
             task.payload,
+            task.executorCert,
             task.result
         );
     }
@@ -316,7 +290,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskStatus(
         bytes32 taskHash
     ) external view returns (TaskStatus) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         return _getTaskStatus(task);
     }
 
@@ -324,9 +298,9 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
     function getTaskResult(
         bytes32 taskHash
     ) external view returns (bytes memory) {
-        Task memory task = tasks[taskHash];
+        Task memory task = _tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
-        require(status == TaskStatus.Verified, InvalidTaskStatus(TaskStatus.Verified, status));
+        require(status == TaskStatus.VERIFIED, InvalidTaskStatus(TaskStatus.VERIFIED, status));
         return task.result;
     }
 
