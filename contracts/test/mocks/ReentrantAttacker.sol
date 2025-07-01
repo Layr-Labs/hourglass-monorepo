@@ -56,7 +56,7 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
         attackCreateTask = _attackCreateTask;
     }
 
-    function validatePreTaskCreation(address, OperatorSet memory, bytes memory) external view override {}
+    function validatePreTaskCreation(address, TaskParams memory) external view {}
 
     function handlePostTaskCreation(
         bytes32
@@ -88,7 +88,11 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
         }
     }
 
-    function handleTaskResultSubmission(bytes32, bytes memory) external {
+    function validatePreTaskResultSubmission(address, bytes32, bytes memory, bytes memory) external view {}
+
+    function handlePostTaskResultSubmission(
+        bytes32
+    ) external {
         if (!attackOnPost) {
             if (attackCreateTask) {
                 // Reconstruct TaskParams for the attack
@@ -114,5 +118,9 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                 taskMailbox.submitResult(attackTaskHash, abi.encode(cert), result);
             }
         }
+    }
+
+    function calculateTaskFee(OperatorSet memory, bytes memory) external pure returns (uint96) {
+        return 0;
     }
 }

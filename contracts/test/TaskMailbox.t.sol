@@ -565,7 +565,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Expect event
         vm.expectEmit(true, true, true, true, address(taskMailbox));
-        emit TaskVerified(aggregator, taskHash, avs, executorOperatorSetId, fuzzResult);
+        emit TaskVerified(aggregator, taskHash, avs, executorOperatorSetId, abi.encode(cert), fuzzResult);
 
         // Submit result
         vm.prank(aggregator);
@@ -578,6 +578,10 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(taskHash);
         assertEq(storedResult, fuzzResult);
+
+        // Verify certificate was stored
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.executorCert, abi.encode(cert));
     }
 
     function testFuzz_submitResult_WithECDSACertificate(
@@ -604,7 +608,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
 
         // Expect event
         vm.expectEmit(true, true, true, true);
-        emit TaskVerified(aggregator, newTaskHash, avs, executorOperatorSetId, fuzzResult);
+        emit TaskVerified(aggregator, newTaskHash, avs, executorOperatorSetId, abi.encode(cert), fuzzResult);
 
         // Submit result with ECDSA certificate
         vm.prank(aggregator);
@@ -617,6 +621,10 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Verify result was stored
         bytes memory storedResult = taskMailbox.getTaskResult(newTaskHash);
         assertEq(storedResult, fuzzResult);
+
+        // Verify certificate was stored
+        Task memory task = taskMailbox.getTaskInfo(newTaskHash);
+        assertEq(task.executorCert, abi.encode(cert));
     }
 
     function test_Revert_WhenTimestampAtCreation() public {
@@ -922,6 +930,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         assertEq(task.avsFee, avsFee);
         assertEq(task.feeSplit, 0);
         assertEq(task.payload, bytes("test payload"));
+        assertEq(task.executorCert, bytes(""));
         assertEq(task.result, bytes(""));
     }
 
@@ -1109,6 +1118,7 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
         assertEq(task.avsFee, avsFee);
         assertEq(task.feeSplit, 0);
         assertEq(task.payload, bytes("test payload"));
+        assertEq(task.executorCert, bytes(""));
         assertEq(task.result, bytes(""));
     }
 }

@@ -62,9 +62,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             InvalidOperatorSetOwner()
         );
 
-        // TODO: Do we need to make taskHook ERC165 compliant? and check for ERC165 interface support?
         // TODO: Double check if any other config checks are needed.
-
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
@@ -113,8 +111,10 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             ExecutorOperatorSetTaskConfigNotSet()
         );
 
-        // Pre-task submission checks: AVS can validate the caller, operator set and task payload
-        taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams.executorOperatorSet, taskParams.payload);
+        // Pre-task submission checks:
+        // 1. AVS can validate the caller and task params.
+        // 2. AVS can design fee markets to validate their avsFee against.
+        taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams);
 
         bytes32 taskHash = keccak256(abi.encode(_globalTaskCount, address(this), block.chainid, taskParams));
         _globalTaskCount = _globalTaskCount + 1;
@@ -130,6 +130,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             0, // TODO: Update with fee split % variable
             taskConfig,
             taskParams.payload,
+            bytes(""),
             bytes("")
         );
 
@@ -139,9 +140,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             taskConfig.feeToken.safeTransferFrom(msg.sender, address(this), taskParams.avsFee);
         }
 
-        // Post-task submission checks:
-        // 1. AVS can write to storage in their hook for validating task lifecycle
-        // 2. AVS can design fee markets to validate their avsFee against.
+        // Post-task submission checks: AVS can write to storage in their hook for validating task lifecycle
         taskConfig.taskHook.handlePostTaskCreation(taskHash);
 
         emit TaskCreated(
@@ -166,10 +165,13 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
         require(block.timestamp > task.creationTime, TimestampAtCreation());
 
+        // Pre-task result submission checks: AVS can validate the caller, task result, params and certificate.
+        task.executorOperatorSetTaskConfig.taskHook.validatePreTaskResultSubmission(msg.sender, taskHash, cert, result);
+
         uint16[] memory totalStakeProportionThresholds = new uint16[](1);
         totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
-        OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
 
+        OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
         bool isCertificateValid;
         if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
             // BN254 Certificate verification
@@ -191,14 +193,13 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
         require(isCertificateValid, CertificateVerificationFailed());
 
         task.status = TaskStatus.VERIFIED;
+        task.executorCert = cert;
         task.result = result;
 
-        // Task result submission checks:
-        // 1. AVS can validate the task result, params and certificate.
-        // 2. It can update hook storage for task lifecycle if needed.
-        task.executorOperatorSetTaskConfig.taskHook.handleTaskResultSubmission(taskHash, cert);
+        // Task result submission checks: AVS can update hook storage for task lifecycle if needed.
+        task.executorOperatorSetTaskConfig.taskHook.handlePostTaskResultSubmission(taskHash);
 
-        emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.result);
+        emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.executorCert, task.result);
     }
 
     /**
@@ -280,6 +281,7 @@ contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
             task.feeSplit,
             task.executorOperatorSetTaskConfig,
             task.payload,
+            task.executorCert,
             task.result
         );
     }

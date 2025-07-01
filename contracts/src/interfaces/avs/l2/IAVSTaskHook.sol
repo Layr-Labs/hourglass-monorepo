@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {IBN254CertificateVerifierTypes} from
-    "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
+import {ITaskMailboxTypes} from "../../core/ITaskMailbox.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 /**
@@ -17,15 +16,10 @@ interface IAVSTaskHook {
     /**
      * @notice Validates a task before it is created
      * @param caller Address that is creating the task
-     * @param operatorSet The operator set that will execute the task
-     * @param payload Task payload
+     * @param taskParams Task parameters
      * @dev This function should revert if the task should not be created
      */
-    function validatePreTaskCreation(
-        address caller,
-        OperatorSet memory operatorSet,
-        bytes memory payload
-    ) external view;
+    function validatePreTaskCreation(address caller, ITaskMailboxTypes.TaskParams memory taskParams) external view;
 
     /**
      * @notice Handles a task after it is created
@@ -37,10 +31,34 @@ interface IAVSTaskHook {
     ) external;
 
     /**
-     * @notice Handles a task result submission
+     * @notice Validates a task before it is submitted for verification
+     * @param caller Address that is submitting the result
      * @param taskHash Unique identifier of the task
      * @param cert Certificate proving the validity of the result
+     * @param result Task execution result data
+     * @dev This function should revert if the task should not be verified
+     */
+    function validatePreTaskResultSubmission(
+        address caller,
+        bytes32 taskHash,
+        bytes memory cert,
+        bytes memory result
+    ) external view;
+
+    /**
+     * @notice Handles a task result submission
+     * @param taskHash Unique identifier of the task
      * @dev This function can be used to perform additional validation or update AVS-specific state
      */
-    function handleTaskResultSubmission(bytes32 taskHash, bytes memory cert) external;
+    function handlePostTaskResultSubmission(
+        bytes32 taskHash
+    ) external;
+
+    /**
+     * @notice Calculates the fee for a task payload against a specific fee market
+     * @param operatorSet The operator set that will execute the task
+     * @param payload Task payload
+     * @return The fee for the task
+     */
+    function calculateTaskFee(OperatorSet memory operatorSet, bytes memory payload) external view returns (uint96);
 }

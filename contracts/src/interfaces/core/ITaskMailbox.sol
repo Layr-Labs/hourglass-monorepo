@@ -85,6 +85,7 @@ interface ITaskMailboxTypes {
      * @param feeSplit Percentage split of fees taken by the TaskMailbox
      * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
      * @param payload Task payload
+     * @param executorCert Executor certificate
      * @param result Task execution result data
      */
     struct Task {
@@ -99,6 +100,7 @@ interface ITaskMailboxTypes {
         uint16 feeSplit;
         ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;
+        bytes executorCert;
         bytes result;
     }
 }
@@ -202,6 +204,7 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
      * @param taskHash Unique identifier of the task
      * @param avs Address of the AVS handling the task
      * @param executorOperatorSetId ID of the executor operator set
+     * @param executorCert Executor certificate
      * @param result Task execution result data
      */
     event TaskVerified(
@@ -209,6 +212,7 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
         bytes32 indexed taskHash,
         address indexed avs,
         uint32 executorOperatorSetId,
+        bytes executorCert,
         bytes result
     );
 }
