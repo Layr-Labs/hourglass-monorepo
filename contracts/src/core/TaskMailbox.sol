@@ -12,8 +12,9 @@ import {
 import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgrades/contracts/security/ReentrancyGuardUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin-upgrades/contracts/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin-upgrades/contracts/proxy/utils/Initializable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
@@ -21,27 +22,46 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
+import {SemVerMixin} from "@eigenlayer-contracts/src/contracts/mixins/SemVerMixin.sol";
 
 /**
  * @title TaskMailbox
  * @author Layr Labs, Inc.
  * @notice Contract for managing the lifecycle of tasks that are executed by operator sets of task-based AVSs.
  */
-contract TaskMailbox is Ownable, ReentrancyGuard, TaskMailboxStorage {
+contract TaskMailbox is
+    Initializable,
+    OwnableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    TaskMailboxStorage,
+    SemVerMixin
+{
     using SafeERC20 for IERC20;
     using SafeCast for *;
 
     /**
      * @notice Constructor for TaskMailbox
-     * @param _owner The owner of the contract
      * @param _bn254CertificateVerifier Address of the BN254 certificate verifier
      * @param _ecdsaCertificateVerifier Address of the ECDSA certificate verifier
+     * @param _version The semantic version of the contract
      */
     constructor(
-        address _owner,
         address _bn254CertificateVerifier,
-        address _ecdsaCertificateVerifier
-    ) Ownable() TaskMailboxStorage(_bn254CertificateVerifier, _ecdsaCertificateVerifier) {
+        address _ecdsaCertificateVerifier,
+        string memory _version
+    ) TaskMailboxStorage(_bn254CertificateVerifier, _ecdsaCertificateVerifier) SemVerMixin(_version) {
+        _disableInitializers();
+    }
+
+    /**
+     * @notice Initializer for TaskMailbox
+     * @param _owner The owner of the contract
+     */
+    function initialize(
+        address _owner
+    ) external initializer {
+        __Ownable_init();
+        __ReentrancyGuard_init();
         _transferOwnership(_owner);
     }
 

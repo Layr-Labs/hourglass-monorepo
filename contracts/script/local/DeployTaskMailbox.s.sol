@@ -2,6 +2,9 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import {TaskMailbox} from "../../src/core/TaskMailbox.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
@@ -19,8 +22,24 @@ contract DeployTaskMailbox is Script {
         vm.startBroadcast(deployerPrivateKey);
         console.log("Deployer address:", deployer);
 
-        TaskMailbox taskMailbox = new TaskMailbox(deployer, bn254CertVerifier, ecdsaCertVerifier);
-        console.log("TaskMailbox deployed to:", address(taskMailbox));
+        // Deploy ProxyAdmin
+        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        console.log("ProxyAdmin deployed to:", address(proxyAdmin));
+
+        // Deploy implementation
+        TaskMailbox taskMailboxImpl = new TaskMailbox(bn254CertVerifier, ecdsaCertVerifier, "1.0.0");
+        console.log("TaskMailbox implementation deployed to:", address(taskMailboxImpl));
+
+        // Deploy proxy with initialization
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskMailboxImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, deployer)
+        );
+        console.log("TaskMailbox proxy deployed to:", address(proxy));
+
+        // Transfer ProxyAdmin ownership to deployer (or a multisig in production)
+        proxyAdmin.transferOwnership(deployer);
 
         vm.stopBroadcast();
     }

@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin-upgrades/contracts/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin-upgrades/contracts/proxy/utils/Initializable.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
+import {AVSRegistrarWithSocket} from
+    "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
 
 import {ITaskAVSRegistrarBase} from "../interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
@@ -13,22 +16,33 @@ import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
  * @author Layr Labs, Inc.
  * @notice Abstract AVS Registrar for task-based AVSs
  */
-abstract contract TaskAVSRegistrarBase is TaskAVSRegistrarBaseStorage, Ownable {
+abstract contract TaskAVSRegistrarBase is
+    Initializable,
+    OwnableUpgradeable,
+    AVSRegistrarWithSocket,
+    TaskAVSRegistrarBaseStorage
+{
     /**
-     * @dev Constructor that passes parameters to parent and sets the owner
+     * @dev Constructor that passes parameters to parent
      * @param _avs The address of the AVS
      * @param _allocationManager The AllocationManager contract address
      * @param _keyRegistrar The KeyRegistrar contract address
-     * @param _owner The owner of the contract
-     * @param _initialConfig The initial AVS configuration
      */
     constructor(
         address _avs,
         IAllocationManager _allocationManager,
-        IKeyRegistrar _keyRegistrar,
-        address _owner,
-        AvsConfig memory _initialConfig
-    ) TaskAVSRegistrarBaseStorage(_avs, _allocationManager, _keyRegistrar) Ownable() {
+        IKeyRegistrar _keyRegistrar
+    ) AVSRegistrarWithSocket(_avs, _allocationManager, _keyRegistrar) {
+        _disableInitializers();
+    }
+
+    /**
+     * @dev Initializer for the upgradeable contract
+     * @param _owner The owner of the contract
+     * @param _initialConfig The initial AVS configuration
+     */
+    function __TaskAVSRegistrarBase_init(address _owner, AvsConfig memory _initialConfig) internal onlyInitializing {
+        __Ownable_init();
         _transferOwnership(_owner);
         _setAvsConfig(_initialConfig);
     }

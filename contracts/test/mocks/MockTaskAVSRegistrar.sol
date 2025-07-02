@@ -12,14 +12,19 @@ contract MockTaskAVSRegistrar is TaskAVSRegistrarBase {
      * @param _avs The address of the AVS
      * @param _allocationManager The AllocationManager contract address
      * @param _keyRegistrar The KeyRegistrar contract address
-     * @param _owner The owner of the contract
-     * @param _initialConfig The initial AVS configuration
      */
     constructor(
         address _avs,
         IAllocationManager _allocationManager,
-        IKeyRegistrar _keyRegistrar,
-        address _owner,
-        AvsConfig memory _initialConfig
-    ) TaskAVSRegistrarBase(_avs, _allocationManager, _keyRegistrar, _owner, _initialConfig) {}
+        IKeyRegistrar _keyRegistrar
+    ) TaskAVSRegistrarBase(_avs, _allocationManager, _keyRegistrar) {}
+
+    /**
+     * @dev Initializer that calls parent initializer
+     * @param _owner The owner of the contract
+     * @param _initialConfig The initial AVS configuration
+     */
+    function initialize(address _owner, AvsConfig memory _initialConfig) external initializer {
+        __TaskAVSRegistrarBase_init(_owner, _initialConfig);
+    }
 }

@@ -2,6 +2,9 @@
 pragma solidity ^0.8.27;
 
 import {Script, console} from "forge-std/Script.sol";
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
@@ -35,9 +38,24 @@ contract DeployAVSL1Contracts is Script {
             executorOperatorSetIds: executorOperatorSetIds
         });
 
-        MockTaskAVSRegistrar taskAVSRegistrar =
-            new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR, avs, initialConfig);
-        console.log("TaskAVSRegistrar deployed to:", address(taskAVSRegistrar));
+        // Deploy ProxyAdmin
+        ProxyAdmin proxyAdmin = new ProxyAdmin();
+        console.log("ProxyAdmin deployed to:", address(proxyAdmin));
+
+        // Deploy implementation
+        MockTaskAVSRegistrar taskAVSRegistrarImpl = new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR);
+        console.log("TaskAVSRegistrar implementation deployed to:", address(taskAVSRegistrarImpl));
+
+        // Deploy proxy with initialization
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(taskAVSRegistrarImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, avs, initialConfig)
+        );
+        console.log("TaskAVSRegistrar proxy deployed to:", address(proxy));
+
+        // Transfer ProxyAdmin ownership to avs (or a multisig in production)
+        proxyAdmin.transferOwnership(avs);
 
         vm.stopBroadcast();
     }
