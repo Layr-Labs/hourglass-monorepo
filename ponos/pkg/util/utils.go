@@ -171,5 +171,5 @@ func DeriveAddressFromECDSAPrivateKey(pk *ecdsa.PrivateKey) (common.Address, err
 	if pk == nil {
 		return common.Address{0}, fmt.Errorf("private key is nil")
 	}
-	return cryptoUtils.DeriveAddress(pk), nil
+	return cryptoUtils.DeriveAddress(pk.PublicKey), nil
 }

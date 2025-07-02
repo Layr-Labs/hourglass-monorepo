@@ -97,6 +97,7 @@ type IContractCaller interface {
 		operatorAddress common.Address,
 		avsAddress common.Address,
 		operatorSetId uint32,
+		signingKeyAddress common.Address,
 	) ([32]byte, error)
 
 	ConfigureAVSOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType) (*ethereumTypes.Receipt, error)

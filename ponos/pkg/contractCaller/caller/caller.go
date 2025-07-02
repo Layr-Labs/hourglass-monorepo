@@ -508,11 +508,18 @@ func (cc *ContractCaller) GetOperatorECDSAKeyRegistrationMessageHash(
 	operatorAddress common.Address,
 	avsAddress common.Address,
 	operatorSetId uint32,
+	signingKeyAddress common.Address,
 ) ([32]byte, error) {
+	cc.logger.Sugar().Infow("Getting ECDSA key registration message hash",
+		zap.String("operatorAddress", operatorAddress.String()),
+		zap.String("avsAddress", avsAddress.Hex()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("signingKeyAddress", signingKeyAddress.String()),
+	)
 	return cc.keyRegistrar.GetECDSAKeyRegistrationMessageHash(&bind.CallOpts{Context: ctx}, operatorAddress, IKeyRegistrar.OperatorSet{
 		Avs: avsAddress,
 		Id:  operatorSetId,
-	}, operatorAddress)
+	}, signingKeyAddress)
 }
 
 func (cc *ContractCaller) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error) {
@@ -581,6 +588,12 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(
 		return nil, fmt.Errorf("failed to convert curve type to uint8: %w", err)
 	}
 
+	cc.logger.Sugar().Infow("configuring AVS operator set",
+		zap.String("avsAddress", avsAddress.String()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("curveType", curveType.String()),
+		zap.Uint8("solidityCurveType", solidityCurveType),
+	)
 	tx, err := cc.keyRegistrar.ConfigureOperatorSet(
 		txOpts,
 		IKeyRegistrar.OperatorSet{

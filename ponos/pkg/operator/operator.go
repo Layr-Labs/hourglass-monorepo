@@ -2,15 +2,15 @@ package operator
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"go.uber.org/zap"
 )
 
@@ -34,9 +34,9 @@ func generateKeyData(operator *Operator, cc contractCaller.IContractCaller) ([]b
 	if operator.Curve == config.CurveTypeECDSA {
 		pk, ok := operator.SigningPrivateKey.(*ecdsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("signing private key is not of type string")
+			return nil, fmt.Errorf("signing private key is not of type crypto-libs/ecds.PrivateKey")
 		}
-		address, err := util.DeriveAddressFromECDSAPrivateKey(pk)
+		address, err := pk.DeriveAddress()
 		if err != nil {
 			return nil, fmt.Errorf("failed to derive address from ECDSA private key: %w", err)
 		}
@@ -54,34 +54,6 @@ func generateKeyData(operator *Operator, cc contractCaller.IContractCaller) ([]b
 		return keyData, nil
 	}
 	return nil, fmt.Errorf("unsupported curve type: %s", operator.Curve)
-}
-
-func ecdsaSignAndPack(
-	privateKey *ecdsa.PrivateKey,
-	messageHash []byte,
-) ([]byte, error) {
-	signature, err := crypto.Sign(messageHash, privateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// signature is 65 bytes: [R || S || V]
-	// R = signature[0:32]
-	// S = signature[32:64]
-	// V = signature[64]
-
-	// Extract r, s, v
-	r := signature[0:32]
-	s := signature[32:64]
-	v := signature[64]
-
-	// abi.encodePacked(r, s, v) equivalent
-	packed := make([]byte, 65)
-	copy(packed[0:32], r)  // r (32 bytes)
-	copy(packed[32:64], s) // s (32 bytes)
-	packed[64] = v         // v (1 byte)
-
-	return packed, nil
 }
 
 func RegisterOperatorToOperatorSets(
@@ -122,23 +94,68 @@ func RegisterOperatorToOperatorSets(
 			zap.String("txHash", tx.TxHash.String()),
 		)
 
+		setCurveType, err := avsContractCaller.GetOperatorSetCurveType(avsAddress.String(), operatorSetId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
+		}
+		l.Sugar().Infow("Operator set curve type",
+			zap.String("avsAddress", avsAddress.String()),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.String("curveType", setCurveType.String()),
+		)
+		if setCurveType != operator.Curve {
+			return nil, fmt.Errorf("operator set curve type %s does not match operator curve type %s", setCurveType, operator.Curve)
+		}
+
 		var messageHash [32]byte
 		var signature []byte
 
 		switch operator.Curve {
 		case config.CurveTypeECDSA:
-			messageHash, err = operatorContractCaller.GetOperatorECDSAKeyRegistrationMessageHash(ctx, operatorAddress, avsAddress, operatorSetId)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get operator registration message hash: %w", err)
-			}
 			pk, ok := operator.SigningPrivateKey.(*ecdsa.PrivateKey)
 			if !ok {
 				return nil, fmt.Errorf("signing private key is not of type *ecdsa.PrivateKey")
 			}
-			signature, err = ecdsaSignAndPack(pk, messageHash[:])
+
+			address, err := pk.DeriveAddress()
+			if err != nil {
+				return nil, fmt.Errorf("failed to derive address from ECDSA private key: %w", err)
+			}
+
+			messageHash, err = operatorContractCaller.GetOperatorECDSAKeyRegistrationMessageHash(ctx, operatorAddress, avsAddress, operatorSetId, address)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get operator registration message hash: %w", err)
+			}
+
+			var hash [32]byte
+			copy(hash[:], messageHash[:])
+
+			rawSig, err := pk.Sign(hash)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sign message hash: %w", err)
 			}
+			fmt.Printf("Sig: %+v\n", rawSig)
+
+			signature, err = pk.SignAndPack(hash)
+			if err != nil {
+				return nil, fmt.Errorf("failed to sign message hash: %w", err)
+			}
+			fmt.Printf("Signature: %s\n", hexutil.Encode(signature))
+
+			// verify the signature
+			sig, err := ecdsa.NewSignatureFromBytes(signature)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
+			}
+			valid, err := sig.Verify(pk.Public(), messageHash)
+			if err != nil {
+				return nil, fmt.Errorf("failed to verify signature: %w", err)
+			}
+			if !valid {
+				return nil, fmt.Errorf("signature verification failed")
+			}
+			l.Sugar().Infow("Signature verified successfully")
+
 		case config.CurveTypeBN254:
 			messageHash, err = operatorContractCaller.GetOperatorBN254KeyRegistrationMessageHash(ctx, operatorAddress, avsAddress, operatorSetId, keyData)
 			if err != nil {
@@ -167,6 +184,9 @@ func RegisterOperatorToOperatorSets(
 			zap.String("avsAddress", avsAddress.String()),
 			zap.Uint32("operatorSetId", operatorSetId),
 			zap.String("operatorAddress", operatorAddress.String()),
+			zap.String("curveType", operator.Curve.String()),
+			zap.String("signature", hexutil.Encode(signature)),
+			zap.String("keyData", hexutil.Encode(keyData)),
 		)
 
 		txReceipt, err := operatorContractCaller.RegisterKeyWithKeyRegistrar(
