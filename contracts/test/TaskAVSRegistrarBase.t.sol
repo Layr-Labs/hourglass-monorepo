@@ -2,6 +2,9 @@
 pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
+import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {AllocationManagerMock} from "@eigenlayer-middleware/test/mocks/AllocationManagerMock.sol";
@@ -38,6 +41,7 @@ contract TaskAVSRegistrarBaseUnitTests is
 
     // Contract under test
     MockTaskAVSRegistrar public registrar;
+    ProxyAdmin public proxyAdmin;
 
     function setUp() public virtual {
         // Deploy mock contracts
@@ -47,14 +51,17 @@ contract TaskAVSRegistrarBaseUnitTests is
         // Create initial valid config
         AvsConfig memory initialConfig = _createValidAvsConfig();
 
-        // Deploy the registrar
-        registrar = new MockTaskAVSRegistrar(
-            avs,
-            IAllocationManager(address(allocationManager)),
-            IKeyRegistrar(address(keyRegistrar)),
-            owner,
-            initialConfig
+        // Deploy the registrar with proxy pattern
+        proxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar registrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
         );
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(registrarImpl),
+            address(proxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, initialConfig)
+        );
+        registrar = MockTaskAVSRegistrar(address(proxy));
     }
 
     // Helper function to create a valid AVS config
@@ -124,10 +131,17 @@ contract TaskAVSRegistrarBaseUnitTests_Constructor is TaskAVSRegistrarBaseUnitTe
         // Create config for new deployment
         AvsConfig memory config = _createValidAvsConfig();
 
-        // Deploy new registrar
-        MockTaskAVSRegistrar newRegistrar = new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        // Deploy new registrar with proxy pattern
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
         );
+        TransparentUpgradeableProxy newProxy = new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
+        );
+        MockTaskAVSRegistrar newRegistrar = MockTaskAVSRegistrar(address(newProxy));
 
         // Verify owner was set
         assertEq(newRegistrar.owner(), owner);
@@ -144,49 +158,93 @@ contract TaskAVSRegistrarBaseUnitTests_Constructor is TaskAVSRegistrarBaseUnitTe
     function test_Constructor_EmitsAvsConfigSet() public {
         AvsConfig memory config = _createValidAvsConfig();
 
-        // Expect event
+        // Deploy implementation
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Expect event during initialization
         vm.expectEmit(true, true, true, true);
         emit AvsConfigSet(config.aggregatorOperatorSetId, config.executorOperatorSetIds);
 
-        // Deploy new registrar
-        new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        // Deploy proxy with initialization
+        new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
         );
     }
 
     function test_Revert_Constructor_EmptyExecutorSet() public {
         AvsConfig memory config = _createEmptyExecutorSetConfig();
 
+        // Deploy implementation
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Expect revert during initialization
         vm.expectRevert(ExecutorOperatorSetIdsEmpty.selector);
-        new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
         );
     }
 
     function test_Revert_Constructor_InvalidAggregatorId() public {
         AvsConfig memory config = _createAggregatorMatchingExecutorConfig();
 
+        // Deploy implementation
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Expect revert during initialization
         vm.expectRevert(InvalidAggregatorOperatorSetId.selector);
-        new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
         );
     }
 
     function test_Revert_Constructor_DuplicateExecutorId() public {
         AvsConfig memory config = _createDuplicateExecutorConfig();
 
+        // Deploy implementation
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Expect revert during initialization
         vm.expectRevert(DuplicateExecutorOperatorSetId.selector);
-        new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
         );
     }
 
     function test_Revert_Constructor_UnsortedExecutorIds() public {
         AvsConfig memory config = _createUnsortedExecutorConfig();
 
+        // Deploy implementation
+        ProxyAdmin newProxyAdmin = new ProxyAdmin();
+        MockTaskAVSRegistrar newRegistrarImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Expect revert during initialization
         vm.expectRevert(DuplicateExecutorOperatorSetId.selector);
-        new MockTaskAVSRegistrar(
-            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar)), owner, config
+        new TransparentUpgradeableProxy(
+            address(newRegistrarImpl),
+            address(newProxyAdmin),
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, owner, config)
         );
     }
 }
@@ -332,6 +390,163 @@ contract TaskAVSRegistrarBaseUnitTests_setAvsConfig is TaskAVSRegistrarBaseUnitT
         AvsConfig memory storedConfig = registrar.getAvsConfig();
         assertEq(storedConfig.aggregatorOperatorSetId, aggregatorId);
         assertEq(storedConfig.executorOperatorSetIds.length, numExecutors);
+    }
+}
+
+// Test contract for upgradeable functionality
+contract TaskAVSRegistrarBaseUnitTests_Upgradeable is TaskAVSRegistrarBaseUnitTests {
+    function test_Initialize_OnlyOnce() public {
+        // Try to initialize again, should revert
+        vm.expectRevert("Initializable: contract is already initialized");
+        registrar.initialize(address(0x9999), _createValidAvsConfig());
+    }
+
+    function test_Implementation_CannotBeInitialized() public {
+        // Deploy a new implementation
+        MockTaskAVSRegistrar newImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Try to initialize the implementation directly, should revert
+        vm.expectRevert("Initializable: contract is already initialized");
+        newImpl.initialize(owner, _createValidAvsConfig());
+    }
+
+    function test_ProxyUpgrade() public {
+        address newOwner = address(0x1234);
+
+        // First, make some state changes
+        AvsConfig memory newConfig = AvsConfig({aggregatorOperatorSetId: 5, executorOperatorSetIds: new uint32[](2)});
+        newConfig.executorOperatorSetIds[0] = 6;
+        newConfig.executorOperatorSetIds[1] = 7;
+
+        vm.prank(owner);
+        registrar.setAvsConfig(newConfig);
+
+        // Deploy new implementation (could have new functions/logic)
+        MockTaskAVSRegistrar newImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Upgrade proxy to new implementation
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(registrar)), address(newImpl));
+
+        // Verify state is preserved (config should still be the same)
+        AvsConfig memory storedConfig = registrar.getAvsConfig();
+        assertEq(storedConfig.aggregatorOperatorSetId, newConfig.aggregatorOperatorSetId);
+        assertEq(storedConfig.executorOperatorSetIds.length, newConfig.executorOperatorSetIds.length);
+        for (uint256 i = 0; i < newConfig.executorOperatorSetIds.length; i++) {
+            assertEq(storedConfig.executorOperatorSetIds[i], newConfig.executorOperatorSetIds[i]);
+        }
+
+        // Verify owner is still the same
+        assertEq(registrar.owner(), owner);
+    }
+
+    function test_ProxyAdmin_OnlyOwnerCanUpgrade() public {
+        address attacker = address(0x9999);
+
+        // Deploy new implementation
+        MockTaskAVSRegistrar newImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Try to upgrade from non-owner, should revert
+        vm.prank(attacker);
+        vm.expectRevert("Ownable: caller is not the owner");
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(registrar)), address(newImpl));
+    }
+
+    function test_Initialization_SetsCorrectValues() public {
+        // Already tested in setUp, but let's verify again explicitly
+        assertEq(registrar.owner(), owner);
+
+        // Verify initial config
+        AvsConfig memory config = registrar.getAvsConfig();
+        assertEq(config.aggregatorOperatorSetId, AGGREGATOR_OPERATOR_SET_ID);
+        assertEq(config.executorOperatorSetIds.length, 2);
+        assertEq(config.executorOperatorSetIds[0], EXECUTOR_OPERATOR_SET_ID_1);
+        assertEq(config.executorOperatorSetIds[1], EXECUTOR_OPERATOR_SET_ID_2);
+    }
+
+    function test_ProxyAdmin_CannotCallImplementation() public {
+        // ProxyAdmin should not be able to call implementation functions
+        vm.prank(address(proxyAdmin));
+        vm.expectRevert("TransparentUpgradeableProxy: admin cannot fallback to proxy target");
+        MockTaskAVSRegistrar(payable(address(registrar))).owner();
+    }
+
+    function test_StorageSlotConsistency_AfterUpgrade() public {
+        address newOwner = address(0x1234);
+
+        // First, transfer ownership to track a state change
+        vm.prank(owner);
+        registrar.transferOwnership(newOwner);
+        assertEq(registrar.owner(), newOwner);
+
+        // Set a different config
+        AvsConfig memory newConfig = AvsConfig({aggregatorOperatorSetId: 10, executorOperatorSetIds: new uint32[](3)});
+        newConfig.executorOperatorSetIds[0] = 11;
+        newConfig.executorOperatorSetIds[1] = 12;
+        newConfig.executorOperatorSetIds[2] = 13;
+
+        vm.prank(newOwner);
+        registrar.setAvsConfig(newConfig);
+
+        // Deploy new implementation
+        MockTaskAVSRegistrar newImpl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Upgrade
+        vm.prank(address(this)); // proxyAdmin owner
+        proxyAdmin.upgrade(ITransparentUpgradeableProxy(address(registrar)), address(newImpl));
+
+        // Verify all state is preserved after upgrade
+        assertEq(registrar.owner(), newOwner);
+
+        // Verify the config is still there
+        AvsConfig memory configAfterUpgrade = registrar.getAvsConfig();
+        assertEq(configAfterUpgrade.aggregatorOperatorSetId, newConfig.aggregatorOperatorSetId);
+        assertEq(configAfterUpgrade.executorOperatorSetIds.length, newConfig.executorOperatorSetIds.length);
+        for (uint256 i = 0; i < newConfig.executorOperatorSetIds.length; i++) {
+            assertEq(configAfterUpgrade.executorOperatorSetIds[i], newConfig.executorOperatorSetIds[i]);
+        }
+    }
+
+    function test_InitializerModifier_PreventsReinitialization() public {
+        // Deploy a new proxy without initialization data
+        TransparentUpgradeableProxy uninitializedProxy = new TransparentUpgradeableProxy(
+            address(
+                new MockTaskAVSRegistrar(
+                    avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+                )
+            ),
+            address(new ProxyAdmin()),
+            ""
+        );
+
+        MockTaskAVSRegistrar uninitializedRegistrar = MockTaskAVSRegistrar(address(uninitializedProxy));
+
+        // Initialize it once
+        AvsConfig memory config = _createValidAvsConfig();
+        uninitializedRegistrar.initialize(owner, config);
+        assertEq(uninitializedRegistrar.owner(), owner);
+
+        // Try to initialize again, should fail
+        vm.expectRevert("Initializable: contract is already initialized");
+        uninitializedRegistrar.initialize(address(0x9999), config);
+    }
+
+    function test_DisableInitializers_InImplementation() public {
+        // This test verifies that the implementation contract has initializers disabled
+        MockTaskAVSRegistrar impl = new MockTaskAVSRegistrar(
+            avs, IAllocationManager(address(allocationManager)), IKeyRegistrar(address(keyRegistrar))
+        );
+
+        // Try to initialize the implementation, should revert
+        vm.expectRevert("Initializable: contract is already initialized");
+        impl.initialize(owner, _createValidAvsConfig());
     }
 }
 
