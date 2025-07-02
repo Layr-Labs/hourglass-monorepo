@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/crypto"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -826,9 +827,10 @@ func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.Perform
 		}
 
 		var verified bool
+		payloadHash := crypto.Keccak256Hash(t.Payload)
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, t.Payload)
+			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
 			if err != nil {
 				aps.logger.Sugar().Errorw("Error verifying BN254 signature",
 					zap.String("avsAddress", aps.config.AvsAddress),
@@ -846,7 +848,7 @@ func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.Perform
 				)
 				continue
 			}
-			verified, err = typedSig.VerifyWithAddress(t.Payload[:], opset.WrappedPublicKey.ECDSAAddress)
+			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
 			if err != nil {
 				aps.logger.Sugar().Errorw("Error verifying ECDSA signature",
 					zap.String("avsAddress", aps.config.AvsAddress),

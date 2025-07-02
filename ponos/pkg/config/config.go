@@ -194,7 +194,8 @@ func (sk *SigningKey) Validate() error {
 }
 
 type SigningKeys struct {
-	BLS *SigningKey `json:"bls"`
+	BLS   *SigningKey `json:"bls"`
+	ECDSA string      `json:"ecdsa"`
 }
 
 func (sk *SigningKeys) Validate() error {

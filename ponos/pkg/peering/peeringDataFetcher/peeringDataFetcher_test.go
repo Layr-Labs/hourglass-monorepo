@@ -401,8 +401,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			testMessage := []byte("test message")
 
-			var hash [32]byte
-			copy(hash[:], keccak256.Hash(testMessage))
+			hash := keccak256.Hash(testMessage)
 
 			testSig, err := tc.privateSigningKey.Sign(hash)
 			if err != nil {

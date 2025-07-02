@@ -185,6 +185,8 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
+	// TODO(seanmcgary): this should probably live in the taskSession package
+	// it also needs to be aware of the curve for the aggregator
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign task payload: %w", err)

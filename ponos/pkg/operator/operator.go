@@ -127,16 +127,13 @@ func RegisterOperatorToOperatorSets(
 				return nil, fmt.Errorf("failed to get operator registration message hash: %w", err)
 			}
 
-			var hash [32]byte
-			copy(hash[:], messageHash[:])
-
-			rawSig, err := pk.Sign(hash)
+			rawSig, err := pk.Sign(messageHash[:])
 			if err != nil {
 				return nil, fmt.Errorf("failed to sign message hash: %w", err)
 			}
 			fmt.Printf("Sig: %+v\n", rawSig)
 
-			signature, err = pk.SignAndPack(hash)
+			signature, err = pk.SignAndPack(messageHash)
 			if err != nil {
 				return nil, fmt.Errorf("failed to sign message hash: %w", err)
 			}

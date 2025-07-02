@@ -31,17 +31,14 @@ func main() {
 		panic(fmt.Errorf("failed to decode message hash: %w", err))
 	}
 
-	var hash [32]byte
-	copy(hash[:], messageHash[:32])
-
-	signature, err := privateKey.Sign(hash)
+	signature, err := privateKey.Sign(messageHash)
 	if err != nil {
 		panic(fmt.Errorf("failed to sign message: %w", err))
 	}
 	fmt.Printf("Raw sig: %+v\n", signature)
 	fmt.Printf("Signature: %s\n", hexutil.Encode(signature.Bytes()))
 
-	isValid, err := signature.VerifyWithAddress(hash[:], derivedAddress)
+	isValid, err := signature.VerifyWithAddress(messageHash, derivedAddress)
 	if err != nil {
 		panic(fmt.Errorf("failed to verify signature: %w", err))
 	}
