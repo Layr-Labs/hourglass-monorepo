@@ -27,6 +27,7 @@ type PeerWeight struct {
 	RootReferenceTimestamp uint32
 	Weights                map[string][]*big.Int
 	Operators              []*peering.OperatorPeerInfo
+	CurveType              config.CurveType
 }
 
 type OperatorManager struct {
@@ -189,6 +190,11 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
 	}
 
+	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
+	}
+
 	return &PeerWeight{
 		BlockNumber:            taskBlockNumber,
 		ChainId:                chainId,
@@ -196,6 +202,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		RootReferenceTimestamp: referenceTimestamp,
 		Weights:                operatorWeights,
 		Operators:              operators,
+		CurveType:              curveType,
 	}, nil
 
 }

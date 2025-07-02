@@ -3,13 +3,15 @@ package executor
 import (
 	"context"
 	"fmt"
-
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
@@ -23,7 +25,45 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_Executor(t *testing.T) {
+func parseKeysFromConfig(
+	operatorConfig *config.OperatorConfig,
+	curveType config.CurveType,
+) (*bn254.PrivateKey, *cryptoLibsEcdsa.PrivateKey, interface{}, error) {
+	var genericExecutorSigningKey interface{}
+	var bn254PrivateSigningKey *bn254.PrivateKey
+	var ecdsaPrivateSigningKey *cryptoLibsEcdsa.PrivateKey
+	var err error
+
+	if curveType == config.CurveTypeBN254 {
+		storedKeys, err := keystore.ParseKeystoreJSON(operatorConfig.SigningKeys.BLS.Keystore)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to parse keystore JSON: %w", err)
+		}
+
+		bn254PrivateSigningKey, err = storedKeys.GetBN254PrivateKey(operatorConfig.SigningKeys.BLS.Password)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get private key: %w", err)
+		}
+		genericExecutorSigningKey = bn254PrivateSigningKey
+	} else if curveType == config.CurveTypeECDSA {
+		ecdsaPrivateSigningKey, err = cryptoLibsEcdsa.NewPrivateKeyFromHexString(operatorConfig.SigningKeys.ECDSA)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get ECDSA private key: %w", err)
+		}
+		genericExecutorSigningKey = ecdsaPrivateSigningKey
+	} else {
+		return nil, nil, nil, fmt.Errorf("unsupported curve type: %s", curveType)
+	}
+	return bn254PrivateSigningKey, ecdsaPrivateSigningKey, genericExecutorSigningKey, nil
+}
+
+func testWithKeyType(
+	t *testing.T,
+	curveType config.CurveType,
+	executorConfigYaml string,
+	aggregatorConfigYaml string,
+) {
+	t.Logf("Running test with curve type: %s", curveType)
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
 
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
@@ -31,52 +71,62 @@ func Test_Executor(t *testing.T) {
 		t.Fatalf("failed to create logger: %v", err)
 	}
 
+	root := testUtils.GetProjectRootPath()
+	t.Logf("Project root path: %s", root)
+
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
 	// executor setup
 	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(executorConfigYaml))
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
+	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
 
-	storedKeys, err := keystore.ParseKeystoreJSON(execConfig.Operator.SigningKeys.BLS.Keystore)
+	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := parseKeysFromConfig(execConfig.Operator, curveType)
 	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
-
-	privateSigningKey, err := storedKeys.GetBN254PrivateKey(execConfig.Operator.SigningKeys.BLS.Password)
-	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
-	}
-
-	execSigner := inMemorySigner.NewInMemorySigner(privateSigningKey)
+	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, curveType)
 
 	// aggregator setup
 	simAggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggregatorConfigYaml))
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
+	simAggConfig.Operator.SigningKeys.ECDSA = chainConfig.OperatorAccountPrivateKey
 
-	aggStoredKeys, err := keystore.ParseKeystoreJSON(simAggConfig.Operator.SigningKeys.BLS.Keystore)
+	aggBn254PrivateSigningKey, aggEcdsaPrivateSigningKey, aggGenericExecutorSigningKey, err := parseKeysFromConfig(simAggConfig.Operator, curveType)
 	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
+	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, curveType)
 
-	aggPrivateSigningKey, err := aggStoredKeys.GetBN254PrivateKey(simAggConfig.Operator.SigningKeys.BLS.Password)
-	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
+	peer := &peering.OperatorSet{
+		OperatorSetID:    0,
+		WrappedPublicKey: peering.WrappedPublicKey{},
+		NetworkAddress:   fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
+		CurveType:        curveType,
 	}
+	if curveType == config.CurveTypeBN254 {
+		peer.WrappedPublicKey.PublicKey = aggBn254PrivateSigningKey.Public()
+	} else if curveType == config.CurveTypeECDSA {
+		derivedAddress, err := aggEcdsaPrivateSigningKey.DeriveAddress()
+		if err != nil {
+			t.Fatalf("Failed to derive ECDSA address: %v", err)
+		}
+		peer.WrappedPublicKey.ECDSAAddress = derivedAddress
+	}
+	fmt.Printf("Peer: %+v\n", peer)
 
-	pubKey := aggPrivateSigningKey.Public()
 	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
 		AggregatorPeers: []*peering.OperatorPeerInfo{
 			{
 				OperatorAddress: simAggConfig.Operator.Address,
-				OperatorSets: []*peering.OperatorSet{
-					{
-						OperatorSetID:  0,
-						PublicKey:      pubKey,
-						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
-					},
-				},
+				OperatorSets:    []*peering.OperatorSet{peer},
 			},
 		},
 	}, l)
@@ -89,8 +139,6 @@ func Test_Executor(t *testing.T) {
 	if err := exec.Initialize(ctx); err != nil {
 		t.Fatalf("Failed to initialize executor: %v", err)
 	}
-
-	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
 
 	success := atomic.Bool{}
 	success.Store(false)
@@ -111,12 +159,14 @@ func Test_Executor(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
+	payloadHash := util.GetKeccak256Digest(payloadJsonBytes)
 
+	payloadSig, err := aggSigner.SignMessage(payloadHash[:])
 	if err != nil {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
 
+	// send the task to the executor
 	taskResult, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
 		TaskId:            "0x1234taskId",
 		AggregatorAddress: simAggConfig.Operator.Address,
@@ -131,11 +181,24 @@ func Test_Executor(t *testing.T) {
 	}
 	assert.NotNil(t, taskResult)
 
-	sig, err := bn254.NewSignatureFromBytes(taskResult.Signature)
-	assert.Nil(t, err)
-
 	digest := util.GetKeccak256Digest(taskResult.Output)
-	verified, err := sig.VerifySolidityCompatible(privateSigningKey.Public(), digest)
+
+	var verified bool
+	if curveType == config.CurveTypeBN254 {
+		sig, err := bn254.NewSignatureFromBytes(taskResult.Signature)
+		assert.Nil(t, err)
+		verified, err = sig.VerifySolidityCompatible(execBn254PrivateSigningKey.Public(), digest)
+	} else if curveType == config.CurveTypeECDSA {
+		sig, err := cryptoLibsEcdsa.NewSignatureFromBytes(taskResult.Signature)
+		assert.Nil(t, err)
+		derivedAddress, err := execEcdsaPrivateSigningKey.DeriveAddress()
+		if err != nil {
+			t.Fatalf("Failed to derive ECDSA address: %v", err)
+		}
+		verified, err = sig.VerifyWithAddress(digest[:], derivedAddress)
+	} else {
+		t.Fatalf("Unsupported curve type: %s", curveType)
+	}
 	assert.Nil(t, err)
 	assert.True(t, verified)
 	cancel()
@@ -144,6 +207,17 @@ func Test_Executor(t *testing.T) {
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
 	time.Sleep(3 * time.Second)
+}
+
+func Test_Executor(t *testing.T) {
+
+	t.Run("BN254", func(t *testing.T) {
+		testWithKeyType(t, config.CurveTypeBN254, executorConfigYaml, aggregatorConfigYaml)
+	})
+	t.Run("ECDSA", func(t *testing.T) {
+		testWithKeyType(t, config.CurveTypeECDSA, executorConfigYaml, aggregatorConfigYaml)
+	})
+
 }
 
 const (

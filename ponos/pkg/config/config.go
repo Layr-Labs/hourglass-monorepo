@@ -6,6 +6,47 @@ import (
 	"slices"
 )
 
+type CurveType string
+
+func (c CurveType) String() string {
+	return string(c)
+}
+func (c CurveType) Uint8() (uint8, error) {
+	return ConvertCurveTypeToSolidityEnum(c)
+}
+
+const (
+	CurveTypeUnknown CurveType = "unknown"
+	CurveTypeECDSA   CurveType = "ecdsa"
+	CurveTypeBN254   CurveType = "bn254" // BN254 is the only supported curve type for now
+)
+
+func ConvertCurveTypeToSolidityEnum(curveType CurveType) (uint8, error) {
+	switch curveType {
+	case CurveTypeUnknown:
+		return 0, nil
+	case CurveTypeECDSA:
+		return 1, nil
+	case CurveTypeBN254:
+		return 2, nil
+	default:
+		return 0, fmt.Errorf("unsupported curve type: %s", curveType)
+	}
+}
+
+func ConvertSolidityEnumToCurveType(enumValue uint8) (CurveType, error) {
+	switch enumValue {
+	case 0:
+		return CurveTypeUnknown, nil
+	case 1:
+		return CurveTypeECDSA, nil
+	case 2:
+		return CurveTypeBN254, nil
+	default:
+		return "", fmt.Errorf("unsupported curve type enum value: %d", enumValue)
+	}
+}
+
 type ChainId uint
 
 const (
@@ -153,7 +194,8 @@ func (sk *SigningKey) Validate() error {
 }
 
 type SigningKeys struct {
-	BLS *SigningKey `json:"bls"`
+	BLS   *SigningKey `json:"bls"`
+	ECDSA string      `json:"ecdsa"`
 }
 
 func (sk *SigningKeys) Validate() error {

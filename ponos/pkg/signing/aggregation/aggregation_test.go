@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"testing"
 	"time"
 
@@ -15,12 +16,12 @@ import (
 
 func Test_Aggregation(t *testing.T) {
 	// Create test operators with key pairs
-	operators := make([]*Operator, 4) // Changed to 4 operators
+	operators := make([]*Operator[signing.PublicKey], 4) // Changed to 4 operators
 	privateKeys := make([]*bn254.PrivateKey, 4)
 	for i := 0; i < 4; i++ {
 		privKey, pubKey, err := bn254.GenerateKeyPair()
 		require.NoError(t, err)
-		operators[i] = &Operator{
+		operators[i] = &Operator[signing.PublicKey]{
 			Address:   fmt.Sprintf("0x%d", i+1), // Simple address format for testing
 			PublicKey: pubKey,
 		}
@@ -33,7 +34,7 @@ func Test_Aggregation(t *testing.T) {
 
 	deadline := time.Now().Add(10 * time.Minute)
 
-	agg, err := NewTaskResultAggregator(
+	agg, err := NewBN254TaskResultAggregator(
 		context.Background(),
 		taskId,
 		100, // taskCreatedBlock
@@ -52,7 +53,7 @@ func Test_Aggregation(t *testing.T) {
 
 	// Store individual signatures for verification
 	individualSigs := make([]*bn254.Signature, 3) // Only store 3 signatures since one operator won't sign
-	remainingPubKeys := make([]*bn254.PublicKey, 3)
+	remainingPubKeys := make([]signing.PublicKey, 3)
 	remainingSigs := make([]*bn254.Signature, 3)
 
 	// Simulate receiving responses from all operators except the last one
@@ -105,7 +106,10 @@ func Test_Aggregation(t *testing.T) {
 
 	// Test: Verify if an operator's signature was included
 	// We can verify this by checking that the remaining signatures verify correctly
-	verified, err = bn254.BatchVerifySolidityCompatible(remainingPubKeys, responseDigest, remainingSigs)
+	remainingBn254PubKeys := util.Map(remainingPubKeys, func(pk signing.PublicKey, i uint64) *bn254.PublicKey {
+		return pk.(*bn254.PublicKey)
+	})
+	verified, err = bn254.BatchVerifySolidityCompatible(remainingBn254PubKeys, responseDigest, remainingSigs)
 	require.NoError(t, err)
 	assert.True(t, verified, "Remaining signatures should verify correctly")
 
@@ -113,7 +117,10 @@ func Test_Aggregation(t *testing.T) {
 	// Create a new signature array including the non-signer's signature
 	allSigs := append(remainingSigs, individualSigs[0])            // Add a duplicate signature
 	allPubKeys := append(remainingPubKeys, operators[3].PublicKey) // Add non-signer's public key
-	verified, err = bn254.BatchVerifySolidityCompatible(allPubKeys, responseDigest, allSigs)
+	allBn254PubKeys := util.Map(allPubKeys, func(pk signing.PublicKey, i uint64) *bn254.PublicKey {
+		return pk.(*bn254.PublicKey)
+	})
+	verified, err = bn254.BatchVerifySolidityCompatible(allBn254PubKeys, responseDigest, allSigs)
 	require.NoError(t, err)
 	assert.False(t, verified, "Verification should fail when including non-signer's public key")
 }

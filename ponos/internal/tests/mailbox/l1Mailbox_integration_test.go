@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254TableCalculator"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -17,6 +18,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
@@ -273,8 +275,16 @@ func Test_L1Mailbox(t *testing.T) {
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		aggPrivateKey,
-		execPrivateKey,
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			SigningPrivateKey:     aggPrivateKey,
+			Curve:                 config.CurveTypeBN254,
+		},
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
+			SigningPrivateKey:     execPrivateKey,
+			Curve:                 config.CurveTypeBN254,
+		},
 		"localhost:9000",
 		l,
 	)
@@ -363,14 +373,14 @@ func Test_L1Mailbox(t *testing.T) {
 				return
 			}
 
-			operators := []*aggregation.Operator{
+			operators := []*aggregation.Operator[signing.PublicKey]{
 				{
 					Address:   chainConfig.ExecOperatorAccountAddress,
 					PublicKey: execPublicKey,
 				},
 			}
 
-			resultAgg, err := aggregation.NewTaskResultAggregator(
+			resultAgg, err := aggregation.NewBN254TaskResultAggregator(
 				ctx,
 				task.TaskId,
 				task.BlockNumber,
@@ -442,7 +452,7 @@ func Test_L1Mailbox(t *testing.T) {
 			}
 
 			fmt.Printf("Submitting task result to AVS\n\n\n")
-			receipt, err := avsCc.SubmitTaskResult(ctx, cert, tableData.LatestReferenceTimestamp)
+			receipt, err := avsCc.SubmitBN254TaskResult(ctx, cert, tableData.LatestReferenceTimestamp)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to submit task result: %v", err)

@@ -185,6 +185,8 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
+	// TODO(seanmcgary): this should probably live in the taskSession package
+	// it also needs to be aware of the curve for the aggregator
 	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign task payload: %w", err)
@@ -214,7 +216,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
 
-	ts, err := taskSession.NewTaskSession(
+	ts, err := taskSession.NewBN254TaskSession(
 		ctx,
 		cancel,
 		task,
@@ -270,7 +272,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 
 		em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(ts.Task.ChainId)))
 
-		receipt, err := chainCC.SubmitTaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
 		if err != nil {
 			// TODO: emit metric
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)

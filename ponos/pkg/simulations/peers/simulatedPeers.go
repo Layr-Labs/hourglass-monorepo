@@ -15,8 +15,10 @@ func NewSimulatedPeerFromConfig(simulatedPeer config.SimulatedPeer) (*peering.Op
 		OperatorAddress: simulatedPeer.OperatorAddress,
 		OperatorSets: []*peering.OperatorSet{
 			{
-				OperatorSetID:  simulatedPeer.OperatorSetId,
-				PublicKey:      pubKey,
+				OperatorSetID: simulatedPeer.OperatorSetId,
+				WrappedPublicKey: peering.WrappedPublicKey{
+					PublicKey: pubKey,
+				},
 				NetworkAddress: simulatedPeer.NetworkAddress,
 			},
 		},

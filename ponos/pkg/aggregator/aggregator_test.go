@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"math/big"
 	"sync"
 	"testing"
@@ -202,8 +203,16 @@ func Test_Aggregator(t *testing.T) {
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		aggPrivateSigningKey,
-		execPrivateSigningKey,
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			SigningPrivateKey:     aggPrivateSigningKey,
+			Curve:                 config.CurveTypeBN254,
+		},
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
+			SigningPrivateKey:     execPrivateSigningKey,
+			Curve:                 config.CurveTypeBN254,
+		},
 		fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
 		l,
 	)
