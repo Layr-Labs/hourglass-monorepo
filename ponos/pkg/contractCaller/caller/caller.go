@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
-	cryptoLibEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
@@ -324,7 +323,6 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			return nil, err
 		}
-
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			OperatorAddress: operatorSetStringAddrs[i],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
@@ -389,23 +387,21 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err
 		}
-		peeringOpset.PublicKey = pubKey
+		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+			PublicKey: pubKey,
+		}
 		return peeringOpset, nil
 	}
 
 	if curveType == config.CurveTypeECDSA {
-		solidityPubKey, err := cc.keyRegistrar.GetECDSAKey(&bind.CallOpts{}, opset, operatorAddress)
+		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(&bind.CallOpts{}, opset, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
 		}
-
-		pubKey, err := cryptoLibEcdsa.NewPublicKeyFromBytes(solidityPubKey)
-		if err != nil {
-			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
-			return nil, err
+		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+			ECDSAAddress: ecdsaAddr,
 		}
-		peeringOpset.PublicKey = pubKey
 		return peeringOpset, nil
 	}
 	cc.logger.Sugar().Errorf("unsupported curve type: %s", curveType)

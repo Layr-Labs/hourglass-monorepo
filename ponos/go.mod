@@ -13,6 +13,7 @@ require (
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
+	github.com/iden3/go-iden3-crypto v0.0.16
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -52,7 +53,6 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
-	github.com/iden3/go-iden3-crypto v0.0.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect

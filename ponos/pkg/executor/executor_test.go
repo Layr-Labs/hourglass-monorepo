@@ -72,8 +72,10 @@ func Test_Executor(t *testing.T) {
 				OperatorAddress: simAggConfig.Operator.Address,
 				OperatorSets: []*peering.OperatorSet{
 					{
-						OperatorSetID:  0,
-						PublicKey:      pubKey,
+						OperatorSetID: 0,
+						WrappedPublicKey: peering.WrappedPublicKey{
+							PublicKey: pubKey,
+						},
 						NetworkAddress: fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
 						CurveType:      config.CurveTypeBN254,
 					},

@@ -5,13 +5,19 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/common"
 )
 
+type WrappedPublicKey struct {
+	PublicKey    signing.PublicKey `json:"publicKey"`
+	ECDSAAddress common.Address    `json:"ecdsaAddress"`
+}
+
 type OperatorSet struct {
-	OperatorSetID  uint32            `json:"operatorSetId"`
-	PublicKey      signing.PublicKey `json:"publicKey"`
-	NetworkAddress string            `json:"networkAddress"`
-	CurveType      config.CurveType  `json:"curveType"`
+	OperatorSetID    uint32           `json:"operatorSetId"`
+	WrappedPublicKey WrappedPublicKey `json:"publicKey"`
+	NetworkAddress   string           `json:"networkAddress"`
+	CurveType        config.CurveType `json:"curveType"`
 }
 
 type OperatorPeerInfo struct {

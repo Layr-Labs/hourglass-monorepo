@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"sync"
 	"sync/atomic"
@@ -51,7 +52,7 @@ func NewBN254TaskSession(
 		}
 		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
 			Address:   peer.OperatorAddress,
-			PublicKey: opset.PublicKey,
+			PublicKey: opset.WrappedPublicKey.PublicKey,
 		})
 	}
 
@@ -94,16 +95,16 @@ func NewECDSATaskSession(
 	aggregatorSignature []byte,
 	operatorPeersWeight *operatorManager.PeerWeight,
 	logger *zap.Logger,
-) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, signing.PublicKey], error) {
-	operators := []*aggregation.Operator[signing.PublicKey]{}
+) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address], error) {
+	operators := []*aggregation.Operator[common.Address]{}
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
-		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
+		operators = append(operators, &aggregation.Operator[common.Address]{
 			Address:   peer.OperatorAddress,
-			PublicKey: opset.PublicKey,
+			PublicKey: opset.WrappedPublicKey.ECDSAAddress,
 		})
 	}
 
@@ -120,7 +121,7 @@ func NewECDSATaskSession(
 	if err != nil {
 		return nil, err
 	}
-	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, signing.PublicKey]{
+	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address]{
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		aggregatorSignature: aggregatorSignature,

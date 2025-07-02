@@ -825,16 +825,38 @@ func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.Perform
 			return err
 		}
 
-		verfied, err := sig.Verify(opset.PublicKey, t.Payload)
-		if err != nil {
-			aps.logger.Sugar().Errorw("Error verifying signature",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("aggregatorAddress", t.AggregatorAddress),
-				zap.Error(err),
-			)
-			continue
+		var verified bool
+		switch opset.CurveType {
+		case config.CurveTypeBN254:
+			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, t.Payload)
+			if err != nil {
+				aps.logger.Sugar().Errorw("Error verifying BN254 signature",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.Error(err),
+				)
+				continue
+			}
+		case config.CurveTypeECDSA:
+			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
+			if err != nil {
+				aps.logger.Sugar().Errorw("Failed to create ECDSA signature from bytes",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.Error(err),
+				)
+				continue
+			}
+			verified, err = typedSig.VerifyWithAddress(t.Payload[:], opset.WrappedPublicKey.ECDSAAddress)
+			if err != nil {
+				aps.logger.Sugar().Errorw("Error verifying ECDSA signature",
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.Error(err),
+				)
+				continue
+			}
 		}
-		if !verfied {
+		if !verified {
 			aps.logger.Sugar().Errorw("Failed to verify signature",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("aggregatorAddress", t.AggregatorAddress),

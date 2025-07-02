@@ -14,8 +14,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/iden3/go-iden3-crypto/keccak256"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -30,7 +28,6 @@ const (
 
 func Test_PeeringDataFetcher(t *testing.T) {
 	t.Run("BN254", func(t *testing.T) {
-		t.Skip()
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -164,8 +161,10 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				},
 				l,
 			)
-			assert.Nil(t, err)
 			fmt.Printf("Result: %+v\n", result)
+			if err != nil {
+				t.Fatalf("Failed to register operator: %v", err)
+			}
 
 			// create a peeringDataFetcher and get the data
 			pdf := NewPeeringDataFetcher(operatorCc, l)
@@ -201,7 +200,9 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to sign message: %v", err)
 			}
 
-			valid, err := testSig.Verify(peers[0].OperatorSets[0].PublicKey.(*bn254.PublicKey), testMessage)
+			wrappedPubKey := peers[0].OperatorSets[0].WrappedPublicKey
+
+			valid, err := testSig.Verify(wrappedPubKey.PublicKey.(*bn254.PublicKey), testMessage)
 			if err != nil {
 				t.Fatalf("Failed to verify signature: %v", err)
 			}
@@ -264,6 +265,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		execOperatorAddress := cryptoUtils.DeriveAddress(execOperatorPrivateKey.PublicKey)
 		assert.True(t, strings.EqualFold(execOperatorAddress.String(), chainConfig.ExecOperatorAccountAddress))
 
+		execOperatorSigningKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(chainConfig.ExecOperatorAccountPk)
+		if err != nil {
+			l.Sugar().Fatalf("failed to convert private key: %v", err)
+		}
+
 		ethClient, err := ethereumClient.GetEthereumContractCaller()
 		if err != nil {
 			l.Sugar().Fatalf("failed to get Ethereum contract caller: %v", err)
@@ -308,12 +314,13 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				operatorSets:      []uint32{0},
 				operatorType:      "aggregator",
 				privateSigningKey: aggOperatorSigningKey,
-			}, /*{
-				txPrivateKey:   chainConfig.ExecOperatorAccountPk,
-				operatorAddress:      chainConfig.ExecOperatorAccountAddress,
-				operatorSets: []uint32{1},
-				operatorType: "executor",
-			},*/
+			}, {
+				txPrivateKey:      chainConfig.ExecOperatorAccountPk,
+				operatorAddress:   chainConfig.ExecOperatorAccountAddress,
+				operatorSets:      []uint32{1},
+				operatorType:      "executor",
+				privateSigningKey: execOperatorSigningKey,
+			},
 		}
 
 		hasErrors := false
@@ -337,28 +344,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}
-
-			derivedAddress, err := tc.privateSigningKey.DeriveAddress()
-
-			messageHash, _ := avsCc.GetOperatorECDSAKeyRegistrationMessageHash(
-				ctx,
-				common.HexToAddress(tc.operatorAddress),
-				common.HexToAddress(chainConfig.AVSAccountAddress),
-				tc.operatorSets[0],
-				derivedAddress,
-			)
-			fmt.Printf("Message hash: %s\n", hexutil.Encode(messageHash[:]))
-
-			nativePrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(tc.txPrivateKey)
-			if err != nil {
-				t.Fatalf("Failed to convert private key: %+v", err)
-			}
-
-			sig, err := crypto.Sign(messageHash[:], nativePrivateKey)
-			if err != nil {
-				t.Fatalf("Failed to sign message hash: %v", err)
-			}
-			fmt.Printf("Raw sig: %+v\n", hexutil.Encode(sig))
 
 			socket := "localhost:8545"
 			result, err := operator.RegisterOperatorToOperatorSets(
@@ -408,6 +393,9 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 				for _, peer := range peers {
 					t.Logf("Aggregator Peer: %+v\n", peer)
+					for _, os := range peer.OperatorSets {
+						t.Logf("\tOperator Set: %+v\n", os)
+					}
 				}
 			}
 
@@ -415,13 +403,14 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			var hash [32]byte
 			copy(hash[:], keccak256.Hash(testMessage))
+
 			testSig, err := tc.privateSigningKey.Sign(hash)
 			if err != nil {
 				t.Fatalf("Failed to sign message: %v", err)
 			}
 
-			pubKey := peers[0].OperatorSets[0].PublicKey.(*cryptoLibsEcdsa.PublicKey)
-			valid, err := testSig.Verify(pubKey, hash)
+			addr := peers[0].OperatorSets[0].WrappedPublicKey.ECDSAAddress
+			valid, err := testSig.VerifyWithAddress(hash[:], addr)
 			if err != nil {
 				t.Fatalf("Failed to verify signature: %v", err)
 			}
