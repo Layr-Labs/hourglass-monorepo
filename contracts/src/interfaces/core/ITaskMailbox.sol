@@ -17,16 +17,6 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  */
 interface ITaskMailboxTypes {
     /**
-     * @notice Configuration for certificate verifiers
-     * @param curveType The curve type for the verifier
-     * @param verifier Address of the certificate verifier contract
-     */
-    struct CertificateVerifierConfig {
-        IKeyRegistrarTypes.CurveType curveType;
-        address verifier;
-    }
-
-    /**
      * @notice Configuration for the executor operator set
      * @param curveType The curve type used for signature verification
      * @param taskHook Address of the AVS task hook contract
