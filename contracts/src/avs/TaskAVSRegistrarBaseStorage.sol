@@ -1,33 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.27;
 
-import {AVSRegistrarWithSocket} from
-    "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
-import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
-import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {ITaskAVSRegistrarBase} from "../interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 
 /**
  * @title TaskAVSRegistrarBaseStorage
  * @author Layr Labs, Inc.
- * @notice Storage contract for TaskAVSRegistrarBase that extends AVSRegistrarWithSocket
- * @dev This contract extends AVSRegistrarWithSocket which already includes AVSRegistrar and SocketRegistry storage
+ * @notice Storage contract for TaskAVSRegistrarBase
+ * @dev This contract holds the storage variables for TaskAVSRegistrarBase
  */
-abstract contract TaskAVSRegistrarBaseStorage is AVSRegistrarWithSocket, ITaskAVSRegistrarBase {
+abstract contract TaskAVSRegistrarBaseStorage is ITaskAVSRegistrarBase {
     /// @notice Configuration for this AVS
     AvsConfig public avsConfig;
-
-    /**
-     * @dev Constructor that passes parameters to parent AVSRegistrarWithSocket
-     * @param _avs The address of the AVS
-     * @param _allocationManager The AllocationManager contract address
-     * @param _keyRegistrar The KeyRegistrar contract address
-     */
-    constructor(
-        address _avs,
-        IAllocationManager _allocationManager,
-        IKeyRegistrar _keyRegistrar
-    ) AVSRegistrarWithSocket(_avs, _allocationManager, _keyRegistrar) {}
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new

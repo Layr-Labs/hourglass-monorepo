@@ -5,6 +5,8 @@ import {OwnableUpgradeable} from "@openzeppelin-upgrades/contracts/access/Ownabl
 import {Initializable} from "@openzeppelin-upgrades/contracts/proxy/utils/Initializable.sol";
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
+import {AVSRegistrarWithSocket} from
+    "@eigenlayer-middleware/src/middlewareV2/registrar/presets/AVSRegistrarWithSocket.sol";
 
 import {ITaskAVSRegistrarBase} from "../interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
 import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
@@ -14,7 +16,12 @@ import {TaskAVSRegistrarBaseStorage} from "./TaskAVSRegistrarBaseStorage.sol";
  * @author Layr Labs, Inc.
  * @notice Abstract AVS Registrar for task-based AVSs
  */
-abstract contract TaskAVSRegistrarBase is Initializable, OwnableUpgradeable, TaskAVSRegistrarBaseStorage {
+abstract contract TaskAVSRegistrarBase is
+    Initializable,
+    OwnableUpgradeable,
+    AVSRegistrarWithSocket,
+    TaskAVSRegistrarBaseStorage
+{
     /**
      * @dev Constructor that passes parameters to parent
      * @param _avs The address of the AVS
@@ -25,7 +32,7 @@ abstract contract TaskAVSRegistrarBase is Initializable, OwnableUpgradeable, Tas
         address _avs,
         IAllocationManager _allocationManager,
         IKeyRegistrar _keyRegistrar
-    ) TaskAVSRegistrarBaseStorage(_avs, _allocationManager, _keyRegistrar) {
+    ) AVSRegistrarWithSocket(_avs, _allocationManager, _keyRegistrar) {
         _disableInitializers();
     }
 
