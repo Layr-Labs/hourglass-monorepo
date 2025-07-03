@@ -86,6 +86,9 @@ contract TaskMailbox is
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
+        
+        // Validate consensus configuration
+        _validateConsensus(config.consensus);
 
         executorOperatorSetTaskConfigs[operatorSet.key()] = config;
         emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
@@ -188,28 +191,14 @@ contract TaskMailbox is
         // Pre-task result submission checks: AVS can validate the caller, task result, params and certificate.
         task.executorOperatorSetTaskConfig.taskHook.validatePreTaskResultSubmission(msg.sender, taskHash, cert, result);
 
-        uint16[] memory totalStakeProportionThresholds = new uint16[](1);
-        totalStakeProportionThresholds[0] = task.executorOperatorSetTaskConfig.stakeProportionThreshold;
-
+        // Verify certificate based on consensus configuration
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
-        bool isCertificateValid;
-        if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.BN254) {
-            // BN254 Certificate verification
-            IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
-                abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
-            isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
-                executorOperatorSet, bn254Cert, totalStakeProportionThresholds
-            );
-        } else if (task.executorOperatorSetTaskConfig.curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
-            // ECDSA Certificate verification
-            IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
-                abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
-            isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
-                executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
-            );
-        } else {
-            revert InvalidCurveType();
-        }
+        bool isCertificateValid = _verifyCertificate(
+            task.executorOperatorSetTaskConfig.curveType,
+            task.executorOperatorSetTaskConfig.consensus,
+            executorOperatorSet,
+            cert
+        );
         require(isCertificateValid, CertificateVerificationFailed());
 
         task.status = TaskStatus.VERIFIED;
@@ -269,6 +258,64 @@ contract TaskMailbox is
             return ECDSA_CERTIFICATE_VERIFIER;
         } else {
             revert InvalidCurveType();
+        }
+    }
+
+    /**
+     * @notice Validates the consensus configuration
+     * @param consensus The consensus configuration to validate
+     */
+    function _validateConsensus(Consensus memory consensus) internal pure {
+        if (consensus.consensusType == ConsensusType.STAKE_PROPORTION_THRESHOLD) {
+            // Decode and validate the stake proportion threshold
+            require(consensus.value.length == 32, InvalidConsensusValue());
+            uint16 stakeProportionThreshold = abi.decode(consensus.value, (uint16));
+            require(stakeProportionThreshold <= 10000, InvalidConsensusValue());
+        } else {
+            revert InvalidConsensusType();
+        }
+    }
+
+    /**
+     * @notice Verifies a certificate based on the consensus configuration
+     * @param curveType The curve type used for signature verification
+     * @param consensus The consensus configuration
+     * @param executorOperatorSet The executor operator set
+     * @param cert The certificate to verify
+     * @return isCertificateValid Whether the certificate is valid
+     */
+    function _verifyCertificate(
+        IKeyRegistrarTypes.CurveType curveType,
+        Consensus memory consensus,
+        OperatorSet memory executorOperatorSet,
+        bytes memory cert
+    ) internal returns (bool isCertificateValid) {
+        if (consensus.consensusType == ConsensusType.STAKE_PROPORTION_THRESHOLD) {
+            // Decode stake proportion threshold
+            uint16 stakeProportionThreshold = abi.decode(consensus.value, (uint16));
+            uint16[] memory totalStakeProportionThresholds = new uint16[](1);
+            totalStakeProportionThresholds[0] = stakeProportionThreshold;
+            
+            // Verify certificate based on curve type
+            if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
+                // BN254 Certificate verification
+                IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
+                    abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
+                isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
+                    executorOperatorSet, bn254Cert, totalStakeProportionThresholds
+                );
+            } else if (curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
+                // ECDSA Certificate verification
+                IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
+                    abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
+                isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
+                    executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
+                );
+            } else {
+                revert InvalidCurveType();
+            }
+        } else {
+            revert InvalidConsensusType();
         }
     }
 
