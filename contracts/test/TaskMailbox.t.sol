@@ -103,7 +103,10 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
             feeToken: IERC20(address(mockToken)),
             feeCollector: feeCollector,
             taskSLA: taskSLA,
-            stakeProportionThreshold: stakeProportionThreshold,
+            consensus: Consensus({
+                consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+                value: abi.encode(stakeProportionThreshold)
+            }),
             taskMetadata: bytes("test metadata")
         });
     }
@@ -249,6 +252,8 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         vm.assume(fuzzCertificateVerifier != address(0));
         vm.assume(fuzzTaskHook != address(0));
         vm.assume(fuzzTaskSLA > 0);
+        // Bound stake proportion threshold to valid range (0-10000 basis points)
+        fuzzStakeProportionThreshold = uint16(bound(fuzzStakeProportionThreshold, 0, 10000));
 
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
@@ -258,7 +263,10 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
             feeToken: IERC20(fuzzFeeToken),
             feeCollector: fuzzFeeCollector,
             taskSLA: fuzzTaskSLA,
-            stakeProportionThreshold: fuzzStakeProportionThreshold,
+            consensus: Consensus({
+                consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+                value: abi.encode(fuzzStakeProportionThreshold)
+            }),
             taskMetadata: fuzzTaskMetadata
         });
 
@@ -286,7 +294,10 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(address(retrievedConfig.feeToken), fuzzFeeToken);
         assertEq(retrievedConfig.feeCollector, fuzzFeeCollector);
         assertEq(retrievedConfig.taskSLA, fuzzTaskSLA);
-        assertEq(retrievedConfig.stakeProportionThreshold, fuzzStakeProportionThreshold);
+        // Verify consensus configuration
+        assertEq(uint8(retrievedConfig.consensus.consensusType), uint8(ConsensusType.STAKE_PROPORTION_THRESHOLD));
+        uint16 decodedThreshold = abi.decode(retrievedConfig.consensus.value, (uint16));
+        assertEq(decodedThreshold, fuzzStakeProportionThreshold);
         assertEq(retrievedConfig.taskMetadata, fuzzTaskMetadata);
 
         // Verify operator set is registered
@@ -317,7 +328,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(
             entries[0].topics[0],
             keccak256(
-                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(uint8,address,address,address,uint96,uint16,bytes))"
+                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(uint8,address,address,address,uint96,(uint8,bytes),bytes))"
             )
         );
 
@@ -938,7 +949,9 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         assertEq(address(config.feeToken), address(mockToken));
         assertEq(config.feeCollector, feeCollector);
         assertEq(config.taskSLA, taskSLA);
-        assertEq(config.stakeProportionThreshold, stakeProportionThreshold);
+        assertEq(uint8(config.consensus.consensusType), uint8(ConsensusType.STAKE_PROPORTION_THRESHOLD));
+        uint16 decodedThreshold = abi.decode(config.consensus.value, (uint16));
+        assertEq(decodedThreshold, stakeProportionThreshold);
         assertEq(config.taskMetadata, bytes("test metadata"));
     }
 
@@ -952,7 +965,7 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         assertEq(address(config.feeToken), address(0));
         assertEq(config.feeCollector, address(0));
         assertEq(config.taskSLA, 0);
-        assertEq(config.stakeProportionThreshold, 0);
+        assertEq(config.consensus.value.length, 0);
         assertEq(config.taskMetadata, bytes(""));
     }
 
@@ -1127,7 +1140,8 @@ contract TaskMailboxUnitTests_Storage is TaskMailboxUnitTests {
         assertEq(address(storedConfig.feeToken), address(config.feeToken));
         assertEq(storedConfig.feeCollector, config.feeCollector);
         assertEq(storedConfig.taskSLA, config.taskSLA);
-        assertEq(storedConfig.stakeProportionThreshold, config.stakeProportionThreshold);
+        assertEq(uint8(storedConfig.consensus.consensusType), uint8(config.consensus.consensusType));
+        assertEq(storedConfig.consensus.value, config.consensus.value);
         assertEq(storedConfig.taskMetadata, config.taskMetadata);
     }
 
@@ -1253,7 +1267,8 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
             taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
         assertEq(address(configAfterUpgrade.taskHook), address(config.taskHook));
         assertEq(configAfterUpgrade.taskSLA, config.taskSLA);
-        assertEq(configAfterUpgrade.stakeProportionThreshold, config.stakeProportionThreshold);
+        assertEq(uint8(configAfterUpgrade.consensus.consensusType), uint8(config.consensus.consensusType));
+        assertEq(configAfterUpgrade.consensus.value, config.consensus.value);
     }
 
     function test_InitializerModifier_PreventsReinitialization() public {

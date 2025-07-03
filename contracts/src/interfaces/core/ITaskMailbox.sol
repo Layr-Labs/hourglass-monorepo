@@ -17,13 +17,30 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  */
 interface ITaskMailboxTypes {
     /**
+     * @notice Enum defining the type of consensus mechanism
+     */
+    enum ConsensusType {
+        STAKE_PROPORTION_THRESHOLD
+    }
+
+    /**
+     * @notice Consensus configuration for task verification
+     * @param consensusType The type of consensus mechanism
+     * @param value Encoded consensus parameters based on consensusType
+     */
+    struct Consensus {
+        ConsensusType consensusType;
+        bytes value;
+    }
+
+    /**
      * @notice Configuration for the executor operator set
      * @param curveType The curve type used for signature verification
      * @param taskHook Address of the AVS task hook contract
      * @param feeToken ERC20 token used for task fees
      * @param feeCollector Address to receive AVS fees
      * @param taskSLA Time (in seconds) within which the task must be completed
-     * @param stakeProportionThreshold Minimum proportion of executor operator set stake required to certify task execution (in basis points)
+     * @param consensus Consensus configuration for task verification
      * @param taskMetadata Additional metadata for task execution
      */
     struct ExecutorOperatorSetTaskConfig {
@@ -34,7 +51,7 @@ interface ITaskMailboxTypes {
         IERC20 feeToken;
         address feeCollector;
         uint96 taskSLA;
-        uint16 stakeProportionThreshold;
+        Consensus consensus;
         bytes taskMetadata;
     }
 
@@ -134,6 +151,12 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when an operator set owner is invalid
     error InvalidOperatorSetOwner();
+
+    /// @notice Thrown when an invalid consensus type is provided
+    error InvalidConsensusType();
+
+    /// @notice Thrown when an invalid consensus value is provided
+    error InvalidConsensusValue();
 }
 
 /**
