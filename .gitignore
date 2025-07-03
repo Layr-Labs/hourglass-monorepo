@@ -6,3 +6,23 @@ node_modules
 /demo/bin
 /contracts/broadcast/*
 /ponos/anvil*.json
+
+# hgctl specific
+/hgctl/dist/
+/hgctl/*.tsbuildinfo
+/hgctl/coverage/
+/hgctl/.nyc_output/
+/hgctl/*.log
+/hgctl/npm-debug.log*
+/hgctl/yarn-debug.log*
+/hgctl/yarn-error.log*
+/hgctl/.env
+/hgctl/.env.local
+/hgctl/.env.*.local
+/hgctl/*.tgz
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
