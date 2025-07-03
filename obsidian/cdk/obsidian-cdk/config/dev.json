@@ -1,0 +1,20 @@
+{
+  "obsidian": {
+    "deployment": {
+      "type": "ec2",
+      "instanceType": "m5.large",
+      "minSize": 1,
+      "maxSize": 1
+    },
+    "monitoring": {
+      "enableDetailedMetrics": false,
+      "logRetentionDays": 7,
+      "alarmNotificationEmail": "dev@example.com"
+    },
+    "security": {
+      "enableWAF": false,
+      "enableGuardDuty": false,
+      "vpcFlowLogs": false
+    }
+  }
+}

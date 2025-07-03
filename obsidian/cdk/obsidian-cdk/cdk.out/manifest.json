@@ -1,0 +1,299 @@
+{
+  "version": "35.0.0",
+  "artifacts": {
+    "ObsidianStack.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "ObsidianStack.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "ObsidianStack": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://767397703211/us-east-1",
+      "properties": {
+        "templateFile": "ObsidianStack.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::767397703211:role/cdk-hnb659fds-deploy-role-767397703211-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::767397703211:role/cdk-hnb659fds-cfn-exec-role-767397703211-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-767397703211-us-east-1/966b388e8a1d134e141697da1d7f08f1de1a061d35a1d97a7dc5a3009b4c985b.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "ObsidianStack.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::767397703211:role/cdk-hnb659fds-lookup-role-767397703211-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "ObsidianStack.assets"
+      ],
+      "metadata": {
+        "/ObsidianStack/ObsidianArtifacts/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianArtifacts17B3E6A0"
+          }
+        ],
+        "/ObsidianStack/ObsidianBuildRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianBuildRole86EC10B5"
+          }
+        ],
+        "/ObsidianStack/ObsidianBuildRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianBuildRoleDefaultPolicyA2FE42CA"
+          }
+        ],
+        "/ObsidianStack/ObsidianBuildProject/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianBuildProject45FC6A48"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCEA28C635"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1Subnet6E5CF338"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1RouteTable60AD37EF"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1RouteTableAssociationDBB7DB3F"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1DefaultRoute5DAF22B9"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/EIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1EIPFFA2A4E6"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet1/NATGateway": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet1NATGatewayBC02EFB4"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet2SubnetEC5E69F9"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet2RouteTable5A441F69"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet2RouteTableAssociationB1161739"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PublicSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPublicSubnet2DefaultRoute68ECB4E8"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet1Subnet8B53CAD6"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet1RouteTableCCC363B0"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet1RouteTableAssociation622B9CA0"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet1DefaultRoute665B69DC"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet2SubnetD726D1B1"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet2RouteTableC6D57B4D"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet2RouteTableAssociation9BBDB654"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/PrivateSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCPrivateSubnet2DefaultRoute1EC745BE"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/IGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCIGW78465481"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/VPCGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCVPCGW0A1D0967"
+          }
+        ],
+        "/ObsidianStack/ObsidianVPC/RestrictDefaultSecurityGroupCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianVPCRestrictDefaultSecurityGroupCustomResource2A873BD3"
+          }
+        ],
+        "/ObsidianStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+          }
+        ],
+        "/ObsidianStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E"
+          }
+        ],
+        "/ObsidianStack/ObsidianInstanceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianInstanceRole0321FBBC"
+          }
+        ],
+        "/ObsidianStack/ObsidianInstanceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianInstanceRoleDefaultPolicyB8CC292A"
+          }
+        ],
+        "/ObsidianStack/ObsidianSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianSecurityGroup1ACE74AC"
+          }
+        ],
+        "/ObsidianStack/ObsidianLaunchTemplate/Profile": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianLaunchTemplateProfile18964046"
+          }
+        ],
+        "/ObsidianStack/ObsidianLaunchTemplate/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianLaunchTemplate79735FF0"
+          }
+        ],
+        "/ObsidianStack/SsmParameterValue:--aws--service--ami-amazon-linux-latest--amzn2-ami-kernel-5.10-hvm-x86_64-gp2:C96584B6-F00A-464E-AD19-53AFF4B05118.Parameter": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
+          }
+        ],
+        "/ObsidianStack/ObsidianASG/ASG": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ObsidianASGF6FBBDA5"
+          }
+        ],
+        "/ObsidianStack/BucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketName"
+          }
+        ],
+        "/ObsidianStack/BuildProjectName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BuildProjectName"
+          }
+        ],
+        "/ObsidianStack/BuildCommand": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BuildCommand"
+          }
+        ],
+        "/ObsidianStack/InstanceUpdateCommand": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InstanceUpdateCommand"
+          }
+        ],
+        "/ObsidianStack/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/ObsidianStack/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/ObsidianStack/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "ObsidianStack"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    }
+  }
+}

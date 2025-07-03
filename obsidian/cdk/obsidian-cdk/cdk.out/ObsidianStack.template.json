@@ -1,0 +1,1039 @@
+{
+ "Resources": {
+  "ObsidianArtifacts17B3E6A0": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketName": "obsidian-artifacts-767397703211-us-east-1",
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianArtifacts/Resource"
+   }
+  },
+  "ObsidianBuildRole86EC10B5": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "codebuild.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianBuildRole/Resource"
+   }
+  },
+  "ObsidianBuildRoleDefaultPolicyA2FE42CA": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:Abort*",
+        "s3:DeleteObject*",
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ObsidianArtifacts17B3E6A0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ObsidianArtifacts17B3E6A0",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:logs:us-east-1:767397703211:log-group:/aws/codebuild/",
+           {
+            "Ref": "ObsidianBuildProject45FC6A48"
+           },
+           ":*"
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:aws:logs:us-east-1:767397703211:log-group:/aws/codebuild/",
+           {
+            "Ref": "ObsidianBuildProject45FC6A48"
+           }
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "codebuild:BatchPutCodeCoverages",
+        "codebuild:BatchPutTestCases",
+        "codebuild:CreateReport",
+        "codebuild:CreateReportGroup",
+        "codebuild:UpdateReport"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:aws:codebuild:us-east-1:767397703211:report-group/",
+          {
+           "Ref": "ObsidianBuildProject45FC6A48"
+          },
+          "-*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ObsidianBuildRoleDefaultPolicyA2FE42CA",
+    "Roles": [
+     {
+      "Ref": "ObsidianBuildRole86EC10B5"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianBuildRole/DefaultPolicy/Resource"
+   }
+  },
+  "ObsidianBuildProject45FC6A48": {
+   "Type": "AWS::CodeBuild::Project",
+   "Properties": {
+    "Artifacts": {
+     "Location": {
+      "Ref": "ObsidianArtifacts17B3E6A0"
+     },
+     "Name": "obsidian-linux-amd64",
+     "NamespaceType": "NONE",
+     "Packaging": "NONE",
+     "Path": "binaries",
+     "Type": "S3"
+    },
+    "Cache": {
+     "Type": "NO_CACHE"
+    },
+    "EncryptionKey": "alias/aws/s3",
+    "Environment": {
+     "ComputeType": "BUILD_GENERAL1_MEDIUM",
+     "Image": "aws/codebuild/standard:7.0",
+     "ImagePullCredentialsType": "CODEBUILD",
+     "PrivilegedMode": false,
+     "Type": "LINUX_CONTAINER"
+    },
+    "ServiceRole": {
+     "Fn::GetAtt": [
+      "ObsidianBuildRole86EC10B5",
+      "Arn"
+     ]
+    },
+    "Source": {
+     "BuildSpec": "{\n  \"version\": \"0.2\",\n  \"phases\": {\n    \"install\": {\n      \"runtime-versions\": {\n        \"golang\": \"1.21\"\n      },\n      \"commands\": [\n        \"apt-get update -y\",\n        \"apt-get install -y protobuf-compiler\",\n        \"go install google.golang.org/protobuf/cmd/protoc-gen-go@latest\",\n        \"go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest\"\n      ]\n    },\n    \"build\": {\n      \"commands\": [\n        \"cd obsidian\",\n        \"make proto\",\n        \"GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o obsidian-linux-amd64 ./cmd/obsidian\"\n      ]\n    }\n  },\n  \"artifacts\": {\n    \"files\": [\n      \"obsidian/obsidian-linux-amd64\"\n    ],\n    \"discard-paths\": \"yes\"\n  }\n}",
+     "Location": "https://github.com/Layr-Labs/hourglass-monorepo.git",
+     "ReportBuildStatus": true,
+     "Type": "GITHUB"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianBuildProject/Resource"
+   }
+  },
+  "ObsidianVPCEA28C635": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/Resource"
+   }
+  },
+  "ObsidianVPCPublicSubnet1Subnet6E5CF338": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.0.0/18",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/Subnet"
+   }
+  },
+  "ObsidianVPCPublicSubnet1RouteTable60AD37EF": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/RouteTable"
+   }
+  },
+  "ObsidianVPCPublicSubnet1RouteTableAssociationDBB7DB3F": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPublicSubnet1RouteTable60AD37EF"
+    },
+    "SubnetId": {
+     "Ref": "ObsidianVPCPublicSubnet1Subnet6E5CF338"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "ObsidianVPCPublicSubnet1DefaultRoute5DAF22B9": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "ObsidianVPCIGW78465481"
+    },
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPublicSubnet1RouteTable60AD37EF"
+    }
+   },
+   "DependsOn": [
+    "ObsidianVPCVPCGW0A1D0967"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/DefaultRoute"
+   }
+  },
+  "ObsidianVPCPublicSubnet1EIPFFA2A4E6": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/EIP"
+   }
+  },
+  "ObsidianVPCPublicSubnet1NATGatewayBC02EFB4": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "ObsidianVPCPublicSubnet1EIPFFA2A4E6",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "ObsidianVPCPublicSubnet1Subnet6E5CF338"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "ObsidianVPCPublicSubnet1DefaultRoute5DAF22B9",
+    "ObsidianVPCPublicSubnet1RouteTableAssociationDBB7DB3F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet1/NATGateway"
+   }
+  },
+  "ObsidianVPCPublicSubnet2SubnetEC5E69F9": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.64.0/18",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet2/Subnet"
+   }
+  },
+  "ObsidianVPCPublicSubnet2RouteTable5A441F69": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet2/RouteTable"
+   }
+  },
+  "ObsidianVPCPublicSubnet2RouteTableAssociationB1161739": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPublicSubnet2RouteTable5A441F69"
+    },
+    "SubnetId": {
+     "Ref": "ObsidianVPCPublicSubnet2SubnetEC5E69F9"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "ObsidianVPCPublicSubnet2DefaultRoute68ECB4E8": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "ObsidianVPCIGW78465481"
+    },
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPublicSubnet2RouteTable5A441F69"
+    }
+   },
+   "DependsOn": [
+    "ObsidianVPCVPCGW0A1D0967"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PublicSubnet2/DefaultRoute"
+   }
+  },
+  "ObsidianVPCPrivateSubnet1Subnet8B53CAD6": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.128.0/18",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet1/Subnet"
+   }
+  },
+  "ObsidianVPCPrivateSubnet1RouteTableCCC363B0": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet1/RouteTable"
+   }
+  },
+  "ObsidianVPCPrivateSubnet1RouteTableAssociation622B9CA0": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPrivateSubnet1RouteTableCCC363B0"
+    },
+    "SubnetId": {
+     "Ref": "ObsidianVPCPrivateSubnet1Subnet8B53CAD6"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet1/RouteTableAssociation"
+   }
+  },
+  "ObsidianVPCPrivateSubnet1DefaultRoute665B69DC": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "ObsidianVPCPublicSubnet1NATGatewayBC02EFB4"
+    },
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPrivateSubnet1RouteTableCCC363B0"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet1/DefaultRoute"
+   }
+  },
+  "ObsidianVPCPrivateSubnet2SubnetD726D1B1": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.192.0/18",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet2/Subnet"
+   }
+  },
+  "ObsidianVPCPrivateSubnet2RouteTableC6D57B4D": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet2/RouteTable"
+   }
+  },
+  "ObsidianVPCPrivateSubnet2RouteTableAssociation9BBDB654": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPrivateSubnet2RouteTableC6D57B4D"
+    },
+    "SubnetId": {
+     "Ref": "ObsidianVPCPrivateSubnet2SubnetD726D1B1"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet2/RouteTableAssociation"
+   }
+  },
+  "ObsidianVPCPrivateSubnet2DefaultRoute1EC745BE": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "ObsidianVPCPublicSubnet1NATGatewayBC02EFB4"
+    },
+    "RouteTableId": {
+     "Ref": "ObsidianVPCPrivateSubnet2RouteTableC6D57B4D"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/PrivateSubnet2/DefaultRoute"
+   }
+  },
+  "ObsidianVPCIGW78465481": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "ObsidianStack/ObsidianVPC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/IGW"
+   }
+  },
+  "ObsidianVPCVPCGW0A1D0967": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "ObsidianVPCIGW78465481"
+    },
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/VPCGW"
+   }
+  },
+  "ObsidianVPCRestrictDefaultSecurityGroupCustomResource2A873BD3": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "ObsidianVPCEA28C635",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": "767397703211"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianVPC/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:ec2:us-east-1:767397703211:security-group/",
+             {
+              "Fn::GetAtt": [
+               "ObsidianVPCEA28C635",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-767397703211-us-east-1",
+     "S3Key": "7f18a11296f35510ee16538afec983ed6312e12afbf81b777089a9f8e34e2474.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7f18a11296f35510ee16538afec983ed6312e12afbf81b777089a9f8e34e2474",
+    "aws:asset:property": "Code"
+   }
+  },
+  "ObsidianInstanceRole0321FBBC": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianInstanceRole/Resource"
+   }
+  },
+  "ObsidianInstanceRoleDefaultPolicyB8CC292A": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetBucket*",
+        "s3:GetObject*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "ObsidianArtifacts17B3E6A0",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "ObsidianArtifacts17B3E6A0",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:BatchGetImage",
+        "ecr:GetAuthorizationToken",
+        "ecr:GetDownloadUrlForLayer"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "ObsidianInstanceRoleDefaultPolicyB8CC292A",
+    "Roles": [
+     {
+      "Ref": "ObsidianInstanceRole0321FBBC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianInstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "ObsidianSecurityGroup1ACE74AC": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Obsidian instances",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "HTTP API",
+      "FromPort": 8080,
+      "IpProtocol": "tcp",
+      "ToPort": 8080
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "gRPC API",
+      "FromPort": 9090,
+      "IpProtocol": "tcp",
+      "ToPort": 9090
+     }
+    ],
+    "VpcId": {
+     "Ref": "ObsidianVPCEA28C635"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianSecurityGroup/Resource"
+   }
+  },
+  "ObsidianLaunchTemplateProfile18964046": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "ObsidianInstanceRole0321FBBC"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianLaunchTemplate/Profile"
+   }
+  },
+  "ObsidianLaunchTemplate79735FF0": {
+   "Type": "AWS::EC2::LaunchTemplate",
+   "Properties": {
+    "LaunchTemplateData": {
+     "IamInstanceProfile": {
+      "Arn": {
+       "Fn::GetAtt": [
+        "ObsidianLaunchTemplateProfile18964046",
+        "Arn"
+       ]
+      }
+     },
+     "ImageId": {
+      "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
+     },
+     "InstanceType": "m5.large",
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "ObsidianSecurityGroup1ACE74AC",
+        "GroupId"
+       ]
+      }
+     ],
+     "TagSpecifications": [
+      {
+       "ResourceType": "instance",
+       "Tags": [
+        {
+         "Key": "Name",
+         "Value": "ObsidianStack/ObsidianLaunchTemplate"
+        }
+       ]
+      },
+      {
+       "ResourceType": "volume",
+       "Tags": [
+        {
+         "Key": "Name",
+         "Value": "ObsidianStack/ObsidianLaunchTemplate"
+        }
+       ]
+      }
+     ],
+     "UserData": {
+      "Fn::Base64": {
+       "Fn::Join": [
+        "",
+        [
+         "#!/bin/bash\nyum update -y\nyum install -y docker aws-cli\nservice docker start\nusermod -a -G docker ec2-user\nmkdir -p /opt/obsidian\ncat > /opt/obsidian/config.yaml << EOF\nserver:\n  port: 8080\n  grpcPort: 9090\n\norchestrator:\n  resources:\n    maxCpu: \"4\"\n    maxMemory: \"8Gi\" \n    maxContainers: 10\n\nregistry:\n  registries:\n    - name: \"ecr\"\n      type: \"aws-ecr\"\n      region: \"us-east-1\"\n      credentialSource: \"iam-role\"\n\nproxy:\n  backends: []\n\nlogging:\n  level: \"info\"\nEOF\naws s3 cp s3://",
+         {
+          "Ref": "ObsidianArtifacts17B3E6A0"
+         },
+         "/binaries/obsidian-linux-amd64 /opt/obsidian/obsidian || echo \"Binary not yet available\"\nchmod +x /opt/obsidian/obsidian || true\ncat > /etc/systemd/system/obsidian.service << EOF\n[Unit]\nDescription=Obsidian Gateway\nAfter=docker.service\n\n[Service]\nType=simple\nExecStart=/opt/obsidian/obsidian --config=/opt/obsidian/config.yaml\nRestart=always\nStandardOutput=journal\n\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable obsidian\n# Start only if binary exists\n[ -f /opt/obsidian/obsidian ] && systemctl start obsidian || echo \"Waiting for binary\""
+        ]
+       ]
+      }
+     }
+    },
+    "TagSpecifications": [
+     {
+      "ResourceType": "launch-template",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "ObsidianStack/ObsidianLaunchTemplate"
+       }
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "ObsidianInstanceRoleDefaultPolicyB8CC292A",
+    "ObsidianInstanceRole0321FBBC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianLaunchTemplate/Resource"
+   }
+  },
+  "ObsidianASGF6FBBDA5": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "LaunchTemplate": {
+     "LaunchTemplateId": {
+      "Ref": "ObsidianLaunchTemplate79735FF0"
+     },
+     "Version": {
+      "Fn::GetAtt": [
+       "ObsidianLaunchTemplate79735FF0",
+       "LatestVersionNumber"
+      ]
+     }
+    },
+    "MaxSize": "1",
+    "MinSize": "1",
+    "VPCZoneIdentifier": [
+     {
+      "Ref": "ObsidianVPCPrivateSubnet1Subnet8B53CAD6"
+     },
+     {
+      "Ref": "ObsidianVPCPrivateSubnet2SubnetD726D1B1"
+     }
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/ObsidianASG/ASG"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/3WQ0WrCQBBFv6Xv61bTL0iliFDaJRFfy2Qy6uhmN+zOKhLy7yVGDBb6dO89O8xcNtOLxVzPX+ASZ1ifZpYr3ZUCeFJwiT9dfNPde8ITiVru3Oh6xdDorvCWBnhT4y3jdYiTW7so4JBM8Du21Cv0NVWJba07E/yR8Lb0bntFmOlu2+IAt2apTKosY5kqN16fXOGT0AaqscDIJ5bH6JFB2LvH8GA+1maQL5AVCF3gqkzgMwhNi9dOKDh6DIxN7ikXATw05ESVhCmwXFfBp/bW4Ql8QnJ42FDTWhhvP5NeQRIfESy7ve7yJL4cw2PhX9b3qqDoU0BSyxTFN1PcuX+eTPBnrimoPEaSUmDPbn/7cwjQkFAYwneSNkmvnK9JH+PrOcv0ItPzl2NknoXkhBvSxai/37MoPDECAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "ObsidianStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2"
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Outputs": {
+  "BucketName": {
+   "Description": "S3 bucket containing Obsidian binaries",
+   "Value": {
+    "Ref": "ObsidianArtifacts17B3E6A0"
+   }
+  },
+  "BuildProjectName": {
+   "Description": "CodeBuild project name",
+   "Value": {
+    "Ref": "ObsidianBuildProject45FC6A48"
+   }
+  },
+  "BuildCommand": {
+   "Description": "Command to trigger a build",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "aws codebuild start-build --project-name ",
+      {
+       "Ref": "ObsidianBuildProject45FC6A48"
+      }
+     ]
+    ]
+   }
+  },
+  "InstanceUpdateCommand": {
+   "Description": "Command to update Obsidian on running instances",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "aws ssm send-command --document-name \"AWS-RunShellScript\" --targets \"Key=tag:aws:autoscaling:groupName,Values=",
+      {
+       "Ref": "ObsidianASGF6FBBDA5"
+      },
+      "\" --parameters 'commands=[\"aws s3 cp s3://",
+      {
+       "Ref": "ObsidianArtifacts17B3E6A0"
+      },
+      "/binaries/obsidian-linux-amd64 /opt/obsidian/obsidian && chmod +x /opt/obsidian/obsidian && systemctl restart obsidian\"]'"
+     ]
+    ]
+   }
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}
