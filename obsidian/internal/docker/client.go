@@ -2,12 +2,14 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
@@ -44,8 +46,8 @@ func NewClient() (*Client, error) {
 	return &Client{cli: cli}, nil
 }
 
-func (c *Client) PullImage(ctx context.Context, image string) error {
-	reader, err := c.cli.ImagePull(ctx, image, types.ImagePullOptions{})
+func (c *Client) PullImage(ctx context.Context, img string) error {
+	reader, err := c.cli.ImagePull(ctx, img, image.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
@@ -168,15 +170,16 @@ func (c *Client) GetContainerLogs(ctx context.Context, containerID string, since
 	return logs, nil
 }
 
-func (c *Client) GetContainerStats(ctx context.Context, containerID string) (*types.StatsJSON, error) {
+func (c *Client) GetContainerStats(ctx context.Context, containerID string) (*container.StatsResponse, error) {
 	stats, err := c.cli.ContainerStatsOneShot(ctx, containerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container stats: %w", err)
 	}
 	defer stats.Body.Close()
 
-	var statsJSON types.StatsJSON
-	if err := statsJSON.Decode(stats.Body); err != nil {
+	var statsJSON container.StatsResponse
+	decoder := json.NewDecoder(stats.Body)
+	if err := decoder.Decode(&statsJSON); err != nil {
 		return nil, fmt.Errorf("failed to decode stats: %w", err)
 	}
 

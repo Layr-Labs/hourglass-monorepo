@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hourglass/obsidian/api/proto/orchestrator"
 	pb "github.com/hourglass/obsidian/api/proto/orchestrator"
 	"github.com/hourglass/obsidian/internal/docker"
 	"github.com/hourglass/obsidian/pkg/config"
@@ -106,7 +105,7 @@ func (s *Server) CreateContainer(ctx context.Context, req *pb.CreateContainerReq
 		AutoRemove: false,
 	}
 
-	dockerID, err := s.dockerClient.CreateContainer(ctx, containerID, dockerConfig)
+	_, err := s.dockerClient.CreateContainer(ctx, containerID, dockerConfig)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create container: %v", err)
 	}

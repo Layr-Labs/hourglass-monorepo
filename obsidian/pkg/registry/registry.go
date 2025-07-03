@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	pb "github.com/hourglass/obsidian/api/proto/registry"
 	"github.com/hourglass/obsidian/internal/docker"
 	"github.com/hourglass/obsidian/pkg/config"
