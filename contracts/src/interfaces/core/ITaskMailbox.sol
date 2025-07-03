@@ -45,7 +45,6 @@ interface ITaskMailboxTypes {
      */
     struct ExecutorOperatorSetTaskConfig {
         // TODO: Pack storage efficiently.
-        // TODO: We need to support proportional, nominal, none and custom verifications.
         IKeyRegistrarTypes.CurveType curveType;
         IAVSTaskHook taskHook;
         IERC20 feeToken;
