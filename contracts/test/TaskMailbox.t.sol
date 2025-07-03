@@ -253,7 +253,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         vm.assume(fuzzTaskHook != address(0));
         vm.assume(fuzzTaskSLA > 0);
         // Bound stake proportion threshold to valid range (0-10000 basis points)
-        fuzzStakeProportionThreshold = uint16(bound(fuzzStakeProportionThreshold, 0, 10000));
+        fuzzStakeProportionThreshold = uint16(bound(fuzzStakeProportionThreshold, 0, 10_000));
 
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
@@ -366,6 +366,76 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         vm.prank(avs);
         vm.expectRevert(TaskSLAIsZero.selector);
         taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+    }
+
+    function test_Revert_WhenConsensusValueInvalid_EmptyBytes() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD, value: bytes("")});
+
+        vm.prank(avs);
+        vm.expectRevert(InvalidConsensusValue.selector);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+    }
+
+    function test_Revert_WhenConsensusValueInvalid_WrongLength() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encodePacked(uint8(50)) // Wrong size - should be 32 bytes
+        });
+
+        vm.prank(avs);
+        vm.expectRevert(InvalidConsensusValue.selector);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+    }
+
+    function test_Revert_WhenConsensusValueInvalid_ExceedsMaximum() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(10_001)) // Exceeds 10000 basis points
+        });
+
+        vm.prank(avs);
+        vm.expectRevert(InvalidConsensusValue.selector);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+    }
+
+    function test_ConsensusZeroThreshold() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(0)) // Zero threshold is valid
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Verify config was set
+        ExecutorOperatorSetTaskConfig memory retrievedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        uint16 decodedThreshold = abi.decode(retrievedConfig.consensus.value, (uint16));
+        assertEq(decodedThreshold, 0);
+    }
+
+    function test_ConsensusMaxThreshold() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(10_000)) // Maximum 100%
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Verify config was set
+        ExecutorOperatorSetTaskConfig memory retrievedConfig = taskMailbox.getExecutorOperatorSetTaskConfig(operatorSet);
+        uint16 decodedThreshold = abi.decode(retrievedConfig.consensus.value, (uint16));
+        assertEq(decodedThreshold, 10_000);
     }
 }
 
@@ -909,6 +979,68 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert("ReentrancyGuard: reentrant call");
         taskMailbox.submitResult(attackTaskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_submitResult_WithZeroStakeThreshold() public {
+        // Setup executor operator set with zero stake threshold
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(0)) // Zero threshold
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Submit result with zero threshold should still work
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(newTaskHash);
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("test result"));
+
+        // Verify task was verified
+        TaskStatus status = taskMailbox.getTaskStatus(newTaskHash);
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
+    }
+
+    function test_submitResult_WithMaxStakeThreshold() public {
+        // Setup executor operator set with max stake threshold
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(10_000)) // 100% threshold
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Submit result with max threshold
+        IBN254CertificateVerifier.BN254Certificate memory cert = _createValidBN254Certificate(newTaskHash);
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("test result"));
+
+        // Verify task was verified
+        TaskStatus status = taskMailbox.getTaskStatus(newTaskHash);
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
     }
 }
 

@@ -86,7 +86,7 @@ contract TaskMailbox is
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
-        
+
         // Validate consensus configuration
         _validateConsensus(config.consensus);
 
@@ -265,12 +265,14 @@ contract TaskMailbox is
      * @notice Validates the consensus configuration
      * @param consensus The consensus configuration to validate
      */
-    function _validateConsensus(Consensus memory consensus) internal pure {
+    function _validateConsensus(
+        Consensus memory consensus
+    ) internal pure {
         if (consensus.consensusType == ConsensusType.STAKE_PROPORTION_THRESHOLD) {
             // Decode and validate the stake proportion threshold
             require(consensus.value.length == 32, InvalidConsensusValue());
             uint16 stakeProportionThreshold = abi.decode(consensus.value, (uint16));
-            require(stakeProportionThreshold <= 10000, InvalidConsensusValue());
+            require(stakeProportionThreshold <= 10_000, InvalidConsensusValue());
         } else {
             revert InvalidConsensusType();
         }
@@ -295,7 +297,7 @@ contract TaskMailbox is
             uint16 stakeProportionThreshold = abi.decode(consensus.value, (uint16));
             uint16[] memory totalStakeProportionThresholds = new uint16[](1);
             totalStakeProportionThresholds[0] = stakeProportionThreshold;
-            
+
             // Verify certificate based on curve type
             if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
                 // BN254 Certificate verification
