@@ -17,13 +17,20 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  */
 interface ITaskMailboxTypes {
     /**
-     * @notice Configuration for certificate verifiers
-     * @param curveType The curve type for the verifier
-     * @param verifier Address of the certificate verifier contract
+     * @notice Enum defining the type of consensus mechanism
      */
-    struct CertificateVerifierConfig {
-        IKeyRegistrarTypes.CurveType curveType;
-        address verifier;
+    enum ConsensusType {
+        STAKE_PROPORTION_THRESHOLD
+    }
+
+    /**
+     * @notice Consensus configuration for task verification
+     * @param consensusType The type of consensus mechanism
+     * @param value Encoded consensus parameters based on consensusType
+     */
+    struct Consensus {
+        ConsensusType consensusType;
+        bytes value;
     }
 
     /**
@@ -33,18 +40,17 @@ interface ITaskMailboxTypes {
      * @param feeToken ERC20 token used for task fees
      * @param feeCollector Address to receive AVS fees
      * @param taskSLA Time (in seconds) within which the task must be completed
-     * @param stakeProportionThreshold Minimum proportion of executor operator set stake required to certify task execution (in basis points)
+     * @param consensus Consensus configuration for task verification
      * @param taskMetadata Additional metadata for task execution
      */
     struct ExecutorOperatorSetTaskConfig {
         // TODO: Pack storage efficiently.
-        // TODO: We need to support proportional, nominal, none and custom verifications.
         IKeyRegistrarTypes.CurveType curveType;
         IAVSTaskHook taskHook;
         IERC20 feeToken;
         address feeCollector;
         uint96 taskSLA;
-        uint16 stakeProportionThreshold;
+        Consensus consensus;
         bytes taskMetadata;
     }
 
@@ -144,6 +150,12 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when an operator set owner is invalid
     error InvalidOperatorSetOwner();
+
+    /// @notice Thrown when an invalid consensus type is provided
+    error InvalidConsensusType();
+
+    /// @notice Thrown when an invalid consensus value is provided
+    error InvalidConsensusValue();
 }
 
 /**
