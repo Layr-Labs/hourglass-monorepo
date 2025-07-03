@@ -176,11 +176,12 @@
      ]
     },
     "Source": {
-     "BuildSpec": "{\n  \"version\": \"0.2\",\n  \"phases\": {\n    \"install\": {\n      \"runtime-versions\": {\n        \"golang\": \"1.21\"\n      },\n      \"commands\": [\n        \"apt-get update -y\",\n        \"apt-get install -y protobuf-compiler\",\n        \"go install google.golang.org/protobuf/cmd/protoc-gen-go@latest\",\n        \"go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest\"\n      ]\n    },\n    \"build\": {\n      \"commands\": [\n        \"cd obsidian\",\n        \"make proto\",\n        \"GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o obsidian-linux-amd64 ./cmd/obsidian\"\n      ]\n    }\n  },\n  \"artifacts\": {\n    \"files\": [\n      \"obsidian/obsidian-linux-amd64\"\n    ],\n    \"discard-paths\": \"yes\"\n  }\n}",
+     "BuildSpec": "{\n  \"version\": \"0.2\",\n  \"phases\": {\n    \"install\": {\n      \"runtime-versions\": {\n        \"golang\": \"1.21\"\n      },\n      \"commands\": [\n        \"apt-get update -y\",\n        \"apt-get install -y protobuf-compiler\",\n        \"go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0\",\n        \"go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0\"\n      ]\n    },\n    \"build\": {\n      \"commands\": [\n        \"cd obsidian\",\n        \"make proto\",\n        \"GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o obsidian-linux-amd64 ./cmd/obsidian\"\n      ]\n    }\n  },\n  \"artifacts\": {\n    \"files\": [\n      \"obsidian/obsidian-linux-amd64\"\n    ],\n    \"discard-paths\": \"yes\"\n  }\n}",
      "Location": "https://github.com/Layr-Labs/hourglass-monorepo.git",
      "ReportBuildStatus": true,
      "Type": "GITHUB"
-    }
+    },
+    "SourceVersion": "obsidian"
    },
    "Metadata": {
     "aws:cdk:path": "ObsidianStack/ObsidianBuildProject/Resource"

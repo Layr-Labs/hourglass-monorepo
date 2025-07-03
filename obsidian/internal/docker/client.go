@@ -10,7 +10,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 )
 
 type Client struct {
@@ -61,7 +60,7 @@ func (c *Client) CreateContainer(ctx context.Context, name string, config *Conta
 		Resources: container.Resources{
 			CPUQuota:  config.CPULimit * 100000,
 			Memory:    config.MemoryLimit,
-			DiskQuota: config.DiskLimit,
+			// DiskQuota is not available in newer Docker API
 		},
 		NetworkMode: container.NetworkMode(config.NetworkMode),
 		AutoRemove:  config.AutoRemove,
@@ -83,7 +82,7 @@ func (c *Client) CreateContainer(ctx context.Context, name string, config *Conta
 }
 
 func (c *Client) StartContainer(ctx context.Context, containerID string) error {
-	if err := c.cli.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); err != nil {
+	if err := c.cli.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 	return nil
@@ -98,7 +97,7 @@ func (c *Client) StopContainer(ctx context.Context, containerID string, timeout 
 }
 
 func (c *Client) RemoveContainer(ctx context.Context, containerID string) error {
-	if err := c.cli.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{Force: true}); err != nil {
+	if err := c.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true}); err != nil {
 		return fmt.Errorf("failed to remove container: %w", err)
 	}
 	return nil
@@ -127,11 +126,11 @@ func (c *Client) InspectContainer(ctx context.Context, containerID string) (*Con
 }
 
 func (c *Client) ListContainers(ctx context.Context, labels map[string]string) ([]types.Container, error) {
-	filters := types.ContainerListOptions{
+	options := container.ListOptions{
 		All: true,
 	}
 
-	containers, err := c.cli.ContainerList(ctx, filters)
+	containers, err := c.cli.ContainerList(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
@@ -154,7 +153,7 @@ func (c *Client) ListContainers(ctx context.Context, labels map[string]string) (
 }
 
 func (c *Client) GetContainerLogs(ctx context.Context, containerID string, since time.Time) (io.ReadCloser, error) {
-	options := types.ContainerLogsOptions{
+	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Since:      since.Format(time.RFC3339),

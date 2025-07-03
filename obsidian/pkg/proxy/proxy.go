@@ -189,7 +189,7 @@ func (s *Server) UpdateBackend(ctx context.Context, req *pb.BackendConfig) (*pb.
 	}
 
 	backend.URL = req.Url
-	backend.RateLimiter = rate.NewLimiter(rate.Limit(req.RateLimits.RequestsPerSecond), req.RateLimits.Burst)
+	backend.RateLimiter = rate.NewLimiter(rate.Limit(req.RateLimits.RequestsPerSecond), int(req.RateLimits.Burst))
 	backend.AllowedMethods = s.buildAllowedMethods(req.AllowedMethods)
 	backend.Filters = s.buildFilters(req.Filters)
 	backend.UpdatedAt = time.Now()

@@ -29,6 +29,7 @@ export class ObsidianSimpleStack extends cdk.Stack {
       source: codebuild.Source.gitHub({
         owner: 'Layr-Labs',
         repo: 'hourglass-monorepo',
+        branchOrRef: 'obsidian', // Your test branch
       }),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
@@ -51,8 +52,9 @@ export class ObsidianSimpleStack extends cdk.Stack {
             commands: [
               'apt-get update -y',
               'apt-get install -y protobuf-compiler',
-              'go install google.golang.org/protobuf/cmd/protoc-gen-go@latest',
-              'go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest',
+              // Use specific versions compatible with Go 1.21
+              'go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0',
+              'go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.3.0',
             ],
           },
           build: {

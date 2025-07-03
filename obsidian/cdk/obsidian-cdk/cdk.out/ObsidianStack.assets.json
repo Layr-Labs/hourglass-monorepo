@@ -15,7 +15,7 @@
         }
       }
     },
-    "966b388e8a1d134e141697da1d7f08f1de1a061d35a1d97a7dc5a3009b4c985b": {
+    "2d7771e19b80b434d6fb46fc6a7a4a70e1485d80ebd45d72cc1f5092be8c40c7": {
       "source": {
         "path": "ObsidianStack.template.json",
         "packaging": "file"
@@ -23,7 +23,7 @@
       "destinations": {
         "767397703211-us-east-1": {
           "bucketName": "cdk-hnb659fds-assets-767397703211-us-east-1",
-          "objectKey": "966b388e8a1d134e141697da1d7f08f1de1a061d35a1d97a7dc5a3009b4c985b.json",
+          "objectKey": "2d7771e19b80b434d6fb46fc6a7a4a70e1485d80ebd45d72cc1f5092be8c40c7.json",
           "region": "us-east-1",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::767397703211:role/cdk-hnb659fds-file-publishing-role-767397703211-us-east-1"
         }
