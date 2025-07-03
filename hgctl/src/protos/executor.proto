@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package eigenlayer.hourglass.v1;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor";
+
+// This server is implemented by the executor and is used to submit tasks to the executor from the aggregator
+service ExecutorService {
+  // SubmitTask submits a task to the executor from the aggregator
+  rpc SubmitTask(TaskSubmission) returns (TaskResult) {}
+  
+  // DeployArtifact deploys a new artifact to an AVS performer
+  rpc DeployArtifact(DeployArtifactRequest) returns (DeployArtifactResponse) {}
+  
+  // ListPerformers returns a list of all performers an d their status
+  rpc ListPerformers(ListPerformersRequest) returns (ListPerformersResponse) {}
+  
+  // RemovePerformer removes a performer from the executor
+  rpc RemovePerformer(RemovePerformerRequest) returns (RemovePerformerResponse) {}
+}
+
+// TaskSubmission is the message used to submit a task to the executor from the aggregator
+message TaskSubmission {
+  string task_id = 1;
+  string aggregator_address = 2;
+  string avs_address = 3;
+  bytes payload = 4;
+  bytes signature = 5;
+}
+
+message TaskResult {
+  string task_id = 1;
+  string operator_address = 2;
+  bytes output = 3;
+  bytes signature = 4;
+  string avs_address = 5;
+}
+
+// DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer
+message DeployArtifactRequest {
+  string avs_address = 1;
+  string digest = 2;
+  string registry_url = 3;
+}
+
+message DeployArtifactResponse {
+  bool success = 1;
+  string message = 2;
+  string deployment_id = 3;
+}
+
+// ListPerformersRequest is the message used to list all performers
+message ListPerformersRequest {
+  // Optional: filter by AVS address
+  string avs_address = 1;
+}
+
+// Performer contains information about a single performer
+message Performer {
+  string performer_id = 1;
+  string avs_address = 2;
+  string status = 3;
+  string artifact_registry = 4;
+  string artifact_digest = 5;
+  bool resource_healthy = 6;
+  bool application_healthy = 7;
+  string last_health_check = 8;
+  string container_id = 9;
+}
+
+// ListPerformersResponse contains the list of all performers
+message ListPerformersResponse {
+  repeated Performer performers = 1;
+}
+
+// RemovePerformerRequest is the message used to remove a performer
+message RemovePerformerRequest {
+  string performer_id = 1;
+}
+
+// RemovePerformerResponse contains the result of performer removal
+message RemovePerformerResponse {
+  bool success = 1;
+  string message = 2;
+}
