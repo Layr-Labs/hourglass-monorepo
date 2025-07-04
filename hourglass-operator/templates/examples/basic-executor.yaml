@@ -1,0 +1,284 @@
+# Basic Executor Deployment Example
+# This example shows a minimal executor deployment for development/testing
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: basic-avs-project
+  labels:
+    app.kubernetes.io/name: hourglass-executor
+    app.kubernetes.io/part-of: hourglass
+
+---
+# ServiceAccount for the Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: executor-service-account
+  namespace: basic-avs-project
+automountServiceAccountToken: true
+
+---
+# Role for managing Performers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: basic-avs-project
+  name: basic-executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "pods", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["basic-executor-config"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["basic-executor-keys"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: basic-executor-binding
+  namespace: basic-avs-project
+subjects:
+- kind: ServiceAccount
+  name: executor-service-account
+  namespace: basic-avs-project
+roleRef:
+  kind: Role
+  name: basic-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap with basic configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: basic-executor-config
+  namespace: basic-avs-project
+data:
+  config.yaml: |
+    aggregator_endpoint: "aggregator.example.com:9090"
+    aggregator_tls_enabled: false
+    deployment_mode: "kubernetes"
+    log_level: "info"
+    log_format: "json"
+    
+    performer_config:
+      service_pattern: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+      default_port: 9090
+      connection_timeout: "30s"
+      startup_timeout: "300s"
+      retry_attempts: 3
+      max_performers: 5
+    
+    kubernetes:
+      namespace: "basic-avs-project"
+      operator_namespace: "hourglass-system"
+      performer_crd_group: "hourglass.eigenlayer.io"
+      performer_crd_version: "v1alpha1"
+      performer_crd_kind: "Performer"
+      cleanup_on_shutdown: true
+      cleanup_timeout: "60s"
+    
+    chains:
+      - name: "ethereum"
+        chain_id: 1
+        rpc_url: "https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY"
+        task_mailbox_address: "0x1234567890abcdef1234567890abcdef12345678"
+        block_confirmations: 12
+        gas_limit: 300000
+        event_filter:
+          from_block: "latest"
+    
+    avs_config:
+      supported_avs:
+        - address: "0x1234567890abcdef1234567890abcdef12345678"
+          name: "basic-avs"
+          performer_image: "myavs/performer"
+          performer_version: "v1.0.0"
+          default_resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+    
+    metrics:
+      enabled: true
+      port: 8080
+      path: "/metrics"
+    
+    health:
+      enabled: true
+      port: 8090
+
+---
+# Secret for operator keys (replace with actual keys)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-executor-keys
+  namespace: basic-avs-project
+type: Opaque
+data:
+  # Replace these with actual base64-encoded private keys
+  ecdsa-private-key: "LS0tLS1CRUdJTi..." # Replace with actual key
+  bls-private-key: "LS0tLS1CRUdJTi..."   # Replace with actual key
+
+---
+# StatefulSet for the Executor
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: basic-executor
+  namespace: basic-avs-project
+  labels:
+    app: basic-executor
+    component: executor
+spec:
+  serviceName: basic-executor
+  replicas: 1
+  selector:
+    matchLabels:
+      app: basic-executor
+      component: executor
+  template:
+    metadata:
+      labels:
+        app: basic-executor
+        component: executor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: executor-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+      - name: executor
+        image: hourglass/executor:v1.2.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: AGGREGATOR_ENDPOINT
+          value: "aggregator.example.com:9090"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        - name: ECDSA_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: basic-executor-keys
+              key: ecdsa-private-key
+        - name: BLS_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: basic-executor-keys
+              key: bls-private-key
+        ports:
+        - containerPort: 8080
+          name: metrics
+        - containerPort: 8090
+          name: health
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      volumes:
+      - name: config
+        configMap:
+          name: basic-executor-config
+      - name: tmp
+        emptyDir: {}
+      terminationGracePeriodSeconds: 60
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Service for the executor
+apiVersion: v1
+kind: Service
+metadata:
+  name: basic-executor
+  namespace: basic-avs-project
+  labels:
+    app: basic-executor
+    component: executor
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+  - name: health
+    port: 8090
+    targetPort: health
+  selector:
+    app: basic-executor
+    component: executor

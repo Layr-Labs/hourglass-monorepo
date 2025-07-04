@@ -1,0 +1,526 @@
+# Production Executor Deployment Example
+# This example shows a production-ready executor deployment with HA, monitoring, and security
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production-avs
+  labels:
+    app.kubernetes.io/name: hourglass-executor
+    app.kubernetes.io/part-of: hourglass
+    environment: production
+
+---
+# ServiceAccount for the Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: executor-service-account
+  namespace: production-avs
+  annotations:
+    # Optional: EKS IAM role annotation
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/ExecutorRole"
+automountServiceAccountToken: true
+
+---
+# Role for managing Performers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: production-avs
+  name: production-executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "pods", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["production-executor-config"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+  resourceNames: ["production-executor-keys", "production-executor-tls"]
+
+---
+# RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: production-executor-binding
+  namespace: production-avs
+subjects:
+- kind: ServiceAccount
+  name: executor-service-account
+  namespace: production-avs
+roleRef:
+  kind: Role
+  name: production-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap with production configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: production-executor-config
+  namespace: production-avs
+data:
+  config.yaml: |
+    aggregator_endpoint: "aggregator-ha.production.example.com:9090"
+    aggregator_tls_enabled: true
+    aggregator_timeout: "30s"
+    deployment_mode: "kubernetes"
+    log_level: "info"
+    log_format: "json"
+    
+    performer_config:
+      service_pattern: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+      default_port: 9090
+      connection_timeout: "30s"
+      startup_timeout: "300s"
+      retry_attempts: 5
+      max_performers: 20
+      health_check_interval: "30s"
+      health_check_timeout: "10s"
+      resource_monitoring_enabled: true
+      resource_monitoring_interval: "60s"
+    
+    kubernetes:
+      namespace: "production-avs"
+      operator_namespace: "hourglass-system"
+      performer_crd_group: "hourglass.eigenlayer.io"
+      performer_crd_version: "v1alpha1"
+      performer_crd_kind: "Performer"
+      cleanup_on_shutdown: true
+      cleanup_timeout: "120s"
+    
+    chains:
+      - name: "ethereum"
+        chain_id: 1
+        rpc_url: "https://eth-mainnet.infura.io/v3/YOUR_PROJECT_ID"
+        ws_url: "wss://eth-mainnet.infura.io/ws/v3/YOUR_PROJECT_ID"
+        task_mailbox_address: "0x1234567890abcdef1234567890abcdef12345678"
+        block_confirmations: 12
+        gas_limit: 300000
+        gas_price_multiplier: 1.2
+        event_filter:
+          from_block: "latest"
+        retry_config:
+          max_attempts: 5
+          backoff_duration: "10s"
+      
+      - name: "base"
+        chain_id: 8453
+        rpc_url: "https://mainnet.base.org"
+        ws_url: "wss://mainnet.base.org"
+        task_mailbox_address: "0xabcdef1234567890abcdef1234567890abcdef12"
+        block_confirmations: 3
+        gas_limit: 300000
+        gas_price_multiplier: 1.1
+        event_filter:
+          from_block: "latest"
+        retry_config:
+          max_attempts: 3
+          backoff_duration: "5s"
+    
+    avs_config:
+      supported_avs:
+        - address: "0x1234567890abcdef1234567890abcdef12345678"
+          name: "production-avs"
+          performer_image: "myavs/performer"
+          performer_version: "v2.1.0"
+          default_resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          hardware_requirements:
+            gpu_required: false
+            tee_required: false
+          scheduling:
+            node_selector:
+              node.kubernetes.io/instance-type: "m5.xlarge"
+            priority_class: "high-priority"
+    
+    metrics:
+      enabled: true
+      port: 8080
+      path: "/metrics"
+      custom_metrics:
+        - name: "performer_count"
+          help: "Number of active performers"
+          type: "gauge"
+        - name: "task_processing_duration"
+          help: "Time taken to process tasks"
+          type: "histogram"
+        - name: "performer_connection_errors"
+          help: "Number of performer connection errors"
+          type: "counter"
+    
+    health:
+      enabled: true
+      port: 8090
+      endpoints:
+        liveness: "/health"
+        readiness: "/ready"
+        startup: "/startup"
+      checks:
+        - name: "aggregator_connection"
+          enabled: true
+          timeout: "10s"
+        - name: "chain_connections"
+          enabled: true
+          timeout: "15s"
+        - name: "performer_status"
+          enabled: true
+          timeout: "5s"
+        - name: "kubernetes_api"
+          enabled: true
+          timeout: "5s"
+
+---
+# Secret for operator keys
+apiVersion: v1
+kind: Secret
+metadata:
+  name: production-executor-keys
+  namespace: production-avs
+type: Opaque
+data:
+  ecdsa-private-key: "LS0tLS1CRUdJTi..." # Replace with actual key
+  bls-private-key: "LS0tLS1CRUdJTi..."   # Replace with actual key
+
+---
+# Secret for TLS certificates
+apiVersion: v1
+kind: Secret
+metadata:
+  name: production-executor-tls
+  namespace: production-avs
+type: kubernetes.io/tls
+data:
+  tls.crt: "LS0tLS1CRUdJTi..." # Replace with actual certificate
+  tls.key: "LS0tLS1CRUdJTi..." # Replace with actual private key
+  ca.crt: "LS0tLS1CRUdJTi..."  # Replace with actual CA certificate
+
+---
+# PriorityClass for high-priority scheduling
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000
+globalDefault: false
+description: "High priority class for production AVS workloads"
+
+---
+# StatefulSet for the Executor (High Availability)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: production-executor
+  namespace: production-avs
+  labels:
+    app: production-executor
+    component: executor
+    environment: production
+spec:
+  serviceName: production-executor
+  replicas: 3  # High availability
+  selector:
+    matchLabels:
+      app: production-executor
+      component: executor
+  template:
+    metadata:
+      labels:
+        app: production-executor
+        component: executor
+        environment: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+        # Force rolling update on config changes
+        checksum/config: "REPLACE_WITH_CONFIG_HASH"
+    spec:
+      serviceAccountName: executor-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Anti-affinity to spread replicas across nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [production-executor]
+            topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values: ["m5.xlarge", "m5.2xlarge"]
+      
+      # Node selection for production workloads
+      nodeSelector:
+        node.kubernetes.io/instance-type: "m5.xlarge"
+      
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "avs-workloads"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: executor
+        image: hourglass/executor:v1.2.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: AGGREGATOR_ENDPOINT
+          value: "aggregator-ha.production.example.com:9090"
+        - name: AGGREGATOR_TLS_ENABLED
+          value: "true"
+        - name: LOG_LEVEL
+          value: "info"
+        - name: LOG_FORMAT
+          value: "json"
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        - name: HA_MODE
+          value: "true"
+        - name: REPLICA_COUNT
+          value: "3"
+        - name: ECDSA_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: production-executor-keys
+              key: ecdsa-private-key
+        - name: BLS_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: production-executor-keys
+              key: bls-private-key
+        ports:
+        - containerPort: 8080
+          name: metrics
+        - containerPort: 8090
+          name: health
+        - containerPort: 9095
+          name: grpc
+        
+        # Comprehensive health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        
+        # Production resource allocation
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+          readOnly: true
+        - name: tls-certs
+          mountPath: /etc/tls
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+      
+      volumes:
+      - name: config
+        configMap:
+          name: production-executor-config
+      - name: tls-certs
+        secret:
+          secretName: production-executor-tls
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      priorityClassName: high-priority
+      terminationGracePeriodSeconds: 120
+      
+      # DNS configuration for performance
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+  
+  # Persistent storage
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: production-executor
+        component: executor
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# Service for the executor
+apiVersion: v1
+kind: Service
+metadata:
+  name: production-executor
+  namespace: production-avs
+  labels:
+    app: production-executor
+    component: executor
+    environment: production
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+  - name: health
+    port: 8090
+    targetPort: health
+  - name: grpc
+    port: 9095
+    targetPort: grpc
+  selector:
+    app: production-executor
+    component: executor
+
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: production-executor-headless
+  namespace: production-avs
+  labels:
+    app: production-executor
+    component: executor
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 9095
+    targetPort: grpc
+  selector:
+    app: production-executor
+    component: executor
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: production-executor-metrics
+  namespace: production-avs
+  labels:
+    app: production-executor
+    component: executor-metrics
+spec:
+  selector:
+    matchLabels:
+      app: production-executor
+      component: executor
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scrapeTimeout: 10s
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: production-executor-pdb
+  namespace: production-avs
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: production-executor
+      component: executor

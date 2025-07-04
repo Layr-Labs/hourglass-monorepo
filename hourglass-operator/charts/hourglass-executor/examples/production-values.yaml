@@ -1,0 +1,168 @@
+# Production Executor Values Example
+# This example shows a production-ready configuration with HA and monitoring
+
+executor:
+  name: "production-executor"
+  replicaCount: 3  # High availability
+  
+  resources:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "8"
+      memory: "16Gi"
+
+# Production aggregator with TLS
+aggregator:
+  endpoint: "aggregator-ha.production.com:9090"
+  tls:
+    enabled: true
+  timeout: "30s"
+
+# Multi-chain configuration
+chains:
+  ethereum:
+    enabled: true
+    rpcUrl: "https://eth-mainnet.infura.io/v3/YOUR_PROJECT_ID"
+    wsUrl: "wss://eth-mainnet.infura.io/ws/v3/YOUR_PROJECT_ID"
+    taskMailboxAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    blockConfirmations: 12
+    gasPriceMultiplier: 1.2
+    retryAttempts: 5
+    
+  base:
+    enabled: true
+    rpcUrl: "https://mainnet.base.org"
+    wsUrl: "wss://mainnet.base.org"
+    taskMailboxAddress: "0xabcdef1234567890abcdef1234567890abcdef12"
+    blockConfirmations: 3
+
+# Production AVS configuration
+avs:
+  supportedAvs:
+    - address: "0x1234567890abcdef1234567890abcdef12345678"
+      name: "production-avs"
+      performer:
+        image: "my-org/production-performer"
+        version: "v2.1.0"
+      resources:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+        limits:
+          cpu: "4"
+          memory: "8Gi"
+      scheduling:
+        nodeSelector:
+          node.kubernetes.io/instance-type: "m5.xlarge"
+        priorityClassName: "high-priority"
+
+# Production secrets with TLS
+secrets:
+  operatorKeys:
+    ecdsaPrivateKey: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
+    blsPrivateKey: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
+  
+  tls:
+    enabled: true
+    cert: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t..."
+    key: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
+    ca: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t..."
+
+# High-performance storage
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"
+  size: "100Gi"
+
+# Service account with annotations for IRSA (EKS)
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT:role/ExecutorRole"
+
+# Production scheduling
+scheduling:
+  # Anti-affinity to spread replicas across nodes
+  podAntiAffinity:
+    enabled: true
+    type: required
+    topologyKey: kubernetes.io/hostname
+  
+  # Node selection for production workloads
+  nodeSelector:
+    node.kubernetes.io/instance-type: "m5.xlarge"
+  
+  # Tolerations for dedicated nodes
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "avs-workloads"
+      effect: "NoSchedule"
+  
+  priorityClassName: "high-priority"
+
+# Production monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: "monitoring"
+    interval: "30s"
+    labels:
+      release: prometheus
+
+# Health checks tuned for production
+healthChecks:
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    failureThreshold: 5
+  readinessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 3
+  startupProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 30
+
+# Pod disruption budget for HA
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Network security
+networkPolicy:
+  enabled: true
+
+# Security context
+pod:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+# Enhanced performer configuration
+performer:
+  maxPerformers: 20
+  healthCheckInterval: "30s"
+  resourceMonitoringEnabled: true
+
+# Production cleanup settings
+cleanup:
+  onShutdown: true
+  timeout: "120s"
