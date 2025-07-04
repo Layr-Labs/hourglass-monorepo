@@ -26,6 +26,7 @@ type (
 		Timestamp    EthereumQuantity       `json:"timestamp" validate:"required_with=Number"`
 		Transactions []*EthereumTransaction `json:"transactions"`
 		Nonce        EthereumHexString      `json:"nonce"`
+		MixHash      EthereumHexString      `json:"mixHash"`
 		ChainId      config.ChainId
 	}
 

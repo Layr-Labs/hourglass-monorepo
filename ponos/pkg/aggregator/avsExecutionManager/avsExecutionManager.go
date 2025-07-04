@@ -16,6 +16,13 @@ import (
 	"sync"
 )
 
+type AggregationStrategy uint
+
+const (
+	AggregationStrategyNone          AggregationStrategy = 0
+	AggregationStrategyStakeWeighted AggregationStrategy = 1
+)
+
 type AvsExecutionManagerConfig struct {
 	AvsAddress               string
 	SupportedChainIds        []config.ChainId
@@ -23,6 +30,7 @@ type AvsExecutionManagerConfig struct {
 	AggregatorAddress        string
 	AggregatorUrl            string
 	L1ChainId                config.ChainId
+	AggregationStrategy      AggregationStrategy
 }
 
 type AvsExecutionManager struct {
@@ -41,6 +49,8 @@ type AvsExecutionManager struct {
 	taskQueue chan *types.Task
 
 	inflightTasks sync.Map
+
+	aggregationStrategy IAggregationStrategy
 }
 
 func NewAvsExecutionManager(
@@ -68,6 +78,24 @@ func NewAvsExecutionManager(
 		return nil, fmt.Errorf("chainContractCallers must contain L1ChainId: %d", config.L1ChainId)
 	}
 
+	var aggStrat IAggregationStrategy
+	switch config.AggregationStrategy {
+	case AggregationStrategyNone:
+		aggStrat = NewSingleAvsAggregationStrategy()
+	case AggregationStrategyStakeWeighted:
+		aggStrat = NewStakeWeightedAggregationStrategy(
+			config.AvsAddress,
+			om,
+			logger,
+		)
+	default:
+		logger.Sugar().Errorw("Unknown aggregation strategy",
+			zap.String("avsAddress", config.AvsAddress),
+			zap.Any("aggregationStrategy", config.AggregationStrategy),
+		)
+		return nil, fmt.Errorf("unknown aggregation strategy: %d", config.AggregationStrategy)
+	}
+
 	manager := &AvsExecutionManager{
 		config:               config,
 		logger:               logger,
@@ -77,6 +105,7 @@ func NewAvsExecutionManager(
 		operatorManager:      om,
 		inflightTasks:        sync.Map{},
 		taskQueue:            make(chan *types.Task, 10000),
+		aggregationStrategy:  aggStrat,
 	}
 	return manager, nil
 }
@@ -130,8 +159,9 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			)
 			if err := em.handleTask(ctx, task); err != nil {
 				em.logger.Sugar().Errorw("Failed to handle task",
-					"taskId", task.TaskId,
-					"error", err,
+					zap.String("taskId", task.TaskId),
+					zap.Any("task", task),
+					zap.Error(err),
 				)
 			}
 		case <-ctx.Done():
@@ -163,7 +193,25 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 			return nil
 		}
 		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
-			return em.processTask(lwb)
+			isLeader, err := em.aggregationStrategy.IsLeaderForBlock(context.Background(), lwb.Block)
+			if err != nil {
+				em.logger.Sugar().Errorw("Failed to check if leader for block",
+					zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+					zap.Error(err),
+				)
+				return fmt.Errorf("failed to check if leader for block: %w", err)
+			}
+			if isLeader {
+				return em.processTask(lwb)
+			}
+			em.logger.Sugar().Infow("Not leader for block, ignoring TaskCreated event",
+				zap.String("eventName", lg.EventName),
+				zap.String("contractAddress", lg.Address),
+				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+				zap.String("avsAddress", em.config.AvsAddress),
+			)
+			return nil
 		}
 	}
 

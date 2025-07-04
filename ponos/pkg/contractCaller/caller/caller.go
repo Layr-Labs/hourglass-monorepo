@@ -690,7 +690,11 @@ func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, r
 	if referenceBlockNumber > 0 {
 		opts.BlockNumber = new(big.Int).SetUint64(uint64(referenceBlockNumber))
 	}
-	return cc.crossChainRegistry.GetSupportedChains(opts)
+	chains, addresses, err := cc.crossChainRegistry.GetSupportedChains(opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get supported chains(%s): %w", cc.config.CrossChainRegistryAddress, err)
+	}
+	return chains, addresses, nil
 }
 
 func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
