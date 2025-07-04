@@ -1,0 +1,21 @@
+apiVersion: v2
+name: hourglass-executor
+description: A Helm chart for deploying Hourglass Executors that work with the singleton operator
+type: application
+version: 0.1.0
+appVersion: "1.2.0"
+home: https://github.com/your-org/hourglass-monorepo
+sources:
+  - https://github.com/your-org/hourglass-monorepo
+maintainers:
+  - name: Hourglass Team
+    email: team@hourglass.com
+keywords:
+  - hourglass
+  - eigenlayer
+  - avs
+  - executor
+  - blockchain
+annotations:
+  category: Blockchain
+  licenses: MIT

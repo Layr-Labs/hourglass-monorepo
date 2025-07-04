@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${EXECUTOR_NAME}-config
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${EXECUTOR_NAME}
+    component: executor-config
+data:
+  config.yaml: |
+    # Hourglass Executor Configuration
+    
+    # Aggregator connection settings
+    aggregator_endpoint: "${AGGREGATOR_ENDPOINT}"
+    aggregator_tls_enabled: ${AGGREGATOR_TLS_ENABLED:-false}
+    aggregator_timeout: "${AGGREGATOR_TIMEOUT:-30s}"
+    
+    # Deployment mode (kubernetes vs docker)
+    deployment_mode: "kubernetes"
+    
+    # Logging configuration
+    log_level: "${LOG_LEVEL:-info}"
+    log_format: "${LOG_FORMAT:-json}"
+    
+    # Performer management configuration
+    performer_config:
+      # Service discovery pattern for Kubernetes
+      service_pattern: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+      default_port: ${PERFORMER_DEFAULT_PORT:-9090}
+      connection_timeout: "${PERFORMER_CONNECTION_TIMEOUT:-30s}"
+      startup_timeout: "${PERFORMER_STARTUP_TIMEOUT:-300s}"
+      retry_attempts: ${PERFORMER_RETRY_ATTEMPTS:-3}
+      max_performers: ${MAX_PERFORMERS:-10}
+      
+      # Health check configuration
+      health_check_interval: "${HEALTH_CHECK_INTERVAL:-30s}"
+      health_check_timeout: "${HEALTH_CHECK_TIMEOUT:-10s}"
+      
+      # Performer resource management
+      resource_monitoring_enabled: ${RESOURCE_MONITORING_ENABLED:-true}
+      resource_monitoring_interval: "${RESOURCE_MONITORING_INTERVAL:-60s}"
+    
+    # Kubernetes-specific configuration
+    kubernetes:
+      namespace: "${NAMESPACE}"
+      operator_namespace: "${OPERATOR_NAMESPACE:-hourglass-system}"
+      
+      # CRD management
+      performer_crd_group: "hourglass.eigenlayer.io"
+      performer_crd_version: "v1alpha1"
+      performer_crd_kind: "Performer"
+      
+      # Service account for API access
+      service_account: "${SERVICE_ACCOUNT_NAME:-executor-service-account}"
+      
+      # Cleanup behavior
+      cleanup_on_shutdown: ${CLEANUP_ON_SHUTDOWN:-true}
+      cleanup_timeout: "${CLEANUP_TIMEOUT:-60s}"
+    
+    # Chain configurations
+    chains:
+      - name: "ethereum"
+        chain_id: ${ETH_CHAIN_ID:-1}
+        rpc_url: "${ETH_RPC_URL}"
+        ws_url: "${ETH_WS_URL}"
+        task_mailbox_address: "${ETH_TASK_MAILBOX_ADDRESS}"
+        block_confirmations: ${ETH_BLOCK_CONFIRMATIONS:-12}
+        gas_limit: ${ETH_GAS_LIMIT:-300000}
+        gas_price_multiplier: ${ETH_GAS_PRICE_MULTIPLIER:-1.1}
+        
+        # Event filtering
+        event_filter:
+          from_block: ${ETH_FROM_BLOCK:-latest}
+          topics: []
+        
+        # Retry configuration
+        retry_config:
+          max_attempts: ${ETH_RETRY_ATTEMPTS:-3}
+          backoff_duration: "${ETH_RETRY_BACKOFF:-5s}"
+      
+      - name: "base"
+        chain_id: ${BASE_CHAIN_ID:-8453}
+        rpc_url: "${BASE_RPC_URL}"
+        ws_url: "${BASE_WS_URL}"
+        task_mailbox_address: "${BASE_TASK_MAILBOX_ADDRESS}"
+        block_confirmations: ${BASE_BLOCK_CONFIRMATIONS:-3}
+        gas_limit: ${BASE_GAS_LIMIT:-300000}
+        gas_price_multiplier: ${BASE_GAS_PRICE_MULTIPLIER:-1.1}
+        
+        # Event filtering
+        event_filter:
+          from_block: ${BASE_FROM_BLOCK:-latest}
+          topics: []
+        
+        # Retry configuration
+        retry_config:
+          max_attempts: ${BASE_RETRY_ATTEMPTS:-3}
+          backoff_duration: "${BASE_RETRY_BACKOFF:-5s}"
+    
+    # AVS configuration
+    avs_config:
+      # Supported AVS addresses and their configurations
+      supported_avs:
+        - address: "${AVS_ADDRESS_1}"
+          name: "${AVS_NAME_1:-avs-1}"
+          performer_image: "${AVS_PERFORMER_IMAGE_1}"
+          performer_version: "${AVS_PERFORMER_VERSION_1:-latest}"
+          
+          # Default resources for this AVS
+          default_resources:
+            requests:
+              cpu: "${AVS_1_CPU_REQUESTS:-500m}"
+              memory: "${AVS_1_MEMORY_REQUESTS:-1Gi}"
+            limits:
+              cpu: "${AVS_1_CPU_LIMITS:-2}"
+              memory: "${AVS_1_MEMORY_LIMITS:-4Gi}"
+          
+          # Hardware requirements
+          hardware_requirements:
+            gpu_required: ${AVS_1_GPU_REQUIRED:-false}
+            gpu_type: "${AVS_1_GPU_TYPE:-}"
+            gpu_count: ${AVS_1_GPU_COUNT:-0}
+            tee_required: ${AVS_1_TEE_REQUIRED:-false}
+            tee_type: "${AVS_1_TEE_TYPE:-}"
+          
+          # Scheduling preferences
+          scheduling:
+            node_selector:
+              ${AVS_1_NODE_SELECTOR:-}
+            tolerations: []
+            priority_class: "${AVS_1_PRIORITY_CLASS:-}"
+    
+    # Operator keys configuration (loaded from secrets)
+    operator_keys:
+      ecdsa_private_key_path: "/etc/secrets/ecdsa-private-key"
+      bls_private_key_path: "/etc/secrets/bls-private-key"
+    
+    # Metrics and monitoring
+    metrics:
+      enabled: ${METRICS_ENABLED:-true}
+      port: ${METRICS_PORT:-8080}
+      path: "/metrics"
+      
+      # Custom metrics configuration
+      custom_metrics:
+        - name: "performer_count"
+          help: "Number of active performers"
+          type: "gauge"
+        - name: "task_processing_duration"
+          help: "Time taken to process tasks"
+          type: "histogram"
+        - name: "performer_connection_errors"
+          help: "Number of performer connection errors"
+          type: "counter"
+    
+    # Health check configuration
+    health:
+      enabled: ${HEALTH_CHECK_ENABLED:-true}
+      port: ${HEALTH_CHECK_PORT:-8090}
+      
+      # Health check endpoints
+      endpoints:
+        liveness: "/health"
+        readiness: "/ready"
+        startup: "/startup"
+      
+      # Health check components
+      checks:
+        - name: "aggregator_connection"
+          enabled: true
+          timeout: "10s"
+        - name: "chain_connections"
+          enabled: true
+          timeout: "15s"
+        - name: "performer_status"
+          enabled: true
+          timeout: "5s"
+        - name: "kubernetes_api"
+          enabled: true
+          timeout: "5s"

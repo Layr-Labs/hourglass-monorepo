@@ -1,0 +1,618 @@
+# Multi-Namespace Deployment Example
+# This example demonstrates multiple AVS projects using the singleton operator
+
+# ==========================================
+# AVS Project A - ML Workloads
+# ==========================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-workloads
+  labels:
+    app.kubernetes.io/name: hourglass-executor
+    app.kubernetes.io/part-of: hourglass
+    project: avs-project-a
+    workload-type: ml
+
+---
+# ServiceAccount for ML Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ml-executor-service-account
+  namespace: ml-workloads
+automountServiceAccountToken: true
+
+---
+# Role for ML Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: ml-workloads
+  name: ml-executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "pods", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding for ML Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ml-executor-binding
+  namespace: ml-workloads
+subjects:
+- kind: ServiceAccount
+  name: ml-executor-service-account
+  namespace: ml-workloads
+roleRef:
+  kind: Role
+  name: ml-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap for ML Executor
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-executor-config
+  namespace: ml-workloads
+data:
+  config.yaml: |
+    aggregator_endpoint: "aggregator.ml-project.com:9090"
+    deployment_mode: "kubernetes"
+    log_level: "info"
+    
+    kubernetes:
+      namespace: "ml-workloads"
+      operator_namespace: "hourglass-system"
+    
+    chains:
+      - name: "ethereum"
+        chain_id: 1
+        rpc_url: "https://eth-mainnet.alchemyapi.io/v2/ML_PROJECT_KEY"
+        task_mailbox_address: "0x1111222233334444555566667777888899990000"
+    
+    avs_config:
+      supported_avs:
+        - address: "0x1111222233334444555566667777888899990000"
+          name: "ml-avs"
+          performer_image: "ml-project/gpu-performer"
+          performer_version: "v3.0.0"
+          default_resources:
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "8"
+              memory: "16Gi"
+          hardware_requirements:
+            gpu_required: true
+            gpu_type: "nvidia-a100"
+            gpu_count: 1
+
+---
+# Secret for ML Executor
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ml-executor-keys
+  namespace: ml-workloads
+type: Opaque
+data:
+  ecdsa-private-key: "TUxfUFJJVkFURV9LRVk="  # Replace with actual key
+  bls-private-key: "TUxfQkxTX0tFWQ=="        # Replace with actual key
+
+---
+# StatefulSet for ML Executor
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ml-executor
+  namespace: ml-workloads
+  labels:
+    app: ml-executor
+    component: executor
+    project: ml-workloads
+spec:
+  serviceName: ml-executor
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-executor
+  template:
+    metadata:
+      labels:
+        app: ml-executor
+        component: executor
+        project: ml-workloads
+    spec:
+      serviceAccountName: ml-executor-service-account
+      nodeSelector:
+        accelerator: nvidia-tesla-a100
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - name: executor
+        image: hourglass/executor:v1.2.0
+        env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          value: "ml-workloads"
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+      volumes:
+      - name: config
+        configMap:
+          name: ml-executor-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+
+---
+# ==========================================
+# AVS Project B - Secure Compute
+# ==========================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: secure-compute
+  labels:
+    app.kubernetes.io/name: hourglass-executor
+    app.kubernetes.io/part-of: hourglass
+    project: avs-project-b
+    workload-type: tee
+
+---
+# ServiceAccount for Secure Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: secure-executor-service-account
+  namespace: secure-compute
+automountServiceAccountToken: true
+
+---
+# Role for Secure Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: secure-compute
+  name: secure-executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "pods", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding for Secure Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: secure-executor-binding
+  namespace: secure-compute
+subjects:
+- kind: ServiceAccount
+  name: secure-executor-service-account
+  namespace: secure-compute
+roleRef:
+  kind: Role
+  name: secure-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap for Secure Executor
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secure-executor-config
+  namespace: secure-compute
+data:
+  config.yaml: |
+    aggregator_endpoint: "aggregator.secure-project.com:9090"
+    deployment_mode: "kubernetes"
+    log_level: "warn"  # Reduced logging for security
+    
+    kubernetes:
+      namespace: "secure-compute"
+      operator_namespace: "hourglass-system"
+    
+    chains:
+      - name: "ethereum"
+        chain_id: 1
+        rpc_url: "https://eth-mainnet.alchemyapi.io/v2/SECURE_PROJECT_KEY"
+        task_mailbox_address: "0xaaabbbcccdddeeefff000111222333444555666"
+    
+    avs_config:
+      supported_avs:
+        - address: "0xaaabbbcccdddeeefff000111222333444555666"
+          name: "secure-avs"
+          performer_image: "secure-project/tee-performer"
+          performer_version: "v1.5.0"
+          default_resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          hardware_requirements:
+            tee_required: true
+            tee_type: "sgx"
+
+---
+# Secret for Secure Executor
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secure-executor-keys
+  namespace: secure-compute
+type: Opaque
+data:
+  ecdsa-private-key: "U0VDVVJFX1BST0pFQ1RfS0VZ"  # Replace with actual key
+  bls-private-key: "U0VDVVJFX0JMU19LRVk="        # Replace with actual key
+
+---
+# StatefulSet for Secure Executor
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: secure-executor
+  namespace: secure-compute
+  labels:
+    app: secure-executor
+    component: executor
+    project: secure-compute
+spec:
+  serviceName: secure-executor
+  replicas: 2  # Multiple replicas for redundancy
+  selector:
+    matchLabels:
+      app: secure-executor
+  template:
+    metadata:
+      labels:
+        app: secure-executor
+        component: executor
+        project: secure-compute
+    spec:
+      serviceAccountName: secure-executor-service-account
+      nodeSelector:
+        intel.feature.node.kubernetes.io/sgx: "true"
+      tolerations:
+      - key: "sgx"
+        operator: "Equal"
+        value: "enabled"
+        effect: "NoSchedule"
+      containers:
+      - name: executor
+        image: hourglass/executor:v1.2.0
+        env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          value: "secure-compute"
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        - name: SECURITY_LEVEL
+          value: "high"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        securityContext:
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: config
+        configMap:
+          name: secure-executor-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# ==========================================
+# AVS Project C - General Purpose
+# ==========================================
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: general-compute
+  labels:
+    app.kubernetes.io/name: hourglass-executor
+    app.kubernetes.io/part-of: hourglass
+    project: avs-project-c
+    workload-type: general
+
+---
+# ServiceAccount for General Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: general-executor-service-account
+  namespace: general-compute
+automountServiceAccountToken: true
+
+---
+# Role for General Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: general-compute
+  name: general-executor-role
+rules:
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services", "pods", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding for General Executor
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: general-executor-binding
+  namespace: general-compute
+subjects:
+- kind: ServiceAccount
+  name: general-executor-service-account
+  namespace: general-compute
+roleRef:
+  kind: Role
+  name: general-executor-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# ConfigMap for General Executor
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: general-executor-config
+  namespace: general-compute
+data:
+  config.yaml: |
+    aggregator_endpoint: "aggregator.general-project.com:9090"
+    deployment_mode: "kubernetes"
+    log_level: "info"
+    
+    kubernetes:
+      namespace: "general-compute"
+      operator_namespace: "hourglass-system"
+    
+    chains:
+      - name: "ethereum"
+        chain_id: 1
+        rpc_url: "https://eth-mainnet.alchemyapi.io/v2/GENERAL_PROJECT_KEY"
+        task_mailbox_address: "0xfffeeeddddccccbbbbaaaa999888777666555444"
+      - name: "base"
+        chain_id: 8453
+        rpc_url: "https://mainnet.base.org"
+        task_mailbox_address: "0x444555666777888999aaabbbcccdddeeefff0001"
+    
+    avs_config:
+      supported_avs:
+        - address: "0xfffeeeddddccccbbbbaaaa999888777666555444"
+          name: "general-avs"
+          performer_image: "general-project/performer"
+          performer_version: "v2.0.0"
+          default_resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+
+---
+# Secret for General Executor
+apiVersion: v1
+kind: Secret
+metadata:
+  name: general-executor-keys
+  namespace: general-compute
+type: Opaque
+data:
+  ecdsa-private-key: "R0VORVJBTF9QUk9KRUNUX0tFWQ=="  # Replace with actual key
+  bls-private-key: "R0VORVJBTF9CTFNfS0VZ"          # Replace with actual key
+
+---
+# StatefulSet for General Executor
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: general-executor
+  namespace: general-compute
+  labels:
+    app: general-executor
+    component: executor
+    project: general-compute
+spec:
+  serviceName: general-executor
+  replicas: 1
+  selector:
+    matchLabels:
+      app: general-executor
+  template:
+    metadata:
+      labels:
+        app: general-executor
+        component: executor
+        project: general-compute
+    spec:
+      serviceAccountName: general-executor-service-account
+      containers:
+      - name: executor
+        image: hourglass/executor:v1.2.0
+        env:
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          value: "general-compute"
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+      volumes:
+      - name: config
+        configMap:
+          name: general-executor-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# ==========================================
+# Monitoring Configuration (Cluster-wide)
+# ==========================================
+
+# ServiceMonitor for all executors
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: hourglass-executors
+  namespace: hourglass-system
+  labels:
+    app: hourglass-operator
+    component: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+    - ml-workloads
+    - secure-compute
+    - general-compute
+  selector:
+    matchLabels:
+      component: executor
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# NetworkPolicy for namespace isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: executor-isolation
+  namespace: ml-workloads
+spec:
+  podSelector:
+    matchLabels:
+      component: executor
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from operator namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: hourglass-system
+  # Allow from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-workloads
+  egress:
+  # DNS resolution
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  # External API access
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Operator communication
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: hourglass-system

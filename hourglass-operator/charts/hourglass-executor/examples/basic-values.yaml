@@ -1,0 +1,65 @@
+# Basic Executor Values Example
+# This example shows a minimal configuration for development/testing
+
+executor:
+  name: "basic-executor"
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+
+# Aggregator configuration (REQUIRED)
+aggregator:
+  endpoint: "aggregator.example.com:9090"
+  tls:
+    enabled: false
+
+# Blockchain configuration (REQUIRED)
+chains:
+  ethereum:
+    enabled: true
+    rpcUrl: "https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY"
+    taskMailboxAddress: "0x1234567890abcdef1234567890abcdef12345678"
+    blockConfirmations: 12
+
+# AVS configuration (REQUIRED)
+avs:
+  supportedAvs:
+    - address: "0x1234567890abcdef1234567890abcdef12345678"
+      name: "basic-avs"
+      performer:
+        image: "my-org/basic-performer"
+        version: "v1.0.0"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+
+# Secrets (REQUIRED)
+secrets:
+  operatorKeys:
+    # Replace with your actual base64-encoded ECDSA private key
+    ecdsaPrivateKey: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
+    # Optional BLS private key
+    # blsPrivateKey: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0t..."
+
+# Storage configuration
+persistence:
+  enabled: true
+  size: 10Gi
+
+# Basic monitoring
+metrics:
+  enabled: true
+
+# Development settings
+development:
+  enabled: false
