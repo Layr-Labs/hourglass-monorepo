@@ -270,10 +270,10 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     /**
      * @notice Submits the result of a task execution
      * @param taskHash Unique identifier of the task
-     * @param cert Certificate proving the validity of the result
+     * @param executorCert Certificate proving the validity of the result
      * @param result Task execution result data
      */
-    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external;
+    function submitResult(bytes32 taskHash, bytes memory executorCert, bytes memory result) external;
 
     /**
      *

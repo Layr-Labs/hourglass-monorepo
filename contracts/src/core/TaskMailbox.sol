@@ -175,7 +175,7 @@ contract TaskMailbox is
     }
 
     /// @inheritdoc ITaskMailbox
-    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external nonReentrant {
+    function submitResult(bytes32 taskHash, bytes memory executorCert, bytes memory result) external nonReentrant {
         // TODO: Handle case of anyone submitting a result with empty signature in the certificate.
 
         Task storage task = _tasks[taskHash];
@@ -184,20 +184,22 @@ contract TaskMailbox is
         require(block.timestamp > task.creationTime, TimestampAtCreation());
 
         // Pre-task result submission checks: AVS can validate the caller, task result, params and certificate.
-        task.executorOperatorSetTaskConfig.taskHook.validatePreTaskResultSubmission(msg.sender, taskHash, cert, result);
+        task.executorOperatorSetTaskConfig.taskHook.validatePreTaskResultSubmission(
+            msg.sender, taskHash, executorCert, result
+        );
 
         // Verify certificate based on consensus configuration
         OperatorSet memory executorOperatorSet = OperatorSet(task.avs, task.executorOperatorSetId);
-        bool isCertificateValid = _verifyCertificate(
+        bool isCertificateValid = _verifyExecutorCertificate(
             task.executorOperatorSetTaskConfig.curveType,
             task.executorOperatorSetTaskConfig.consensus,
             executorOperatorSet,
-            cert
+            executorCert
         );
         require(isCertificateValid, CertificateVerificationFailed());
 
         task.status = TaskStatus.VERIFIED;
-        task.executorCert = cert;
+        task.executorCert = executorCert;
         task.result = result;
 
         // Task result submission checks: AVS can update hook storage for task lifecycle if needed.
@@ -281,18 +283,18 @@ contract TaskMailbox is
     }
 
     /**
-     * @notice Verifies a certificate based on the consensus configuration
+     * @notice Verifies an executor certificate based on the consensus configuration
      * @param curveType The curve type used for signature verification
      * @param consensus The consensus configuration
      * @param executorOperatorSet The executor operator set
-     * @param cert The certificate to verify
+     * @param executorCert The executor certificate to verify
      * @return isCertificateValid Whether the certificate is valid
      */
-    function _verifyCertificate(
+    function _verifyExecutorCertificate(
         IKeyRegistrarTypes.CurveType curveType,
         Consensus memory consensus,
         OperatorSet memory executorOperatorSet,
-        bytes memory cert
+        bytes memory executorCert
     ) internal returns (bool isCertificateValid) {
         if (consensus.consensusType == ConsensusType.STAKE_PROPORTION_THRESHOLD) {
             // Decode stake proportion threshold
@@ -304,14 +306,14 @@ contract TaskMailbox is
             if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
                 // BN254 Certificate verification
                 IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
-                    abi.decode(cert, (IBN254CertificateVerifierTypes.BN254Certificate));
+                    abi.decode(executorCert, (IBN254CertificateVerifierTypes.BN254Certificate));
                 isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                     executorOperatorSet, bn254Cert, totalStakeProportionThresholds
                 );
             } else if (curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
                 // ECDSA Certificate verification
                 IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
-                    abi.decode(cert, (IECDSACertificateVerifierTypes.ECDSACertificate));
+                    abi.decode(executorCert, (IECDSACertificateVerifierTypes.ECDSACertificate));
                 isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                     executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
                 );
