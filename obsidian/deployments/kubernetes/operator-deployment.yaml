@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avs-operator
+  namespace: obsidian-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: avs-operator
+  template:
+    metadata:
+      labels:
+        app: avs-operator
+    spec:
+      serviceAccountName: avs-operator
+      containers:
+      - name: operator
+        image: localhost:5000/obsidian-operator:v1.0.0
+        command:
+        - /manager
+        args:
+        - --leader-elect
+        env:
+        - name: WATCH_NAMESPACE
+          value: "" # Watch all namespaces
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi

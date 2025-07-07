@@ -1,0 +1,37 @@
+{
+  "l1": {
+    "chainId": 31337,
+    "forkUrl": "https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/",
+    "forkBlock": 4070297,
+    "blockTime": 2,
+    "port": 8545
+  },
+  "l2": {
+    "chainId": 31338,
+    "forkUrl": "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/",
+    "forkBlock": 27614707,
+    "blockTime": 2,
+    "port": 9545
+  },
+  "contracts": {
+    "bn254CertVerifierL1": "0xf462d03A82C1F3496B0DFe27E978318eD1720E1f",
+    "ecdsaCertVerifierL1": "0xF9BDd6af3Fb02659101cbb776DC7cb4879c93d8A",
+    "bn254CertVerifierL2": "0x824604a31b580Aec16D8Dd7ae9A27661Dc65cBA3",
+    "ecdsaCertVerifierL2": "0x95A49cB0aED0e8f299223Da3A8A335440f5F00E7"
+  },
+  "avs": {
+    "address": "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4",
+    "signingCurve": "bn254",
+    "responseTimeout": 3000
+  },
+  "operators": {
+    "aggregator": {
+      "address": "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc",
+      "privateKey": "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
+    },
+    "executor": {
+      "address": "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc",
+      "privateKey": "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+    }
+  }
+}

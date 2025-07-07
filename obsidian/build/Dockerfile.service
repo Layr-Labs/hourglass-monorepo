@@ -1,0 +1,33 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o obsidian-service ./cmd/obsidian-service
+
+# Final stage
+FROM alpine:3.18
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/obsidian-service .
+
+# Set build-time variables for reproducibility
+ARG BUILD_TIME=1970-01-01T00:00:00Z
+ARG VERSION=unknown
+
+ENV VERSION=${VERSION}
+ENV BUILD_TIME=${BUILD_TIME}
+
+EXPOSE 8080
+
+CMD ["./obsidian-service"]

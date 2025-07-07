@@ -1,0 +1,21 @@
+apiVersion: hourglass.io/v1alpha1
+kind: AVS
+metadata:
+  name: example-avs
+  namespace: default
+spec:
+  operator: "operator-1"
+  serviceImage: "localhost:5000/obsidian-service:v1.0.0"
+  replicas: 3
+  computeRequirements:
+    cpu: "1"
+    memory: "2Gi"
+    teeType: "SEV-SNP"
+    nodeSelector:
+      feature.node.kubernetes.io/cpu-sev: "true"
+  attestationPolicy:
+    allowedMeasurements:
+      - "7b068c0c3ac29afe264134536b9be26f1e4ccd575b88d3e3be77e768414ce98d"
+    maxAttestationAge: "1h"
+    requireSEV: true
+  servicePort: 8080
