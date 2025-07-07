@@ -76,16 +76,13 @@ contract TaskMailbox is
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
-        address certificateVerifier = _getCertificateVerifier(config.curveType);
-        require(
-            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
-            InvalidOperatorSetOwner()
-        );
-
         // TODO: Double check if any other config checks are needed.
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
+
+        // Validate operator set ownership
+        _validateOperatorSetOwner(operatorSet, config.curveType);
 
         // Validate consensus configuration
         _validateConsensus(config.consensus);
@@ -108,11 +105,9 @@ contract TaskMailbox is
                 && taskConfig.taskSLA > 0,
             ExecutorOperatorSetTaskConfigNotSet()
         );
-        address certificateVerifier = _getCertificateVerifier(taskConfig.curveType);
-        require(
-            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
-            InvalidOperatorSetOwner()
-        );
+
+        // Validate operator set ownership
+        _validateOperatorSetOwner(operatorSet, taskConfig.curveType);
 
         _registerExecutorOperatorSet(operatorSet, isRegistered);
     }
@@ -245,20 +240,27 @@ contract TaskMailbox is
     }
 
     /**
-     * @notice Gets the certificate verifier for a specific curve type
-     * @param curveType The curve type for the verifier
-     * @return The address of the certificate verifier
+     * @notice Validates that the caller is the owner of the operator set
+     * @param operatorSet The operator set to validate ownership for
+     * @param curveType The curve type used to determine the certificate verifier
      */
-    function _getCertificateVerifier(
+    function _validateOperatorSetOwner(
+        OperatorSet memory operatorSet,
         IKeyRegistrarTypes.CurveType curveType
-    ) internal view returns (address) {
+    ) internal view {
+        address certificateVerifier;
         if (curveType == IKeyRegistrarTypes.CurveType.BN254) {
-            return BN254_CERTIFICATE_VERIFIER;
+            certificateVerifier = BN254_CERTIFICATE_VERIFIER;
         } else if (curveType == IKeyRegistrarTypes.CurveType.ECDSA) {
-            return ECDSA_CERTIFICATE_VERIFIER;
+            certificateVerifier = ECDSA_CERTIFICATE_VERIFIER;
         } else {
             revert InvalidCurveType();
         }
+
+        require(
+            IBaseCertificateVerifier(certificateVerifier).getOperatorSetOwner(operatorSet) == msg.sender,
+            InvalidOperatorSetOwner()
+        );
     }
 
     /**
