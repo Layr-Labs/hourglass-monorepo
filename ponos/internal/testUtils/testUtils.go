@@ -291,10 +291,6 @@ func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chain
 	return nil
 }
 
-// var (
-// 	transportEcdsaPrivateKey = "0x2ba58f64c57faa1073d63add89799f2a0101855a8b289b1330cb500758d5d1ee"
-// )
-
 func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 	transportBlsPrivateKey := os.Getenv("HOURGLASS_TRANSPORT_BLS_KEY")
 	if transportBlsPrivateKey == "" {
