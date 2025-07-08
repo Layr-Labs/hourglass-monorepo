@@ -26,7 +26,6 @@ export class DevstackStack extends cdk.Stack {
       allowedValues: ['t3.large', 't3.xlarge', 't3.2xlarge', 'm5.large', 'm5.xlarge'],
     });
 
-
     // VPC - create a new one with minimal subnets to save costs
     const vpc = new ec2.Vpc(this, 'DevstackVPC', {
       maxAzs: 2,
