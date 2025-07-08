@@ -29,6 +29,14 @@ var (
 	_ = abi.ConvertType
 )
 
+// ITaskMailboxTypesTaskParams is an auto generated low-level Go binding around an user-defined struct.
+type ITaskMailboxTypesTaskParams struct {
+	RefundCollector     common.Address
+	AvsFee              *big.Int
+	ExecutorOperatorSet OperatorSet
+	Payload             []byte
+}
+
 // OperatorSet is an auto generated low-level Go binding around an user-defined struct.
 type OperatorSet struct {
 	Avs common.Address
@@ -37,7 +45,7 @@ type OperatorSet struct {
 
 // IAVSTaskHookMetaData contains all meta data concerning the IAVSTaskHook contract.
 var IAVSTaskHookMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"handlePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"handleTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"calculateTaskFee\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[{\"name\":\"\",\"type\":\"uint96\",\"internalType\":\"uint96\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"handlePostTaskCreation\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"handlePostTaskResultSubmission\",\"inputs\":[{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"}],\"outputs\":[],\"stateMutability\":\"nonpayable\"},{\"type\":\"function\",\"name\":\"validatePreTaskCreation\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskParams\",\"type\":\"tuple\",\"internalType\":\"structITaskMailboxTypes.TaskParams\",\"components\":[{\"name\":\"refundCollector\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"avsFee\",\"type\":\"uint96\",\"internalType\":\"uint96\"},{\"name\":\"executorOperatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"payload\",\"type\":\"bytes\",\"internalType\":\"bytes\"}]}],\"outputs\":[],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"validatePreTaskResultSubmission\",\"inputs\":[{\"name\":\"caller\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"taskHash\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"cert\",\"type\":\"bytes\",\"internalType\":\"bytes\"},{\"name\":\"result\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"outputs\":[],\"stateMutability\":\"view\"}]",
 }
 
 // IAVSTaskHookABI is the input ABI used to generate the binding from.
@@ -186,12 +194,43 @@ func (_IAVSTaskHook *IAVSTaskHookTransactorRaw) Transact(opts *bind.TransactOpts
 	return _IAVSTaskHook.Contract.contract.Transact(opts, method, params...)
 }
 
-// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xe507027a.
+// CalculateTaskFee is a free data retrieval call binding the contract method 0x09a9d71c.
 //
-// Solidity: function validatePreTaskCreation(address caller, (address,uint32) operatorSet, bytes payload) view returns()
-func (_IAVSTaskHook *IAVSTaskHookCaller) ValidatePreTaskCreation(opts *bind.CallOpts, caller common.Address, operatorSet OperatorSet, payload []byte) error {
+// Solidity: function calculateTaskFee((address,uint32) operatorSet, bytes payload) view returns(uint96)
+func (_IAVSTaskHook *IAVSTaskHookCaller) CalculateTaskFee(opts *bind.CallOpts, operatorSet OperatorSet, payload []byte) (*big.Int, error) {
 	var out []interface{}
-	err := _IAVSTaskHook.contract.Call(opts, &out, "validatePreTaskCreation", caller, operatorSet, payload)
+	err := _IAVSTaskHook.contract.Call(opts, &out, "calculateTaskFee", operatorSet, payload)
+
+	if err != nil {
+		return *new(*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
+
+	return out0, err
+
+}
+
+// CalculateTaskFee is a free data retrieval call binding the contract method 0x09a9d71c.
+//
+// Solidity: function calculateTaskFee((address,uint32) operatorSet, bytes payload) view returns(uint96)
+func (_IAVSTaskHook *IAVSTaskHookSession) CalculateTaskFee(operatorSet OperatorSet, payload []byte) (*big.Int, error) {
+	return _IAVSTaskHook.Contract.CalculateTaskFee(&_IAVSTaskHook.CallOpts, operatorSet, payload)
+}
+
+// CalculateTaskFee is a free data retrieval call binding the contract method 0x09a9d71c.
+//
+// Solidity: function calculateTaskFee((address,uint32) operatorSet, bytes payload) view returns(uint96)
+func (_IAVSTaskHook *IAVSTaskHookCallerSession) CalculateTaskFee(operatorSet OperatorSet, payload []byte) (*big.Int, error) {
+	return _IAVSTaskHook.Contract.CalculateTaskFee(&_IAVSTaskHook.CallOpts, operatorSet, payload)
+}
+
+// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xa7fbe930.
+//
+// Solidity: function validatePreTaskCreation(address caller, (address,uint96,(address,uint32),bytes) taskParams) view returns()
+func (_IAVSTaskHook *IAVSTaskHookCaller) ValidatePreTaskCreation(opts *bind.CallOpts, caller common.Address, taskParams ITaskMailboxTypesTaskParams) error {
+	var out []interface{}
+	err := _IAVSTaskHook.contract.Call(opts, &out, "validatePreTaskCreation", caller, taskParams)
 
 	if err != nil {
 		return err
@@ -201,18 +240,47 @@ func (_IAVSTaskHook *IAVSTaskHookCaller) ValidatePreTaskCreation(opts *bind.Call
 
 }
 
-// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xe507027a.
+// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xa7fbe930.
 //
-// Solidity: function validatePreTaskCreation(address caller, (address,uint32) operatorSet, bytes payload) view returns()
-func (_IAVSTaskHook *IAVSTaskHookSession) ValidatePreTaskCreation(caller common.Address, operatorSet OperatorSet, payload []byte) error {
-	return _IAVSTaskHook.Contract.ValidatePreTaskCreation(&_IAVSTaskHook.CallOpts, caller, operatorSet, payload)
+// Solidity: function validatePreTaskCreation(address caller, (address,uint96,(address,uint32),bytes) taskParams) view returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) ValidatePreTaskCreation(caller common.Address, taskParams ITaskMailboxTypesTaskParams) error {
+	return _IAVSTaskHook.Contract.ValidatePreTaskCreation(&_IAVSTaskHook.CallOpts, caller, taskParams)
 }
 
-// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xe507027a.
+// ValidatePreTaskCreation is a free data retrieval call binding the contract method 0xa7fbe930.
 //
-// Solidity: function validatePreTaskCreation(address caller, (address,uint32) operatorSet, bytes payload) view returns()
-func (_IAVSTaskHook *IAVSTaskHookCallerSession) ValidatePreTaskCreation(caller common.Address, operatorSet OperatorSet, payload []byte) error {
-	return _IAVSTaskHook.Contract.ValidatePreTaskCreation(&_IAVSTaskHook.CallOpts, caller, operatorSet, payload)
+// Solidity: function validatePreTaskCreation(address caller, (address,uint96,(address,uint32),bytes) taskParams) view returns()
+func (_IAVSTaskHook *IAVSTaskHookCallerSession) ValidatePreTaskCreation(caller common.Address, taskParams ITaskMailboxTypesTaskParams) error {
+	return _IAVSTaskHook.Contract.ValidatePreTaskCreation(&_IAVSTaskHook.CallOpts, caller, taskParams)
+}
+
+// ValidatePreTaskResultSubmission is a free data retrieval call binding the contract method 0xba33565d.
+//
+// Solidity: function validatePreTaskResultSubmission(address caller, bytes32 taskHash, bytes cert, bytes result) view returns()
+func (_IAVSTaskHook *IAVSTaskHookCaller) ValidatePreTaskResultSubmission(opts *bind.CallOpts, caller common.Address, taskHash [32]byte, cert []byte, result []byte) error {
+	var out []interface{}
+	err := _IAVSTaskHook.contract.Call(opts, &out, "validatePreTaskResultSubmission", caller, taskHash, cert, result)
+
+	if err != nil {
+		return err
+	}
+
+	return err
+
+}
+
+// ValidatePreTaskResultSubmission is a free data retrieval call binding the contract method 0xba33565d.
+//
+// Solidity: function validatePreTaskResultSubmission(address caller, bytes32 taskHash, bytes cert, bytes result) view returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) ValidatePreTaskResultSubmission(caller common.Address, taskHash [32]byte, cert []byte, result []byte) error {
+	return _IAVSTaskHook.Contract.ValidatePreTaskResultSubmission(&_IAVSTaskHook.CallOpts, caller, taskHash, cert, result)
+}
+
+// ValidatePreTaskResultSubmission is a free data retrieval call binding the contract method 0xba33565d.
+//
+// Solidity: function validatePreTaskResultSubmission(address caller, bytes32 taskHash, bytes cert, bytes result) view returns()
+func (_IAVSTaskHook *IAVSTaskHookCallerSession) ValidatePreTaskResultSubmission(caller common.Address, taskHash [32]byte, cert []byte, result []byte) error {
+	return _IAVSTaskHook.Contract.ValidatePreTaskResultSubmission(&_IAVSTaskHook.CallOpts, caller, taskHash, cert, result)
 }
 
 // HandlePostTaskCreation is a paid mutator transaction binding the contract method 0x09c5c450.
@@ -236,23 +304,23 @@ func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandlePostTaskCreation(taskH
 	return _IAVSTaskHook.Contract.HandlePostTaskCreation(&_IAVSTaskHook.TransactOpts, taskHash)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
+// HandlePostTaskResultSubmission is a paid mutator transaction binding the contract method 0xdb6ecf67.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactor) HandleTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte, cert []byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.contract.Transact(opts, "handleTaskResultSubmission", taskHash, cert)
+// Solidity: function handlePostTaskResultSubmission(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactor) HandlePostTaskResultSubmission(opts *bind.TransactOpts, taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.contract.Transact(opts, "handlePostTaskResultSubmission", taskHash)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
+// HandlePostTaskResultSubmission is a paid mutator transaction binding the contract method 0xdb6ecf67.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookSession) HandleTaskResultSubmission(taskHash [32]byte, cert []byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
+// Solidity: function handlePostTaskResultSubmission(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookSession) HandlePostTaskResultSubmission(taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandlePostTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash)
 }
 
-// HandleTaskResultSubmission is a paid mutator transaction binding the contract method 0xd192ec7c.
+// HandlePostTaskResultSubmission is a paid mutator transaction binding the contract method 0xdb6ecf67.
 //
-// Solidity: function handleTaskResultSubmission(bytes32 taskHash, bytes cert) returns()
-func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandleTaskResultSubmission(taskHash [32]byte, cert []byte) (*types.Transaction, error) {
-	return _IAVSTaskHook.Contract.HandleTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash, cert)
+// Solidity: function handlePostTaskResultSubmission(bytes32 taskHash) returns()
+func (_IAVSTaskHook *IAVSTaskHookTransactorSession) HandlePostTaskResultSubmission(taskHash [32]byte) (*types.Transaction, error) {
+	return _IAVSTaskHook.Contract.HandlePostTaskResultSubmission(&_IAVSTaskHook.TransactOpts, taskHash)
 }

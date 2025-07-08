@@ -3,14 +3,21 @@ package avsExecutionManager
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
 	"strings"
 	"sync"
@@ -185,7 +192,12 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
-	sig, err := em.signer.SignMessage(task.Payload)
+	// TODO(seanmcgary): this should probably live in the taskSession package
+	// it also needs to be aware of the curve for the aggregator
+
+	// hash the payload and sign it
+	payloadHash := util.GetKeccak256Digest(task.Payload)
+	sig, err := em.signer.SignMessage(payloadHash[:])
 	if err != nil {
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}
@@ -213,25 +225,71 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
+	fmt.Printf("Operator peers and weights: %v\n", operatorPeersWeight)
 
-	ts, err := taskSession.NewTaskSession(
-		ctx,
-		cancel,
-		task,
-		em.config.AggregatorAddress,
-		sig,
-		operatorPeersWeight,
-		em.logger,
-	)
+	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(ctx, task.AVSAddress, task.OperatorSetId)
 	if err != nil {
-		em.logger.Sugar().Errorw("Failed to create task session",
-			zap.String("taskId", task.TaskId),
+		em.logger.Sugar().Errorw("Failed to get curve type for operator set",
+			zap.String("avsAddress", task.AVSAddress),
+			zap.Uint32("operatorSetId", task.OperatorSetId),
 			zap.Error(err),
 		)
-		return fmt.Errorf("failed to create task session: %w", err)
+		return fmt.Errorf("failed to get curve type for operator set: %w", err)
 	}
 
-	em.logger.Sugar().Infow("Created task session",
+	if opsetCurveType == config.CurveTypeBN254 {
+		ts, err := taskSession.NewBN254TaskSession(
+			ctx,
+			cancel,
+			task,
+			em.config.AggregatorAddress,
+			sig,
+			operatorPeersWeight,
+			em.logger,
+		)
+		if err != nil {
+			em.logger.Sugar().Errorw("Failed to create task session",
+				zap.String("taskId", task.TaskId),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to create task session: %w", err)
+		}
+		return em.processBN254Task(ctx, task, ts, chainCC, operatorPeersWeight)
+	} else if opsetCurveType == config.CurveTypeECDSA {
+		ts, err := taskSession.NewECDSATaskSession(
+			ctx,
+			cancel,
+			task,
+			em.config.AggregatorAddress,
+			sig,
+			operatorPeersWeight,
+			em.logger,
+		)
+		if err != nil {
+			em.logger.Sugar().Errorw("Failed to create task session",
+				zap.String("taskId", task.TaskId),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to create task session: %w", err)
+		}
+		return em.processECDSATask(ctx, task, ts, chainCC, operatorPeersWeight)
+	}
+	em.logger.Sugar().Errorw("Unsupported curve type for task",
+		zap.String("taskId", task.TaskId),
+		zap.String("curveType", opsetCurveType.String()),
+	)
+	return fmt.Errorf("unsupported curve type: %s", opsetCurveType)
+
+}
+
+func (em *AvsExecutionManager) processBN254Task(
+	ctx context.Context,
+	task *types.Task,
+	ts *taskSession.TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey],
+	chainCC contractCaller.IContractCaller,
+	operatorPeersWeight *operatorManager.PeerWeight,
+) error {
+	em.logger.Sugar().Infow("Created BN254 task session",
 		zap.Any("taskSession", ts),
 	)
 	em.inflightTasks.Store(task.TaskId, ts)
@@ -268,11 +326,8 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			zap.String("taskResponseDigest", string(cert.TaskResponseDigest)),
 		)
 
-		em.logger.Sugar().Infow("Calling chain contract", zap.Uint("chainId", uint(ts.Task.ChainId)))
-
-		receipt, err := chainCC.SubmitTaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
 		if err != nil {
-			// TODO: emit metric
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
 			return
@@ -291,7 +346,99 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			zap.String("taskId", task.TaskId),
 		)
 		return nil
-	case <-errorsChan:
+	case err := <-errorsChan:
+		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
+		return err
+	case <-ctx.Done():
+		switch ctx.Err() {
+		case context.Canceled:
+			em.logger.Sugar().Errorw("task session context done",
+				zap.String("taskId", task.TaskId),
+				zap.Error(ctx.Err()),
+			)
+		case context.DeadlineExceeded:
+			em.logger.Sugar().Errorw("task session context deadline exceeded",
+				zap.String("taskId", task.TaskId),
+				zap.Error(ctx.Err()),
+			)
+			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
+		default:
+			em.logger.Sugar().Errorw("task session encountered an error",
+				zap.String("taskId", task.TaskId),
+				zap.Error(ctx.Err()),
+			)
+			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
+		}
+
+		return nil
+	}
+}
+
+func (em *AvsExecutionManager) processECDSATask(
+	ctx context.Context,
+	task *types.Task,
+	ts *taskSession.TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address],
+	chainCC contractCaller.IContractCaller,
+	operatorPeersWeight *operatorManager.PeerWeight,
+) error {
+	em.logger.Sugar().Infow("Created ECDSA task session",
+		zap.Any("taskSession", ts),
+	)
+	em.inflightTasks.Store(task.TaskId, ts)
+
+	doneChan := make(chan bool, 1)
+	errorsChan := make(chan error, 1)
+
+	// Process the task
+	// - Distributed the task to operators in the set
+	// - Wait for responses
+	// - Aggregate the results
+	go func(chainCC contractCaller.IContractCaller) {
+		em.logger.Sugar().Infow("Processing task session",
+			zap.String("taskId", task.TaskId),
+		)
+		cert, err := ts.Process()
+		if err != nil {
+			em.logger.Sugar().Errorw("Failed to process task",
+				zap.String("taskId", task.TaskId),
+				zap.Error(err),
+			)
+			errorsChan <- fmt.Errorf("failed to process task: %w", err)
+			return
+		}
+		if cert == nil {
+			em.logger.Sugar().Errorw("Received nil aggregate certificate",
+				zap.String("taskId", task.TaskId),
+			)
+			errorsChan <- fmt.Errorf("received nil aggregate certificate")
+			return
+		}
+		em.logger.Sugar().Infow("Received task response and certificate",
+			zap.String("taskId", task.TaskId),
+			zap.String("taskResponseDigest", hexutil.Encode(cert.TaskResponseDigest[:])),
+		)
+
+		receipt, err := chainCC.SubmitECDSATaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		if err != nil {
+			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
+			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
+			return
+		} else {
+			em.logger.Sugar().Infow("Successfully submitted task result",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.String("transactionHash", receipt.TxHash.String()),
+			)
+		}
+		doneChan <- true
+	}(chainCC)
+
+	select {
+	case <-doneChan:
+		em.logger.Sugar().Infow("Task session completed",
+			zap.String("taskId", task.TaskId),
+		)
+		return nil
+	case err := <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		return err
 	case <-ctx.Done():

@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"math/big"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -72,21 +72,17 @@ func Test_Aggregator(t *testing.T) {
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
-
-	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
+	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
 	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
+
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
-	storedKeys, err := keystore.ParseKeystoreJSON(execConfig.Operator.SigningKeys.BLS.Keystore)
+	_, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
 	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
-
-	execPrivateSigningKey, err := storedKeys.GetBN254PrivateKey(execConfig.Operator.SigningKeys.BLS.Password)
-	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
-	}
-	execSigner := inMemorySigner.NewInMemorySigner(execPrivateSigningKey)
+	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, config.CurveTypeECDSA)
 
 	// ------------------------------------------------------------------------
 	// Aggregator setup
@@ -95,29 +91,23 @@ func Test_Aggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
-	if err := aggConfig.Validate(); err != nil {
-		t.Fatalf("Failed to validate aggregator config: %v", err)
-	}
 
 	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
 	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 	aggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	aggConfig.Avss[0].ChainIds = []uint{
-		uint(config.ChainId_EthereumAnvil),
 		uint(config.ChainId_BaseSepoliaAnvil),
 	}
-
-	aggStoredKeys, err := keystore.ParseKeystoreJSON(aggConfig.Operator.SigningKeys.BLS.Keystore)
-	if err != nil {
-		t.Fatalf("failed to parse keystore JSON: %v", err)
+	for _, chain := range aggConfig.Chains {
+		fmt.Printf("Agg chain: %+v\n", chain)
 	}
 
-	aggPrivateSigningKey, err := aggStoredKeys.GetBN254PrivateKey(aggConfig.Operator.SigningKeys.BLS.Password)
+	aggBn254PrivateSigningKey, _, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(aggConfig.Operator, config.CurveTypeBN254)
 	if err != nil {
-		t.Fatalf("failed to get private key: %v", err)
+		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
-	aggSigner := inMemorySigner.NewInMemorySigner(aggPrivateSigningKey)
+	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, config.CurveTypeBN254)
 
 	// ------------------------------------------------------------------------
 	// L1Chain & l1Anvil setup
@@ -128,7 +118,6 @@ func Test_Aggregator(t *testing.T) {
 		BaseUrl:   L1RPCUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
-
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
@@ -138,7 +127,6 @@ func Test_Aggregator(t *testing.T) {
 		BaseUrl:   L2RPCUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
-
 	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
 	if err != nil {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
@@ -186,36 +174,15 @@ func Test_Aggregator(t *testing.T) {
 	}
 	t.Logf("L2 Chain ID: %s", l2ChainId.String())
 
-	coreContracts, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
+	eigenlayerContractAddrs, err := config.GetCoreContractsForChainId(config.ChainId(l1ChainId.Uint64()))
 	if err != nil {
-		l.Sugar().Fatalf("failed to get core contracts for chain ID %d: %v", l1ChainId.Uint64(), err)
-	}
-
-	// ------------------------------------------------------------------------
-	// register peering data
-	// ------------------------------------------------------------------------
-	l.Sugar().Infow("Setting up operator peering",
-		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
-	)
-	err = testUtils.SetupOperatorPeering(
-		ctx,
-		chainConfig,
-		config.ChainId(l1ChainId.Uint64()),
-		l1EthClient,
-		aggPrivateSigningKey,
-		execPrivateSigningKey,
-		fmt.Sprintf("localhost:%d", execConfig.GrpcPort),
-		l,
-	)
-	if err != nil {
-		t.Fatalf("Failed to set up operator peering: %v", err)
+		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
@@ -225,17 +192,156 @@ func Test_Aggregator(t *testing.T) {
 		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 
+	reservations, err := l1AggCc.GetActiveGenerationReservations()
+	if err != nil {
+		t.Fatalf("Failed to get active generation reservations: %v", err)
+	}
+	for _, reservation := range reservations {
+		fmt.Printf("Active generation reservation: %+v\n", reservation)
+	}
+
+	l.Sugar().Infow("Setting up operator peering",
+		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
+	)
+
+	// ------------------------------------------------------------------------
+	// register peering data
+	// ------------------------------------------------------------------------
+	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
+	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
+	aggOpsetId := uint32(0)
+	execOpsetId := uint32(1)
+	allOperatorSetIds := []uint32{aggOpsetId, execOpsetId}
+
+	err = testUtils.SetupOperatorPeering(
+		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
+		l1EthClient,
+		// aggregator is BN254
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			SigningPrivateKey:     aggBn254PrivateSigningKey,
+			Curve:                 config.CurveTypeBN254,
+			OperatorSetIds:        []uint32{aggOpsetId},
+		},
+		// executor is ecdsa
+		&operator.Operator{
+			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
+			SigningPrivateKey:     execEcdsaPrivateSigningKey,
+			Curve:                 config.CurveTypeECDSA,
+			OperatorSetIds:        []uint32{execOpsetId},
+		},
+		"localhost:9000",
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up operator peering: %v", err)
+	}
+
+	err = testUtils.DelegateStakeToOperators(
+		t,
+		ctx,
+		&testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.AggStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			OperatorAddress:    chainConfig.OperatorAccountAddress,
+			OperatorSetId:      0,
+			StrategyAddress:    testUtils.Strategy_WETH,
+		},
+		&testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.ExecStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.ExecOperatorAccountPk,
+			OperatorAddress:    chainConfig.ExecOperatorAccountAddress,
+			OperatorSetId:      1,
+			StrategyAddress:    testUtils.Strategy_STETH,
+		},
+		chainConfig.AVSAccountAddress,
+		l1EthClient,
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to operators: %v", err)
+	}
+
+	t.Logf("All operator set IDs: %v", allOperatorSetIds)
+	// update current block to account for transport
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
+
+	time.Sleep(time.Second * 6)
+
+	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
+	// transport the tables for good measure
+	testUtils.TransportStakeTables(l, true)
+	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
+	time.Sleep(time.Second * 6)
+
+	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
+
+	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
+	}, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
+		[]uint32{execOpsetId},
+		[]config.CurveType{config.CurveTypeECDSA},
+		avsCcL1,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
+
+	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey:          chainConfig.AVSAccountPrivateKey,
+		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
+		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
+	}, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller: %v", err)
+	}
+	err = testUtils.SetupTaskMailbox(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		common.HexToAddress(chainConfig.AVSTaskHookAddressL2),
+		[]uint32{execOpsetId},
+		[]config.CurveType{config.CurveTypeECDSA},
+		avsCcL2,
+	)
+	if err != nil {
+		t.Fatalf("Failed to set up task mailbox: %v", err)
+	}
+
+	// update current block to account for transport
+	currentBlock, err = l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+	l.Sugar().Infow("Current block number", zap.Uint64("blockNumber", currentBlock))
+	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
+
 	// ------------------------------------------------------------------------
 	// Setup the executor
 	// ------------------------------------------------------------------------
 	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
-	exec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf)
+	exec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf, l1ExecCc)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
@@ -278,60 +384,6 @@ func Test_Aggregator(t *testing.T) {
 		t.Logf("Failed to create aggregator: %v", err)
 	}
 
-	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
-	// transport the tables for good measure
-	testUtils.TransportStakeTables(l, true)
-	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
-	time.Sleep(time.Second * 6)
-
-	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
-	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create AVS contract caller: %v", err)
-	}
-	err = testUtils.SetupTaskMailbox(
-		ctx,
-		common.HexToAddress(chainConfig.AVSAccountAddress),
-		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
-		[]uint32{1},
-		[]string{"bn254"},
-		avsCcL1,
-	)
-	if err != nil {
-		t.Fatalf("Failed to set up task mailbox: %v", err)
-	}
-
-	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create AVS contract caller: %v", err)
-	}
-	err = testUtils.SetupTaskMailbox(
-		ctx,
-		common.HexToAddress(chainConfig.AVSAccountAddress),
-		common.HexToAddress(chainConfig.AVSTaskHookAddressL2),
-		[]uint32{1},
-		[]string{"bn254"},
-		avsCcL2,
-	)
-	if err != nil {
-		t.Fatalf("Failed to set up task mailbox: %v", err)
-	}
-
-	// update current block to account for transport
-	currentBlock, err := l1EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get current block number: %v", err)
-	}
-	l.Sugar().Infow("Current block number", zap.Uint64("blockNumber", currentBlock))
-
 	// ------------------------------------------------------------------------
 	// Boot up everything
 	// ------------------------------------------------------------------------
@@ -362,7 +414,8 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
 	if err != nil {
-		t.Fatalf("Failed to get websocket connection: %v", err)
+		t.Errorf("Failed to get websocket connection: %v", err)
+		cancel()
 	}
 
 	taskVerified := false
@@ -372,7 +425,9 @@ func Test_Aggregator(t *testing.T) {
 		Addresses: []common.Address{common.HexToAddress(chainConfig.MailboxContractAddressL2)},
 	}, eventsChan)
 	if err != nil {
-		t.Fatalf("Failed to subscribe to events: %v", err)
+		t.Errorf("Failed to subscribe to events: %v", err)
+		cancel()
+
 	}
 	defer close(eventsChan)
 	go func() {
@@ -422,16 +477,17 @@ func Test_Aggregator(t *testing.T) {
 		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, l2EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create contract caller: %v", err)
+		t.Errorf("Failed to create contract caller: %v", err)
+		cancel()
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
-		t.Fatalf("Failed to publish message to inbox: %v", err)
+		t.Errorf("Failed to publish message to inbox: %v", err)
+		cancel()
 	}
 	t.Logf("Task published: %+v", task)
 
@@ -444,23 +500,21 @@ func Test_Aggregator(t *testing.T) {
 	}
 	fmt.Printf("Test completed\n")
 
-	t.Cleanup(func() {
-		_ = l1Anvil.Process.Kill()
-		_ = l2Anvil.Process.Kill()
-		cancel()
-	})
-
 	time.Sleep(5 * time.Second)
 	assert.True(t, taskVerified)
+
+	_ = l1Anvil.Process.Kill()
+	_ = l2Anvil.Process.Kill()
+	cancel()
 }
 
 const (
 	executorConfigYaml = `
 ---
-grpcPort: 9090
+grpcPort: 9000
 operator:
-  address: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
-  operatorPrivateKey: "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a"
+  address: "0xoperator..."
+  operatorPrivateKey: "..."
   signingKeys:
     bls:
       keystore: |
@@ -501,33 +555,33 @@ l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 31337
 avsPerformers:
-  - image:
-      repository: "hello-performer"
-      tag: "latest"
-    processType: "server"
-    avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
-    workerCount: 1
-    signingCurve: "bn254"
-    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
+- image:
+    repository: "hello-performer"
+    tag: "latest"
+  processType: "server"
+  avsAddress: "0xavs1..."
+  workerCount: 1
+  signingCurve: "bn254"
+  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 
 	aggregatorConfigYaml = `
 ---
-l1ChainId: 31337
 chains:
   - name: ethereum
-    network: mainnet
+    network: sepolia
     chainId: 31337
     rpcUrl: http://localhost:8545
-    pollIntervalSeconds: 2
+    pollIntervalSeconds: 5
   - name: base
     network: sepolia
     chainId: 31338
     rpcUrl: http://localhost:9545
-    pollIntervalSeconds: 2
+    pollIntervalSeconds: 5
+l1ChainId: 31337
 operator:
-  address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
-  operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
+  address: "0x1234aggregator"
+  operatorPrivateKey: "0x..."
   signingKeys:
     bls:
       password: ""
@@ -566,10 +620,10 @@ operator:
         }
 
 avss:
-  - address: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
+  - address: "0xavs1..."
     responseTimeout: 3000
-    chainIds: [31338]
     signingCurve: "bn254"
-    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
+    chainIds: [31338]
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 )

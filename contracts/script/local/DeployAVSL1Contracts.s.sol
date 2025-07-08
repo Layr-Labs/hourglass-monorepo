@@ -14,8 +14,8 @@ import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/l1/ITaskAVSRe
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0xFdD5749e11977D60850E06bF5B13221Ad95eb6B4);
-    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0x1C84Bb62fE7791e173014A879C706445fa893BbE);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
+    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0x78De554Ac8DfF368e3CAa73B3Df8AccCfD92928A);
 
     function setUp() public {}
 

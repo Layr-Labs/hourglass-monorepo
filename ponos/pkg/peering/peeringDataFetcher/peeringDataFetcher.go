@@ -61,12 +61,12 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAdd
 func (pdf *PeeringDataFetcher) ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
 	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress)
 	if err != nil {
-		pdf.logger.Sugar().Errorf("Failed to get AVS config", zap.Error(err))
+		pdf.logger.Sugar().Errorw("Failed to get AVS config", zap.Error(err))
 		return nil, err
 	}
 
 	if avsConfig == nil {
-		pdf.logger.Sugar().Errorf("AVS config is nil")
+		pdf.logger.Sugar().Errorw("AVS config is nil")
 		return nil, nil
 	}
 

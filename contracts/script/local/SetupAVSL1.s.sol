@@ -12,11 +12,11 @@ import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrateg
 
 contract SetupAVSL1 is Script {
     // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0xFdD5749e11977D60850E06bF5B13221Ad95eb6B4);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
 
     // Eigenlayer Strategies
-    IStrategy public STRATEGY_WETH = IStrategy(0xD523267698C81a372191136e477fdebFa33D9FB4);
-    IStrategy public STRATEGY_STETH = IStrategy(0x5C8b55722f421556a2AAfb7A3EA63d4c3e514312);
+    IStrategy public STRATEGY_WETH = IStrategy(0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc);
+    IStrategy public STRATEGY_STETH = IStrategy(0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574);
 
     function setUp() public {}
 
@@ -44,6 +44,7 @@ contract SetupAVSL1 is Script {
         strategies[1] = STRATEGY_STETH;
         IAllocationManagerTypes.CreateSetParams[] memory createOperatorSetParams =
             new IAllocationManagerTypes.CreateSetParams[](2);
+
         IStrategy[] memory opsetZero = new IStrategy[](1);
         opsetZero[0] = STRATEGY_WETH;
         IStrategy[] memory opsetOne = new IStrategy[](1);
@@ -51,6 +52,7 @@ contract SetupAVSL1 is Script {
 
         createOperatorSetParams[0] = IAllocationManagerTypes.CreateSetParams({operatorSetId: 0, strategies: opsetZero});
         createOperatorSetParams[1] = IAllocationManagerTypes.CreateSetParams({operatorSetId: 1, strategies: opsetOne});
+
         ALLOCATION_MANAGER.createOperatorSets(avs, createOperatorSetParams);
         console.log("Operator sets created: ", ALLOCATION_MANAGER.getOperatorSetCount(avs));
 

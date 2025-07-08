@@ -3,15 +3,13 @@ package testUtils
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
-	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"strings"
+	"testing"
 )
 
 func SetupOperatorPeering(
@@ -19,40 +17,25 @@ func SetupOperatorPeering(
 	chainConfig *ChainConfig,
 	chainId config.ChainId,
 	ethClient *ethclient.Client,
-	aggregatorPrivateBLSKey *bn254.PrivateKey,
-	executorPrivateBLSKey *bn254.PrivateKey,
+	aggregator *operator.Operator,
+	executor *operator.Operator,
 	socket string,
 	l *zap.Logger,
 ) error {
-	aggOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.OperatorAccountPrivateKey)
+	aggOperatorAddress, err := aggregator.DeriveAddress()
 	if err != nil {
 		return fmt.Errorf("failed to convert aggregator operator private key: %v", err)
 	}
-	aggOperatorAddress := cryptoUtils.DeriveAddress(aggOperatorPrivateKey)
-	if !strings.EqualFold(aggOperatorAddress.String(), chainConfig.OperatorAccountAddress) {
-		return fmt.Errorf("aggregator operator address mismatch: expected %s, got %s", chainConfig.OperatorAccountAddress, aggOperatorAddress.String())
-	}
 
-	// executor operator
-	execOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.ExecOperatorAccountPk)
+	execOperatorAddress, err := executor.DeriveAddress()
 	if err != nil {
-		return fmt.Errorf("failed to convert exec operator private key: %v", err)
-	}
-	execOperatorAddress := cryptoUtils.DeriveAddress(execOperatorPrivateKey)
-	if !strings.EqualFold(execOperatorAddress.String(), chainConfig.ExecOperatorAccountAddress) {
-		return fmt.Errorf("executor operator address mismatch: expected %s, got %s", chainConfig.ExecOperatorAccountAddress, execOperatorAddress.String())
-	}
-
-	coreContracts, err := config.GetCoreContractsForChainId(chainId)
-	if err != nil {
-		return fmt.Errorf("failed to get core contracts for chain ID %d: %v", chainId, err)
+		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
@@ -62,25 +45,29 @@ func SetupOperatorPeering(
 		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator contract caller: %v", err)
 	}
 
 	l.Sugar().Infow("------------------- Registering aggregator -------------------")
+	if len(aggregator.OperatorSetIds) == 0 {
+		l.Sugar().Infow("No operator sets defined for aggregator")
+		return fmt.Errorf("aggregator operator sets are empty, cannot register")
+	}
 	// register the aggregator
 	result, err := operator.RegisterOperatorToOperatorSets(
 		ctx,
 		avsCc,
 		aggregatorCc,
-		aggOperatorAddress,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
-		[]uint32{0},
-		aggregatorPrivateBLSKey,
-		"",
-		7200,
-		"https://some-metadata-uri.com",
+		aggregator.OperatorSetIds,
+		aggregator,
+		&operator.RegistrationConfig{
+			Socket:          "",
+			MetadataUri:     "https://some-metadata-uri.com",
+			AllocationDelay: 1,
+		},
 		l,
 	)
 	if err != nil {
@@ -95,33 +82,151 @@ func SetupOperatorPeering(
 		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-		KeyRegistrarAddress: coreContracts.KeyRegistrar,
 	}, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor contract caller: %v", err)
 	}
 
 	l.Sugar().Infow("------------------- Registering executor -------------------")
+	if len(executor.OperatorSetIds) == 0 {
+		l.Sugar().Infow("No operator sets defined for executor")
+		return fmt.Errorf("executor operator sets are empty, cannot register")
+	}
 	// register the executor
 	result, err = operator.RegisterOperatorToOperatorSets(
 		ctx,
 		avsCc,
 		executorCc,
-		execOperatorAddress,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
-		[]uint32{1},
-		executorPrivateBLSKey,
-		socket,
-		7200,
-		"https://some-metadata-uri.com",
+		executor.OperatorSetIds,
+		executor,
+		&operator.RegistrationConfig{
+			Socket:          socket,
+			MetadataUri:     "https://some-metadata-uri.com",
+			AllocationDelay: 1,
+		},
 		l,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to register executor operator: %v", err)
 	}
 	l.Sugar().Infow("Executor operator registered successfully",
-		zap.String("operatorAddress", aggOperatorAddress.String()),
+		zap.String("operatorAddress", execOperatorAddress.String()),
 		zap.String("transactionHash", result.TxHash.String()),
 	)
+	return nil
+}
+
+const (
+	Strategy_WETH  = "0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc"
+	Strategy_STETH = "0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
+)
+
+type StakerDelegationConfig struct {
+	StakerPrivateKey   string
+	StakerAddress      string
+	OperatorPrivateKey string
+	OperatorAddress    string
+	OperatorSetId      uint32
+	StrategyAddress    string
+}
+
+func DelegateStakeToOperators(
+	t *testing.T,
+	ctx context.Context,
+	aggregatorConfig *StakerDelegationConfig,
+	executorConfig *StakerDelegationConfig,
+	avsAddress string,
+	ethClient *ethclient.Client,
+	l *zap.Logger,
+) error {
+	t.Logf("------------------------ Delegating aggregator ------------------------")
+	err := DelegateStakeToOperator(
+		ctx,
+		aggregatorConfig.StakerPrivateKey,
+		aggregatorConfig.StakerAddress,
+		aggregatorConfig.OperatorPrivateKey,
+		aggregatorConfig.OperatorAddress,
+		avsAddress,
+		aggregatorConfig.OperatorSetId,
+		aggregatorConfig.StrategyAddress,
+		ethClient,
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to aggregator operator: %v", err)
+	}
+
+	t.Logf("------------------------ Delegating Executor ------------------------")
+	err = DelegateStakeToOperator(
+		ctx,
+		executorConfig.StakerPrivateKey,
+		executorConfig.StakerAddress,
+		executorConfig.OperatorPrivateKey,
+		executorConfig.OperatorAddress,
+		avsAddress,
+		executorConfig.OperatorSetId,
+		executorConfig.StrategyAddress,
+		ethClient,
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to aggregator operator: %v", err)
+	}
+	return nil
+}
+
+func DelegateStakeToOperator(
+	ctx context.Context,
+	stakerPrivateKey string,
+	stakerAddress string,
+	operatorPrivateKey string,
+	operatorAddress string,
+	avsAddress string,
+	operatorSetId uint32,
+	strategyAddress string,
+	ethclient *ethclient.Client,
+	l *zap.Logger,
+) error {
+	l.Sugar().Infow("Delegating stake to operator",
+		zap.String("stakerPrivateKey", stakerPrivateKey),
+		zap.String("operatorPrivateKey", operatorPrivateKey),
+		zap.String("operatorAddress", operatorAddress),
+		zap.String("avsAddress", avsAddress),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("strategyAddress", strategyAddress),
+	)
+	stakerCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey: stakerPrivateKey,
+	}, ethclient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create staker contract caller: %v", err)
+	}
+
+	if _, err := stakerCc.DelegateToOperator(
+		ctx,
+		common.HexToAddress(stakerAddress),
+		common.HexToAddress(operatorAddress),
+	); err != nil {
+		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)
+	}
+
+	opCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
+		PrivateKey: operatorPrivateKey,
+	}, ethclient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create operator contract caller: %v", err)
+	}
+
+	_, err = opCc.ModifyAllocations(
+		ctx,
+		common.HexToAddress(operatorAddress),
+		common.HexToAddress(avsAddress),
+		operatorSetId,
+		common.HexToAddress(strategyAddress),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to modify allocations for operator %s: %v", operatorAddress, err)
+	}
 	return nil
 }

@@ -26,6 +26,8 @@ message TaskSubmission {
   string avs_address = 3;
   bytes payload = 4;
   bytes signature = 5;
+  uint32 operator_set_id = 6;
+  uint32 reference_timestamp = 7;
 }
 
 message TaskResult {
@@ -34,6 +36,8 @@ message TaskResult {
   bytes output = 3;
   bytes signature = 4;
   string avs_address = 5;
+  uint32 operator_set_id = 6;
+  bytes output_digest = 7;
 }
 
 // DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer

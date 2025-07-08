@@ -47,14 +47,11 @@ type Task struct {
 type TaskResult struct {
 	TaskId          string
 	AvsAddress      string
-	CallbackAddr    string
 	OperatorSetId   uint32
 	Output          []byte
-	ChainId         config.ChainId
-	BlockNumber     uint64
-	BlockHash       string
 	OperatorAddress string
 	Signature       []byte
+	OutputDigest    []byte
 }
 
 func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {
@@ -64,6 +61,7 @@ func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {
 		OperatorAddress: tr.OperatorAddress,
 		Signature:       tr.Signature,
 		AvsAddress:      tr.AvsAddress,
+		OutputDigest:    tr.OutputDigest,
 	}
 }
 

@@ -7,18 +7,16 @@ import {
     ICrossChainRegistry,
     ICrossChainRegistryTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
-import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F);
-    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
-        IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
 
     function setUp() public {}
 
     function run() public {
-        address ownerAddr = address(0xDA29BB71669f46F2a779b4b62f03644A84eE3479);
+        address ownerAddr = address(0xb094Ba769b4976Dc37fC689A76675f31bc4923b0);
         uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
         uint256 l2ChainId = uint256(vm.envUint("L2_CHAIN_ID"));
 
@@ -30,9 +28,9 @@ contract SetupAVSMultichain is Script {
 
         address[] memory tableUpdaters = new address[](2);
         // preprod holesky
-        tableUpdaters[0] = address(0xd7230B89E5E2ed1FD068F0FF9198D7960243f12a);
+        tableUpdaters[0] = address(0xE12C4cebd680a917271145eDbFB091B1BdEFD74D);
         // base sepolia
-        tableUpdaters[1] = address(0x798EB817B7C109c6780264D5161183809C817216);
+        tableUpdaters[1] = address(0xE12C4cebd680a917271145eDbFB091B1BdEFD74D);
 
         CROSS_CHAIN_REGISTRY.addChainIDsToWhitelist(chainIds, tableUpdaters);
 

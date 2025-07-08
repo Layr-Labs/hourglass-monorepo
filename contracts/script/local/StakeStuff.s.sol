@@ -8,10 +8,13 @@ import {
     ICrossChainRegistry,
     ICrossChainRegistryTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
-import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
-import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
+import {
+    IAllocationManager,
+    IAllocationManagerTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IDelegationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 import {IStrategyManager} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategyManager.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -28,26 +31,31 @@ interface IStETH {
 }
 
 contract StakeStuff is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x0022d2014901F2AFBF5610dDFcd26afe2a65Ca6F);
-    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
-        IBN254TableCalculator(0x033af59c1b030Cc6eEE07B150FD97668497dc74b);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
 
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0xFdD5749e11977D60850E06bF5B13221Ad95eb6B4);
-    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x75dfE5B44C2E530568001400D3f704bC8AE350CC);
-    IStrategyManager public STRATEGY_MANAGER = IStrategyManager(0xF9fbF2e35D8803273E214c99BF15174139f4E67a);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
+    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
+    IStrategyManager public STRATEGY_MANAGER = IStrategyManager(0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D);
 
-    IStrategy public STRATEGY_WETH = IStrategy(0xD523267698C81a372191136e477fdebFa33D9FB4);
-    IStrategy public STRATEGY_STETH = IStrategy(0x5C8b55722f421556a2AAfb7A3EA63d4c3e514312);
+    IStrategy public STRATEGY_WETH = IStrategy(0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc);
+    IStrategy public STRATEGY_STETH = IStrategy(0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574);
+
+    uint64 public magnitudeToSet = 1e18;
 
     function setUp() public {}
 
-    function run(address aggregatorAddr, address executorAddr) public {
+    function run() public {
         uint256 aggStakerPrivateKey = vm.envUint("AGG_STAKER_PRIVATE_KEY");
         address aggStakerAddr = vm.addr(aggStakerPrivateKey);
 
         uint256 execStakerPrivateKey = vm.envUint("EXEC_STAKER_PRIVATE_KEY");
         address execStakerAddr = vm.addr(execStakerPrivateKey);
 
+        uint256 aggregatorPrivateKey = vm.envUint("AGGREGATOR_PRIVATE_KEY");
+        address aggregatorAddr = vm.addr(aggregatorPrivateKey);
+
+        uint256 executorPrivateKey = vm.envUint("EXECUTOR_PRIVATE_KEY");
+        address executorAddr = vm.addr(executorPrivateKey);
         // ... operator checks ...
 
         IERC20 wethToken = STRATEGY_WETH.underlyingToken();

@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"strings"
 	"sync"
 
@@ -26,6 +27,8 @@ type Executor struct {
 	signer        signer.ISigner
 	inflightTasks *sync.Map
 
+	l1ContractCaller contractCaller.IContractCaller
+
 	peeringFetcher peering.IPeeringDataFetcher
 }
 
@@ -35,6 +38,7 @@ func NewExecutorWithRpcServer(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	l1ContractCaller contractCaller.IContractCaller,
 ) (*Executor, error) {
 	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 		GrpcPort: port,
@@ -43,7 +47,7 @@ func NewExecutorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signer, peeringFetcher), nil
+	return NewExecutor(config, rpc, logger, signer, peeringFetcher, l1ContractCaller), nil
 }
 
 func NewExecutor(
@@ -52,15 +56,17 @@ func NewExecutor(
 	logger *zap.Logger,
 	signer signer.ISigner,
 	peeringFetcher peering.IPeeringDataFetcher,
+	l1ContractCaller contractCaller.IContractCaller,
 ) *Executor {
 	return &Executor{
-		logger:         logger,
-		config:         config,
-		avsPerformers:  make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:      rpcServer,
-		signer:         signer,
-		inflightTasks:  &sync.Map{},
-		peeringFetcher: peeringFetcher,
+		logger:           logger,
+		config:           config,
+		avsPerformers:    make(map[string]avsPerformer.IAvsPerformer),
+		rpcServer:        rpcServer,
+		signer:           signer,
+		inflightTasks:    &sync.Map{},
+		peeringFetcher:   peeringFetcher,
+		l1ContractCaller: l1ContractCaller,
 	}
 }
 
@@ -86,6 +92,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 					SigningCurve:         avs.SigningCurve,
 				},
 				e.peeringFetcher,
+				e.l1ContractCaller,
 				e.logger,
 			)
 			if err != nil {

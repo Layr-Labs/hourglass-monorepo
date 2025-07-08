@@ -14,10 +14,10 @@ set -e
 
 
 # ethereum holesky
-L1_FORK_RPC_URL=https://special-yolo-river.ethereum-holesky.quiknode.pro/2d21099a19e7c896a22b9fcc23dc8ce80f2214a5/
+L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
 
 anvilL1ChainId=31337
-anvilL1StartBlock=4070297
+anvilL1StartBlock=8712202
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -28,7 +28,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=27614707
+anvilL2StartBlock=28063258
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -83,7 +83,9 @@ for i in $(seq 0 $numAccounts); do
 done
 
 # fund the account used for table transport
-fundAccount "0xD638d3779456898dff17EBFe5D62F5B7a92D61d7"
+fundAccount "0x8736311E6b706AfF3D8132Adf351387092802bA6"
+
+fundAccount "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0"
 
 
 # deployer account
@@ -140,14 +142,17 @@ export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 # -----------------------------------------------------------------------------
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
+# Cert Verifier addresses are the same address across all chains
+bn254CertVerifierAddress="0x998535833f3feE44ce720440E735554699f728a5"
+ecdsaCertVerifierAddress="0xAD2F58A551bD0e77fa20b5531dA96eF440C392BF"
 echo "Deploying mailbox contract to L1..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" "0xf462d03A82C1F3496B0DFe27E978318eD1720E1f" "0xF9BDd6af3Fb02659101cbb776DC7cb4879c93d8A"
-mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $bn254CertVerifierAddress $ecdsaCertVerifierAddress
+mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddressL1"
 
 echo "Deploying mailbox contract to L2..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" "0x824604a31b580Aec16D8Dd7ae9A27661Dc65cBA3" "0x95A49cB0aED0e8f299223Da3A8A335440f5F00E7"
-mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" $bn254CertVerifierAddress $ecdsaCertVerifierAddress
+mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
 echo "Mailbox contract address: $mailboxContractAddressL2"
 
 # -----------------------------------------------------------------------------
@@ -156,10 +161,11 @@ echo "Mailbox contract address: $mailboxContractAddressL2"
 echo "Deploying L1 AVS contract..."
 forge script script/local/DeployAVSL1Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "${avsAccountAddress}"
 
-avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+# we need to get index 2 since thats where the actual proxy lives
+avsTaskRegistrarAddress=$(cat ./broadcast/DeployAVSL1Contracts.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
 echo "L1 AVS contract address: $l1ContractAddress"
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------`-----------------------------
 # Setup L1 AVS
 # -----------------------------------------------------------------------------
 echo "Setting up L1 AVS..."
@@ -171,8 +177,8 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 echo "Setting up L1 AVS..."
 export L1_CHAIN_ID=$anvilL1ChainId
 export L2_CHAIN_ID=$anvilL2ChainId
-cast rpc anvil_impersonateAccount "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --rpc-url $L1_RPC_URL
-forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xDA29BB71669f46F2a779b4b62f03644A84eE3479" --unlocked --broadcast --sig "run()"
+cast rpc anvil_impersonateAccount "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --rpc-url $L1_RPC_URL
+forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --unlocked --broadcast --sig "run()"
 forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
 
 # -----------------------------------------------------------------------------
@@ -205,13 +211,11 @@ echo "Exec staker address: ${execStakerAccountAddress}"
 echo "Staking all the things"
 export AGG_STAKER_PRIVATE_KEY=$aggStakerAccountPk
 export EXEC_STAKER_PRIVATE_KEY=$execStakerAccountPk
-forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast \
-    --sig "run(address, address)" $operatorAccountAddress $execOperatorAccountAddress \
-    -vvvv
+forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()" -vvvv
 
-
-cast rpc --rpc-url $L1_RPC_URL anvil_mine 10
-cast rpc --rpc-url $L2_RPC_URL anvil_mine 10
+# move past the global ALLOCATION_CONFIGURATION_DELAY which is 75 blocks for sepolia
+cast rpc --rpc-url $L1_RPC_URL anvil_mine 80
+cast rpc --rpc-url $L2_RPC_URL anvil_mine 80
 
 echo "Ended at block number: "
 cast block-number
