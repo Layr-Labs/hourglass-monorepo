@@ -76,7 +76,6 @@ contract TaskMailbox is
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
-        // TODO: Double check if any other config checks are needed.
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
@@ -102,7 +101,7 @@ contract TaskMailbox is
 
         require(
             taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
-                && taskConfig.taskSLA > 0,
+                && taskConfig.taskSLA > 0 && taskConfig.consensus.consensusType != ConsensusType.NONE,
             ExecutorOperatorSetTaskConfigNotSet()
         );
 
@@ -125,7 +124,7 @@ contract TaskMailbox is
             executorOperatorSetTaskConfigs[taskParams.executorOperatorSet.key()];
         require(
             taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
-                && taskConfig.taskSLA > 0,
+                && taskConfig.taskSLA > 0 && taskConfig.consensus.consensusType != ConsensusType.NONE,
             ExecutorOperatorSetTaskConfigNotSet()
         );
 

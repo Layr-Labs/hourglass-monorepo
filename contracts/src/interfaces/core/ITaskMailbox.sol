@@ -20,6 +20,7 @@ interface ITaskMailboxTypes {
      * @notice Enum defining the type of consensus mechanism
      */
     enum ConsensusType {
+        NONE,
         STAKE_PROPORTION_THRESHOLD
     }
 

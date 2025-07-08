@@ -437,6 +437,19 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         uint16 decodedThreshold = abi.decode(retrievedConfig.consensus.value, (uint16));
         assertEq(decodedThreshold, 10_000);
     }
+
+    function test_Revert_WhenConsensusTypeIsNone() public {
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.NONE,
+            value: bytes("") // Empty value for NONE type
+        });
+
+        vm.prank(avs);
+        vm.expectRevert(InvalidConsensusType.selector);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+    }
 }
 
 // Test contract for createTask
