@@ -5,7 +5,7 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
-import {IBN254TableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+import {IOperatorTableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 
@@ -20,7 +20,7 @@ contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
     function updateOperatorTable(
         OperatorSet calldata, /*operatorSet*/
         uint32, /*referenceTimestamp*/
-        IBN254TableCalculatorTypes.BN254OperatorSetInfo memory, /*operatorSetInfo*/
+        IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory, /*operatorSetInfo*/
         OperatorSetConfig calldata /*operatorSetConfig*/
     ) external pure {}
 
@@ -93,9 +93,9 @@ contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
         OperatorSet memory, /*operatorSet*/
         uint32, /*referenceTimestamp*/
         uint256 /*operatorIndex*/
-    ) external pure returns (IBN254TableCalculatorTypes.BN254OperatorInfo memory) {
+    ) external pure returns (IOperatorTableCalculatorTypes.BN254OperatorInfo memory) {
         uint256[] memory weights = new uint256[](0);
-        return IBN254TableCalculatorTypes.BN254OperatorInfo({pubkey: BN254.G1Point(0, 0), weights: weights});
+        return IOperatorTableCalculatorTypes.BN254OperatorInfo({pubkey: BN254.G1Point(0, 0), weights: weights});
     }
 
     function isNonsignerCached(
@@ -109,9 +109,9 @@ contract MockBN254CertificateVerifier is IBN254CertificateVerifier {
     function getOperatorSetInfo(
         OperatorSet memory, /*operatorSet*/
         uint32 /*referenceTimestamp*/
-    ) external pure returns (IBN254TableCalculatorTypes.BN254OperatorSetInfo memory) {
+    ) external pure returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory) {
         uint256[] memory totalWeights = new uint256[](0);
-        return IBN254TableCalculatorTypes.BN254OperatorSetInfo({
+        return IOperatorTableCalculatorTypes.BN254OperatorSetInfo({
             operatorInfoTreeRoot: bytes32(0),
             numOperators: 0,
             aggregatePubkey: BN254.G1Point(0, 0),

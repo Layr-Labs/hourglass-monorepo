@@ -8,9 +8,9 @@ import {
     ICrossChainRegistry,
     ICrossChainRegistryTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
-import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {IECDSATableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSATableCalculator.sol";
+import {IECDSATableCalculator} from "@eigenlayer-middleware/src/interfaces/IECDSATableCalculator.sol";
 import {BLSApkRegistry} from "../../lib/eigenlayer-middleware/src/BLSApkRegistry.sol";
 
 contract SetupAVSMultichain is Script {

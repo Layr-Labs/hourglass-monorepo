@@ -35,7 +35,7 @@ contract RegisterOperator is Script {
 
         // 1. Register the operator
         // set the
-        DELEGATION_MANAGER.registerAsOperator(0, allocationDelay, metadataURI);
+        DELEGATION_MANAGER.registerAsOperator(address(0), allocationDelay, metadataURI);
         console.log("Operator registered:", operator, DELEGATION_MANAGER.isOperator(operator));
 
         // 2. Register for operator set

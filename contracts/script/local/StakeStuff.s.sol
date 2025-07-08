@@ -8,7 +8,7 @@ import {
     ICrossChainRegistry,
     ICrossChainRegistryTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
-import {IBN254TableCalculator} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254TableCalculator.sol";
+import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 import {

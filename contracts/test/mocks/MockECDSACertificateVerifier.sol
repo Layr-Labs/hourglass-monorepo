@@ -5,7 +5,6 @@ import {
     IECDSACertificateVerifier,
     IECDSACertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IECDSACertificateVerifier.sol";
-import {IECDSATableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IECDSATableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract MockECDSACertificateVerifier is IECDSACertificateVerifier {
