@@ -246,6 +246,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @notice Sets the task configuration for an executor operator set
      * @param operatorSet The operator set to configure
      * @param config Task configuration for the operator set
+     * @dev Fees can be switched off by setting the fee token to the zero address.
      */
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
@@ -256,6 +257,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @notice Registers an executor operator set with the TaskMailbox
      * @param operatorSet The operator set to register
      * @param isRegistered Whether the operator set is registered
+     * @dev This function can be called to toggle the registration once the task config has been set.
      */
     function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
 

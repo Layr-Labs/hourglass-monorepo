@@ -76,15 +76,14 @@ contract TaskMailbox is
         OperatorSet memory operatorSet,
         ExecutorOperatorSetTaskConfig memory config
     ) external {
+        // Validate config
         require(config.curveType != IKeyRegistrarTypes.CurveType.NONE, InvalidCurveType());
         require(config.taskHook != IAVSTaskHook(address(0)), InvalidAddressZero());
         require(config.taskSLA > 0, TaskSLAIsZero());
+        _validateConsensus(config.consensus);
 
         // Validate operator set ownership
         _validateOperatorSetOwner(operatorSet, config.curveType);
-
-        // Validate consensus configuration
-        _validateConsensus(config.consensus);
 
         executorOperatorSetTaskConfigs[operatorSet.key()] = config;
         emit ExecutorOperatorSetTaskConfigSet(msg.sender, operatorSet.avs, operatorSet.id, config);
@@ -99,6 +98,7 @@ contract TaskMailbox is
     function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external {
         ExecutorOperatorSetTaskConfig memory taskConfig = executorOperatorSetTaskConfigs[operatorSet.key()];
 
+        // Validate that task config has been set before registration can be toggled.
         require(
             taskConfig.curveType != IKeyRegistrarTypes.CurveType.NONE && address(taskConfig.taskHook) != address(0)
                 && taskConfig.taskSLA > 0 && taskConfig.consensus.consensusType != ConsensusType.NONE,
@@ -201,7 +201,7 @@ contract TaskMailbox is
         task.executorCert = executorCert;
         task.result = result;
 
-        // Task result submission checks: AVS can update hook storage for task lifecycle if needed.
+        // Post-task result submission checks: AVS can update hook storage for task lifecycle if needed.
         task.executorOperatorSetTaskConfig.taskHook.handlePostTaskResultSubmission(taskHash);
 
         emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.executorCert, task.result);
