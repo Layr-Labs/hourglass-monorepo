@@ -351,10 +351,11 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 	avsAddress := "0x1234567890abcdef"
 	imageRepo := "ponos-test-container"
 	imageTag := "latest"
+	imageDigest := ""
 	containerPort := 8080
 	networkName := "test-default-network"
 
-	config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
+	config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName)
 
 	t.Run("default configuration creates valid container", func(t *testing.T) {
 		// Create container with default config

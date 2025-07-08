@@ -21,12 +21,13 @@ func BenchmarkCreateDefaultContainerConfig(b *testing.B) {
 	avsAddress := "0x1234567890abcdef1234567890abcdef12345678"
 	imageRepo := "myregistry/myapp"
 	imageTag := "v1.0.0"
+	imageDigest := ""
 	containerPort := 8080
 	networkName := "avs-network"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, containerPort, networkName)
+		_ = CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName)
 	}
 }
 
