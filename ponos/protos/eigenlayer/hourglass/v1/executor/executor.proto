@@ -70,6 +70,7 @@ message Performer {
   bool application_healthy = 7;
   string last_health_check = 8;
   string container_id = 9;
+  string artifact_tag = 10;
 }
 
 // ListPerformersResponse contains the list of all performers

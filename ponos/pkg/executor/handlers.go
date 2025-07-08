@@ -74,7 +74,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	// Deploy using the performer's Deploy method
 	image := avsPerformer.PerformerImage{
 		Repository: req.GetRegistryUrl(),
-		Tag:        req.GetDigest(),
+		Digest:     req.GetDigest(),
 	}
 
 	result, err := performer.Deploy(ctx, image)
@@ -382,6 +382,7 @@ func (e *Executor) performerInfoToProto(info avsPerformer.PerformerMetadata) *ex
 		AvsAddress:         info.AvsAddress,
 		Status:             string(info.Status),
 		ArtifactRegistry:   info.ArtifactRegistry,
+		ArtifactTag:        info.ArtifactTag,
 		ArtifactDigest:     info.ArtifactDigest,
 		ResourceHealthy:    info.ContainerHealthy,
 		ApplicationHealthy: info.ApplicationHealthy,
