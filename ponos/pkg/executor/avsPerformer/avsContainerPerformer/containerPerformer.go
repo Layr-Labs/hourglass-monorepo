@@ -124,7 +124,7 @@ func NewAvsContainerPerformer(
 func (aps *AvsContainerPerformer) cleanupFailedContainer(containerID string, failureReason string) {
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), defaultCleanupTimeout)
 	defer cleanupCancel()
-	
+
 	if err := aps.containerManager.Remove(cleanupCtx, containerID, true); err != nil {
 		aps.logger.Error("Failed to remove container during cleanup",
 			zap.String("containerID", containerID),
