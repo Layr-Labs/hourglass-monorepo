@@ -5,7 +5,8 @@ import {
     IBN254CertificateVerifier,
     IBN254CertificateVerifierTypes
 } from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
-import {IOperatorTableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableCalculator.sol";
+import {IOperatorTableCalculatorTypes} from
+    "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {BN254} from "@eigenlayer-contracts/src/contracts/libraries/BN254.sol";
 
