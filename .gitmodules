@@ -5,6 +5,3 @@
 	path = contracts/lib/eigenlayer-middleware
 	url = https://github.com/Layr-Labs/eigenlayer-middleware
 	branch = release-dev/multichain
-[submodule "ponos/modules/eigenlayer-middleware"]
-	path = ponos/modules/eigenlayer-middleware
-	url = git@github.com:Layr-Labs/eigenlayer-middleware.git
