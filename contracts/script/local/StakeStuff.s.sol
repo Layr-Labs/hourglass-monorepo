@@ -50,12 +50,6 @@ contract StakeStuff is Script {
 
         uint256 execStakerPrivateKey = vm.envUint("EXEC_STAKER_PRIVATE_KEY");
         address execStakerAddr = vm.addr(execStakerPrivateKey);
-
-        uint256 aggregatorPrivateKey = vm.envUint("AGGREGATOR_PRIVATE_KEY");
-        address aggregatorAddr = vm.addr(aggregatorPrivateKey);
-
-        uint256 executorPrivateKey = vm.envUint("EXECUTOR_PRIVATE_KEY");
-        address executorAddr = vm.addr(executorPrivateKey);
         // ... operator checks ...
 
         IERC20 wethToken = STRATEGY_WETH.underlyingToken();
