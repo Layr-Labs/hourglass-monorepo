@@ -34,7 +34,7 @@ function create_binding {
     rm $binding_out_dir/tmp.bin
 }
 
-cd modules/eigenlayer-middleware
+cd ../contracts/lib/eigenlayer-middleware
 
 echo "Running forge build..."
 forge build
