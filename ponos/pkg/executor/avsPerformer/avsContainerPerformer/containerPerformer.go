@@ -27,6 +27,8 @@ const (
 	maxConsecutiveApplicationHealthFailures = 3
 	defaultApplicationHealthCheckInterval   = 15 * time.Second
 	defaultDeploymentTimeout                = 1 * time.Minute
+	defaultCleanupTimeout                   = 5 * time.Second
+	defaultRunningWaitTimeout               = 30 * time.Second
 )
 
 // PerformerContainer holds all information about a container
@@ -117,6 +119,21 @@ func NewAvsContainerPerformer(
 	}, nil
 }
 
+// cleanupFailedContainer removes a container using a fresh context to ensure cleanup succeeds
+// even if the original context is cancelled or timed out
+func (aps *AvsContainerPerformer) cleanupFailedContainer(containerID string, failureReason string) {
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), defaultCleanupTimeout)
+	defer cleanupCancel()
+
+	if err := aps.containerManager.Remove(cleanupCtx, containerID, true); err != nil {
+		aps.logger.Error("Failed to remove container during cleanup",
+			zap.String("containerID", containerID),
+			zap.String("failureReason", failureReason),
+			zap.Error(err),
+		)
+	}
+}
+
 func (aps *AvsContainerPerformer) fetchAggregatorPeerInfo(ctx context.Context) ([]*peering.OperatorPeerInfo, error) {
 	retries := []uint64{1, 3, 5, 10, 20}
 	for i, retry := range retries {
@@ -164,24 +181,14 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	// Start the container
 	if err := aps.containerManager.Start(ctx, containerInfo.ID); err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(containerInfo.ID, "failed to start container")
 		return nil, errors.Wrap(err, "failed to start container")
 	}
 
 	// Wait for the container to be running
-	if err := aps.containerManager.WaitForRunning(ctx, containerInfo.ID, 30*time.Second); err != nil {
+	if err := aps.containerManager.WaitForRunning(ctx, containerInfo.ID, defaultRunningWaitTimeout); err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(containerInfo.ID, "failed to wait for container to be running")
 		return nil, errors.Wrap(err, "failed to wait for container to be running")
 	}
 
@@ -189,12 +196,7 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	updatedInfo, err := aps.containerManager.Inspect(ctx, containerInfo.ID)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(containerInfo.ID, "failed to inspect container")
 		return nil, errors.Wrap(err, "failed to inspect container")
 	}
 
@@ -202,12 +204,7 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	endpoint, err := containerManager.GetContainerEndpoint(updatedInfo, internalContainerPort, containerConfig.NetworkName)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, containerInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", containerInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(containerInfo.ID, "failed to get container endpoint")
 		return nil, errors.Wrap(err, "failed to get container endpoint")
 	}
 
@@ -221,12 +218,7 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, true)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, updatedInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove failed container during cleanup",
-				zap.String("containerID", updatedInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(updatedInfo.ID, "failed to create performer client")
 		return nil, errors.Wrap(err, "failed to create performer client")
 	}
 
@@ -234,12 +226,7 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, updatedInfo.ID, livenessConfig)
 	if err != nil {
 		// Clean up on failure
-		if removeErr := aps.containerManager.Remove(ctx, updatedInfo.ID, true); removeErr != nil {
-			aps.logger.Error("Failed to remove container during monitoring setup failure",
-				zap.String("containerID", updatedInfo.ID),
-				zap.Error(removeErr),
-			)
-		}
+		aps.cleanupFailedContainer(updatedInfo.ID, "failed to start liveness monitoring")
 		return nil, errors.Wrap(err, "failed to start liveness monitoring")
 	}
 
