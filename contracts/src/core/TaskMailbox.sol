@@ -12,6 +12,7 @@ import {
 import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {SemVerMixin} from "@eigenlayer-contracts/src/contracts/mixins/SemVerMixin.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgrades/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-upgrades/contracts/access/OwnableUpgradeable.sol";
 import {Initializable} from "@openzeppelin-upgrades/contracts/proxy/utils/Initializable.sol";
@@ -22,7 +23,6 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
-import {SemVerMixin} from "@eigenlayer-contracts/src/contracts/mixins/SemVerMixin.sol";
 
 /**
  * @title TaskMailbox
