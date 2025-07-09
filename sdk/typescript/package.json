@@ -4,17 +4,21 @@
   "description": "TypeScript SDK for building Hourglass AVS performers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "create-hourglass-performer": "./dist/cli/createPerformer.js"
+  },
   "scripts": {
     "build": "npm run generate:proto && tsc",
     "build:watch": "tsc --watch",
-    "dev": "ts-node-dev --respawn --transpile-only src/examples/demo.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/templates/basic-performer.ts",
     "start": "node dist/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "clean": "rm -rf dist generated",
+    "clean": "rm -rf dist generated typechain-types",
     "generate:proto": "mkdir -p generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --ts_out=grpc_js:generated -I proto proto/performer.proto",
+    "typechain": "typechain --target ethers-v6 --out-dir typechain-types 'contracts/*.json'",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run clean && npm run build"
   },
@@ -31,7 +35,8 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.9.14",
     "@grpc/proto-loader": "^0.7.10",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ethers": "^6.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",
@@ -44,7 +49,9 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.3",
     "grpc-tools": "^1.12.4",
-    "grpc_tools_node_protoc_ts": "^5.3.3"
+    "grpc_tools_node_protoc_ts": "^5.3.3",
+    "typechain": "^8.3.0",
+    "@typechain/ethers-v6": "^0.5.0"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -56,6 +63,7 @@
   },
   "files": [
     "dist/**/*",
+    "src/templates/**/*",
     "README.md",
     "LICENSE"
   ]

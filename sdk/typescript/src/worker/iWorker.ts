@@ -43,11 +43,26 @@ export abstract class BaseWorker implements IWorker {
   }
 
   /**
-   * Abstract method that must be implemented by subclasses
-   * @param task The task request to handle
-   * @returns The task response with result
+   * Handle task - can be overridden in two ways:
+   * 1. Override this method for full TaskRequest/TaskResponse handling
+   * 2. Override handleTask(input) for simplified payload handling
    */
-  abstract handleTask(task: TaskRequest): Promise<TaskResponse>;
+  async handleTask(task: TaskRequest): Promise<TaskResponse> {
+    // Parse payload and call simplified handler
+    const input = this.parsePayload(task.payload);
+    const result = await this.handleSimpleTask(input);
+    const encoded = this.encodePayload(result);
+    return this.createResponse(task.taskId, encoded);
+  }
+
+  /**
+   * Simplified task handler - override this for easy development
+   * @param input Parsed input from task payload
+   * @returns Result to be encoded and returned
+   */
+  async handleSimpleTask(input: any): Promise<any> {
+    throw new Error('Either handleTask or handleSimpleTask must be implemented');
+  }
 
   /**
    * Helper method to create a task response
@@ -60,6 +75,59 @@ export abstract class BaseWorker implements IWorker {
       taskId,
       result,
     };
+  }
+
+  /**
+   * Parse payload from bytes to JavaScript object
+   * @param payload The raw payload bytes
+   * @returns Parsed object
+   */
+  protected parsePayload(payload: Uint8Array): any {
+    try {
+      const text = new TextDecoder().decode(payload);
+      return JSON.parse(text);
+    } catch {
+      // If not JSON, return as string
+      return new TextDecoder().decode(payload);
+    }
+  }
+
+  /**
+   * Encode result to bytes
+   * @param result The result to encode
+   * @returns Encoded bytes
+   */
+  protected encodePayload(result: any): Uint8Array {
+    if (result instanceof Uint8Array) {
+      return result;
+    }
+    
+    const json = typeof result === 'object' ? JSON.stringify(result) : String(result);
+    return new TextEncoder().encode(json);
+  }
+
+  /**
+   * Simple start method for one-line usage
+   */
+  async start(port: number = 8080): Promise<void> {
+    const { PerformerServer } = await import('../server/performerServer');
+    
+    const server = new PerformerServer(this, {
+      port,
+      timeout: 10000,
+      debug: true,
+    });
+
+    // Set up graceful shutdown
+    server.setupGracefulShutdown();
+
+    try {
+      await server.start();
+      console.log(`🚀 Performer is running on port ${port}!`);
+    } catch (error) {
+      console.error('❌ Failed to start server:', error);
+      process.exit(1);
+    }
   }
 }
 

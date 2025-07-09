@@ -124,7 +124,7 @@ export interface TaskProcessorConfig {
  */
 export class TaskProcessor {
   private config: Required<TaskProcessorConfig>;
-  private pipeline: TaskPipeline;
+  private pipeline: TaskPipeline | undefined;
   private metrics: TaskMetrics[] = [];
 
   constructor(
@@ -157,7 +157,9 @@ export class TaskProcessor {
 
     try {
       // Execute the processing pipeline
-      await this.pipeline.execute(context);
+      if (this.pipeline) {
+        await this.pipeline.execute(context);
+      }
 
       // Execute the worker task
       const response = await this.executeWorkerTask(context);
