@@ -117,8 +117,8 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         return IBN254CertificateVerifierTypes.BN254Certificate({
             referenceTimestamp: uint32(block.timestamp),
             messageHash: messageHash,
-            signature: BN254.G1Point(0, 0),
-            apk: BN254.G2Point([uint256(0), uint256(0)], [uint256(0), uint256(0)]),
+            signature: BN254.G1Point(1, 2), // Non-zero signature
+            apk: BN254.G2Point([uint256(1), uint256(2)], [uint256(3), uint256(4)]),
             nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
         });
     }
@@ -129,7 +129,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         return IECDSACertificateVerifierTypes.ECDSACertificate({
             referenceTimestamp: uint32(block.timestamp),
             messageHash: messageHash,
-            sig: bytes("")
+            sig: bytes("0x1234567890abcdef") // Non-empty signature
         });
     }
 }
@@ -1054,6 +1054,146 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Verify task was verified
         TaskStatus status = taskMailbox.getTaskStatus(newTaskHash);
         assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
+    }
+
+    function test_Revert_WhenBN254CertificateHasEmptySignature() public {
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        // Create BN254 certificate with empty signature (X=0, Y=0)
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: taskHash,
+            signature: BN254.G1Point(0, 0), // Empty signature
+            apk: BN254.G2Point([uint256(1), uint256(2)], [uint256(3), uint256(4)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // Submit result should fail with EmptyCertificateSignature error
+        vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_Revert_WhenBN254CertificateHasEmptySignature_OnlyXZero() public {
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        // Create BN254 certificate with partially empty signature (X=0, Y=1)
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: taskHash,
+            signature: BN254.G1Point(0, 1), // Partially empty signature
+            apk: BN254.G2Point([uint256(1), uint256(2)], [uint256(3), uint256(4)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // This should pass since only both X and Y being zero is considered empty
+        vm.prank(aggregator);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
+
+        // Verify task was verified
+        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
+        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
+    }
+
+    function test_Revert_WhenECDSACertificateHasEmptySignature() public {
+        // Setup executor operator set with ECDSA curve type
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        // Create ECDSA certificate with empty signature
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert = IECDSACertificateVerifierTypes.ECDSACertificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: newTaskHash,
+            sig: bytes("") // Empty signature
+        });
+
+        // Submit result should fail with EmptyCertificateSignature error
+        vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_Revert_WhenBN254CertificateHasEmptySignature_WithZeroThreshold() public {
+        // Setup executor operator set with zero stake threshold
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(0)) // Zero threshold
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Create BN254 certificate with empty signature
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: newTaskHash,
+            signature: BN254.G1Point(0, 0), // Empty signature
+            apk: BN254.G2Point([uint256(1), uint256(2)], [uint256(3), uint256(4)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // Even with zero threshold, empty signatures should be rejected
+        vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_Revert_WhenECDSACertificateHasEmptySignature_WithZeroThreshold() public {
+        // Setup executor operator set with ECDSA curve type and zero threshold
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.curveType = IKeyRegistrarTypes.CurveType.ECDSA;
+        config.consensus = Consensus({
+            consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
+            value: abi.encode(uint16(0)) // Zero threshold
+        });
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Advance time
+        vm.warp(block.timestamp + 1);
+
+        // Create ECDSA certificate with empty signature
+        IECDSACertificateVerifierTypes.ECDSACertificate memory cert = IECDSACertificateVerifierTypes.ECDSACertificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: newTaskHash,
+            sig: bytes("") // Empty signature
+        });
+
+        // Even with zero threshold, empty signatures should be rejected
+        vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
     }
 }
 
