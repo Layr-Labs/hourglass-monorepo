@@ -23,6 +23,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	goEthereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -181,20 +182,36 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
+	l1AggSigningContext, err := transactionsigner.NewSigningContext(l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 aggregator signing context: %v", err)
+	}
+	l1AggPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1AggSigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create L1 aggregator private key signer: %v", err)
+	}
+
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, l1AggPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 
+	l1ExecSigningContext, err := transactionsigner.NewSigningContext(l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 executor signing context: %v", err)
+	}
+	l1ExecPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, l1ExecSigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create L1 executor private key signer: %v", err)
+	}
+
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, l1ExecPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
@@ -291,11 +308,19 @@ func Test_Aggregator(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
 
+	avsCcL1SigningContext, err := transactionsigner.NewSigningContext(l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L1 signing context: %v", err)
+	}
+	avsCcL1PrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsCcL1SigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L1 private key signer: %v", err)
+	}
+
 	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, avsCcL1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -311,11 +336,19 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to set up task mailbox: %v", err)
 	}
 
+	avsCcL2SigningContext, err := transactionsigner.NewSigningContext(l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L2 signing context: %v", err)
+	}
+	avsCcL2PrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsCcL2SigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L2 private key signer: %v", err)
+	}
+
 	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
+	}, l2EthClient, avsCcL2PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -475,11 +508,19 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
+	l2AppSigningContext, err := transactionsigner.NewSigningContext(l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 app signing context: %v", err)
+	}
+	l2AppPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2AppSigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create L2 app private key signer: %v", err)
+	}
+
 	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
+	}, l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
 		t.Errorf("Failed to create contract caller: %v", err)
 		cancel()

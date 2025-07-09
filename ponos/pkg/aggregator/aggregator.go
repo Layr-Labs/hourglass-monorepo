@@ -18,6 +18,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"strings"
@@ -255,13 +256,25 @@ func InitializeContractCaller(
 		return nil, err
 	}
 
+	// Create signing context and private key signer
+	signingContext, err := transactionSigner.NewSigningContext(ethereumContractCaller, logger)
+	if err != nil {
+		logger.Sugar().Errorw("failed to create signing context", "error", err)
+		return nil, fmt.Errorf("failed to create signing context: %w", err)
+	}
+
+	signer, err := transactionSigner.NewPrivateKeySigner(privateKey, signingContext)
+	if err != nil {
+		logger.Sugar().Errorw("failed to create private key signer", "error", err)
+		return nil, fmt.Errorf("failed to create private key signer: %w", err)
+	}
+
 	callerConfig := &caller.ContractCallerConfig{
-		PrivateKey:          privateKey,
 		AVSRegistrarAddress: avsRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
 	}
 
-	return caller.NewContractCaller(callerConfig, ethereumContractCaller, logger)
+	return caller.NewContractCaller(callerConfig, ethereumContractCaller, signer, logger)
 }
 
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {

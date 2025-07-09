@@ -19,6 +19,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -175,22 +176,38 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
+	l1SigningContext, err := transactionsigner.NewSigningContext(l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 signing context: %v", err)
+	}
+	l1PrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create L1 private key signer: %v", err)
+	}
+
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l1EthClient, l)
+	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
 
 	var l2CC *caller.ContractCaller
 	if networkTarget == NetworkTarget_L2 {
+		l2SigningContext, err := transactionsigner.NewSigningContext(l2EthClient, l)
+		if err != nil {
+			t.Fatalf("Failed to create L2 signing context: %v", err)
+		}
+		l2PrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2SigningContext)
+		if err != nil {
+			t.Fatalf("Failed to create L2 private key signer: %v", err)
+		}
+
 		l2CC, err = caller.NewContractCaller(&caller.ContractCallerConfig{
-			PrivateKey:          chainConfig.AppAccountPrivateKey,
 			AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
 			TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-		}, l2EthClient, l)
+		}, l2EthClient, l2PrivateKeySigner, l)
 		if err != nil {
 			t.Fatalf("Failed to create L2 contract caller: %v", err)
 		}
@@ -296,11 +313,19 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsTaskHookAddress = chainConfig.AVSTaskHookAddressL2
 	}
 
+	avsSigningContext, err := transactionsigner.NewSigningContext(mailboxEthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS signing context: %v", err)
+	}
+	avsPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+	if err != nil {
+		t.Fatalf("Failed to create AVS private key signer: %v", err)
+	}
+
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
-	}, mailboxEthClient, l)
+	}, mailboxEthClient, avsPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}

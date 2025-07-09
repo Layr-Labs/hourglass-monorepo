@@ -9,6 +9,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -106,6 +107,11 @@ var runCmd = &cobra.Command{
 			BaseUrl: Config.L1Chain.RpcUrl,
 		}, l)
 
+		ethClient, err := ethereumClient.GetEthereumContractCaller()
+		if err != nil {
+			return fmt.Errorf("failed to get ethereum contract caller: %w", err)
+		}
+
 		mailboxContract := util.Find(imContractStore.ListContracts(), func(c *contracts.Contract) bool {
 			return c.ChainId == Config.L1Chain.ChainId && c.Name == config.ContractName_TaskMailbox
 		})
@@ -113,11 +119,20 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("task mailbox contract not found")
 		}
 
+		// Create signing context and private key signer
+		signingContext, err := transactionsigner.NewSigningContext(ethClient, l)
+		if err != nil {
+			return fmt.Errorf("failed to create signing context: %w", err)
+		}
+		privateKeySigner, err := transactionsigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey, signingContext)
+		if err != nil {
+			return fmt.Errorf("failed to create private key signer: %w", err)
+		}
+
 		cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-			PrivateKey:          "",
 			AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
 			TaskMailboxAddress:  mailboxContract.Address,
-		}, ethereumClient, l)
+		}, ethereumClient, privateKeySigner, l)
 		if err != nil {
 			return fmt.Errorf("failed to initialize contract caller: %w", err)
 		}
