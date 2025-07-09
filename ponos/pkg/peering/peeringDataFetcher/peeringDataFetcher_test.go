@@ -216,7 +216,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			t.Logf("Test completed")
 		}
 
-		_ = anvil.Process.Kill()
+		_ = testUtils.KillAnvil(anvil)
 		assert.False(t, hasErrors)
 	})
 
@@ -431,7 +431,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 
 		assert.False(t, hasErrors)
-		_ = anvil.Process.Kill()
+		_ = testUtils.KillAnvil(anvil)
 	})
 
 }

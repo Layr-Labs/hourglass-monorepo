@@ -340,6 +340,6 @@ func Test_CertificateVerifier(t *testing.T) {
 	t.Logf("Certificate verification receipt: %+v", receipt)
 
 	t.Cleanup(func() {
-		_ = l1Anvil.Process.Kill()
+		_ = testUtils.KillAnvil(l1Anvil)
 	})
 }

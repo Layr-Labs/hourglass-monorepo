@@ -279,7 +279,7 @@ func testWithKeyType(
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
 
-	_ = l1Anvil.Process.Kill()
+	_ = testUtils.KillAnvil(l1Anvil)
 }
 
 func Test_Executor(t *testing.T) {

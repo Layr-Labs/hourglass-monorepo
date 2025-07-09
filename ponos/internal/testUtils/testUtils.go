@@ -238,6 +238,20 @@ func StartAnvil(projectRoot string, ctx context.Context, cfg *AnvilConfig) (*exe
 	return nil, fmt.Errorf("failed to start anvil")
 }
 
+func KillAnvil(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return fmt.Errorf("anvil command is not running")
+	}
+
+	if err := cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("failed to kill anvil process: %w", err)
+	}
+	_ = cmd.Wait()
+
+	fmt.Println("Anvil process killed successfully")
+	return nil
+}
+
 func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {
 	// read the mailbox ABI json file
 	path, err := filepath.Abs(fmt.Sprintf("%s/../contracts/out/ITaskMailbox.sol/ITaskMailbox.json", projectRoot))

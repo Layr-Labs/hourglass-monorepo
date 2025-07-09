@@ -503,8 +503,8 @@ func Test_Aggregator(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	assert.True(t, taskVerified)
 
-	_ = l1Anvil.Process.Kill()
-	_ = l2Anvil.Process.Kill()
+	_ = testUtils.KillAnvil(l1Anvil)
+	_ = testUtils.KillAnvil(l2Anvil)
 	cancel()
 }
 
