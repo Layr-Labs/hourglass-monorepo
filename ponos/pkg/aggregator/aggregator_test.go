@@ -132,6 +132,8 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
 	}
 
+	_ = testUtils.KillallAnvils()
+
 	startErrorsChan := make(chan error, 2)
 	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
 	defer anvilCancel()
@@ -503,8 +505,8 @@ func Test_Aggregator(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	assert.True(t, taskVerified)
 
-	_ = l1Anvil.Process.Kill()
-	_ = l2Anvil.Process.Kill()
+	_ = testUtils.KillAnvil(l1Anvil)
+	_ = testUtils.KillAnvil(l2Anvil)
 	cancel()
 }
 

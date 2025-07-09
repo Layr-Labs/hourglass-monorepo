@@ -129,6 +129,16 @@ func WaitForAnvil(
 	}
 }
 
+func KillallAnvils() error {
+	cmd := exec.Command("pkill", "-f", "anvil")
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to kill all anvils: %w", err)
+	}
+	fmt.Println("All anvil processes killed successfully")
+	return nil
+}
+
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
 	portNumber := "8545"
@@ -236,6 +246,20 @@ func StartAnvil(projectRoot string, ctx context.Context, cfg *AnvilConfig) (*exe
 	}
 
 	return nil, fmt.Errorf("failed to start anvil")
+}
+
+func KillAnvil(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return fmt.Errorf("anvil command is not running")
+	}
+
+	if err := cmd.Process.Kill(); err != nil {
+		return fmt.Errorf("failed to kill anvil process: %w", err)
+	}
+	_ = cmd.Wait()
+
+	fmt.Println("Anvil process killed successfully")
+	return nil
 }
 
 func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {

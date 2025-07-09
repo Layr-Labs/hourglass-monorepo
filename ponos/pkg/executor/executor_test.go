@@ -97,6 +97,8 @@ func testWithKeyType(
 		t.Fatalf("Failed to get L1 Ethereum contract caller: %v", err)
 	}
 
+	_ = testUtils.KillallAnvils()
+
 	anvilWg := &sync.WaitGroup{}
 	anvilWg.Add(1)
 	startErrorsChan := make(chan error, 1)
@@ -279,7 +281,7 @@ func testWithKeyType(
 	<-ctx.Done()
 	t.Logf("Received shutdown signal, shutting down...")
 
-	_ = l1Anvil.Process.Kill()
+	_ = testUtils.KillAnvil(l1Anvil)
 }
 
 func Test_Executor(t *testing.T) {

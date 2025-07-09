@@ -136,6 +136,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
 	defer anvilCancel()
 
+	_ = testUtils.KillallAnvils()
+
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start L1 Anvil: %v", err)
@@ -509,9 +511,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	assert.False(t, hasErrors)
 
-	_ = l1Anvil.Process.Kill()
+	_ = testUtils.KillAnvil(l1Anvil)
 	if l2Anvil != nil {
-		_ = l2Anvil.Process.Kill()
+		_ = testUtils.KillAnvil(l2Anvil)
 	}
 }
 
