@@ -103,7 +103,7 @@ func testWithKeyType(
 	anvilWg.Add(1)
 	startErrorsChan := make(chan error, 1)
 
-	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
 	defer anvilCancel()
 
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)

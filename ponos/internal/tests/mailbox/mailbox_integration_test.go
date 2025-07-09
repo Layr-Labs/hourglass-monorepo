@@ -133,7 +133,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	anvilWg.Add(1)
 	startErrorsChan := make(chan error, 1)
 
-	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
 	defer anvilCancel()
 
 	_ = testUtils.KillallAnvils()
@@ -277,7 +277,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	}
 	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
 
-	time.Sleep(time.Second * 6)
+	time.Sleep(time.Second * 2)
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 
@@ -504,7 +504,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	select {
 	case <-time.After(240 * time.Second):
 		cancel()
-		t.Errorf("Test timed out after 10 seconds")
+		t.Errorf("Test timed out after 240 seconds")
 	case <-ctx.Done():
 		t.Logf("Test completed")
 	}
@@ -517,7 +517,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	}
 }
 
-func Test_L1Mailbox(t *testing.T) {
+func Test_Mailbox(t *testing.T) {
 	t.Run("BN254 & ECDSA - L1", func(t *testing.T) {
 		testL1MailboxForCurve(t, config.CurveTypeECDSA, NetworkTarget_L1)
 	})

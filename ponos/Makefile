@@ -131,7 +131,7 @@ build/test-container:
 
 .PHONY: test
 test:
-	GOFLAGS="-count=1" $(GO) test -v -p 1 -parallel 1 ./...
+	GOFLAGS="-count=1" ./scripts/goTest.sh -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
 ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container test
