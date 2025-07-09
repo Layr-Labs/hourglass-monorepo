@@ -29,7 +29,10 @@ contract SetupAVSTaskMailboxConfig is Script {
             feeToken: IERC20(address(0)),
             feeCollector: address(0),
             taskSLA: 60,
-            stakeProportionThreshold: 10_000,
+            consensus: ITaskMailboxTypes.Consensus({
+                consensusType: ITaskMailboxTypes.ConsensusType.STAKE_PROPORTION_THRESHOLD,
+                value: abi.encode(uint16(10_000))
+            }),
             taskMetadata: bytes("")
         });
         ITaskMailbox(taskMailbox).setExecutorOperatorSetTaskConfig(OperatorSet(avs, 1), executorOperatorSetTaskConfig);

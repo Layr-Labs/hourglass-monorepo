@@ -16,7 +16,6 @@ contract SetupAVSMultichain is Script {
     function setUp() public {}
 
     function run() public {
-        address ownerAddr = address(0xb094Ba769b4976Dc37fC689A76675f31bc4923b0);
         uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
         uint256 l2ChainId = uint256(vm.envUint("L2_CHAIN_ID"));
 

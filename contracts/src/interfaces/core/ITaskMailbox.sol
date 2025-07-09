@@ -17,13 +17,21 @@ import {IAVSTaskHook} from "../avs/l2/IAVSTaskHook.sol";
  */
 interface ITaskMailboxTypes {
     /**
-     * @notice Configuration for certificate verifiers
-     * @param curveType The curve type for the verifier
-     * @param verifier Address of the certificate verifier contract
+     * @notice Enum defining the type of consensus mechanism
      */
-    struct CertificateVerifierConfig {
-        IKeyRegistrarTypes.CurveType curveType;
-        address verifier;
+    enum ConsensusType {
+        NONE,
+        STAKE_PROPORTION_THRESHOLD
+    }
+
+    /**
+     * @notice Consensus configuration for task verification
+     * @param consensusType The type of consensus mechanism
+     * @param value Encoded consensus parameters based on consensusType
+     */
+    struct Consensus {
+        ConsensusType consensusType;
+        bytes value;
     }
 
     /**
@@ -33,18 +41,17 @@ interface ITaskMailboxTypes {
      * @param feeToken ERC20 token used for task fees
      * @param feeCollector Address to receive AVS fees
      * @param taskSLA Time (in seconds) within which the task must be completed
-     * @param stakeProportionThreshold Minimum proportion of executor operator set stake required to certify task execution (in basis points)
+     * @param consensus Consensus configuration for task verification
      * @param taskMetadata Additional metadata for task execution
      */
     struct ExecutorOperatorSetTaskConfig {
         // TODO: Pack storage efficiently.
-        // TODO: We need to support proportional, nominal, none and custom verifications.
         IKeyRegistrarTypes.CurveType curveType;
         IAVSTaskHook taskHook;
         IERC20 feeToken;
         address feeCollector;
         uint96 taskSLA;
-        uint16 stakeProportionThreshold;
+        Consensus consensus;
         bytes taskMetadata;
     }
 
@@ -144,6 +151,12 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when an operator set owner is invalid
     error InvalidOperatorSetOwner();
+
+    /// @notice Thrown when an invalid consensus type is provided
+    error InvalidConsensusType();
+
+    /// @notice Thrown when an invalid consensus value is provided
+    error InvalidConsensusValue();
 }
 
 /**
@@ -233,6 +246,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @notice Sets the task configuration for an executor operator set
      * @param operatorSet The operator set to configure
      * @param config Task configuration for the operator set
+     * @dev Fees can be switched off by setting the fee token to the zero address.
      */
     function setExecutorOperatorSetTaskConfig(
         OperatorSet memory operatorSet,
@@ -243,6 +257,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @notice Registers an executor operator set with the TaskMailbox
      * @param operatorSet The operator set to register
      * @param isRegistered Whether the operator set is registered
+     * @dev This function can be called to toggle the registration once the task config has been set.
      */
     function registerExecutorOperatorSet(OperatorSet memory operatorSet, bool isRegistered) external;
 
@@ -258,10 +273,10 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     /**
      * @notice Submits the result of a task execution
      * @param taskHash Unique identifier of the task
-     * @param cert Certificate proving the validity of the result
+     * @param executorCert Certificate proving the validity of the result
      * @param result Task execution result data
      */
-    function submitResult(bytes32 taskHash, bytes memory cert, bytes memory result) external;
+    function submitResult(bytes32 taskHash, bytes memory executorCert, bytes memory result) external;
 
     /**
      *
