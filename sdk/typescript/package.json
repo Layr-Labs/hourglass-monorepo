@@ -19,6 +19,11 @@
     "clean": "rm -rf dist generated typechain-types",
     "generate:proto": "mkdir -p generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --ts_out=grpc_js:generated -I proto proto/performer.proto",
     "typechain": "typechain --target ethers-v6 --out-dir typechain-types 'contracts/*.json'",
+    "docker:build": "docker build -t hourglass-performer .",
+    "docker:run": "docker run -p 8080:8080 hourglass-performer",
+    "docker:dev": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run clean && npm run build"
   },

@@ -636,6 +636,13 @@ export class SimpleSolidityWorker extends SolidityWorker<SampleContract, 'square
   private generateDockerfile(config: ProjectConfig): string {
     return `FROM node:18-alpine
 
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \\
+    adduser -S performer -u 1001
+
 WORKDIR /app
 
 # Copy package files
@@ -644,21 +651,31 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
-# Copy source code
-COPY . .
+# Copy built application
+COPY dist/ ./dist/
 
-# Build the application
-RUN npm run build
+# Create required directories
+RUN mkdir -p /app/logs /app/data && \\
+    chown -R performer:nodejs /app
+
+# Switch to non-root user
+USER performer
 
 # Expose port
 EXPOSE ${config.port}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \\
-  CMD node -e "const grpc = require('@grpc/grpc-js'); const client = new grpc.Client('localhost:${config.port}', grpc.credentials.createInsecure()); client.close();"
+    CMD node -e "const http = require('http'); \\
+        const options = { hostname: 'localhost', port: ${config.port}, path: '/health', timeout: 5000 }; \\
+        const req = http.request(options, (res) => { \\
+            process.exit(res.statusCode === 200 ? 0 : 1); \\
+        }); \\
+        req.on('error', () => process.exit(1)); \\
+        req.end();"
 
 # Run the application
-CMD ["npm", "start"]
+CMD ["node", "dist/performer.js"]
 `;
   }
 
@@ -676,6 +693,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=${config.port}
+      - LOG_LEVEL=info
+      - MAX_CONCURRENT_TASKS=20
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs${config.useTypeChain ? '\n      - ./contracts:/app/contracts' : ''}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "${config.port}"]
@@ -707,11 +729,12 @@ services:
     console.log('  npm run dev');
     
     console.log('\n📚 Available commands:');
-    console.log('  npm run build     - Build for production');
-    console.log('  npm run dev       - Start development server');
-    console.log('  npm start         - Start production server');
+    console.log('  npm run build        - Build for production');
+    console.log('  npm run dev          - Start development server');
+    console.log('  npm start            - Start production server');
     console.log('  npm run docker:build - Build Docker image');
     console.log('  npm run docker:run   - Run Docker container');
+    console.log('  npm run docker:dev   - Start with Docker Compose');
     
     if (config.useTypeChain) {
       console.log('  npm run typechain - Generate TypeChain types');
