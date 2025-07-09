@@ -1,3 +1,34 @@
+// Package web3signer provides a client for interacting with Web3Signer services.
+//
+// Web3Signer is a remote signing service that provides a REST API for signing
+// Ethereum transactions and messages. This client package provides a Go
+// interface for interacting with Web3Signer instances.
+//
+// The client supports the following operations:
+//   - Signing data with specified keys
+//   - Listing available public keys
+//   - Reloading signer keys
+//   - Health checking and status monitoring
+//
+// Example usage:
+//
+//	cfg := &web3signer.Config{
+//		BaseURL: "http://localhost:9000",
+//		Timeout: 30 * time.Second,
+//	}
+//	client := web3signer.NewClient(cfg, logger)
+//
+//	// Sign some data
+//	signature, err := client.Sign(ctx, "key-id", "0x48656c6c6f")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+//	// List available keys
+//	keys, err := client.ListPublicKeys(ctx)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
 package web3signer
 
 import (
@@ -7,24 +38,33 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 )
 
+// Client represents a Web3Signer HTTP client that provides methods for
+// interacting with a Web3Signer service instance.
 type Client struct {
+	// Logger is used for logging client operations and debugging
 	Logger     *zap.Logger
+	// httpClient is the underlying HTTP client used for requests
 	httpClient *http.Client
+	// config contains the client configuration including base URL and timeout
 	config     *Config
 }
 
+// Config holds the configuration for the Web3Signer client.
 type Config struct {
+	// BaseURL is the base URL of the Web3Signer service (e.g., "http://localhost:9000")
 	BaseURL string
+	// Timeout is the maximum duration for HTTP requests
 	Timeout time.Duration
 }
 
+// DefaultConfig returns a default configuration for the Web3Signer client.
+// The default configuration uses localhost:9000 as the base URL and a 30-second timeout.
 func DefaultConfig() *Config {
 	return &Config{
 		BaseURL: "http://localhost:9000",
@@ -32,6 +72,8 @@ func DefaultConfig() *Config {
 	}
 }
 
+// NewClient creates a new Web3Signer client with the given configuration and logger.
+// If cfg is nil, DefaultConfig() is used. If logger is nil, a no-op logger is used.
 func NewClient(cfg *Config, logger *zap.Logger) *Client {
 	if cfg == nil {
 		cfg = DefaultConfig()
@@ -54,12 +96,23 @@ func NewClient(cfg *Config, logger *zap.Logger) *Client {
 	}
 }
 
+// SetHttpClient allows setting a custom HTTP client for the Web3Signer client.
+// This is useful for testing or when custom HTTP client configuration is needed.
 func (c *Client) SetHttpClient(client *http.Client) {
 	c.httpClient = client
 }
 
+// Sign requests a signature for the given data using the specified key identifier.
+// The data should be hex-encoded. Returns the signature as a hex string.
+//
+// Parameters:
+//   - ctx: Context for the request
+//   - identifier: The key identifier/name to use for signing
+//   - data: Hex-encoded data to sign
+//
+// Returns the signature as a hex string or an error if the operation fails.
 func (c *Client) Sign(ctx context.Context, identifier, data string) (string, error) {
-	endpoint := path.Join("/api/v1/eth1/sign", identifier)
+	endpoint := fmt.Sprintf("/api/v1/eth1/sign/%s", identifier)
 
 	signRequest := SignRequest{
 		Data: data,
@@ -74,6 +127,8 @@ func (c *Client) Sign(ctx context.Context, identifier, data string) (string, err
 	return signature, nil
 }
 
+// ListPublicKeys retrieves all available public keys from the Web3Signer service.
+// Returns a slice of hex-encoded public key strings.
 func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 	var publicKeys []string
 	err := c.makeRequest(ctx, http.MethodGet, "/api/v1/eth1/publicKeys", nil, &publicKeys)
@@ -84,6 +139,8 @@ func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 	return publicKeys, nil
 }
 
+// Reload instructs the Web3Signer service to reload its key configuration.
+// This is useful when keys have been added or modified on the filesystem.
 func (c *Client) Reload(ctx context.Context) error {
 	var response interface{}
 	err := c.makeRequest(ctx, http.MethodPost, "/reload", nil, &response)
@@ -94,6 +151,8 @@ func (c *Client) Reload(ctx context.Context) error {
 	return nil
 }
 
+// Upcheck performs a basic health check on the Web3Signer service.
+// Returns the status string (typically "OK") or an error if the service is down.
 func (c *Client) Upcheck(ctx context.Context) (string, error) {
 	var status string
 	err := c.makeRequest(ctx, http.MethodGet, "/upcheck", nil, &status)
@@ -104,6 +163,9 @@ func (c *Client) Upcheck(ctx context.Context) (string, error) {
 	return status, nil
 }
 
+// HealthCheck performs a detailed health check on the Web3Signer service.
+// Returns a HealthCheck struct with detailed status information about various
+// service components (disk space, memory, etc.).
 func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
 	var healthCheck HealthCheck
 	err := c.makeRequest(ctx, http.MethodGet, "/healthcheck", nil, &healthCheck)
@@ -114,6 +176,8 @@ func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
 	return &healthCheck, nil
 }
 
+// makeRequest performs an HTTP request to the Web3Signer service.
+// This is a private method used internally by the client methods.
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, requestBody interface{}, responseBody interface{}) error {
 	url := c.buildURL(endpoint)
 
@@ -161,7 +225,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, reque
 		return c.handleErrorResponse(resp.StatusCode, responseData)
 	}
 
-	if responseBody != nil {
+	if responseBody != nil && len(responseData) > 0 {
 		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain") {
 			if strPtr, ok := responseBody.(*string); ok {
 				*strPtr = strings.Trim(string(responseData), "\"")
@@ -177,6 +241,8 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, reque
 	return nil
 }
 
+// handleErrorResponse converts HTTP error responses into appropriate Web3SignerError instances.
+// This is a private method used internally by makeRequest.
 func (c *Client) handleErrorResponse(statusCode int, responseData []byte) error {
 	errorMsg := string(responseData)
 
@@ -194,6 +260,8 @@ func (c *Client) handleErrorResponse(statusCode int, responseData []byte) error 
 	}
 }
 
+// buildURL constructs the full URL for an API endpoint.
+// This is a private method used internally by makeRequest.
 func (c *Client) buildURL(endpoint string) string {
 	baseURL := strings.TrimSuffix(c.config.BaseURL, "/")
 	endpoint = strings.TrimPrefix(endpoint, "/")

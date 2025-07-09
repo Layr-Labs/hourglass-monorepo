@@ -9,14 +9,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 func TestNewClient(t *testing.T) {
+	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+		Debug: false,
+	})
+	assert.Nil(t, loggerErr)
+	
 	t.Run("with default config", func(t *testing.T) {
-		client := NewClient(nil, nil)
+		client := NewClient(nil, l)
 		assert.NotNil(t, client)
 		assert.NotNil(t, client.config)
 		assert.Equal(t, "http://localhost:9000", client.config.BaseURL)
@@ -28,7 +33,7 @@ func TestNewClient(t *testing.T) {
 			BaseURL: "http://custom:8080",
 			Timeout: 10 * time.Second,
 		}
-		client := NewClient(cfg, zap.NewNop())
+		client := NewClient(cfg, l)
 		assert.NotNil(t, client)
 		assert.Equal(t, "http://custom:8080", client.config.BaseURL)
 		assert.Equal(t, 10*time.Second, client.config.Timeout)
@@ -55,7 +60,12 @@ func TestClient_Sign(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		signature, err := client.Sign(context.Background(), "test-key", "0x48656c6c6f2c20776f726c6421")
 		require.NoError(t, err)
@@ -65,11 +75,16 @@ func TestClient_Sign(t *testing.T) {
 	t.Run("key not found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("Public Key not found"))
+			_, _ = w.Write([]byte("Public Key not found"))
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		_, err := client.Sign(context.Background(), "non-existent-key", "0x48656c6c6f2c20776f726c6421")
 		require.Error(t, err)
@@ -82,11 +97,16 @@ func TestClient_Sign(t *testing.T) {
 	t.Run("bad request", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("Bad request format"))
+			_, _ = w.Write([]byte("Bad request format"))
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		_, err := client.Sign(context.Background(), "test-key", "invalid-data")
 		require.Error(t, err)
@@ -110,11 +130,16 @@ func TestClient_ListPublicKeys(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(expectedKeys)
+			_ = json.NewEncoder(w).Encode(expectedKeys)
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		keys, err := client.ListPublicKeys(context.Background())
 		require.NoError(t, err)
@@ -124,11 +149,16 @@ func TestClient_ListPublicKeys(t *testing.T) {
 	t.Run("server error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Internal server error"))
+			_, _ = w.Write([]byte("Internal server error"))
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		_, err := client.ListPublicKeys(context.Background())
 		require.Error(t, err)
@@ -149,7 +179,12 @@ func TestClient_Reload(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		err := client.Reload(context.Background())
 		require.NoError(t, err)
@@ -158,11 +193,16 @@ func TestClient_Reload(t *testing.T) {
 	t.Run("reload error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Failed to reload"))
+			_, _ = w.Write([]byte("Failed to reload"))
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		err := client.Reload(context.Background())
 		require.Error(t, err)
@@ -177,11 +217,16 @@ func TestClient_Upcheck(t *testing.T) {
 
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`"OK"`))
+			_, _ = w.Write([]byte(`"OK"`))
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		status, err := client.Upcheck(context.Background())
 		require.NoError(t, err)
@@ -206,11 +251,16 @@ func TestClient_HealthCheck(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(expectedHealthCheck)
+			_ = json.NewEncoder(w).Encode(expectedHealthCheck)
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		health, err := client.HealthCheck(context.Background())
 		require.NoError(t, err)
@@ -231,11 +281,16 @@ func TestClient_HealthCheck(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(expectedHealthCheck)
+			_ = json.NewEncoder(w).Encode(expectedHealthCheck)
 		}))
 		defer server.Close()
 
-		client := NewClient(&Config{BaseURL: server.URL}, zap.NewNop())
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+		
+		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		_, err := client.HealthCheck(context.Background())
 		require.Error(t, err)
@@ -247,7 +302,12 @@ func TestClient_HealthCheck(t *testing.T) {
 }
 
 func TestClient_buildURL(t *testing.T) {
-	client := NewClient(&Config{BaseURL: "http://localhost:9000"}, zap.NewNop())
+	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+		Debug: false,
+	})
+	assert.Nil(t, loggerErr)
+	
+	client := NewClient(&Config{BaseURL: "http://localhost:9000"}, l)
 
 	tests := []struct {
 		name     string
