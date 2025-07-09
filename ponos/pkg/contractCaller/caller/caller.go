@@ -2,7 +2,6 @@ package caller
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
@@ -18,16 +17,15 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
+	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 	"math/big"
@@ -35,7 +33,6 @@ import (
 )
 
 type ContractCallerConfig struct {
-	PrivateKey          string
 	AVSRegistrarAddress string
 	TaskMailboxAddress  string
 	KeyRegistrarAddress string
@@ -53,11 +50,13 @@ type ContractCaller struct {
 	config             *ContractCallerConfig
 	logger             *zap.Logger
 	coreContracts      *config.CoreContractAddresses
+	signer             transactionsigner.TransactionSigner
 }
 
 func NewContractCallerFromEthereumClient(
 	config *ContractCallerConfig,
 	ethClient *ethereum.Client,
+	signer transactionsigner.TransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	client, err := ethClient.GetEthereumContractCaller()
@@ -65,12 +64,13 @@ func NewContractCallerFromEthereumClient(
 		return nil, err
 	}
 
-	return NewContractCaller(config, client, logger)
+	return NewContractCaller(config, client, signer, logger)
 }
 
 func NewContractCaller(
 	cfg *ContractCallerConfig,
 	ethclient *ethclient.Client,
+	signer transactionsigner.TransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	logger.Sugar().Debugw("Creating contract caller",
@@ -134,6 +134,7 @@ func NewContractCaller(
 		coreContracts:      coreContracts,
 		config:             cfg,
 		logger:             logger,
+		signer:             signer,
 	}, nil
 }
 
@@ -171,7 +172,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	aggCert *aggregation.AggregatedBN254Certificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -235,7 +236,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
+	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
 }
 
 func (cc *ContractCaller) SubmitECDSATaskResultRetryable(
@@ -272,7 +273,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	aggCert *aggregation.AggregatedECDSACertificate,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -311,7 +312,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SubmitTaskSession")
+	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
 }
 
 func (cc *ContractCaller) CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error) {
@@ -460,23 +461,12 @@ func (cc *ContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSet
 }
 
 func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*types.Receipt, error) {
-	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to get public key ECDSA")
-	}
-
-	address := crypto.PubkeyToAddress(*publicKeyECDSA)
-
-	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
+	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
+
+	address := cc.signer.GetFromAddress()
 
 	tx, err := cc.taskMailbox.CreateTask(noSendTxOpts, ITaskMailbox.ITaskMailboxTypesTaskParams{
 		RefundCollector: address,
@@ -491,7 +481,7 @@ func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress 
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "PublishMessageToInbox")
+	receipt, err := cc.signAndSendTransaction(ctx, tx, "PublishMessageToInbox")
 	if err != nil {
 		return nil, fmt.Errorf("failed to send transaction: %w", err)
 	}
@@ -589,7 +579,7 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(
 	operatorSetId uint32,
 	curveType config.CurveType,
 ) (*types.Receipt, error) {
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -617,7 +607,7 @@ func (cc *ContractCaller) ConfigureAVSOperatorSet(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ConfigureOperatorSet")
+	return cc.signAndSendTransaction(ctx, tx, "ConfigureOperatorSet")
 }
 
 func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
@@ -628,7 +618,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 	sigBytes []byte,
 	keyData []byte,
 ) (*types.Receipt, error) {
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -658,7 +648,7 @@ func (cc *ContractCaller) RegisterKeyWithKeyRegistrar(
 		return nil, fmt.Errorf("failed to register key: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ConfigureOperatorSet")
+	return cc.signAndSendTransaction(ctx, tx, "ConfigureOperatorSet")
 }
 
 func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
@@ -709,7 +699,7 @@ func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId
 }
 
 func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress common.Address, allocationDelay uint32, metadataUri string) (*types.Receipt, error) {
-	noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -735,7 +725,7 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "RegisterAsOperator")
+	return cc.signAndSendTransaction(ctx, tx, "RegisterAsOperator")
 }
 
 func encodeString(str string) ([]byte, error) {
@@ -759,7 +749,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	operatorSetIds []uint32,
 	socket string,
 ) (*types.Receipt, error) {
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -779,57 +769,18 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "registerOperatorWithAvs")
+	return cc.signAndSendTransaction(ctx, tx, "registerOperatorWithAvs")
 }
 
 //nolint:unused
 func (cc *ContractCaller) getTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
-	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	chainId, err := cc.ethclient.ChainID(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chain ID: %w", err)
-	}
-
-	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transactor: %w", err)
-	}
-
-	auth.Context = ctx
-
-	return auth, nil
+	return cc.signer.GetTransactOpts(ctx)
 }
 
-func (cc *ContractCaller) buildNoSendOptsWithPrivateKey(ctx context.Context) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {
-	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(cc.config.PrivateKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
-	noSendTxOpts, err := cc.buildTxOps(ctx, privateKey)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build transaction options: %w", err)
-	}
-	return noSendTxOpts, privateKey, nil
+func (cc *ContractCaller) buildTransactionOpts(ctx context.Context) (*bind.TransactOpts, error) {
+	return cc.signer.GetTransactOpts(ctx)
 }
 
-func (cc *ContractCaller) buildTxOps(ctx context.Context, pk *ecdsa.PrivateKey) (*bind.TransactOpts, error) {
-	chainId, err := cc.ethclient.ChainID(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get chain ID: %w", err)
-	}
-
-	opts, err := bind.NewKeyedTransactorWithChainID(pk, chainId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transactor: %w", err)
-	}
-	opts.NoSend = true
-	return opts, nil
-}
 
 func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
 	opts := &bind.CallOpts{
@@ -979,7 +930,7 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 		}
 		mailboxCfg.CurveType = solidityCurveType
 
-		noSendTxOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+		noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to build transaction options: %w", err)
 		}
@@ -995,7 +946,7 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 		if err != nil {
 			return fmt.Errorf("failed to create transaction: %w", err)
 		}
-		receipt, err := cc.EstimateGasPriceAndLimitAndSendTx(ctx, noSendTxOpts.From, tx, privateKey, "SetupTaskMailboxForAvs")
+		receipt, err := cc.signAndSendTransaction(ctx, tx, "SetupTaskMailboxForAvs")
 		if err != nil {
 			return fmt.Errorf("failed to send transaction: %w", err)
 		}
@@ -1023,7 +974,7 @@ func (cc *ContractCaller) DelegateToOperator(
 		zap.String("delegationApprover", approver.String()),
 	)
 
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -1043,7 +994,7 @@ func (cc *ContractCaller) DelegateToOperator(
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "DelegateToOperator")
+	return cc.signAndSendTransaction(ctx, tx, "DelegateToOperator")
 }
 
 func (cc *ContractCaller) ModifyAllocations(
@@ -1068,7 +1019,7 @@ func (cc *ContractCaller) ModifyAllocations(
 		zap.String("operatorAddress", operatorAddress.String()),
 	)
 
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -1086,7 +1037,7 @@ func (cc *ContractCaller) ModifyAllocations(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "ModifyAllocations")
+	return cc.signAndSendTransaction(ctx, tx, "ModifyAllocations")
 }
 
 func (cc *ContractCaller) VerifyECDSACertificate(
@@ -1097,7 +1048,7 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 	globalTableRootReferenceTimestamp uint32,
 	threshold uint16,
 ) (*types.Receipt, error) {
-	txOpts, privateKey, err := cc.buildNoSendOptsWithPrivateKey(ctx)
+	txOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
@@ -1138,5 +1089,5 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
-	return cc.EstimateGasPriceAndLimitAndSendTx(ctx, txOpts.From, tx, privateKey, "VerifyECDSACertificate")
+	return cc.signAndSendTransaction(ctx, tx, "VerifyECDSACertificate")
 }

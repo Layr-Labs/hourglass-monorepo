@@ -18,6 +18,17 @@ var (
 	FallbackGasTipCap = big.NewInt(15000000000)
 )
 
+// signAndSendTransaction signs a transaction and sends it to the network using the TransactionSigner
+func (cc *ContractCaller) signAndSendTransaction(ctx context.Context, tx *ethereumTypes.Transaction, operation string) (*ethereumTypes.Receipt, error) {
+	cc.logger.Sugar().Infow("Signing and sending transaction",
+		zap.String("operation", operation),
+		zap.String("from", cc.signer.GetFromAddress().Hex()),
+		zap.String("to", tx.To().Hex()),
+	)
+
+	return cc.signer.SignAndSendTransaction(ctx, tx)
+}
+
 func (cc *ContractCaller) EstimateGasPriceAndLimitAndSendTx(
 	ctx context.Context,
 	fromAddress common.Address,
