@@ -90,7 +90,6 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
     function _createValidTaskParams() internal view returns (TaskParams memory) {
         return TaskParams({
             refundCollector: refundCollector,
-            avsFee: avsFee,
             executorOperatorSet: OperatorSet(avs, executorOperatorSetId),
             payload: bytes("test payload")
         });
@@ -470,10 +469,12 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.assume(fuzzPayload.length > 0);
         // We create two tasks in this test, so need at least 2x the fee
         vm.assume(fuzzAvsFee <= mockToken.balanceOf(creator) / 2);
+        
+        // Set the mock hook to return the fuzzed fee
+        mockTaskHook.setDefaultFee(fuzzAvsFee);
 
         TaskParams memory taskParams = TaskParams({
             refundCollector: fuzzRefundCollector,
-            avsFee: fuzzAvsFee,
             executorOperatorSet: OperatorSet(avs, executorOperatorSetId),
             payload: fuzzPayload
         });
@@ -530,8 +531,10 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     }
 
     function test_createTask_ZeroFee() public {
+        // Set the mock hook to return 0 fee
+        mockTaskHook.setDefaultFee(0);
+        
         TaskParams memory taskParams = _createValidTaskParams();
-        taskParams.avsFee = 0;
 
         uint256 balanceBefore = mockToken.balanceOf(address(taskMailbox));
 
@@ -557,7 +560,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
 
         TaskParams memory taskParams = TaskParams({
             refundCollector: refundCollector,
-            avsFee: 1 ether,
             executorOperatorSet: operatorSet,
             payload: bytes("test payload")
         });
@@ -599,7 +601,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
 
         TaskParams memory taskParams = TaskParams({
             refundCollector: refundCollector,
-            avsFee: avsFee,
             executorOperatorSet: operatorSet,
             payload: bytes("test payload")
         });
@@ -630,7 +631,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         // Set up attack parameters
         TaskParams memory taskParams = TaskParams({
             refundCollector: refundCollector,
-            avsFee: avsFee,
             executorOperatorSet: operatorSet,
             payload: bytes("test payload")
         });
@@ -916,7 +916,6 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Create a task
         TaskParams memory taskParams = TaskParams({
             refundCollector: refundCollector,
-            avsFee: avsFee,
             executorOperatorSet: operatorSet,
             payload: bytes("test payload")
         });
@@ -965,7 +964,6 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         // Create a task
         TaskParams memory taskParams = TaskParams({
             refundCollector: refundCollector,
-            avsFee: avsFee,
             executorOperatorSet: operatorSet,
             payload: bytes("test payload")
         });
