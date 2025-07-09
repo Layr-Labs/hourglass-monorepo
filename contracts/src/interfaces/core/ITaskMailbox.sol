@@ -157,6 +157,9 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when an invalid consensus value is provided
     error InvalidConsensusValue();
+
+    /// @notice Thrown when a certificate has an empty signature
+    error EmptyCertificateSignature();
 }
 
 /**

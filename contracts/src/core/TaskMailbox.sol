@@ -12,6 +12,7 @@ import {
 import {IBaseCertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBaseCertificateVerifier.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet, OperatorSetLib} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
+import {SemVerMixin} from "@eigenlayer-contracts/src/contracts/mixins/SemVerMixin.sol";
 import {ReentrancyGuardUpgradeable} from "@openzeppelin-upgrades/contracts/security/ReentrancyGuardUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin-upgrades/contracts/access/OwnableUpgradeable.sol";
 import {Initializable} from "@openzeppelin-upgrades/contracts/proxy/utils/Initializable.sol";
@@ -22,7 +23,6 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IAVSTaskHook} from "../interfaces/avs/l2/IAVSTaskHook.sol";
 import {ITaskMailbox} from "../interfaces/core/ITaskMailbox.sol";
 import {TaskMailboxStorage} from "./TaskMailboxStorage.sol";
-import {SemVerMixin} from "@eigenlayer-contracts/src/contracts/mixins/SemVerMixin.sol";
 
 /**
  * @title TaskMailbox
@@ -175,8 +175,6 @@ contract TaskMailbox is
 
     /// @inheritdoc ITaskMailbox
     function submitResult(bytes32 taskHash, bytes memory executorCert, bytes memory result) external nonReentrant {
-        // TODO: Handle case of anyone submitting a result with empty signature in the certificate.
-
         Task storage task = _tasks[taskHash];
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.CREATED, InvalidTaskStatus(TaskStatus.CREATED, status));
@@ -306,6 +304,10 @@ contract TaskMailbox is
                 // BN254 Certificate verification
                 IBN254CertificateVerifierTypes.BN254Certificate memory bn254Cert =
                     abi.decode(executorCert, (IBN254CertificateVerifierTypes.BN254Certificate));
+
+                // Validate that the certificate has a non-empty signature
+                require(bn254Cert.signature.X != 0 && bn254Cert.signature.Y != 0, EmptyCertificateSignature());
+
                 isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                     executorOperatorSet, bn254Cert, totalStakeProportionThresholds
                 );
@@ -313,6 +315,10 @@ contract TaskMailbox is
                 // ECDSA Certificate verification
                 IECDSACertificateVerifierTypes.ECDSACertificate memory ecdsaCert =
                     abi.decode(executorCert, (IECDSACertificateVerifierTypes.ECDSACertificate));
+
+                // Validate that the certificate has a non-empty signature
+                require(ecdsaCert.sig.length > 0, EmptyCertificateSignature());
+
                 isCertificateValid = IECDSACertificateVerifier(ECDSA_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                     executorOperatorSet, ecdsaCert, totalStakeProportionThresholds
                 );
