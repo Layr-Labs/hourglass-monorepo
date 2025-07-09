@@ -17,6 +17,7 @@ const (
 type PerformerImage struct {
 	Repository string
 	Tag        string
+	Digest     string
 }
 
 // PerformerStatus represents the health status of a performer container
@@ -59,6 +60,7 @@ type PerformerMetadata struct {
 	ResourceID         string
 	Status             PerformerResourceStatus
 	ArtifactRegistry   string
+	ArtifactTag        string
 	ArtifactDigest     string
 	ContainerHealthy   bool
 	ApplicationHealthy bool

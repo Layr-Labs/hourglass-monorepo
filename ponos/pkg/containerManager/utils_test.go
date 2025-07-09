@@ -52,6 +52,7 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 		avsAddress    string
 		imageRepo     string
 		imageTag      string
+		imageDigest   string
 		containerPort int
 		networkName   string
 	}{
@@ -60,6 +61,7 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 			avsAddress:    "0x1234567890abcdef",
 			imageRepo:     "myregistry/myapp",
 			imageTag:      "v1.0.0",
+			imageDigest:   "",
 			containerPort: 8080,
 			networkName:   "avs-network",
 		},
@@ -68,8 +70,18 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 			avsAddress:    "0xabcdef1234567890",
 			imageRepo:     "myapp",
 			imageTag:      "latest",
+			imageDigest:   "",
 			containerPort: 3000,
 			networkName:   "custom-network",
+		},
+		{
+			name:          "with image digest",
+			avsAddress:    "0xfedcba9876543210",
+			imageRepo:     "myregistry/myapp",
+			imageTag:      "",
+			imageDigest:   "sha256:abcdef1234567890",
+			containerPort: 8080,
+			networkName:   "avs-network",
 		},
 	}
 
@@ -79,6 +91,7 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 				tt.avsAddress,
 				tt.imageRepo,
 				tt.imageTag,
+				tt.imageDigest,
 				tt.containerPort,
 				tt.networkName,
 			)
@@ -93,7 +106,12 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 				"Hostname should follow pattern 'avs-performer-{6-digit-hash}-{timestamp}'")
 
 			// Verify image format
-			expectedImage := tt.imageRepo + ":" + tt.imageTag
+			var expectedImage string
+			if tt.imageDigest != "" {
+				expectedImage = tt.imageRepo + "@" + tt.imageDigest
+			} else {
+				expectedImage = tt.imageRepo + ":" + tt.imageTag
+			}
 			assert.Equal(t, expectedImage, config.Image)
 
 			// Verify port configuration

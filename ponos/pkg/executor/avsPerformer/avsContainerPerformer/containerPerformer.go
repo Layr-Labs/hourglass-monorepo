@@ -292,6 +292,7 @@ func (aps *AvsContainerPerformer) Initialize(ctx context.Context) error {
 			aps.config.AvsAddress,
 			aps.config.Image.Repository,
 			aps.config.Image.Tag,
+			aps.config.Image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
 		),
@@ -471,7 +472,9 @@ func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetC
 		zap.String("avsAddress", aps.config.AvsAddress),
 		zap.String("performerID", targetContainer.performerID),
 		zap.String("previousContainerID", targetContainer.info.ID),
-		zap.String("image", fmt.Sprintf("%s:%s", targetContainer.image.Repository, targetContainer.image.Tag)),
+		zap.String("repository", targetContainer.image.Repository),
+		zap.String("tag", targetContainer.image.Tag),
+		zap.String("digest", targetContainer.image.Digest),
 	)
 
 	// Create and start new container
@@ -482,6 +485,7 @@ func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetC
 			aps.config.AvsAddress,
 			targetContainer.image.Repository,
 			targetContainer.image.Tag,
+			targetContainer.image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
 		), containerManager.NewDefaultAvsPerformerLivenessConfig())
@@ -620,6 +624,7 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 			aps.config.AvsAddress,
 			image.Repository,
 			image.Tag,
+			image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
 		), containerManager.NewDefaultAvsPerformerLivenessConfig())
@@ -1387,7 +1392,8 @@ func convertPerformerContainer(avsAddress string, container *PerformerContainer)
 		AvsAddress:         avsAddress,
 		Status:             container.status,
 		ArtifactRegistry:   container.image.Repository,
-		ArtifactDigest:     container.image.Tag,
+		ArtifactTag:        container.image.Tag,
+		ArtifactDigest:     container.image.Digest,
 		ContainerHealthy:   container.performerHealth.ContainerIsHealthy,
 		ApplicationHealthy: container.performerHealth.ApplicationIsHealthy,
 		LastHealthCheck:    container.performerHealth.LastHealthCheck,
