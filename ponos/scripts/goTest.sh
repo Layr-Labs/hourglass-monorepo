@@ -31,6 +31,7 @@ function runWeb3SignerContainer() {
         --name $name \
         -v ./internal/testData/web3signer:/web3signer \
         -i \
+        -p "${port}:${port}" \
         --detach \
          consensys/web3signer:develop \
             --key-store-path=/web3signer/keys \

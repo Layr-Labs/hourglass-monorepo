@@ -3,7 +3,6 @@ package web3signer
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,7 +18,7 @@ func TestNewClient(t *testing.T) {
 		Debug: false,
 	})
 	assert.Nil(t, loggerErr)
-	
+
 	t.Run("with default config", func(t *testing.T) {
 		client := NewClient(nil, l)
 		assert.NotNil(t, client)
@@ -40,97 +39,33 @@ func TestNewClient(t *testing.T) {
 	})
 }
 
-func TestClient_Sign(t *testing.T) {
-	t.Run("successful sign", func(t *testing.T) {
-		expectedSignature := "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9"
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "POST", r.Method)
-			assert.Equal(t, "/api/v1/eth1/sign/test-key", r.URL.Path)
-			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-			var req SignRequest
-			err := json.NewDecoder(r.Body).Decode(&req)
-			require.NoError(t, err)
-			assert.Equal(t, "0x48656c6c6f2c20776f726c6421", req.Data)
-
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `"%s"`, expectedSignature)
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-		
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		signature, err := client.Sign(context.Background(), "test-key", "0x48656c6c6f2c20776f726c6421")
-		require.NoError(t, err)
-		assert.Equal(t, expectedSignature, signature)
-	})
-
-	t.Run("key not found", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte("Public Key not found"))
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-		
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		_, err := client.Sign(context.Background(), "non-existent-key", "0x48656c6c6f2c20776f726c6421")
-		require.Error(t, err)
-
-		var web3SignerErr *Web3SignerError
-		assert.ErrorAs(t, err, &web3SignerErr)
-		assert.Equal(t, 404, web3SignerErr.Code)
-	})
-
-	t.Run("bad request", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = w.Write([]byte("Bad request format"))
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-		
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		_, err := client.Sign(context.Background(), "test-key", "invalid-data")
-		require.Error(t, err)
-
-		var web3SignerErr *Web3SignerError
-		assert.ErrorAs(t, err, &web3SignerErr)
-		assert.Equal(t, 400, web3SignerErr.Code)
-	})
-}
-
-func TestClient_ListPublicKeys(t *testing.T) {
-	t.Run("successful list", func(t *testing.T) {
-		expectedKeys := []string{
-			"0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
-			"0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+func TestClient_EthAccounts(t *testing.T) {
+	t.Run("successful accounts request", func(t *testing.T) {
+		expectedAccounts := []string{
+			"0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+			"0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
 		}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "GET", r.Method)
-			assert.Equal(t, "/api/v1/eth1/publicKeys", r.URL.Path)
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			var req JSONRPCRequest
+			err := json.NewDecoder(r.Body).Decode(&req)
+			require.NoError(t, err)
+			assert.Equal(t, "2.0", req.Jsonrpc)
+			assert.Equal(t, "eth_accounts", req.Method)
+			assert.Nil(t, req.Params)
+
+			response := JSONRPCResponse{
+				Jsonrpc: "2.0",
+				Result:  expectedAccounts,
+				ID:      req.ID,
+			}
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(expectedKeys)
+			_ = json.NewEncoder(w).Encode(response)
 		}))
 		defer server.Close()
 
@@ -138,12 +73,12 @@ func TestClient_ListPublicKeys(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
-		keys, err := client.ListPublicKeys(context.Background())
+		accounts, err := client.EthAccounts(context.Background())
 		require.NoError(t, err)
-		assert.Equal(t, expectedKeys, keys)
+		assert.Equal(t, expectedAccounts, accounts)
 	})
 
 	t.Run("server error", func(t *testing.T) {
@@ -157,10 +92,10 @@ func TestClient_ListPublicKeys(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
-		_, err := client.ListPublicKeys(context.Background())
+		_, err := client.EthAccounts(context.Background())
 		require.Error(t, err)
 
 		var web3SignerErr *Web3SignerError
@@ -169,13 +104,34 @@ func TestClient_ListPublicKeys(t *testing.T) {
 	})
 }
 
-func TestClient_Reload(t *testing.T) {
-	t.Run("successful reload", func(t *testing.T) {
+func TestClient_EthSign(t *testing.T) {
+	t.Run("successful sign", func(t *testing.T) {
+		expectedSignature := "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9"
+
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			assert.Equal(t, "/reload", r.URL.Path)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
+			var req JSONRPCRequest
+			err := json.NewDecoder(r.Body).Decode(&req)
+			require.NoError(t, err)
+			assert.Equal(t, "2.0", req.Jsonrpc)
+			assert.Equal(t, "eth_sign", req.Method)
+
+			params, ok := req.Params.([]interface{})
+			require.True(t, ok)
+			assert.Equal(t, "0x1234567890abcdef", params[0])
+			assert.Equal(t, "0x48656c6c6f2c20776f726c6421", params[1])
+
+			response := JSONRPCResponse{
+				Jsonrpc: "2.0",
+				Result:  expectedSignature,
+				ID:      req.ID,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(response)
 		}))
 		defer server.Close()
 
@@ -183,17 +139,32 @@ func TestClient_Reload(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
-		err := client.Reload(context.Background())
+		signature, err := client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
 		require.NoError(t, err)
+		assert.Equal(t, expectedSignature, signature)
 	})
 
-	t.Run("reload error", func(t *testing.T) {
+	t.Run("account not found", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("Failed to reload"))
+			var req JSONRPCRequest
+			err := json.NewDecoder(r.Body).Decode(&req)
+			require.NoError(t, err)
+
+			response := JSONRPCResponse{
+				Jsonrpc: "2.0",
+				Error: &JSONRPCError{
+					Code:    -32000,
+					Message: "Account not found",
+				},
+				ID: req.ID,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(response)
 		}))
 		defer server.Close()
 
@@ -201,23 +172,50 @@ func TestClient_Reload(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
-		err := client.Reload(context.Background())
+		_, err := client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
 		require.Error(t, err)
+
+		var web3SignerErr *Web3SignerError
+		assert.ErrorAs(t, err, &web3SignerErr)
+		assert.Equal(t, -32000, web3SignerErr.Code)
 	})
 }
 
-func TestClient_Upcheck(t *testing.T) {
-	t.Run("successful upcheck", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "GET", r.Method)
-			assert.Equal(t, "/upcheck", r.URL.Path)
+func TestClient_EthSignTransaction(t *testing.T) {
+	t.Run("successful transaction sign", func(t *testing.T) {
+		expectedSignature := "0xf86c808504a817c800825208943535353535353535353535353535353535353535880de0b6b3a76400008025a028ef61340bd939bc2195fe537567866003e1a15d3c71ff63e1590620aa636276a067cbe9d8997f761aecb703304b3800ccf555c9f3dc64214b297fb1966a3b6d83"
 
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+			var req JSONRPCRequest
+			err := json.NewDecoder(r.Body).Decode(&req)
+			require.NoError(t, err)
+			assert.Equal(t, "2.0", req.Jsonrpc)
+			assert.Equal(t, "eth_signTransaction", req.Method)
+
+			params, ok := req.Params.([]interface{})
+			require.True(t, ok)
+			require.Len(t, params, 1)
+
+			txData, ok := params[0].(map[string]interface{})
+			require.True(t, ok)
+			assert.Equal(t, "0x1234567890abcdef", txData["from"])
+			assert.Equal(t, "0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23", txData["to"])
+
+			response := JSONRPCResponse{
+				Jsonrpc: "2.0",
+				Result:  expectedSignature,
+				ID:      req.ID,
+			}
+
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`"OK"`))
+			_ = json.NewEncoder(w).Encode(response)
 		}))
 		defer server.Close()
 
@@ -225,12 +223,20 @@ func TestClient_Upcheck(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
-		status, err := client.Upcheck(context.Background())
+		transaction := map[string]interface{}{
+			"to":       "0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23",
+			"value":    "0x1",
+			"gasPrice": "0x9184e72a000",
+			"gas":      "0x5208",
+			"nonce":    "0x0",
+		}
+
+		signature, err := client.EthSignTransaction(context.Background(), "0x1234567890abcdef", transaction)
 		require.NoError(t, err)
-		assert.Equal(t, "OK", status)
+		assert.Equal(t, expectedSignature, signature)
 	})
 }
 
@@ -259,7 +265,7 @@ func TestClient_HealthCheck(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		health, err := client.HealthCheck(context.Background())
@@ -270,18 +276,9 @@ func TestClient_HealthCheck(t *testing.T) {
 	})
 
 	t.Run("unhealthy status", func(t *testing.T) {
-		expectedHealthCheck := HealthCheck{
-			Status: "DOWN",
-			Checks: []StatusCheck{
-				{ID: "disk-space", Status: "DOWN"},
-			},
-			Outcome: "DOWN",
-		}
-
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(w).Encode(expectedHealthCheck)
+			_, _ = w.Write([]byte("Service unavailable"))
 		}))
 		defer server.Close()
 
@@ -289,7 +286,7 @@ func TestClient_HealthCheck(t *testing.T) {
 			Debug: false,
 		})
 		assert.Nil(t, loggerErr)
-		
+
 		client := NewClient(&Config{BaseURL: server.URL}, l)
 
 		_, err := client.HealthCheck(context.Background())
@@ -301,12 +298,56 @@ func TestClient_HealthCheck(t *testing.T) {
 	})
 }
 
+func TestClient_Reload(t *testing.T) {
+	t.Run("successful reload", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/reload", r.URL.Path)
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+
+		client := NewClient(&Config{BaseURL: server.URL}, l)
+
+		err := client.Reload(context.Background())
+		require.NoError(t, err)
+	})
+
+	t.Run("reload error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("Failed to reload"))
+		}))
+		defer server.Close()
+
+		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+			Debug: false,
+		})
+		assert.Nil(t, loggerErr)
+
+		client := NewClient(&Config{BaseURL: server.URL}, l)
+
+		err := client.Reload(context.Background())
+		require.Error(t, err)
+
+		var web3SignerErr *Web3SignerError
+		assert.ErrorAs(t, err, &web3SignerErr)
+		assert.Equal(t, 500, web3SignerErr.Code)
+	})
+}
+
 func TestClient_buildURL(t *testing.T) {
 	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
 		Debug: false,
 	})
 	assert.Nil(t, loggerErr)
-	
+
 	client := NewClient(&Config{BaseURL: "http://localhost:9000"}, l)
 
 	tests := []struct {
@@ -315,19 +356,19 @@ func TestClient_buildURL(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "endpoint with leading slash",
-			endpoint: "/api/v1/eth1/publicKeys",
-			expected: "http://localhost:9000/api/v1/eth1/publicKeys",
+			name:     "JSON-RPC endpoint",
+			endpoint: "",
+			expected: "http://localhost:9000",
 		},
 		{
-			name:     "endpoint without leading slash",
-			endpoint: "api/v1/eth1/publicKeys",
-			expected: "http://localhost:9000/api/v1/eth1/publicKeys",
+			name:     "REST endpoint with leading slash",
+			endpoint: "/healthcheck",
+			expected: "http://localhost:9000/healthcheck",
 		},
 		{
-			name:     "root endpoint",
-			endpoint: "/",
-			expected: "http://localhost:9000/",
+			name:     "REST endpoint without leading slash",
+			endpoint: "reload",
+			expected: "http://localhost:9000/reload",
 		},
 	}
 
@@ -341,10 +382,10 @@ func TestClient_buildURL(t *testing.T) {
 
 func TestWeb3SignerError_Error(t *testing.T) {
 	err := &Web3SignerError{
-		Code:    404,
-		Message: "Public key not found",
+		Code:    -32000,
+		Message: "Account not found",
 	}
 
-	expected := "Web3Signer error 404: Public key not found"
+	expected := "Web3Signer error -32000: Account not found"
 	assert.Equal(t, expected, err.Error())
 }

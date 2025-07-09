@@ -5,6 +5,60 @@ import (
 	"fmt"
 )
 
+// JSONRPCRequest represents a JSON-RPC 2.0 request.
+type JSONRPCRequest struct {
+	// Jsonrpc specifies the JSON-RPC version (always "2.0")
+	Jsonrpc string `json:"jsonrpc"`
+	// Method is the JSON-RPC method name
+	Method string `json:"method"`
+	// Params contains the method parameters
+	Params interface{} `json:"params,omitempty"`
+	// ID is a unique identifier for the request
+	ID int64 `json:"id"`
+}
+
+// JSONRPCResponse represents a JSON-RPC 2.0 response.
+type JSONRPCResponse struct {
+	// Jsonrpc specifies the JSON-RPC version (always "2.0")
+	Jsonrpc string `json:"jsonrpc"`
+	// Result contains the method result (present on success)
+	Result interface{} `json:"result,omitempty"`
+	// Error contains error information (present on error)
+	Error *JSONRPCError `json:"error,omitempty"`
+	// ID is the request identifier
+	ID int64 `json:"id"`
+}
+
+// JSONRPCError represents a JSON-RPC 2.0 error.
+type JSONRPCError struct {
+	// Code is the error code
+	Code int `json:"code"`
+	// Message is the error message
+	Message string `json:"message"`
+	// Data contains additional error data
+	Data interface{} `json:"data,omitempty"`
+}
+
+// EthSignTransactionRequest represents the parameters for eth_signTransaction.
+type EthSignTransactionRequest struct {
+	// From is the account to sign with
+	From string `json:"from"`
+	// To is the destination address
+	To string `json:"to,omitempty"`
+	// Gas is the gas limit
+	Gas string `json:"gas,omitempty"`
+	// GasPrice is the gas price
+	GasPrice string `json:"gasPrice,omitempty"`
+	// Value is the value to send
+	Value string `json:"value,omitempty"`
+	// Data is the transaction data
+	Data string `json:"data,omitempty"`
+	// Nonce is the transaction nonce
+	Nonce string `json:"nonce,omitempty"`
+	// ChainID is the chain ID
+	ChainID string `json:"chainId,omitempty"`
+}
+
 // SignRequest represents a request to sign data sent to the Web3Signer service.
 type SignRequest struct {
 	// Data is the hex-encoded data to be signed
@@ -20,17 +74,17 @@ type SignResponse struct {
 // HealthCheck represents the detailed health status of the Web3Signer service.
 type HealthCheck struct {
 	// Status is the overall status of the service ("UP" or "DOWN")
-	Status  string        `json:"status"`
+	Status string `json:"status"`
 	// Checks contains detailed status information for individual components
-	Checks  []StatusCheck `json:"checks"`
+	Checks []StatusCheck `json:"checks"`
 	// Outcome is the final health determination ("UP" or "DOWN")
-	Outcome string        `json:"outcome"`
+	Outcome string `json:"outcome"`
 }
 
 // StatusCheck represents the status of an individual component within the health check.
 type StatusCheck struct {
 	// ID is the identifier of the component being checked (e.g., "disk-space", "memory")
-	ID     string `json:"id"`
+	ID string `json:"id"`
 	// Status is the status of this component ("UP" or "DOWN")
 	Status string `json:"status"`
 }
@@ -38,7 +92,7 @@ type StatusCheck struct {
 // Web3SignerError represents an error response from the Web3Signer service.
 type Web3SignerError struct {
 	// Code is the HTTP status code associated with the error
-	Code    int    `json:"code"`
+	Code int `json:"code"`
 	// Message is the error message describing what went wrong
 	Message string `json:"message"`
 }
@@ -51,11 +105,11 @@ func (e *Web3SignerError) Error() string {
 // Web3SignerResponse represents a generic response structure from the Web3Signer service.
 type Web3SignerResponse struct {
 	// Status indicates the response status
-	Status string           `json:"status,omitempty"`
+	Status string `json:"status,omitempty"`
 	// Data contains the response payload
-	Data   interface{}      `json:"data,omitempty"`
+	Data interface{} `json:"data,omitempty"`
 	// Error contains error information if the request failed
-	Error  *Web3SignerError `json:"error,omitempty"`
+	Error *Web3SignerError `json:"error,omitempty"`
 }
 
 // IsError returns true if the response contains an error.

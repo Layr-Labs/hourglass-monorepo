@@ -1,11 +1,11 @@
 // Package web3signer provides a client for interacting with Web3Signer services.
 //
-// Web3Signer is a remote signing service that provides a REST API for signing
+// Web3Signer is a remote signing service that provides a JSON-RPC API for signing
 // Ethereum transactions and messages. This client package provides a Go
-// interface for interacting with Web3Signer instances.
+// interface for interacting with Web3Signer instances via JSON-RPC.
 //
 // The client supports the following operations:
-//   - Signing data with specified keys
+//   - Signing transactions with specified keys
 //   - Listing available public keys
 //   - Reloading signer keys
 //   - Health checking and status monitoring
@@ -18,14 +18,14 @@
 //	}
 //	client := web3signer.NewClient(cfg, logger)
 //
-//	// Sign some data
-//	signature, err := client.Sign(ctx, "key-id", "0x48656c6c6f")
+//	// Sign a transaction
+//	signature, err := client.EthSignTransaction(ctx, "0x1234...", txData)
 //	if err != nil {
 //		log.Fatal(err)
 //	}
 //
-//	// List available keys
-//	keys, err := client.ListPublicKeys(ctx)
+//	// List available accounts
+//	accounts, err := client.EthAccounts(ctx)
 //	if err != nil {
 //		log.Fatal(err)
 //	}
@@ -39,20 +39,23 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 )
 
-// Client represents a Web3Signer HTTP client that provides methods for
+// Client represents a Web3Signer JSON-RPC client that provides methods for
 // interacting with a Web3Signer service instance.
 type Client struct {
 	// Logger is used for logging client operations and debugging
-	Logger     *zap.Logger
+	Logger *zap.Logger
 	// httpClient is the underlying HTTP client used for requests
 	httpClient *http.Client
 	// config contains the client configuration including base URL and timeout
-	config     *Config
+	config *Config
+	// requestID is used to generate unique request IDs for JSON-RPC calls
+	requestID int64
 }
 
 // Config holds the configuration for the Web3Signer client.
@@ -93,6 +96,7 @@ func NewClient(cfg *Config, logger *zap.Logger) *Client {
 		Logger:     logger,
 		httpClient: httpClient,
 		config:     cfg,
+		requestID:  0,
 	}
 }
 
@@ -102,168 +106,237 @@ func (c *Client) SetHttpClient(client *http.Client) {
 	c.httpClient = client
 }
 
-// Sign requests a signature for the given data using the specified key identifier.
-// The data should be hex-encoded. Returns the signature as a hex string.
-//
-// Parameters:
-//   - ctx: Context for the request
-//   - identifier: The key identifier/name to use for signing
-//   - data: Hex-encoded data to sign
-//
-// Returns the signature as a hex string or an error if the operation fails.
-func (c *Client) Sign(ctx context.Context, identifier, data string) (string, error) {
-	endpoint := fmt.Sprintf("/api/v1/eth1/sign/%s", identifier)
-
-	signRequest := SignRequest{
-		Data: data,
+// EthAccounts returns a list of accounts available for signing.
+// This corresponds to the eth_accounts JSON-RPC method.
+func (c *Client) EthAccounts(ctx context.Context) ([]string, error) {
+	var result []string
+	err := c.makeJSONRPCRequest(ctx, "eth_accounts", nil, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get accounts: %w", err)
 	}
+	return result, nil
+}
 
-	var signature string
-	err := c.makeRequest(ctx, http.MethodPost, endpoint, signRequest, &signature)
+// EthSignTransaction signs a transaction and returns the signature.
+// This corresponds to the eth_signTransaction JSON-RPC method.
+func (c *Client) EthSignTransaction(ctx context.Context, from string, transaction map[string]interface{}) (string, error) {
+	// Add the from field to the transaction object
+	transaction["from"] = from
+	params := []interface{}{transaction}
+	var result string
+	err := c.makeJSONRPCRequest(ctx, "eth_signTransaction", params, &result)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %w", err)
+	}
+	return result, nil
+}
+
+// EthSign signs data with the specified account.
+// This corresponds to the eth_sign JSON-RPC method.
+func (c *Client) EthSign(ctx context.Context, account string, data string) (string, error) {
+	params := []interface{}{account, data}
+	var result string
+	err := c.makeJSONRPCRequest(ctx, "eth_sign", params, &result)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign data: %w", err)
 	}
+	return result, nil
+}
 
-	return signature, nil
+// EthSignTypedData signs typed data with the specified account.
+// This corresponds to the eth_signTypedData JSON-RPC method.
+func (c *Client) EthSignTypedData(ctx context.Context, account string, typedData interface{}) (string, error) {
+	params := []interface{}{account, typedData}
+	var result string
+	err := c.makeJSONRPCRequest(ctx, "eth_signTypedData", params, &result)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign typed data: %w", err)
+	}
+	return result, nil
 }
 
 // ListPublicKeys retrieves all available public keys from the Web3Signer service.
-// Returns a slice of hex-encoded public key strings.
+// This is a convenience method that calls EthAccounts.
 func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
-	var publicKeys []string
-	err := c.makeRequest(ctx, http.MethodGet, "/api/v1/eth1/publicKeys", nil, &publicKeys)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list public keys: %w", err)
-	}
+	return c.EthAccounts(ctx)
+}
 
-	return publicKeys, nil
+// Sign signs data with the specified account using eth_sign.
+// This is a convenience method that calls EthSign.
+func (c *Client) Sign(ctx context.Context, account string, data string) (string, error) {
+	return c.EthSign(ctx, account, data)
 }
 
 // Reload instructs the Web3Signer service to reload its key configuration.
-// This is useful when keys have been added or modified on the filesystem.
+// This uses the REST API endpoint as JSON-RPC doesn't have a reload method.
 func (c *Client) Reload(ctx context.Context) error {
-	var response interface{}
-	err := c.makeRequest(ctx, http.MethodPost, "/reload", nil, &response)
+	url := c.buildURL("/reload")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to reload signer keys: %w", err)
+		return fmt.Errorf("failed to create reload request: %w", err)
+	}
+
+	c.Logger.Sugar().Debugw("Making Web3Signer reload request", zap.String("url", url))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("reload request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return &Web3SignerError{
+			Code:    resp.StatusCode,
+			Message: fmt.Sprintf("Reload failed: %s", string(body)),
+		}
 	}
 
 	return nil
 }
 
-// Upcheck performs a basic health check on the Web3Signer service.
-// Returns the status string (typically "OK") or an error if the service is down.
-func (c *Client) Upcheck(ctx context.Context) (string, error) {
-	var status string
-	err := c.makeRequest(ctx, http.MethodGet, "/upcheck", nil, &status)
+// HealthCheck performs a detailed health check on the Web3Signer service.
+// This uses the REST API endpoint as JSON-RPC doesn't have a health check method.
+func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
+	url := c.buildURL("/healthcheck")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to check server status: %w", err)
+		return nil, fmt.Errorf("failed to create health check request: %w", err)
 	}
 
-	return status, nil
-}
+	c.Logger.Sugar().Debugw("Making Web3Signer health check request", zap.String("url", url))
 
-// HealthCheck performs a detailed health check on the Web3Signer service.
-// Returns a HealthCheck struct with detailed status information about various
-// service components (disk space, memory, etc.).
-func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
-	var healthCheck HealthCheck
-	err := c.makeRequest(ctx, http.MethodGet, "/healthcheck", nil, &healthCheck)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check server health: %w", err)
+		return nil, fmt.Errorf("health check request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &Web3SignerError{
+			Code:    resp.StatusCode,
+			Message: fmt.Sprintf("Health check failed: %s", string(body)),
+		}
+	}
+
+	var healthCheck HealthCheck
+	if err := json.NewDecoder(resp.Body).Decode(&healthCheck); err != nil {
+		return nil, fmt.Errorf("failed to decode health check response: %w", err)
 	}
 
 	return &healthCheck, nil
 }
 
-// makeRequest performs an HTTP request to the Web3Signer service.
-// This is a private method used internally by the client methods.
-func (c *Client) makeRequest(ctx context.Context, method, endpoint string, requestBody interface{}, responseBody interface{}) error {
-	url := c.buildURL(endpoint)
+// makeJSONRPCRequest performs a JSON-RPC request to the Web3Signer service.
+func (c *Client) makeJSONRPCRequest(ctx context.Context, method string, params interface{}, result interface{}) error {
+	// Generate unique request ID
+	id := atomic.AddInt64(&c.requestID, 1)
 
-	var body io.Reader
-	if requestBody != nil {
-		jsonData, err := json.Marshal(requestBody)
-		if err != nil {
-			return fmt.Errorf("failed to marshal request body: %w", err)
-		}
-		body = bytes.NewReader(jsonData)
+	// Create JSON-RPC request
+	request := JSONRPCRequest{
+		Jsonrpc: "2.0",
+		Method:  method,
+		Params:  params,
+		ID:      id,
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	// Marshal request to JSON
+	requestData, err := json.Marshal(request)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
-	if requestBody != nil {
-		req.Header.Set("Content-Type", "application/json")
+	// Create HTTP request
+	url := c.buildURL("")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(requestData))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %w", err)
 	}
+
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	c.Logger.Sugar().Debugw("Making Web3Signer request",
+	c.Logger.Sugar().Debugw("Making Web3Signer JSON-RPC request",
 		zap.String("method", method),
 		zap.String("url", url),
+		zap.Any("params", params),
 	)
 
+	// Make HTTP request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("JSON-RPC request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Read response body
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	c.Logger.Sugar().Debugw("Web3Signer response received",
+	c.Logger.Sugar().Debugw("Web3Signer JSON-RPC response received",
 		zap.Int("status_code", resp.StatusCode),
 		zap.String("response", string(responseData)),
 	)
 
+	// Check HTTP status
 	if resp.StatusCode >= 400 {
-		return c.handleErrorResponse(resp.StatusCode, responseData)
+		return c.handleHTTPError(resp.StatusCode, responseData)
 	}
 
-	if responseBody != nil && len(responseData) > 0 {
-		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain") {
-			if strPtr, ok := responseBody.(*string); ok {
-				*strPtr = strings.Trim(string(responseData), "\"")
-				return nil
-			}
+	// Parse JSON-RPC response
+	var jsonRPCResponse JSONRPCResponse
+	if err := json.Unmarshal(responseData, &jsonRPCResponse); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON-RPC response: %w", err)
+	}
+
+	// Check for JSON-RPC error
+	if jsonRPCResponse.Error != nil {
+		return &Web3SignerError{
+			Code:    jsonRPCResponse.Error.Code,
+			Message: jsonRPCResponse.Error.Message,
+		}
+	}
+
+	// Unmarshal result if provided
+	if result != nil && jsonRPCResponse.Result != nil {
+		resultData, err := json.Marshal(jsonRPCResponse.Result)
+		if err != nil {
+			return fmt.Errorf("failed to marshal result: %w", err)
 		}
 
-		if err := json.Unmarshal(responseData, responseBody); err != nil {
-			return fmt.Errorf("failed to unmarshal response: %w", err)
+		if err := json.Unmarshal(resultData, result); err != nil {
+			return fmt.Errorf("failed to unmarshal result: %w", err)
 		}
 	}
 
 	return nil
 }
 
-// handleErrorResponse converts HTTP error responses into appropriate Web3SignerError instances.
-// This is a private method used internally by makeRequest.
-func (c *Client) handleErrorResponse(statusCode int, responseData []byte) error {
+// handleHTTPError converts HTTP error responses into appropriate Web3SignerError instances.
+func (c *Client) handleHTTPError(statusCode int, responseData []byte) error {
 	errorMsg := string(responseData)
 
-	switch statusCode {
-	case 400:
-		return &Web3SignerError{Code: 400, Message: fmt.Sprintf("Bad request format: %s", errorMsg)}
-	case 404:
-		return &Web3SignerError{Code: 404, Message: fmt.Sprintf("Public key not found: %s", errorMsg)}
-	case 500:
-		return &Web3SignerError{Code: 500, Message: fmt.Sprintf("Internal Web3Signer server error: %s", errorMsg)}
-	case 503:
-		return &Web3SignerError{Code: 503, Message: fmt.Sprintf("Service unavailable: %s", errorMsg)}
-	default:
-		return &Web3SignerError{Code: statusCode, Message: fmt.Sprintf("HTTP error %d: %s", statusCode, errorMsg)}
+	return &Web3SignerError{
+		Code:    statusCode,
+		Message: fmt.Sprintf("HTTP error %d: %s", statusCode, errorMsg),
 	}
 }
 
 // buildURL constructs the full URL for an API endpoint.
-// This is a private method used internally by makeRequest.
 func (c *Client) buildURL(endpoint string) string {
 	baseURL := strings.TrimSuffix(c.config.BaseURL, "/")
+
+	// For JSON-RPC requests, we don't append anything to the base URL
+	if endpoint == "" {
+		return baseURL
+	}
+
+	// For REST endpoints like /reload and /healthcheck
 	endpoint = strings.TrimPrefix(endpoint, "/")
 	return fmt.Sprintf("%s/%s", baseURL, endpoint)
 }
