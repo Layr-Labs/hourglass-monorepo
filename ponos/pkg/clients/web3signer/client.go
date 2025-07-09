@@ -166,7 +166,6 @@ func (c *Client) Sign(ctx context.Context, account string, data string) (string,
 	return c.EthSign(ctx, account, data)
 }
 
-
 // makeJSONRPCRequest performs a JSON-RPC request to the Web3Signer service.
 func (c *Client) makeJSONRPCRequest(ctx context.Context, method string, params interface{}, result interface{}) error {
 	// Generate unique request ID
@@ -263,4 +262,3 @@ func (c *Client) handleHTTPError(statusCode int, responseData []byte) error {
 		Message: fmt.Sprintf("HTTP error %d: %s", statusCode, errorMsg),
 	}
 }
-

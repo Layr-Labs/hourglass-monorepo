@@ -144,7 +144,6 @@ func testEthSignTransactionIntegration(t *testing.T, client *Client, account str
 	t.Logf("Signature: %s", signature)
 }
 
-
 // Helper functions
 
 // createTestClient creates a Web3Signer client configured for testing

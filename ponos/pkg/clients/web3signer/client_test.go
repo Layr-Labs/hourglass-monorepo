@@ -271,9 +271,6 @@ func TestClient_EthSignTransaction(t *testing.T) {
 	})
 }
 
-
-
-
 func TestWeb3SignerError_Error(t *testing.T) {
 	err := &Web3SignerError{
 		Code:    -32000,
