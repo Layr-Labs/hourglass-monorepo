@@ -12,10 +12,9 @@
 //
 // Example usage:
 //
-//	cfg := &web3signer.Config{
-//		BaseURL: "http://localhost:9000",
-//		Timeout: 30 * time.Second,
-//	}
+//	cfg := web3signer.DefaultConfig()
+//	cfg.BaseURL = "http://localhost:9000"
+//	cfg.Timeout = 30 * time.Second
 //	client := web3signer.NewClient(cfg, logger)
 //
 //	// Sign a transaction
@@ -76,14 +75,14 @@ func DefaultConfig() *Config {
 }
 
 // NewClient creates a new Web3Signer client with the given configuration and logger.
-// If cfg is nil, DefaultConfig() is used. If logger is nil, a no-op logger is used.
-func NewClient(cfg *Config, logger *zap.Logger) *Client {
+// Both cfg and logger must be non-nil. Use DefaultConfig() if you want default configuration.
+func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 	if cfg == nil {
-		cfg = DefaultConfig()
+		return nil, fmt.Errorf("cfg cannot be nil")
 	}
 
 	if logger == nil {
-		logger = zap.NewNop()
+		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
 	httpClient := &http.Client{
@@ -97,7 +96,7 @@ func NewClient(cfg *Config, logger *zap.Logger) *Client {
 		httpClient: httpClient,
 		config:     cfg,
 		requestID:  0,
-	}
+	}, nil
 }
 
 // SetHttpClient allows setting a custom HTTP client for the Web3Signer client.
@@ -167,68 +166,6 @@ func (c *Client) Sign(ctx context.Context, account string, data string) (string,
 	return c.EthSign(ctx, account, data)
 }
 
-// Reload instructs the Web3Signer service to reload its key configuration.
-// This uses the REST API endpoint as JSON-RPC doesn't have a reload method.
-func (c *Client) Reload(ctx context.Context) error {
-	url := c.buildURL("/reload")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create reload request: %w", err)
-	}
-
-	c.Logger.Sugar().Debugw("Making Web3Signer reload request", zap.String("url", url))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("reload request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return &Web3SignerError{
-			Code:    resp.StatusCode,
-			Message: fmt.Sprintf("Reload failed: %s", string(body)),
-		}
-	}
-
-	return nil
-}
-
-// HealthCheck performs a detailed health check on the Web3Signer service.
-// This uses the REST API endpoint as JSON-RPC doesn't have a health check method.
-func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
-	url := c.buildURL("/healthcheck")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create health check request: %w", err)
-	}
-
-	c.Logger.Sugar().Debugw("Making Web3Signer health check request", zap.String("url", url))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("health check request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, &Web3SignerError{
-			Code:    resp.StatusCode,
-			Message: fmt.Sprintf("Health check failed: %s", string(body)),
-		}
-	}
-
-	var healthCheck HealthCheck
-	if err := json.NewDecoder(resp.Body).Decode(&healthCheck); err != nil {
-		return nil, fmt.Errorf("failed to decode health check response: %w", err)
-	}
-
-	return &healthCheck, nil
-}
 
 // makeJSONRPCRequest performs a JSON-RPC request to the Web3Signer service.
 func (c *Client) makeJSONRPCRequest(ctx context.Context, method string, params interface{}, result interface{}) error {
@@ -250,7 +187,7 @@ func (c *Client) makeJSONRPCRequest(ctx context.Context, method string, params i
 	}
 
 	// Create HTTP request
-	url := c.buildURL("")
+	url := strings.TrimSuffix(c.config.BaseURL, "/")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(requestData))
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP request: %w", err)
@@ -327,16 +264,3 @@ func (c *Client) handleHTTPError(statusCode int, responseData []byte) error {
 	}
 }
 
-// buildURL constructs the full URL for an API endpoint.
-func (c *Client) buildURL(endpoint string) string {
-	baseURL := strings.TrimSuffix(c.config.BaseURL, "/")
-
-	// For JSON-RPC requests, we don't append anything to the base URL
-	if endpoint == "" {
-		return baseURL
-	}
-
-	// For REST endpoints like /reload and /healthcheck
-	endpoint = strings.TrimPrefix(endpoint, "/")
-	return fmt.Sprintf("%s/%s", baseURL, endpoint)
-}

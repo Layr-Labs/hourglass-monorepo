@@ -52,13 +52,6 @@ func TestWeb3SignerIntegration(t *testing.T) {
 		testEthSignTransactionIntegration(t, client, accounts[0])
 	})
 
-	t.Run("HealthCheck", func(t *testing.T) {
-		testHealthCheckIntegration(t, client)
-	})
-
-	t.Run("ReloadKeys", func(t *testing.T) {
-		testReloadKeysIntegration(t, client)
-	})
 }
 
 // testEthAccountsIntegration tests listing accounts from the Web3Signer service
@@ -151,31 +144,6 @@ func testEthSignTransactionIntegration(t *testing.T, client *Client, account str
 	t.Logf("Signature: %s", signature)
 }
 
-// testHealthCheckIntegration tests the health check endpoint
-func testHealthCheckIntegration(t *testing.T, client *Client) {
-	ctx := context.Background()
-
-	health, err := client.HealthCheck(ctx)
-	require.NoError(t, err, "Failed to perform health check")
-
-	assert.NotNil(t, health, "Health check result should not be nil")
-	assert.Equal(t, "UP", health.Status, "Service should be UP")
-	assert.Equal(t, "UP", health.Outcome, "Health outcome should be UP")
-	assert.NotEmpty(t, health.Checks, "Health checks should not be empty")
-
-	t.Logf("Health check successful: Status=%s, Outcome=%s, Checks=%d",
-		health.Status, health.Outcome, len(health.Checks))
-}
-
-// testReloadKeysIntegration tests the key reload functionality
-func testReloadKeysIntegration(t *testing.T, client *Client) {
-	ctx := context.Background()
-
-	err := client.Reload(ctx)
-	require.NoError(t, err, "Failed to reload keys")
-
-	t.Logf("Key reload successful")
-}
 
 // Helper functions
 
@@ -183,12 +151,12 @@ func testReloadKeysIntegration(t *testing.T, client *Client) {
 func createTestClient(t *testing.T) *Client {
 	logger := zaptest.NewLogger(t)
 
-	config := &Config{
-		BaseURL: fmt.Sprintf("http://localhost:%s", web3signerL1Port),
-		Timeout: 10 * time.Second,
-	}
+	config := DefaultConfig()
+	config.BaseURL = fmt.Sprintf("http://localhost:%s", web3signerL1Port)
+	config.Timeout = 10 * time.Second
 
-	client := NewClient(config, logger)
+	client, err := NewClient(config, logger)
+	require.NoError(t, err)
 	return client
 }
 

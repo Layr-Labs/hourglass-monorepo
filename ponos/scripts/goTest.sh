@@ -46,7 +46,7 @@ runWeb3SignerContainer $web3signerL1Name $web3signerL1Port $web3signerL1ChainId
 runWeb3SignerContainer $web3signerL2Name $web3signerL2Port $web3signerL2ChainId
 
 echo "Sleeping to let web3signer containers start..."
-sleep 5
+sleep 3
 
 
 # run the tests

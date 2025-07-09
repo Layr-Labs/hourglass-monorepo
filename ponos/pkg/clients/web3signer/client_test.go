@@ -20,7 +20,8 @@ func TestNewClient(t *testing.T) {
 	assert.Nil(t, loggerErr)
 
 	t.Run("with default config", func(t *testing.T) {
-		client := NewClient(nil, l)
+		client, err := NewClient(DefaultConfig(), l)
+		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.NotNil(t, client.config)
 		assert.Equal(t, "http://localhost:9000", client.config.BaseURL)
@@ -32,10 +33,25 @@ func TestNewClient(t *testing.T) {
 			BaseURL: "http://custom:8080",
 			Timeout: 10 * time.Second,
 		}
-		client := NewClient(cfg, l)
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "http://custom:8080", client.config.BaseURL)
 		assert.Equal(t, 10*time.Second, client.config.Timeout)
+	})
+
+	t.Run("with nil config", func(t *testing.T) {
+		client, err := NewClient(nil, l)
+		assert.Error(t, err)
+		assert.Nil(t, client)
+		assert.Contains(t, err.Error(), "cfg cannot be nil")
+	})
+
+	t.Run("with nil logger", func(t *testing.T) {
+		client, err := NewClient(DefaultConfig(), nil)
+		assert.Error(t, err)
+		assert.Nil(t, client)
+		assert.Contains(t, err.Error(), "logger cannot be nil")
 	})
 }
 
@@ -74,7 +90,10 @@ func TestClient_EthAccounts(t *testing.T) {
 		})
 		assert.Nil(t, loggerErr)
 
-		client := NewClient(&Config{BaseURL: server.URL}, l)
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 
 		accounts, err := client.EthAccounts(context.Background())
 		require.NoError(t, err)
@@ -93,9 +112,12 @@ func TestClient_EthAccounts(t *testing.T) {
 		})
 		assert.Nil(t, loggerErr)
 
-		client := NewClient(&Config{BaseURL: server.URL}, l)
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 
-		_, err := client.EthAccounts(context.Background())
+		_, err = client.EthAccounts(context.Background())
 		require.Error(t, err)
 
 		var web3SignerErr *Web3SignerError
@@ -140,7 +162,10 @@ func TestClient_EthSign(t *testing.T) {
 		})
 		assert.Nil(t, loggerErr)
 
-		client := NewClient(&Config{BaseURL: server.URL}, l)
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 
 		signature, err := client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
 		require.NoError(t, err)
@@ -173,9 +198,12 @@ func TestClient_EthSign(t *testing.T) {
 		})
 		assert.Nil(t, loggerErr)
 
-		client := NewClient(&Config{BaseURL: server.URL}, l)
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 
-		_, err := client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
+		_, err = client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
 		require.Error(t, err)
 
 		var web3SignerErr *Web3SignerError
@@ -224,7 +252,10 @@ func TestClient_EthSignTransaction(t *testing.T) {
 		})
 		assert.Nil(t, loggerErr)
 
-		client := NewClient(&Config{BaseURL: server.URL}, l)
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
 
 		transaction := map[string]interface{}{
 			"to":       "0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23",
@@ -240,145 +271,8 @@ func TestClient_EthSignTransaction(t *testing.T) {
 	})
 }
 
-func TestClient_HealthCheck(t *testing.T) {
-	t.Run("healthy status", func(t *testing.T) {
-		expectedHealthCheck := HealthCheck{
-			Status: "UP",
-			Checks: []StatusCheck{
-				{ID: "disk-space", Status: "UP"},
-				{ID: "memory", Status: "UP"},
-			},
-			Outcome: "UP",
-		}
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "GET", r.Method)
-			assert.Equal(t, "/healthcheck", r.URL.Path)
 
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(expectedHealthCheck)
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		health, err := client.HealthCheck(context.Background())
-		require.NoError(t, err)
-		assert.Equal(t, expectedHealthCheck.Status, health.Status)
-		assert.Equal(t, expectedHealthCheck.Outcome, health.Outcome)
-		assert.Len(t, health.Checks, 2)
-	})
-
-	t.Run("unhealthy status", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = w.Write([]byte("Service unavailable"))
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		_, err := client.HealthCheck(context.Background())
-		require.Error(t, err)
-
-		var web3SignerErr *Web3SignerError
-		assert.ErrorAs(t, err, &web3SignerErr)
-		assert.Equal(t, 503, web3SignerErr.Code)
-	})
-}
-
-func TestClient_Reload(t *testing.T) {
-	t.Run("successful reload", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, "POST", r.Method)
-			assert.Equal(t, "/reload", r.URL.Path)
-
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		err := client.Reload(context.Background())
-		require.NoError(t, err)
-	})
-
-	t.Run("reload error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("Failed to reload"))
-		}))
-		defer server.Close()
-
-		l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-			Debug: false,
-		})
-		assert.Nil(t, loggerErr)
-
-		client := NewClient(&Config{BaseURL: server.URL}, l)
-
-		err := client.Reload(context.Background())
-		require.Error(t, err)
-
-		var web3SignerErr *Web3SignerError
-		assert.ErrorAs(t, err, &web3SignerErr)
-		assert.Equal(t, 500, web3SignerErr.Code)
-	})
-}
-
-func TestClient_buildURL(t *testing.T) {
-	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
-		Debug: false,
-	})
-	assert.Nil(t, loggerErr)
-
-	client := NewClient(&Config{BaseURL: "http://localhost:9000"}, l)
-
-	tests := []struct {
-		name     string
-		endpoint string
-		expected string
-	}{
-		{
-			name:     "JSON-RPC endpoint",
-			endpoint: "",
-			expected: "http://localhost:9000",
-		},
-		{
-			name:     "REST endpoint with leading slash",
-			endpoint: "/healthcheck",
-			expected: "http://localhost:9000/healthcheck",
-		},
-		{
-			name:     "REST endpoint without leading slash",
-			endpoint: "reload",
-			expected: "http://localhost:9000/reload",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := client.buildURL(tt.endpoint)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
 
 func TestWeb3SignerError_Error(t *testing.T) {
 	err := &Web3SignerError{
