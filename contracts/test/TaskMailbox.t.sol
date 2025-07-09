@@ -1088,13 +1088,29 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
             nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
         });
 
-        // This should pass since only both X and Y being zero is considered empty
+        // This should now fail since any coordinate being zero is invalid
         vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
         taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
+    }
 
-        // Verify task was verified
-        TaskStatus status = taskMailbox.getTaskStatus(taskHash);
-        assertEq(uint8(status), uint8(TaskStatus.VERIFIED));
+    function test_Revert_WhenBN254CertificateHasEmptySignature_OnlyYZero() public {
+        // Advance time by 1 second to pass TimestampAtCreation check
+        vm.warp(block.timestamp + 1);
+
+        // Create BN254 certificate with partially empty signature (X=1, Y=0)
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: taskHash,
+            signature: BN254.G1Point(1, 0), // Partially empty signature
+            apk: BN254.G2Point([uint256(1), uint256(2)], [uint256(3), uint256(4)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // This should also fail since any coordinate being zero is invalid
+        vm.prank(aggregator);
+        vm.expectRevert(EmptyCertificateSignature.selector);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
     }
 
     function test_Revert_WhenECDSACertificateHasEmptySignature() public {

@@ -306,7 +306,7 @@ contract TaskMailbox is
                     abi.decode(executorCert, (IBN254CertificateVerifierTypes.BN254Certificate));
 
                 // Validate that the certificate has a non-empty signature
-                require(bn254Cert.signature.X != 0 || bn254Cert.signature.Y != 0, EmptyCertificateSignature());
+                require(bn254Cert.signature.X != 0 && bn254Cert.signature.Y != 0, EmptyCertificateSignature());
 
                 isCertificateValid = IBN254CertificateVerifier(BN254_CERTIFICATE_VERIFIER).verifyCertificateProportion(
                     executorOperatorSet, bn254Cert, totalStakeProportionThresholds
