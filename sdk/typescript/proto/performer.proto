@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package eigenlayer.hourglass.v1.performer;
+
+option go_package = "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer";
+
+// PerformerService is the gRPC service interface for AVS performers
+service PerformerService {
+  // ExecuteTask executes a task and returns the result
+  rpc ExecuteTask(TaskRequest) returns (TaskResponse);
+  
+  // HealthCheck returns the current status of the performer
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // StartSync initializes synchronization with the performer
+  rpc StartSync(StartSyncRequest) returns (StartSyncResponse);
+}
+
+// TaskRequest represents a task to be executed
+message TaskRequest {
+  // Unique identifier for the task
+  string task_id = 1;
+  
+  // Task payload as bytes
+  bytes payload = 2;
+}
+
+// TaskResponse represents the result of task execution
+message TaskResponse {
+  // Unique identifier for the task (must match request)
+  string task_id = 1;
+  
+  // Task result as bytes
+  bytes result = 2;
+}
+
+// HealthCheckRequest is an empty request for health checks
+message HealthCheckRequest {}
+
+// PerformerStatus represents the current status of the performer
+enum PerformerStatus {
+  READY_FOR_TASK = 0;
+  BUSY = 1;
+  ERROR = 2;
+  STARTING = 3;
+  STOPPING = 4;
+}
+
+// HealthCheckResponse contains the performer's current status
+message HealthCheckResponse {
+  // Current performer status
+  PerformerStatus status = 1;
+}
+
+// StartSyncRequest is an empty request for synchronization
+message StartSyncRequest {}
+
+// StartSyncResponse is an empty response for synchronization
+message StartSyncResponse {}
