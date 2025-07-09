@@ -149,11 +149,18 @@ The TypeScript SDK provides the same capabilities as the Go performer framework:
 - Added Docker-related npm scripts for building, running, and managing containers
 - Updated CLI tool to generate container-ready projects with proper Docker configurations
 
-### Milestone 8: Documentation & Templates
-- [ ] Create comprehensive README with quick start guide
-- [ ] Write API documentation
-- [ ] Create project templates for common use cases
-- [ ] Add troubleshooting guide
+### Milestone 8: Documentation & Templates ✅ COMPLETED
+- [x] Create comprehensive README with quick start guide
+- [x] Write API documentation
+- [x] Create project templates for common use cases
+- [x] Add troubleshooting guide
+
+**Completed Tasks:**
+- Created comprehensive README.md with quick start guide, API reference, examples, and troubleshooting
+- Built detailed API documentation in docs/API.md covering all classes, methods, types, and configuration
+- Created comprehensive troubleshooting guide in docs/TROUBLESHOOTING.md with common issues and solutions
+- Project templates are built into the CLI tool with basic, Solidity, and advanced performer options
+- Updated execution plan to track all milestone completions
 
 ### Milestone 9: Packaging & Distribution
 - [ ] Prepare npm package
