@@ -34,8 +34,8 @@ func (e *Web3SignerError) Error() string {
 }
 
 type Web3SignerResponse struct {
-	Status string      `json:"status,omitempty"`
-	Data   interface{} `json:"data,omitempty"`
+	Status string           `json:"status,omitempty"`
+	Data   interface{}      `json:"data,omitempty"`
 	Error  *Web3SignerError `json:"error,omitempty"`
 }
 

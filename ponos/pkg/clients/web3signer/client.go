@@ -36,7 +36,7 @@ func NewClient(cfg *Config, logger *zap.Logger) *Client {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
-	
+
 	if logger == nil {
 		logger = zap.NewNop()
 	}
@@ -60,7 +60,7 @@ func (c *Client) SetHttpClient(client *http.Client) {
 
 func (c *Client) Sign(ctx context.Context, identifier, data string) (string, error) {
 	endpoint := path.Join("/api/v1/eth1/sign", identifier)
-	
+
 	signRequest := SignRequest{
 		Data: data,
 	}
@@ -116,7 +116,7 @@ func (c *Client) HealthCheck(ctx context.Context) (*HealthCheck, error) {
 
 func (c *Client) makeRequest(ctx context.Context, method, endpoint string, requestBody interface{}, responseBody interface{}) error {
 	url := c.buildURL(endpoint)
-	
+
 	var body io.Reader
 	if requestBody != nil {
 		jsonData, err := json.Marshal(requestBody)
@@ -168,7 +168,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, reque
 				return nil
 			}
 		}
-		
+
 		if err := json.Unmarshal(responseData, responseBody); err != nil {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
@@ -179,7 +179,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, reque
 
 func (c *Client) handleErrorResponse(statusCode int, responseData []byte) error {
 	errorMsg := string(responseData)
-	
+
 	switch statusCode {
 	case 400:
 		return &Web3SignerError{Code: 400, Message: fmt.Sprintf("Bad request format: %s", errorMsg)}
