@@ -109,13 +109,25 @@ export abstract class BaseWorker implements IWorker {
   /**
    * Simple start method for one-line usage
    */
-  async start(port: number = 8080): Promise<void> {
+  async start(port?: number): Promise<void> {
     const { PerformerServer } = await import('../server/performerServer');
+    const { loadEnvironmentConfig, printConfigSummary } = await import('../utils/envConfig');
+    
+    // Load environment configuration
+    const envConfig = loadEnvironmentConfig();
+    
+    // Override port if provided
+    if (port) {
+      envConfig.port = port;
+    }
+    
+    // Print configuration summary
+    printConfigSummary(envConfig);
     
     const server = new PerformerServer(this, {
-      port,
-      timeout: 10000,
-      debug: true,
+      port: envConfig.port,
+      timeout: envConfig.timeout,
+      debug: envConfig.debug,
     });
 
     // Set up graceful shutdown
@@ -123,7 +135,7 @@ export abstract class BaseWorker implements IWorker {
 
     try {
       await server.start();
-      console.log(`🚀 Performer is running on port ${port}!`);
+      console.log(`🚀 Performer is running on port ${envConfig.port}!`);
     } catch (error) {
       console.error('❌ Failed to start server:', error);
       process.exit(1);
