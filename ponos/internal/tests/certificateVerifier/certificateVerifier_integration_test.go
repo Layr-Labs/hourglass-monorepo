@@ -90,7 +90,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to start L1 Anvil: %v", err)
 	}
 
-	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(10*time.Second))
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
 	defer anvilCancel()
 	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
 
