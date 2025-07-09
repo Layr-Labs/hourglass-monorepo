@@ -83,6 +83,8 @@ func Test_CertificateVerifier(t *testing.T) {
 	anvilWg.Add(1)
 	startErrorsChan := make(chan error, 1)
 
+	_ = testUtils.KillallAnvils()
+
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	if err != nil {
 		t.Fatalf("Failed to start L1 Anvil: %v", err)

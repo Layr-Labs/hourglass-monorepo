@@ -97,6 +97,8 @@ func testWithKeyType(
 		t.Fatalf("Failed to get L1 Ethereum contract caller: %v", err)
 	}
 
+	_ = testUtils.KillallAnvils()
+
 	anvilWg := &sync.WaitGroup{}
 	anvilWg.Add(1)
 	startErrorsChan := make(chan error, 1)

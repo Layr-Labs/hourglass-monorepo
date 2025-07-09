@@ -129,6 +129,16 @@ func WaitForAnvil(
 	}
 }
 
+func KillallAnvils() error {
+	cmd := exec.Command("pkill", "-f", "anvil")
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to kill all anvils: %w", err)
+	}
+	fmt.Println("All anvil processes killed successfully")
+	return nil
+}
+
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
 	portNumber := "8545"

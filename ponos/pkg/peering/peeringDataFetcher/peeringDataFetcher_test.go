@@ -70,6 +70,8 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			l.Sugar().Fatalf("failed to get Ethereum contract caller: %v", err)
 		}
 
+		_ = testUtils.KillallAnvils()
+
 		anvil, err := testUtils.StartL1Anvil(root, ctx)
 		if err != nil {
 			t.Fatalf("Failed to start Anvil: %v", err)
