@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run generate:proto && tsc",
     "build:watch": "tsc --watch",
     "dev": "ts-node-dev --respawn --transpile-only src/examples/demo.ts",
     "start": "node dist/index.js",
@@ -13,7 +13,9 @@
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist generated",
+    "generate:proto": "mkdir -p generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --ts_out=grpc_js:generated -I proto proto/performer.proto",
+    "prebuild": "npm run clean",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -40,7 +42,9 @@
     "@types/jest": "^29.5.11",
     "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "grpc-tools": "^1.12.4",
+    "grpc_tools_node_protoc_ts": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

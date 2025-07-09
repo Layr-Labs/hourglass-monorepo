@@ -49,9 +49,16 @@ npm run lint
 ## Project Structure
 
 - `src/server/` - Core server implementation
+  - `performerServer.ts` - Main PerformerServer class
+  - `taskProcessor.ts` - Enhanced task processing framework
+  - `taskContext.ts` - Task execution context and pipeline
 - `src/worker/` - Worker interface and utilities
+  - `iWorker.ts` - Worker interface and base classes
 - `src/types/` - TypeScript type definitions
+  - `performer.ts` - Core performer types and interfaces
+  - `protobuf.ts` - Protobuf utility functions
 - `src/utils/` - Utility functions
+  - `logger.ts` - Logging utilities
 - `src/examples/` - Example implementations
 
 ## License
