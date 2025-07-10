@@ -469,7 +469,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.assume(fuzzPayload.length > 0);
         // We create two tasks in this test, so need at least 2x the fee
         vm.assume(fuzzAvsFee <= mockToken.balanceOf(creator) / 2);
-        
+
         // Set the mock hook to return the fuzzed fee
         mockTaskHook.setDefaultFee(fuzzAvsFee);
 
@@ -533,7 +533,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     function test_createTask_ZeroFee() public {
         // Set the mock hook to return 0 fee
         mockTaskHook.setDefaultFee(0);
-        
+
         TaskParams memory taskParams = _createValidTaskParams();
 
         uint256 balanceBefore = mockToken.balanceOf(address(taskMailbox));
@@ -648,6 +648,72 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.prank(creator);
         vm.expectRevert("ReentrancyGuard: reentrant call");
         taskMailbox.createTask(taskParams);
+    }
+
+    function test_Revert_createTask_InvalidFeeReceiver_RefundCollector() public {
+        // Set up operator set with fee token
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = mockToken;
+        config.feeCollector = feeCollector;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task params with zero refund collector
+        TaskParams memory taskParams =
+            TaskParams({refundCollector: address(0), executorOperatorSet: operatorSet, payload: bytes("test payload")});
+
+        // Should revert with InvalidFeeReceiver when refundCollector is zero
+        vm.prank(creator);
+        vm.expectRevert(InvalidFeeReceiver.selector);
+        taskMailbox.createTask(taskParams);
+    }
+
+    function test_Revert_createTask_InvalidFeeReceiver_FeeCollector() public {
+        // Set up operator set with fee token but zero fee collector
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = mockToken;
+        config.feeCollector = address(0); // Zero fee collector
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create valid task params
+        TaskParams memory taskParams = _createValidTaskParams();
+
+        // Should revert with InvalidFeeReceiver when feeCollector is zero
+        vm.prank(creator);
+        vm.expectRevert(InvalidFeeReceiver.selector);
+        taskMailbox.createTask(taskParams);
+    }
+
+    function test_createTask_ValidWithZeroFeeReceivers_NoFeeToken() public {
+        // When there's no fee token, zero addresses should be allowed
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = IERC20(address(0)); // No fee token
+        config.feeCollector = address(0); // Zero fee collector is OK when no fee token
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task params with zero refund collector
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: address(0), // Zero refund collector is OK when no fee token
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        // Should succeed when there's no fee token
+        vm.prank(creator);
+        bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Verify task was created
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.creator, creator);
+        assertEq(task.refundCollector, address(0));
     }
 }
 
@@ -1208,6 +1274,236 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         vm.expectRevert(EmptyCertificateSignature.selector);
         taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
+    }
+
+    function test_submitResult_FeeTransferToCollector() public {
+        // Set up operator set with fee token
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = mockToken;
+        config.feeCollector = feeCollector;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create task with fee
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 mailboxBalanceBefore = mockToken.balanceOf(address(taskMailbox));
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        // mailboxBalanceBefore should be 2*avsFee (one from setUp, one from this test)
+
+        // Advance time and submit result
+        vm.warp(block.timestamp + 1);
+
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: newTaskHash,
+            signature: BN254.G1Point(1, 2),
+            apk: BN254.G2Point([uint256(3), uint256(4)], [uint256(5), uint256(6)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // Mock certificate verification
+        vm.mockCall(
+            address(mockBN254CertificateVerifier),
+            abi.encodeWithSelector(IBN254CertificateVerifier.verifyCertificateProportion.selector),
+            abi.encode(true)
+        );
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, abi.encode(cert), bytes("result"));
+
+        // Verify fee was transferred to fee collector
+        assertEq(mockToken.balanceOf(address(taskMailbox)), mailboxBalanceBefore - avsFee);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + avsFee);
+
+        // Verify task cannot be refunded after verification
+        Task memory task = taskMailbox.getTaskInfo(newTaskHash);
+        assertEq(uint8(task.status), uint8(TaskStatus.VERIFIED));
+        assertFalse(task.isFeeRefunded);
+    }
+}
+
+// Test contract for refundFee function
+contract TaskMailboxUnitTests_refundFee is TaskMailboxUnitTests {
+    bytes32 public taskHash;
+
+    function setUp() public override {
+        super.setUp();
+
+        // Set up operator set and task config with fee token
+        OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = mockToken;
+        config.feeCollector = feeCollector;
+
+        vm.prank(avs);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        // Create a task with fee
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        taskHash = taskMailbox.createTask(taskParams);
+    }
+
+    function test_refundFee_Success() public {
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Check initial balances
+        uint256 mailboxBalanceBefore = mockToken.balanceOf(address(taskMailbox));
+        uint256 refundCollectorBalanceBefore = mockToken.balanceOf(refundCollector);
+
+        // Refund fee as refund collector
+        vm.expectEmit(true, true, false, true);
+        emit FeeRefunded(refundCollector, taskHash, avsFee);
+
+        vm.prank(refundCollector);
+        taskMailbox.refundFee(taskHash);
+
+        // Verify balances changed correctly
+        assertEq(mockToken.balanceOf(address(taskMailbox)), mailboxBalanceBefore - avsFee);
+        assertEq(mockToken.balanceOf(refundCollector), refundCollectorBalanceBefore + avsFee);
+
+        // Verify task state
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertTrue(task.isFeeRefunded);
+        assertEq(uint8(task.status), uint8(TaskStatus.EXPIRED));
+    }
+
+    function test_Revert_refundFee_OnlyRefundCollector() public {
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Try to refund as someone else (not refund collector)
+        vm.prank(creator);
+        vm.expectRevert(OnlyRefundCollector.selector);
+        taskMailbox.refundFee(taskHash);
+
+        // Try as a random address
+        vm.prank(address(0x1234));
+        vm.expectRevert(OnlyRefundCollector.selector);
+        taskMailbox.refundFee(taskHash);
+    }
+
+    function test_Revert_refundFee_FeeAlreadyRefunded() public {
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // First refund should succeed
+        vm.prank(refundCollector);
+        taskMailbox.refundFee(taskHash);
+
+        // Second refund should fail
+        vm.prank(refundCollector);
+        vm.expectRevert(FeeAlreadyRefunded.selector);
+        taskMailbox.refundFee(taskHash);
+    }
+
+    function test_Revert_refundFee_TaskNotExpired() public {
+        // Try to refund before task expires
+        vm.prank(refundCollector);
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.EXPIRED, TaskStatus.CREATED));
+        taskMailbox.refundFee(taskHash);
+    }
+
+    function test_Revert_refundFee_TaskAlreadyVerified() public {
+        // Submit result to verify the task
+        IBN254CertificateVerifierTypes.BN254Certificate memory cert = IBN254CertificateVerifierTypes.BN254Certificate({
+            referenceTimestamp: uint32(block.timestamp),
+            messageHash: taskHash,
+            signature: BN254.G1Point(1, 2),
+            apk: BN254.G2Point([uint256(3), uint256(4)], [uint256(5), uint256(6)]),
+            nonSignerWitnesses: new IBN254CertificateVerifierTypes.BN254OperatorInfoWitness[](0)
+        });
+
+        // Mock certificate verification
+        vm.mockCall(
+            address(mockBN254CertificateVerifier),
+            abi.encodeWithSelector(IBN254CertificateVerifier.verifyCertificateProportion.selector),
+            abi.encode(true)
+        );
+
+        vm.prank(aggregator);
+        vm.warp(block.timestamp + 1);
+        taskMailbox.submitResult(taskHash, abi.encode(cert), bytes("result"));
+
+        // Move time forward to what would be expiry
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Try to refund - should fail because task is verified
+        vm.prank(refundCollector);
+        vm.expectRevert(abi.encodeWithSelector(InvalidTaskStatus.selector, TaskStatus.EXPIRED, TaskStatus.VERIFIED));
+        taskMailbox.refundFee(taskHash);
+    }
+
+    function test_refundFee_NoFeeToken() public {
+        // Create a task without fee token
+        OperatorSet memory operatorSet = OperatorSet(avs2, executorOperatorSetId2);
+        ExecutorOperatorSetTaskConfig memory config = _createValidExecutorOperatorSetTaskConfig();
+        config.feeToken = IERC20(address(0));
+
+        vm.prank(avs2);
+        taskMailbox.setExecutorOperatorSetTaskConfig(operatorSet, config);
+
+        TaskParams memory taskParams = TaskParams({
+            refundCollector: refundCollector,
+            executorOperatorSet: operatorSet,
+            payload: bytes("test payload")
+        });
+
+        vm.prank(creator);
+        bytes32 noFeeTaskHash = taskMailbox.createTask(taskParams);
+
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Refund should succeed but no transfer should occur
+        uint256 mailboxBalanceBefore = mockToken.balanceOf(address(taskMailbox));
+        uint256 refundCollectorBalanceBefore = mockToken.balanceOf(refundCollector);
+
+        vm.prank(refundCollector);
+        taskMailbox.refundFee(noFeeTaskHash);
+
+        // Balances should not change since there's no fee token
+        assertEq(mockToken.balanceOf(address(taskMailbox)), mailboxBalanceBefore);
+        assertEq(mockToken.balanceOf(refundCollector), refundCollectorBalanceBefore);
+
+        // Task should still be marked as refunded
+        Task memory task = taskMailbox.getTaskInfo(noFeeTaskHash);
+        assertTrue(task.isFeeRefunded);
+    }
+
+    function test_refundFee_ZeroFee() public {
+        // Set mock to return 0 fee
+        mockTaskHook.setDefaultFee(0);
+
+        // Create a task with 0 fee
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 zeroFeeTaskHash = taskMailbox.createTask(taskParams);
+
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Refund should succeed but no transfer should occur
+        uint256 mailboxBalanceBefore = mockToken.balanceOf(address(taskMailbox));
+        uint256 refundCollectorBalanceBefore = mockToken.balanceOf(refundCollector);
+
+        vm.prank(refundCollector);
+        taskMailbox.refundFee(zeroFeeTaskHash);
+
+        // Balances should not change since fee is 0
+        assertEq(mockToken.balanceOf(address(taskMailbox)), mailboxBalanceBefore);
+        assertEq(mockToken.balanceOf(refundCollector), refundCollectorBalanceBefore);
+
+        // Task should still be marked as refunded
+        Task memory task = taskMailbox.getTaskInfo(zeroFeeTaskHash);
+        assertTrue(task.isFeeRefunded);
     }
 }
 
