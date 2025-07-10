@@ -36,7 +36,10 @@ func CreateSigner(config *SignerConfig, ethClient *ethclient.Client, logger *zap
 		web3SignerConfig := &web3signer.Config{
 			BaseURL: config.Web3SignerURL,
 		}
-		web3SignerClient := web3signer.NewClient(web3SignerConfig, logger)
+		web3SignerClient, err := web3signer.NewClient(web3SignerConfig, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create web3signer client: %w", err)
+		}
 
 		fromAddress := common.HexToAddress(config.FromAddress)
 		return NewWeb3Signer(web3SignerClient, fromAddress, signingContext), nil

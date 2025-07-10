@@ -20,7 +20,8 @@ func TestNewWeb3Signer(t *testing.T) {
 	config := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	client := web3signer.NewClient(config, logger)
+	client, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Create a test address
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
@@ -47,7 +48,8 @@ func TestWeb3Signer_GetTransactOpts(t *testing.T) {
 	config := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	client := web3signer.NewClient(config, logger)
+	client, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Create a test address
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
@@ -77,7 +79,8 @@ func TestWeb3Signer_GetFromAddress(t *testing.T) {
 	config := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	client := web3signer.NewClient(config, logger)
+	client, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Create a test address
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
@@ -100,7 +103,8 @@ func TestWeb3Signer_EstimateGasPriceAndLimit(t *testing.T) {
 	config := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	client := web3signer.NewClient(config, logger)
+	client, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Create a test address
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
@@ -140,7 +144,8 @@ func TestWeb3Signer_SignTransaction(t *testing.T) {
 	config := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	client := web3signer.NewClient(config, logger)
+	client, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Create a test address
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
