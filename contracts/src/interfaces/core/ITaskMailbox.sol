@@ -166,7 +166,7 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when fee has already been refunded
     error FeeAlreadyRefunded();
-    
+
     /// @notice Thrown when caller is not the refund collector
     error OnlyRefundCollector();
 }
@@ -240,18 +240,14 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
         bytes executorCert,
         bytes result
     );
-    
+
     /**
      * @notice Emitted when a task fee is refunded
      * @param refundCollector Address that received the refund
      * @param taskHash Unique identifier of the task
      * @param avsFee Amount of fee refunded
      */
-    event FeeRefunded(
-        address indexed refundCollector,
-        bytes32 indexed taskHash,
-        uint96 avsFee
-    );
+    event FeeRefunded(address indexed refundCollector, bytes32 indexed taskHash, uint96 avsFee);
 }
 
 /**
@@ -309,7 +305,9 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @param taskHash Unique identifier of the task
      * @dev Can only be called by the task creator for expired tasks
      */
-    function refundFee(bytes32 taskHash) external;
+    function refundFee(
+        bytes32 taskHash
+    ) external;
 
     /**
      *

@@ -130,7 +130,7 @@ contract TaskMailbox is
 
         // Pre-task submission checks: AVS can validate the caller and task params.
         taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams);
-        
+
         // Calculate the AVS fee using the task hook
         uint96 avsFee = taskConfig.taskHook.calculateTaskFee(taskParams);
 
@@ -201,12 +201,11 @@ contract TaskMailbox is
         task.status = TaskStatus.VERIFIED;
         task.executorCert = executorCert;
         task.result = result;
-        
+
         // Transfer fee to the fee collector if there's a fee to transfer
         if (task.executorOperatorSetTaskConfig.feeToken != IERC20(address(0)) && task.avsFee > 0) {
             task.executorOperatorSetTaskConfig.feeToken.safeTransfer(
-                task.executorOperatorSetTaskConfig.feeCollector,
-                task.avsFee
+                task.executorOperatorSetTaskConfig.feeCollector, task.avsFee
             );
         }
 
@@ -217,25 +216,25 @@ contract TaskMailbox is
     }
 
     /// @inheritdoc ITaskMailbox
-    function refundFee(bytes32 taskHash) external nonReentrant {
+    function refundFee(
+        bytes32 taskHash
+    ) external nonReentrant {
         Task storage task = _tasks[taskHash];
         require(task.refundCollector == msg.sender, OnlyRefundCollector());
         require(!task.isFeeRefunded, FeeAlreadyRefunded());
-        
+
         TaskStatus status = _getTaskStatus(task);
         require(status == TaskStatus.EXPIRED, InvalidTaskStatus(TaskStatus.EXPIRED, status));
-        
+
+        // Mark fee as refunded to prevent double refunds
+        task.isFeeRefunded = true;
+
         // Transfer fee to refund collector if there's a fee to refund
         if (task.executorOperatorSetTaskConfig.feeToken != IERC20(address(0)) && task.avsFee > 0) {
-            task.executorOperatorSetTaskConfig.feeToken.safeTransfer(
-                task.refundCollector,
-                task.avsFee
-            );
-            // Mark fee as refunded to prevent double refunds
-            task.isFeeRefunded = true;
-            
-            emit FeeRefunded(task.refundCollector, taskHash, task.avsFee);
+            task.executorOperatorSetTaskConfig.feeToken.safeTransfer(task.refundCollector, task.avsFee);
         }
+
+        emit FeeRefunded(task.refundCollector, taskHash, task.avsFee);
     }
 
     /**

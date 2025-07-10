@@ -116,7 +116,9 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
         }
     }
 
-    function calculateTaskFee(ITaskMailboxTypes.TaskParams memory) external pure returns (uint96) {
+    function calculateTaskFee(
+        ITaskMailboxTypes.TaskParams memory
+    ) external pure returns (uint96) {
         return 0;
     }
 }

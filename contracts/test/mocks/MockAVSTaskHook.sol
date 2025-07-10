@@ -7,11 +7,13 @@ import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 
 contract MockAVSTaskHook is IAVSTaskHook {
     uint96 public defaultFee = 1 ether;
-    
-    function setDefaultFee(uint96 _fee) external {
+
+    function setDefaultFee(
+        uint96 _fee
+    ) external {
         defaultFee = _fee;
     }
-    
+
     function validatePreTaskCreation(
         address, /*caller*/
         ITaskMailboxTypes.TaskParams memory /*taskParams*/

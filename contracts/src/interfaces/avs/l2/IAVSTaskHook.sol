@@ -59,5 +59,7 @@ interface IAVSTaskHook {
      * @param taskParams The task parameters
      * @return The fee for the task
      */
-    function calculateTaskFee(ITaskMailboxTypes.TaskParams memory taskParams) external view returns (uint96);
+    function calculateTaskFee(
+        ITaskMailboxTypes.TaskParams memory taskParams
+    ) external view returns (uint96);
 }
