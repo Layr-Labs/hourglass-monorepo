@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// TransactionSigner provides methods for signing Ethereum transactions
-type TransactionSigner interface {
+// ITransactionSigner provides methods for signing Ethereum transactions
+type ITransactionSigner interface {
 	// GetTransactOpts returns transaction options for creating unsigned transactions
 	GetTransactOpts(ctx context.Context) (*bind.TransactOpts, error)
 

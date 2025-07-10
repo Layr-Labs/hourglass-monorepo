@@ -76,7 +76,9 @@ func Test_Aggregator(t *testing.T) {
 	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.ExecOperatorAccountPk,
 	}
-	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
@@ -96,7 +98,9 @@ func Test_Aggregator(t *testing.T) {
 	}
 
 	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
-	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
+	aggConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.OperatorAccountPrivateKey,
+	}
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 	aggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	aggConfig.Avss[0].ChainIds = []uint{

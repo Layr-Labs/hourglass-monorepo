@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// PrivateKeySigner implements TransactionSigner using a private key
+// PrivateKeySigner implements ITransactionSigner using a private key
 type PrivateKeySigner struct {
 	*SigningContext
 	privateKey  *ecdsa.PrivateKey

@@ -124,7 +124,13 @@ var runCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create signing context: %w", err)
 		}
-		privateKeySigner, err := transactionSigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey, signingContext)
+
+		var privateKeySigner transactionSigner.ITransactionSigner
+		if Config.Operator.OperatorPrivateKey.UseRemoteSigner {
+			// TODO(seanmcagry): add remote signer support
+		} else {
+			privateKeySigner, err = transactionSigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey.PrivateKey, signingContext)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to create private key signer: %w", err)
 		}

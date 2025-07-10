@@ -160,8 +160,8 @@ func GetContractsMapForChain(chainId ChainId) *CoreContractAddresses {
 
 type OperatorConfig struct {
 	Address string `json:"address" yaml:"address"`
-	// OperatorPrivateKey is the private key of the operator used for signing transactions
-	OperatorPrivateKey string `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
+	// OperatorPrivateKey is the private key of the operator used for signing transactions.
+	OperatorPrivateKey *ECDSAKeyConfig `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
 	// SigningKeys contains the signing keys for the operator (BLS or ECDSA)
 	SigningKeys SigningKeys `json:"signingKeys" yaml:"signingKeys"`
 }

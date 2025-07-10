@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// Web3Signer implements TransactionSigner using Web3Signer service
+// Web3Signer implements ITransactionSigner using Web3Signer service
 type Web3Signer struct {
 	*SigningContext
 	web3SignerClient *web3signer.Client

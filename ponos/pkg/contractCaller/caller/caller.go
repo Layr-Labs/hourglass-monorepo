@@ -50,13 +50,13 @@ type ContractCaller struct {
 	config             *ContractCallerConfig
 	logger             *zap.Logger
 	coreContracts      *config.CoreContractAddresses
-	signer             transactionSigner.TransactionSigner
+	signer             transactionSigner.ITransactionSigner
 }
 
 func NewContractCallerFromEthereumClient(
 	config *ContractCallerConfig,
 	ethClient *ethereum.Client,
-	signer transactionSigner.TransactionSigner,
+	signer transactionSigner.ITransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	client, err := ethClient.GetEthereumContractCaller()
@@ -70,7 +70,7 @@ func NewContractCallerFromEthereumClient(
 func NewContractCaller(
 	cfg *ContractCallerConfig,
 	ethclient *ethclient.Client,
-	signer transactionSigner.TransactionSigner,
+	signer transactionSigner.ITransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	logger.Sugar().Debugw("Creating contract caller",
