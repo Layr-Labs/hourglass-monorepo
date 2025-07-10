@@ -126,4 +126,3 @@ func TestPrivateKeySignerIntegration(t *testing.T) {
 	t.Logf("Successfully created private key signer")
 	t.Logf("From address: %s", expectedAddress.Hex())
 }
-

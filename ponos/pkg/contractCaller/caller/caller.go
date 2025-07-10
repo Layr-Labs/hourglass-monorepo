@@ -781,7 +781,6 @@ func (cc *ContractCaller) buildTransactionOpts(ctx context.Context) (*bind.Trans
 	return cc.signer.GetTransactOpts(ctx)
 }
 
-
 func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
 	opts := &bind.CallOpts{
 		Context: ctx,
