@@ -303,7 +303,7 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     /**
      * @notice Refunds the fee for an expired task
      * @param taskHash Unique identifier of the task
-     * @dev Can only be called by the task creator for expired tasks
+     * @dev Can only be called by the refund collector for expired tasks
      */
     function refundFee(
         bytes32 taskHash
