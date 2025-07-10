@@ -56,7 +56,8 @@ func TestCreateSigner_Web3Signer(t *testing.T) {
 	web3SignerConfig := &web3signer.Config{
 		BaseURL: "http://localhost:9000",
 	}
-	web3SignerClient := web3signer.NewClient(web3SignerConfig, logger)
+	web3SignerClient, err := web3signer.NewClient(web3SignerConfig, logger)
+	require.NoError(t, err)
 	signer := NewWeb3Signer(web3SignerClient, fromAddress, signingContext)
 
 	assert.NotNil(t, signer)

@@ -29,7 +29,8 @@ func TestWeb3SignerIntegration(t *testing.T) {
 		Timeout: 10 * time.Second,
 	}
 
-	web3SignerClient := web3signer.NewClient(config, logger)
+	web3SignerClient, err := web3signer.NewClient(config, logger)
+	require.NoError(t, err)
 
 	// Wait for service to be ready and get available accounts
 	ctx := context.Background()
@@ -153,7 +154,8 @@ func TestFactoryIntegration(t *testing.T) {
 		BaseURL: "http://localhost:9100",
 		Timeout: 10 * time.Second,
 	}
-	web3SignerClient := web3signer.NewClient(web3SignerConfig, logger)
+	web3SignerClient, err := web3signer.NewClient(web3SignerConfig, logger)
+	require.NoError(t, err)
 	fromAddress := common.HexToAddress("0x742d35Cc6634C0532925a3b8D39E1b86D8a10f23")
 
 	web3Signer := NewWeb3Signer(web3SignerClient, fromAddress, signingContext)
