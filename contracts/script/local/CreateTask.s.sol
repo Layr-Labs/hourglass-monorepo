@@ -21,8 +21,7 @@ contract CreateTask is Script {
         // Call createTask
         OperatorSet memory executorOperatorSet = OperatorSet({avs: avs, id: 1});
         ITaskMailboxTypes.TaskParams memory taskParams = ITaskMailboxTypes.TaskParams({
-            refundCollector: address(0),
-            avsFee: 0,
+            refundCollector: app,
             executorOperatorSet: executorOperatorSet,
             payload: bytes("Hello World")
         });

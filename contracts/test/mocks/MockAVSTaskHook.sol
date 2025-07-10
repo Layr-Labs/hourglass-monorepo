@@ -6,6 +6,14 @@ import {IAVSTaskHook} from "../../src/interfaces/avs/l2/IAVSTaskHook.sol";
 import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
 
 contract MockAVSTaskHook is IAVSTaskHook {
+    uint96 public defaultFee = 1 ether;
+
+    function setDefaultFee(
+        uint96 _fee
+    ) external {
+        defaultFee = _fee;
+    }
+
     function validatePreTaskCreation(
         address, /*caller*/
         ITaskMailboxTypes.TaskParams memory /*taskParams*/
@@ -35,9 +43,8 @@ contract MockAVSTaskHook is IAVSTaskHook {
     }
 
     function calculateTaskFee(
-        OperatorSet memory, /*operatorSet*/
-        bytes memory /*payload*/
+        ITaskMailboxTypes.TaskParams memory /*taskParams*/
     ) external view returns (uint96) {
-        //TODO: Implement
+        return defaultFee;
     }
 }

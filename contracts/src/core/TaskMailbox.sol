@@ -128,10 +128,11 @@ contract TaskMailbox is
             ExecutorOperatorSetTaskConfigNotSet()
         );
 
-        // Pre-task submission checks:
-        // 1. AVS can validate the caller and task params.
-        // 2. AVS can design fee markets to validate their avsFee against.
+        // Pre-task submission checks: AVS can validate the caller and task params.
         taskConfig.taskHook.validatePreTaskCreation(msg.sender, taskParams);
+
+        // Calculate the AVS fee using the task hook
+        uint96 avsFee = taskConfig.taskHook.calculateTaskFee(taskParams);
 
         bytes32 taskHash = keccak256(abi.encode(_globalTaskCount, address(this), block.chainid, taskParams));
         _globalTaskCount = _globalTaskCount + 1;
@@ -143,18 +144,20 @@ contract TaskMailbox is
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
             taskParams.refundCollector,
-            taskParams.avsFee,
+            avsFee,
             0, // TODO: Update with fee split % variable
+            false, // isFeeRefunded
             taskConfig,
             taskParams.payload,
             bytes(""),
             bytes("")
         );
 
-        // TODO: Need a separate permissionless function to do the final transfer from this contract to AVS (or back to App)
-        if (taskConfig.feeToken != IERC20(address(0)) && taskParams.avsFee > 0) {
-            // TODO: Might need a separate variable for tracking balance transfer.
-            taskConfig.feeToken.safeTransferFrom(msg.sender, address(this), taskParams.avsFee);
+        // Transfer fee to the TaskMailbox if there's a fee to transfer
+        if (taskConfig.feeToken != IERC20(address(0)) && avsFee > 0) {
+            require(taskConfig.feeCollector != address(0), InvalidFeeReceiver());
+            require(taskParams.refundCollector != address(0), InvalidFeeReceiver());
+            taskConfig.feeToken.safeTransferFrom(msg.sender, address(this), avsFee);
         }
 
         // Post-task submission checks: AVS can write to storage in their hook for validating task lifecycle
@@ -166,7 +169,7 @@ contract TaskMailbox is
             taskParams.executorOperatorSet.avs,
             taskParams.executorOperatorSet.id,
             taskParams.refundCollector,
-            taskParams.avsFee,
+            avsFee,
             block.timestamp + taskConfig.taskSLA,
             taskParams.payload
         );
@@ -199,10 +202,39 @@ contract TaskMailbox is
         task.executorCert = executorCert;
         task.result = result;
 
+        // Transfer fee to the fee collector if there's a fee to transfer
+        if (task.executorOperatorSetTaskConfig.feeToken != IERC20(address(0)) && task.avsFee > 0) {
+            task.executorOperatorSetTaskConfig.feeToken.safeTransfer(
+                task.executorOperatorSetTaskConfig.feeCollector, task.avsFee
+            );
+        }
+
         // Post-task result submission checks: AVS can update hook storage for task lifecycle if needed.
         task.executorOperatorSetTaskConfig.taskHook.handlePostTaskResultSubmission(taskHash);
 
         emit TaskVerified(msg.sender, taskHash, task.avs, task.executorOperatorSetId, task.executorCert, task.result);
+    }
+
+    /// @inheritdoc ITaskMailbox
+    function refundFee(
+        bytes32 taskHash
+    ) external nonReentrant {
+        Task storage task = _tasks[taskHash];
+        require(task.refundCollector == msg.sender, OnlyRefundCollector());
+        require(!task.isFeeRefunded, FeeAlreadyRefunded());
+
+        TaskStatus status = _getTaskStatus(task);
+        require(status == TaskStatus.EXPIRED, InvalidTaskStatus(TaskStatus.EXPIRED, status));
+
+        // Mark fee as refunded to prevent double refunds
+        task.isFeeRefunded = true;
+
+        // Transfer fee to refund collector if there's a fee to refund
+        if (task.executorOperatorSetTaskConfig.feeToken != IERC20(address(0)) && task.avsFee > 0) {
+            task.executorOperatorSetTaskConfig.feeToken.safeTransfer(task.refundCollector, task.avsFee);
+        }
+
+        emit FeeRefunded(task.refundCollector, taskHash, task.avsFee);
     }
 
     /**
@@ -357,6 +389,7 @@ contract TaskMailbox is
             task.refundCollector,
             task.avsFee,
             task.feeSplit,
+            task.isFeeRefunded,
             task.executorOperatorSetTaskConfig,
             task.payload,
             task.executorCert,

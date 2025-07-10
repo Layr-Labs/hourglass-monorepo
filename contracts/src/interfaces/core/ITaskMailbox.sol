@@ -58,13 +58,11 @@ interface ITaskMailboxTypes {
     /**
      * @notice Parameters for creating a new task
      * @param refundCollector Address to receive refunds if task is not completed
-     * @param avsFee Fee paid to the AVS for processing the task
      * @param executorOperatorSet The operator set that will execute the task
      * @param payload Task payload
      */
     struct TaskParams {
         address refundCollector;
-        uint96 avsFee;
         OperatorSet executorOperatorSet;
         bytes payload;
     }
@@ -90,6 +88,7 @@ interface ITaskMailboxTypes {
      * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
      * @param feeSplit Percentage split of fees taken by the TaskMailbox
+     * @param isFeeRefunded Whether the fee has been refunded
      * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
      * @param payload Task payload
      * @param executorCert Executor certificate
@@ -105,6 +104,7 @@ interface ITaskMailboxTypes {
         address refundCollector;
         uint96 avsFee;
         uint16 feeSplit;
+        bool isFeeRefunded;
         ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;
         bytes executorCert;
@@ -160,6 +160,15 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when a certificate has an empty signature
     error EmptyCertificateSignature();
+
+    /// @notice Thrown when fee receiver is zero address
+    error InvalidFeeReceiver();
+
+    /// @notice Thrown when fee has already been refunded
+    error FeeAlreadyRefunded();
+
+    /// @notice Thrown when caller is not the refund collector
+    error OnlyRefundCollector();
 }
 
 /**
@@ -231,6 +240,14 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
         bytes executorCert,
         bytes result
     );
+
+    /**
+     * @notice Emitted when a task fee is refunded
+     * @param refundCollector Address that received the refund
+     * @param taskHash Unique identifier of the task
+     * @param avsFee Amount of fee refunded
+     */
+    event FeeRefunded(address indexed refundCollector, bytes32 indexed taskHash, uint96 avsFee);
 }
 
 /**
@@ -268,6 +285,8 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @notice Creates a new task
      * @param taskParams Parameters for the task
      * @return taskHash Unique identifier of the created task
+     * @dev If the operator set has its fee token set, call `IAVSTaskHook.calculateTaskFee()` to get
+     * the fee for the task and approve the TaskMailbox for the fee before calling this function.
      */
     function createTask(
         TaskParams memory taskParams
@@ -280,6 +299,15 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      * @param result Task execution result data
      */
     function submitResult(bytes32 taskHash, bytes memory executorCert, bytes memory result) external;
+
+    /**
+     * @notice Refunds the fee for an expired task
+     * @param taskHash Unique identifier of the task
+     * @dev Can only be called by the refund collector for expired tasks
+     */
+    function refundFee(
+        bytes32 taskHash
+    ) external;
 
     /**
      *

@@ -19,7 +19,6 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
 
     // Store attack parameters individually to avoid memory/storage issues
     address public refundCollector;
-    uint96 public avsFee;
     address public executorOperatorSetAvs;
     uint32 public executorOperatorSetId;
     bytes public payload;
@@ -45,7 +44,6 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
     ) external {
         // Store TaskParams fields individually
         refundCollector = _taskParams.refundCollector;
-        avsFee = _taskParams.avsFee;
         executorOperatorSetAvs = _taskParams.executorOperatorSet.avs;
         executorOperatorSetId = _taskParams.executorOperatorSet.id;
         payload = _taskParams.payload;
@@ -66,7 +64,6 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                 // Reconstruct TaskParams for the attack
                 TaskParams memory taskParams = TaskParams({
                     refundCollector: refundCollector,
-                    avsFee: avsFee,
                     executorOperatorSet: OperatorSet(executorOperatorSetAvs, executorOperatorSetId),
                     payload: payload
                 });
@@ -98,7 +95,6 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
                 // Reconstruct TaskParams for the attack
                 TaskParams memory taskParams = TaskParams({
                     refundCollector: refundCollector,
-                    avsFee: avsFee,
                     executorOperatorSet: OperatorSet(executorOperatorSetAvs, executorOperatorSetId),
                     payload: payload
                 });
@@ -120,7 +116,9 @@ contract ReentrantAttacker is IAVSTaskHook, ITaskMailboxTypes {
         }
     }
 
-    function calculateTaskFee(OperatorSet memory, bytes memory) external pure returns (uint96) {
+    function calculateTaskFee(
+        ITaskMailboxTypes.TaskParams memory
+    ) external pure returns (uint96) {
         return 0;
     }
 }

@@ -56,9 +56,10 @@ interface IAVSTaskHook {
 
     /**
      * @notice Calculates the fee for a task payload against a specific fee market
-     * @param operatorSet The operator set that will execute the task
-     * @param payload Task payload
+     * @param taskParams The task parameters
      * @return The fee for the task
      */
-    function calculateTaskFee(OperatorSet memory operatorSet, bytes memory payload) external view returns (uint96);
+    function calculateTaskFee(
+        ITaskMailboxTypes.TaskParams memory taskParams
+    ) external view returns (uint96);
 }
