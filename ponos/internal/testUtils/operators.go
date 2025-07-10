@@ -6,7 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
@@ -33,11 +33,11 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
-	avsSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+	avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS signing context: %v", err)
 	}
-	avsPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS private key signer: %v", err)
 	}
@@ -50,11 +50,11 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
 	}
 
-	aggregatorSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+	aggregatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator signing context: %v", err)
 	}
-	aggregatorPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, aggregatorSigningContext)
+	aggregatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, aggregatorSigningContext)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator private key signer: %v", err)
 	}
@@ -95,11 +95,11 @@ func SetupOperatorPeering(
 		zap.String("transactionHash", result.TxHash.String()),
 	)
 
-	executorSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+	executorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor signing context: %v", err)
 	}
-	executorPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, executorSigningContext)
+	executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, executorSigningContext)
 	if err != nil {
 		return fmt.Errorf("failed to create executor private key signer: %v", err)
 	}
@@ -221,11 +221,11 @@ func DelegateStakeToOperator(
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategyAddress", strategyAddress),
 	)
-	stakerSigningContext, err := transactionsigner.NewSigningContext(ethclient, l)
+	stakerSigningContext, err := transactionSigner.NewSigningContext(ethclient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker signing context: %v", err)
 	}
-	stakerPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(stakerPrivateKey, stakerSigningContext)
+	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, stakerSigningContext)
 	if err != nil {
 		return fmt.Errorf("failed to create staker private key signer: %v", err)
 	}
@@ -243,11 +243,11 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)
 	}
 
-	opSigningContext, err := transactionsigner.NewSigningContext(ethclient, l)
+	opSigningContext, err := transactionSigner.NewSigningContext(ethclient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator signing context: %v", err)
 	}
-	opPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(operatorPrivateKey, opSigningContext)
+	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, opSigningContext)
 	if err != nil {
 		return fmt.Errorf("failed to create operator private key signer: %v", err)
 	}

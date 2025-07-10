@@ -16,7 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -116,11 +116,11 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
-	l1SigningContext, err := transactionsigner.NewSigningContext(l1EthClient, l)
+	l1SigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 signing context: %v", err)
 	}
-	l1PrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
 	if err != nil {
 		t.Fatalf("Failed to create L1 private key signer: %v", err)
 	}

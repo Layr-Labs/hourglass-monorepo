@@ -19,7 +19,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -50,13 +50,13 @@ type ContractCaller struct {
 	config             *ContractCallerConfig
 	logger             *zap.Logger
 	coreContracts      *config.CoreContractAddresses
-	signer             transactionsigner.TransactionSigner
+	signer             transactionSigner.TransactionSigner
 }
 
 func NewContractCallerFromEthereumClient(
 	config *ContractCallerConfig,
 	ethClient *ethereum.Client,
-	signer transactionsigner.TransactionSigner,
+	signer transactionSigner.TransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	client, err := ethClient.GetEthereumContractCaller()
@@ -70,7 +70,7 @@ func NewContractCallerFromEthereumClient(
 func NewContractCaller(
 	cfg *ContractCallerConfig,
 	ethclient *ethclient.Client,
-	signer transactionsigner.TransactionSigner,
+	signer transactionSigner.TransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {
 	logger.Sugar().Debugw("Creating contract caller",
