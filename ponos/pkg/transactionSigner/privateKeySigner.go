@@ -13,17 +13,21 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"go.uber.org/zap"
 )
 
 // PrivateKeySigner implements ITransactionSigner using a private key
 type PrivateKeySigner struct {
-	*SigningContext
+	ethClient   *ethclient.Client
+	logger      *zap.Logger
+	chainID     *big.Int
 	privateKey  *ecdsa.PrivateKey
 	fromAddress common.Address
 }
 
 // NewPrivateKeySigner creates a new private key signer
-func NewPrivateKeySigner(privateKeyHex string, signingContext *SigningContext) (*PrivateKeySigner, error) {
+func NewPrivateKeySigner(privateKeyHex string, ethClient *ethclient.Client, logger *zap.Logger) (*PrivateKeySigner, error) {
 	privateKey, err := cryptoUtils.StringToECDSAPrivateKey(privateKeyHex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
@@ -37,16 +41,24 @@ func NewPrivateKeySigner(privateKeyHex string, signingContext *SigningContext) (
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
 
+	// Get chain ID during initialization
+	chainID, err := ethClient.ChainID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
 	return &PrivateKeySigner{
-		SigningContext: signingContext,
-		privateKey:     privateKey,
-		fromAddress:    fromAddress,
+		ethClient:   ethClient,
+		logger:      logger,
+		chainID:     chainID,
+		privateKey:  privateKey,
+		fromAddress: fromAddress,
 	}, nil
 }
 
 // GetTransactOpts returns transaction options for creating unsigned transactions
 func (pks *PrivateKeySigner) GetTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
-	opts, err := bind.NewKeyedTransactorWithChainID(pks.privateKey, pks.SigningContext.chainID)
+	opts, err := bind.NewKeyedTransactorWithChainID(pks.privateKey, pks.chainID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transactor: %w", err)
 	}
@@ -68,24 +80,25 @@ func (pks *PrivateKeySigner) GetFromAddress() common.Address {
 
 // EstimateGasPriceAndLimit estimates gas price and limit for a transaction
 func (pks *PrivateKeySigner) EstimateGasPriceAndLimit(ctx context.Context, tx *types.Transaction) (*big.Int, uint64, error) {
-	return pks.SigningContext.EstimateGasPriceAndLimit(ctx, tx)
+	// For now, return nil values - this method isn't fully implemented yet
+	return nil, 0, nil
 }
 
 // estimateGasPriceAndLimitAndSendTx replicates the original EstimateGasPriceAndLimitAndSendTx method
 func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Context, fromAddress common.Address, tx *types.Transaction, tag string) (*types.Receipt, error) {
 	var FallbackGasTipCap = big.NewInt(15000000000)
 
-	gasTipCap, err := pks.SigningContext.ethClient.SuggestGasTipCap(ctx)
+	gasTipCap, err := pks.ethClient.SuggestGasTipCap(ctx)
 	if err != nil {
 		// If the transaction failed because the backend does not support
 		// eth_maxPriorityFeePerGas, fallback to using the default constant.
-		pks.SigningContext.logger.Sugar().Debugw("estimateGasPriceAndLimitAndSendTx: cannot get gasTipCap",
+		pks.logger.Sugar().Debugw("estimateGasPriceAndLimitAndSendTx: cannot get gasTipCap",
 			"error", err.Error(),
 		)
 		gasTipCap = FallbackGasTipCap
 	}
 
-	header, err := pks.SigningContext.ethClient.HeaderByNumber(ctx, nil)
+	header, err := pks.ethClient.HeaderByNumber(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +110,7 @@ func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Conte
 	// with out of gas exceptions. To remedy this we extract the internal calls
 	// to perform gas price/gas limit estimation here and add a buffer to
 	// account for any network variability.
-	gasLimit, err := pks.SigningContext.ethClient.EstimateGas(ctx, ethereum.CallMsg{
+	gasLimit, err := pks.ethClient.EstimateGas(ctx, ethereum.CallMsg{
 		From:      fromAddress,
 		To:        tx.To(),
 		GasTipCap: gasTipCap,
@@ -110,7 +123,7 @@ func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Conte
 		return nil, err
 	}
 
-	opts, err := bind.NewKeyedTransactorWithChainID(pks.privateKey, pks.SigningContext.chainID)
+	opts, err := bind.NewKeyedTransactorWithChainID(pks.privateKey, pks.chainID)
 	if err != nil {
 		return nil, fmt.Errorf("estimateGasPriceAndLimitAndSendTx: cannot create transactOpts: %w", err)
 	}
@@ -120,16 +133,16 @@ func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Conte
 	opts.GasFeeCap = gasFeeCap
 	opts.GasLimit = addGasBuffer(gasLimit)
 
-	contract := bind.NewBoundContract(*tx.To(), abi.ABI{}, pks.SigningContext.ethClient, pks.SigningContext.ethClient, pks.SigningContext.ethClient)
+	contract := bind.NewBoundContract(*tx.To(), abi.ABI{}, pks.ethClient, pks.ethClient, pks.ethClient)
 
-	pks.SigningContext.logger.Sugar().Infof("estimateGasPriceAndLimitAndSendTx: sending txn (%s) with gasTipCap=%v gasFeeCap=%v gasLimit=%v", tag, gasTipCap, gasFeeCap, opts.GasLimit)
+	pks.logger.Sugar().Infof("estimateGasPriceAndLimitAndSendTx: sending txn (%s) with gasTipCap=%v gasFeeCap=%v gasLimit=%v", tag, gasTipCap, gasFeeCap, opts.GasLimit)
 
 	tx, err = contract.RawTransact(opts, tx.Data())
 	if err != nil {
 		return nil, fmt.Errorf("estimateGasPriceAndLimitAndSendTx: failed to send txn (%s): %w", tag, err)
 	}
 
-	pks.SigningContext.logger.Sugar().Infof("estimateGasPriceAndLimitAndSendTx: sent txn (%s) with hash=%s", tag, tx.Hash().Hex())
+	pks.logger.Sugar().Infof("estimateGasPriceAndLimitAndSendTx: sent txn (%s) with hash=%s", tag, tx.Hash().Hex())
 
 	receipt, err := pks.ensureTransactionEvaled(ctx, tx, tag)
 	if err != nil {
@@ -141,17 +154,17 @@ func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Conte
 
 // ensureTransactionEvaled waits for transaction to be mined and checks status
 func (pks *PrivateKeySigner) ensureTransactionEvaled(ctx context.Context, tx *types.Transaction, tag string) (*types.Receipt, error) {
-	pks.SigningContext.logger.Sugar().Infow("ensureTransactionEvaled entered")
+	pks.logger.Sugar().Infow("ensureTransactionEvaled entered")
 
-	receipt, err := bind.WaitMined(ctx, pks.SigningContext.ethClient, tx)
+	receipt, err := bind.WaitMined(ctx, pks.ethClient, tx)
 	if err != nil {
 		return nil, fmt.Errorf("ensureTransactionEvaled: failed to wait for transaction (%s) to mine: %w", tag, err)
 	}
 	if receipt.Status != 1 {
-		pks.SigningContext.logger.Sugar().Errorf("ensureTransactionEvaled: transaction (%s) failed: %v", tag, receipt)
+		pks.logger.Sugar().Errorf("ensureTransactionEvaled: transaction (%s) failed: %v", tag, receipt)
 		return nil, fmt.Errorf("transaction failed")
 	}
-	pks.SigningContext.logger.Sugar().Infof("ensureTransactionEvaled: transaction (%s) succeeded: %v", tag, receipt.TxHash.Hex())
+	pks.logger.Sugar().Infof("ensureTransactionEvaled: transaction (%s) succeeded: %v", tag, receipt.TxHash.Hex())
 	return receipt, nil
 }
 

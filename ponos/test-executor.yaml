@@ -2,7 +2,8 @@
 grpcPort: 9090
 operator:
   address: "0xexecutor123..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
       keystore: |

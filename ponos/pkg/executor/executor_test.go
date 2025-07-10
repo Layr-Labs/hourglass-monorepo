@@ -133,11 +133,7 @@ func testWithKeyType(
 	}
 	t.Logf("L1 Chain ID: %s", l1ChainId.String())
 
-	l1SigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L1 signing context: %v", err)
-	}
-	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 private key signer: %v", err)
 	}
@@ -314,7 +310,8 @@ const (
 grpcPort: 9090
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
       keystore: |

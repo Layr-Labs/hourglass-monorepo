@@ -176,11 +176,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
-	l1SigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L1 signing context: %v", err)
-	}
-	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 private key signer: %v", err)
 	}
@@ -195,11 +191,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	var l2CC *caller.ContractCaller
 	if networkTarget == NetworkTarget_L2 {
-		l2SigningContext, err := transactionSigner.NewSigningContext(l2EthClient, l)
-		if err != nil {
-			t.Fatalf("Failed to create L2 signing context: %v", err)
-		}
-		l2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2SigningContext)
+		l2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
 		if err != nil {
 			t.Fatalf("Failed to create L2 private key signer: %v", err)
 		}
@@ -313,11 +305,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsTaskHookAddress = chainConfig.AVSTaskHookAddressL2
 	}
 
-	avsSigningContext, err := transactionSigner.NewSigningContext(mailboxEthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create AVS signing context: %v", err)
-	}
-	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, mailboxEthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS private key signer: %v", err)
 	}

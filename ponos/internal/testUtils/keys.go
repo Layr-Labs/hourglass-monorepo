@@ -10,7 +10,7 @@ import (
 )
 
 type WrappedKeyPair struct {
-	PrivateKey interface{} // This can be *bn254.PrivateKey or *ecdsa.PrivateKey
+	PrivateKey interface{} // This can be *bn254.PrivateKey or *ecdsa.PrivateKeyConfig
 	PublicKey  interface{} // This can be *bn254.PublicKey or *ecdsa.PublicKey
 }
 

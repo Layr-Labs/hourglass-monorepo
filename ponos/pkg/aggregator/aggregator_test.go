@@ -188,11 +188,7 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
-	l1AggSigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L1 aggregator signing context: %v", err)
-	}
-	l1AggPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1AggSigningContext)
+	l1AggPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 aggregator private key signer: %v", err)
 	}
@@ -205,11 +201,7 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 
-	l1ExecSigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L1 executor signing context: %v", err)
-	}
-	l1ExecPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, l1ExecSigningContext)
+	l1ExecPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 executor private key signer: %v", err)
 	}
@@ -314,11 +306,7 @@ func Test_Aggregator(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
 
-	avsCcL1SigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create AVS L1 signing context: %v", err)
-	}
-	avsCcL1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsCcL1SigningContext)
+	avsCcL1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS L1 private key signer: %v", err)
 	}
@@ -342,11 +330,7 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to set up task mailbox: %v", err)
 	}
 
-	avsCcL2SigningContext, err := transactionSigner.NewSigningContext(l2EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create AVS L2 signing context: %v", err)
-	}
-	avsCcL2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsCcL2SigningContext)
+	avsCcL2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS L2 private key signer: %v", err)
 	}
@@ -408,12 +392,12 @@ func Test_Aggregator(t *testing.T) {
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
 		&AggregatorConfig{
-			AVSs:          aggConfig.Avss,
-			Chains:        aggConfig.Chains,
-			Address:       aggConfig.Operator.Address,
-			PrivateKey:    aggConfig.Operator.OperatorPrivateKey,
-			AggregatorUrl: aggConfig.ServerConfig.AggregatorUrl,
-			L1ChainId:     aggConfig.L1ChainId,
+			AVSs:             aggConfig.Avss,
+			Chains:           aggConfig.Chains,
+			Address:          aggConfig.Operator.Address,
+			PrivateKeyConfig: aggConfig.Operator.OperatorPrivateKey,
+			AggregatorUrl:    aggConfig.ServerConfig.AggregatorUrl,
+			L1ChainId:        aggConfig.L1ChainId,
 		},
 		imContractStore,
 		tlp,
@@ -514,11 +498,7 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
-	l2AppSigningContext, err := transactionSigner.NewSigningContext(l2EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L2 app signing context: %v", err)
-	}
-	l2AppPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2AppSigningContext)
+	l2AppPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 app private key signer: %v", err)
 	}
@@ -563,7 +543,8 @@ const (
 grpcPort: 9000
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
       keystore: |
@@ -630,7 +611,9 @@ chains:
 l1ChainId: 31337
 operator:
   address: "0x1234aggregator"
-  operatorPrivateKey: "0x..."
+  operatorPrivateKey:
+    privateKey: "0x..."
+
   signingKeys:
     bls:
       password: ""

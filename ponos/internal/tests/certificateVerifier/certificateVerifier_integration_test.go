@@ -116,11 +116,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
-	l1SigningContext, err := transactionSigner.NewSigningContext(l1EthClient, l)
-	if err != nil {
-		t.Fatalf("Failed to create L1 signing context: %v", err)
-	}
-	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1SigningContext)
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 private key signer: %v", err)
 	}

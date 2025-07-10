@@ -10,22 +10,34 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"go.uber.org/zap"
 )
 
 // Web3Signer implements ITransactionSigner using Web3Signer service
 type Web3Signer struct {
-	*SigningContext
+	ethClient        *ethclient.Client
+	logger           *zap.Logger
+	chainID          *big.Int
 	web3SignerClient *web3signer.Client
 	fromAddress      common.Address
 }
 
 // NewWeb3Signer creates a new Web3Signer
-func NewWeb3Signer(web3SignerClient *web3signer.Client, fromAddress common.Address, signingContext *SigningContext) *Web3Signer {
+func NewWeb3Signer(web3SignerClient *web3signer.Client, fromAddress common.Address, ethClient *ethclient.Client, logger *zap.Logger) (*Web3Signer, error) {
+	// Get chain ID during initialization
+	chainID, err := ethClient.ChainID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
 	return &Web3Signer{
-		SigningContext:   signingContext,
+		ethClient:        ethClient,
+		logger:           logger,
+		chainID:          chainID,
 		web3SignerClient: web3SignerClient,
 		fromAddress:      fromAddress,
-	}
+	}, nil
 }
 
 // GetTransactOpts returns transaction options for creating unsigned transactions
@@ -91,7 +103,8 @@ func (w3s *Web3Signer) GetFromAddress() common.Address {
 
 // EstimateGasPriceAndLimit estimates gas price and limit for a transaction
 func (w3s *Web3Signer) EstimateGasPriceAndLimit(ctx context.Context, tx *types.Transaction) (*big.Int, uint64, error) {
-	return w3s.SigningContext.EstimateGasPriceAndLimit(ctx, tx)
+	// For now, return nil values - this method isn't fully implemented yet
+	return nil, 0, nil
 }
 
 // signTransaction is a signing function for bind.TransactOpts

@@ -38,11 +38,7 @@ func main() {
 		panic(err)
 	}
 
-	signingContext, err := transactionSigner.NewSigningContext(ethCaller, l)
-	if err != nil {
-		panic(err)
-	}
-	privateKeySigner, err := transactionSigner.NewPrivateKeySigner("0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214", signingContext)
+	privateKeySigner, err := transactionSigner.NewPrivateKeySigner("0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214", ethCaller, l)
 	if err != nil {
 		panic(err)
 	}

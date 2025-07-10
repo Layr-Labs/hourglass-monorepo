@@ -171,7 +171,7 @@ func (oc *OperatorConfig) Validate() error {
 	if oc.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
 	}
-	if oc.OperatorPrivateKey == "" {
+	if oc.OperatorPrivateKey == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("operatorPrivateKey"), "operatorPrivateKey is required"))
 	}
 	if err := oc.SigningKeys.Validate(); err != nil {
@@ -203,10 +203,11 @@ func (sk *SigningKey) Validate() error {
 }
 
 type RemoteSignerConfig struct {
-	Url    string `json:"url" yaml:"url"`
-	CACert string `json:"caCert" yaml:"caCert"`
-	Cert   string `json:"cert" yaml:"cert"`
-	Key    string `json:"key" yaml:"key"`
+	Url         string `json:"url" yaml:"url"`
+	CACert      string `json:"caCert" yaml:"caCert"`
+	Cert        string `json:"cert" yaml:"cert"`
+	Key         string `json:"key" yaml:"key"`
+	FromAddress string `json:"fromAddress" yaml:"fromAddress"`
 }
 
 type ECDSAKeyConfig struct {

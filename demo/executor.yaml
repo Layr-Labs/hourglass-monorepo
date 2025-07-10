@@ -3,7 +3,8 @@ grpcPort: 9090
 performerNetworkName: demo_hourglass-demo
 operator:
   address: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
-  operatorPrivateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+  operatorPrivateKey:
+    privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
   signingKeys:
     bls:
       keystoreFile: "/ponos-config/testKeys/executor/key_bn254.json"

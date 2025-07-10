@@ -2,6 +2,11 @@ package transactionSigner
 
 import (
 	"context"
+	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/web3signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"go.uber.org/zap"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -22,4 +27,24 @@ type ITransactionSigner interface {
 
 	// EstimateGasPriceAndLimit estimates gas price and limit for a transaction
 	EstimateGasPriceAndLimit(ctx context.Context, tx *types.Transaction) (*big.Int, uint64, error)
+}
+
+func NewTransactionSigner(cfg *config.ECDSAKeyConfig, ethClient *ethclient.Client, logger *zap.Logger) (ITransactionSigner, error) {
+	if cfg.UseRemoteSigner {
+		baseConfig := web3signer.DefaultConfig()
+		baseConfig.BaseURL = cfg.RemoteSignerConfig.Url
+
+		web3SignerClient, err := web3signer.NewClient(baseConfig, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create web3signer client: %w", err)
+		}
+
+		return NewWeb3Signer(web3SignerClient, common.HexToAddress(cfg.RemoteSignerConfig.FromAddress), ethClient, logger)
+	}
+
+	if cfg.PrivateKey == "" {
+		return nil, fmt.Errorf("private key cannot be empty")
+	}
+
+	return NewPrivateKeySigner(cfg.PrivateKey, ethClient, logger)
 }

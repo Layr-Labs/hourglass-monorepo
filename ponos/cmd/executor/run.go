@@ -119,18 +119,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("task mailbox contract not found")
 		}
 
-		// Create signing context and private key signer
-		signingContext, err := transactionSigner.NewSigningContext(ethClient, l)
-		if err != nil {
-			return fmt.Errorf("failed to create signing context: %w", err)
-		}
-
-		var privateKeySigner transactionSigner.ITransactionSigner
-		if Config.Operator.OperatorPrivateKey.UseRemoteSigner {
-			// TODO(seanmcagry): add remote signer support
-		} else {
-			privateKeySigner, err = transactionSigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey.PrivateKey, signingContext)
-		}
+		privateKeySigner, err := transactionSigner.NewTransactionSigner(Config.Operator.OperatorPrivateKey, ethClient, l)
 		if err != nil {
 			return fmt.Errorf("failed to create private key signer: %w", err)
 		}

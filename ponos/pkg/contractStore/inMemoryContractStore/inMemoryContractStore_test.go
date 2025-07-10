@@ -50,7 +50,8 @@ const (
 ---
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
         keystore: ""

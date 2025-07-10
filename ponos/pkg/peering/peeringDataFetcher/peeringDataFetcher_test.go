@@ -120,11 +120,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create AVS signing context: %v", err)
-			}
-			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
@@ -137,11 +133,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
-			operatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create operator signing context: %v", err)
-			}
-			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.privateKey, operatorSigningContext)
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.privateKey, ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}
@@ -342,11 +334,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create AVS signing context: %v", err)
-			}
-			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
@@ -359,11 +347,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
-			operatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create operator signing context: %v", err)
-			}
-			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.txPrivateKey, operatorSigningContext)
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.txPrivateKey, ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}

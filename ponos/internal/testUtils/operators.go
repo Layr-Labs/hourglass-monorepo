@@ -33,11 +33,7 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
-	avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create AVS signing context: %v", err)
-	}
-	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS private key signer: %v", err)
 	}
@@ -50,11 +46,7 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
 	}
 
-	aggregatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create aggregator signing context: %v", err)
-	}
-	aggregatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, aggregatorSigningContext)
+	aggregatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator private key signer: %v", err)
 	}
@@ -95,11 +87,7 @@ func SetupOperatorPeering(
 		zap.String("transactionHash", result.TxHash.String()),
 	)
 
-	executorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create executor signing context: %v", err)
-	}
-	executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, executorSigningContext)
+	executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, ethClient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor private key signer: %v", err)
 	}
@@ -221,11 +209,7 @@ func DelegateStakeToOperator(
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategyAddress", strategyAddress),
 	)
-	stakerSigningContext, err := transactionSigner.NewSigningContext(ethclient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create staker signing context: %v", err)
-	}
-	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, stakerSigningContext)
+	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, ethclient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker private key signer: %v", err)
 	}
@@ -243,11 +227,7 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)
 	}
 
-	opSigningContext, err := transactionSigner.NewSigningContext(ethclient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create operator signing context: %v", err)
-	}
-	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, opSigningContext)
+	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, ethclient, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator private key signer: %v", err)
 	}
