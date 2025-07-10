@@ -74,7 +74,7 @@ func (pks *PrivateKeySigner) EstimateGasPriceAndLimit(ctx context.Context, tx *t
 // estimateGasPriceAndLimitAndSendTx replicates the original EstimateGasPriceAndLimitAndSendTx method
 func (pks *PrivateKeySigner) estimateGasPriceAndLimitAndSendTx(ctx context.Context, fromAddress common.Address, tx *types.Transaction, tag string) (*types.Receipt, error) {
 	var FallbackGasTipCap = big.NewInt(15000000000)
-	
+
 	gasTipCap, err := pks.SigningContext.ethClient.SuggestGasTipCap(ctx)
 	if err != nil {
 		// If the transaction failed because the backend does not support
