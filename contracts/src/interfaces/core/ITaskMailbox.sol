@@ -92,7 +92,6 @@ interface ITaskMailboxTypes {
      * @param feeSplit Percentage split of fees taken by the TaskMailbox in basis points
      * @param status Current status of the task
      * @param isFeeRefunded Whether the fee has been refunded
-     * @param feeSplitCollector Address to receive the fee split
      * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
      * @param payload Task payload
      * @param executorCert Executor certificate
@@ -111,8 +110,6 @@ interface ITaskMailboxTypes {
         uint16 feeSplit;
         TaskStatus status;
         bool isFeeRefunded;
-        // Storage slot 4: feeSplitCollector (20 bytes) = 20 bytes (12 bytes unused)
-        address feeSplitCollector;
         // Dynamic storage slots
         ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;

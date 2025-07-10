@@ -149,7 +149,6 @@ contract TaskMailbox is
             feeSplit,
             TaskStatus.CREATED,
             false, // isFeeRefunded
-            feeSplitCollector,
             taskConfig,
             taskParams.payload,
             bytes(""),
@@ -212,7 +211,7 @@ contract TaskMailbox is
 
             // Transfer split to fee split collector if there's a split
             if (feeSplitAmount > 0) {
-                task.executorOperatorSetTaskConfig.feeToken.safeTransfer(task.feeSplitCollector, feeSplitAmount);
+                task.executorOperatorSetTaskConfig.feeToken.safeTransfer(feeSplitCollector, feeSplitAmount);
             }
 
             // Transfer remaining fee to AVS fee collector
@@ -443,7 +442,6 @@ contract TaskMailbox is
             task.feeSplit,
             _getTaskStatus(task),
             task.isFeeRefunded,
-            task.feeSplitCollector,
             task.executorOperatorSetTaskConfig,
             task.payload,
             task.executorCert,
