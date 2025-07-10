@@ -5,7 +5,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
 )
@@ -41,12 +41,12 @@ func main() {
 		return
 	}
 
-	signingContext, err := transactionsigner.NewSigningContext(ethClient, l)
+	signingContext, err := transactionSigner.NewSigningContext(ethClient, l)
 	if err != nil {
 		l.Sugar().Fatalf("failed to create signing context: %v", err)
 		return
 	}
-	privateKeySigner, err := transactionsigner.NewPrivateKeySigner("0x90a7b1bcc84977a8b008fea51da40ad7e58b844095b13518f575ded17a4c67e4", signingContext)
+	privateKeySigner, err := transactionSigner.NewPrivateKeySigner("0x90a7b1bcc84977a8b008fea51da40ad7e58b844095b13518f575ded17a4c67e4", signingContext)
 	if err != nil {
 		l.Sugar().Fatalf("failed to create private key signer: %v", err)
 		return

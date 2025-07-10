@@ -13,7 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/iden3/go-iden3-crypto/keccak256"
 	"github.com/stretchr/testify/assert"
@@ -120,11 +120,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+			avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create AVS signing context: %v", err)
 			}
-			avsPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
 			if err != nil {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
@@ -137,11 +137,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
-			operatorSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+			operatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create operator signing context: %v", err)
 			}
-			operatorPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(tc.privateKey, operatorSigningContext)
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.privateKey, operatorSigningContext)
 			if err != nil {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}
@@ -342,11 +342,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+			avsSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create AVS signing context: %v", err)
 			}
-			avsPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, avsSigningContext)
 			if err != nil {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
@@ -359,11 +359,11 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
-			operatorSigningContext, err := transactionsigner.NewSigningContext(ethClient, l)
+			operatorSigningContext, err := transactionSigner.NewSigningContext(ethClient, l)
 			if err != nil {
 				t.Fatalf("Failed to create operator signing context: %v", err)
 			}
-			operatorPrivateKeySigner, err := transactionsigner.NewPrivateKeySigner(tc.txPrivateKey, operatorSigningContext)
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.txPrivateKey, operatorSigningContext)
 			if err != nil {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}

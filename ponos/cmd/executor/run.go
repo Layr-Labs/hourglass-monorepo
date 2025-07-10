@@ -21,7 +21,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
-	transactionsigner "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -120,11 +120,11 @@ var runCmd = &cobra.Command{
 		}
 
 		// Create signing context and private key signer
-		signingContext, err := transactionsigner.NewSigningContext(ethClient, l)
+		signingContext, err := transactionSigner.NewSigningContext(ethClient, l)
 		if err != nil {
 			return fmt.Errorf("failed to create signing context: %w", err)
 		}
-		privateKeySigner, err := transactionsigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey, signingContext)
+		privateKeySigner, err := transactionSigner.NewPrivateKeySigner(Config.Operator.OperatorPrivateKey, signingContext)
 		if err != nil {
 			return fmt.Errorf("failed to create private key signer: %w", err)
 		}
