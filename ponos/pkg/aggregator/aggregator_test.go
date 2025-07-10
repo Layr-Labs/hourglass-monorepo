@@ -73,7 +73,9 @@ func Test_Aggregator(t *testing.T) {
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
-	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
 	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 

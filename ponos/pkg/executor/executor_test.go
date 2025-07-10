@@ -61,7 +61,9 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
-	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
 	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
@@ -77,7 +79,9 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
-	simAggConfig.Operator.SigningKeys.ECDSA = chainConfig.OperatorAccountPrivateKey
+	simAggConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.OperatorAccountPrivateKey,
+	}
 	simAggConfig.Operator.Address = chainConfig.OperatorAccountAddress
 	simAggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	simAggConfig.Avss[0].Address = chainConfig.AVSAccountAddress

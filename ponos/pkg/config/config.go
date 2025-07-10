@@ -202,9 +202,22 @@ func (sk *SigningKey) Validate() error {
 	return nil
 }
 
+type RemoteSignerConfig struct {
+	Url    string `json:"url" yaml:"url"`
+	CACert string `json:"caCert" yaml:"caCert"`
+	Cert   string `json:"cert" yaml:"cert"`
+	Key    string `json:"key" yaml:"key"`
+}
+
+type ECDSAKeyConfig struct {
+	UseRemoteSigner    bool                `json:"remoteSigner" yaml:"remoteSigner"`
+	RemoteSignerConfig *RemoteSignerConfig `json:"remoteSignerConfig" yaml:"remoteSignerConfig"`
+	PrivateKey         string              `json:"privateKey" yaml:"privateKey"`
+}
+
 type SigningKeys struct {
-	BLS   *SigningKey `json:"bls"`
-	ECDSA string      `json:"ecdsa"`
+	BLS   *SigningKey     `json:"bls"`
+	ECDSA *ECDSAKeyConfig `json:"ecdsa"`
 }
 
 func (sk *SigningKeys) Validate() error {

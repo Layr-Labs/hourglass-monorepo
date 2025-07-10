@@ -83,7 +83,7 @@ func ParseKeysFromConfig(
 		}
 		genericExecutorSigningKey = bn254PrivateSigningKey
 	} else if curveType == config.CurveTypeECDSA {
-		ecdsaPrivateSigningKey, err = cryptoLibsEcdsa.NewPrivateKeyFromHexString(operatorConfig.SigningKeys.ECDSA)
+		ecdsaPrivateSigningKey, err = cryptoLibsEcdsa.NewPrivateKeyFromHexString(operatorConfig.SigningKeys.ECDSA.PrivateKey)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get ECDSA private key: %w", err)
 		}
