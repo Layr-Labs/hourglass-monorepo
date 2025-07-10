@@ -467,6 +467,10 @@ contract TaskMailboxUnitTests_setFeeSplit is TaskMailboxUnitTests {
 
     function test_SetFeeSplit_MaxValue() public {
         uint16 maxFeeSplit = 10_000; // 100%
+
+        vm.expectEmit(true, true, true, true);
+        emit FeeSplitSet(maxFeeSplit);
+
         taskMailbox.setFeeSplit(maxFeeSplit);
         assertEq(taskMailbox.getFeeSplit(), maxFeeSplit);
     }
