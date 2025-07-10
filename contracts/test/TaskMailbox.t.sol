@@ -77,7 +77,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         taskMailbox = TaskMailbox(address(proxy));
 
@@ -144,7 +144,7 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox newTaskMailbox = TaskMailbox(address(proxy));
 
@@ -853,7 +853,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
@@ -896,7 +896,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
@@ -1775,7 +1775,7 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
     function test_Initialize_OnlyOnce() public {
         // Try to initialize again, should revert
         vm.expectRevert("Initializable: contract is already initialized");
-        taskMailbox.initialize(address(0x9999));
+        taskMailbox.initialize(address(0x9999), 0, address(1));
     }
 
     function test_Implementation_CannotBeInitialized() public {
@@ -1785,7 +1785,7 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
 
         // Try to initialize the implementation directly, should revert
         vm.expectRevert("Initializable: contract is already initialized");
-        newImpl.initialize(address(this));
+        newImpl.initialize(address(this), 0, address(1));
     }
 
     function test_ProxyUpgrade() public {
@@ -1879,11 +1879,11 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
         TaskMailbox uninitializedTaskMailbox = TaskMailbox(address(uninitializedProxy));
 
         // Initialize it once
-        uninitializedTaskMailbox.initialize(address(this));
+        uninitializedTaskMailbox.initialize(address(this), 0, address(1));
         assertEq(uninitializedTaskMailbox.owner(), address(this));
 
         // Try to initialize again, should fail
         vm.expectRevert("Initializable: contract is already initialized");
-        uninitializedTaskMailbox.initialize(address(0x9999));
+        uninitializedTaskMailbox.initialize(address(0x9999), 0, address(1));
     }
 }

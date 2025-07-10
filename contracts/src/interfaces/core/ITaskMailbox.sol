@@ -87,7 +87,8 @@ interface ITaskMailboxTypes {
      * @param executorOperatorSetId ID of the operator set executing the task
      * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
-     * @param feeSplit Percentage split of fees taken by the TaskMailbox
+     * @param feeSplit Percentage split of fees taken by the TaskMailbox in basis points
+     * @param feeSplitCollector Address to receive the fee split
      * @param isFeeRefunded Whether the fee has been refunded
      * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
      * @param payload Task payload
@@ -104,6 +105,7 @@ interface ITaskMailboxTypes {
         address refundCollector;
         uint96 avsFee;
         uint16 feeSplit;
+        address feeSplitCollector;
         bool isFeeRefunded;
         ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;
@@ -169,6 +171,9 @@ interface ITaskMailboxErrors is ITaskMailboxTypes {
 
     /// @notice Thrown when caller is not the refund collector
     error OnlyRefundCollector();
+
+    /// @notice Thrown when fee split value is invalid (> 10000 bips)
+    error InvalidFeeSplit();
 }
 
 /**
@@ -248,6 +253,18 @@ interface ITaskMailboxEvents is ITaskMailboxTypes {
      * @param avsFee Amount of fee refunded
      */
     event FeeRefunded(address indexed refundCollector, bytes32 indexed taskHash, uint96 avsFee);
+
+    /**
+     * @notice Emitted when the fee split is updated
+     * @param feeSplit The new fee split value in basis points
+     */
+    event FeeSplitSet(uint16 feeSplit);
+
+    /**
+     * @notice Emitted when the fee split collector is updated
+     * @param feeSplitCollector The new fee split collector address
+     */
+    event FeeSplitCollectorSet(address indexed feeSplitCollector);
 }
 
 /**
@@ -307,6 +324,24 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
      */
     function refundFee(
         bytes32 taskHash
+    ) external;
+
+    /**
+     * @notice Sets the fee split percentage
+     * @param _feeSplit The fee split in basis points (0-10000)
+     * @dev Only callable by the owner
+     */
+    function setFeeSplit(
+        uint16 _feeSplit
+    ) external;
+
+    /**
+     * @notice Sets the fee split collector address
+     * @param _feeSplitCollector The address to receive fee splits
+     * @dev Only callable by the owner
+     */
+    function setFeeSplitCollector(
+        address _feeSplitCollector
     ) external;
 
     /**
@@ -377,4 +412,16 @@ interface ITaskMailbox is ITaskMailboxErrors, ITaskMailboxEvents {
     function getECDSACertificateBytes(
         IECDSACertificateVerifierTypes.ECDSACertificate memory cert
     ) external pure returns (bytes memory);
+
+    /**
+     * @notice Gets the current fee split percentage
+     * @return The fee split in basis points
+     */
+    function getFeeSplit() external view returns (uint16);
+
+    /**
+     * @notice Gets the current fee split collector address
+     * @return The address that receives fee splits
+     */
+    function getFeeSplitCollector() external view returns (address);
 }

@@ -27,14 +27,15 @@ contract DeployTaskMailbox is Script {
         console.log("ProxyAdmin deployed to:", address(proxyAdmin));
 
         // Deploy implementation
-        TaskMailbox taskMailboxImpl = new TaskMailbox(bn254CertVerifier, ecdsaCertVerifier, "1.0.0");
+        TaskMailbox taskMailboxImpl = new TaskMailbox(bn254CertVerifier, ecdsaCertVerifier, "0.0.1");
         console.log("TaskMailbox implementation deployed to:", address(taskMailboxImpl));
 
         // Deploy proxy with initialization
+        // Initialize with no fee split (0) and deployer as fee split collector
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, deployer)
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, deployer, 0, deployer)
         );
         console.log("TaskMailbox proxy deployed to:", address(proxy));
 
