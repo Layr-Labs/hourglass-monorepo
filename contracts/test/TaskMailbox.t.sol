@@ -77,7 +77,7 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         taskMailbox = TaskMailbox(address(proxy));
 
@@ -144,7 +144,7 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox newTaskMailbox = TaskMailbox(address(proxy));
 
@@ -152,6 +152,8 @@ contract TaskMailboxUnitTests_Constructor is TaskMailboxUnitTests {
         assertEq(newTaskMailbox.ECDSA_CERTIFICATE_VERIFIER(), ecdsaVerifier);
         assertEq(newTaskMailbox.version(), "1.0.0");
         assertEq(newTaskMailbox.owner(), address(this));
+        assertEq(newTaskMailbox.getFeeSplit(), 0);
+        assertEq(newTaskMailbox.getFeeSplitCollector(), address(1));
     }
 }
 
@@ -451,6 +453,64 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
     }
 }
 
+// Test contract for setFeeSplit
+contract TaskMailboxUnitTests_setFeeSplit is TaskMailboxUnitTests {
+    function test_SetFeeSplit() public {
+        uint16 newFeeSplit = 2000; // 20%
+
+        vm.expectEmit(true, true, true, true);
+        emit FeeSplitSet(newFeeSplit);
+
+        taskMailbox.setFeeSplit(newFeeSplit);
+        assertEq(taskMailbox.getFeeSplit(), newFeeSplit);
+    }
+
+    function test_SetFeeSplit_MaxValue() public {
+        uint16 maxFeeSplit = 10_000; // 100%
+
+        vm.expectEmit(true, true, true, true);
+        emit FeeSplitSet(maxFeeSplit);
+
+        taskMailbox.setFeeSplit(maxFeeSplit);
+        assertEq(taskMailbox.getFeeSplit(), maxFeeSplit);
+    }
+
+    function test_Revert_SetFeeSplit_NotOwner() public {
+        vm.prank(address(0x999));
+        vm.expectRevert("Ownable: caller is not the owner");
+        taskMailbox.setFeeSplit(1000);
+    }
+
+    function test_Revert_SetFeeSplit_ExceedsMax() public {
+        vm.expectRevert(InvalidFeeSplit.selector);
+        taskMailbox.setFeeSplit(10_001); // > 100%
+    }
+}
+
+// Test contract for setFeeSplitCollector
+contract TaskMailboxUnitTests_setFeeSplitCollector is TaskMailboxUnitTests {
+    function test_SetFeeSplitCollector() public {
+        address newCollector = address(0x123);
+
+        vm.expectEmit(true, true, true, true);
+        emit FeeSplitCollectorSet(newCollector);
+
+        taskMailbox.setFeeSplitCollector(newCollector);
+        assertEq(taskMailbox.getFeeSplitCollector(), newCollector);
+    }
+
+    function test_Revert_SetFeeSplitCollector_NotOwner() public {
+        vm.prank(address(0x999));
+        vm.expectRevert("Ownable: caller is not the owner");
+        taskMailbox.setFeeSplitCollector(address(0x123));
+    }
+
+    function test_Revert_SetFeeSplitCollector_ZeroAddress() public {
+        vm.expectRevert(InvalidAddressZero.selector);
+        taskMailbox.setFeeSplitCollector(address(0));
+    }
+}
+
 // Test contract for createTask
 contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
     function setUp() public override {
@@ -521,6 +581,7 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         assertEq(task.refundCollector, fuzzRefundCollector);
         assertEq(task.avsFee, fuzzAvsFee);
         assertEq(task.feeSplit, 0);
+        assertEq(task.feeSplitCollector, address(1)); // From initialization
         assertEq(task.payload, fuzzPayload);
 
         // Verify token transfer if fee > 0
@@ -715,6 +776,44 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         assertEq(task.creator, creator);
         assertEq(task.refundCollector, address(0));
     }
+
+    function test_createTask_CapturesFeeSplitValues() public {
+        // Set fee split values
+        uint16 feeSplit = 1500; // 15%
+        address feeSplitCollector = address(0x456);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 taskHash = taskMailbox.createTask(taskParams);
+
+        // Verify task captured current fee split values
+        Task memory task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.feeSplit, feeSplit);
+        assertEq(task.feeSplitCollector, feeSplitCollector);
+
+        // Change fee split values
+        uint16 newFeeSplit = 3000; // 30%
+        address newFeeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(newFeeSplit);
+        taskMailbox.setFeeSplitCollector(newFeeSplitCollector);
+
+        // Create another task
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Verify new task has new values while old task retains old values
+        Task memory newTask = taskMailbox.getTaskInfo(newTaskHash);
+        assertEq(newTask.feeSplit, newFeeSplit);
+        assertEq(newTask.feeSplitCollector, newFeeSplitCollector);
+
+        // Verify old task still has old values
+        task = taskMailbox.getTaskInfo(taskHash);
+        assertEq(task.feeSplit, feeSplit);
+        assertEq(task.feeSplitCollector, feeSplitCollector);
+    }
 }
 
 // Test contract for submitResult
@@ -853,7 +952,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
@@ -896,7 +995,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskMailboxImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this))
+            abi.encodeWithSelector(TaskMailbox.initialize.selector, address(this), 0, address(1))
         );
         TaskMailbox failingTaskMailbox = TaskMailbox(address(proxy));
 
@@ -1326,6 +1425,305 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         assertEq(uint8(task.status), uint8(TaskStatus.VERIFIED));
         assertFalse(task.isFeeRefunded);
     }
+
+    function test_FeeSplit_10Percent() public {
+        // Setup fee split
+        uint16 feeSplit = 1000; // 10%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify fee distribution
+        uint256 expectedFeeSplitAmount = (avsFee * feeSplit) / 10_000;
+        uint256 expectedFeeCollectorAmount = avsFee - expectedFeeSplitAmount;
+
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedFeeCollectorAmount);
+    }
+
+    function test_FeeSplit_50Percent() public {
+        // Setup fee split
+        uint16 feeSplit = 5000; // 50%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify fee distribution - should be equal split
+        uint256 expectedFeeSplitAmount = avsFee / 2;
+        uint256 expectedFeeCollectorAmount = avsFee - expectedFeeSplitAmount;
+
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedFeeCollectorAmount);
+    }
+
+    function test_FeeSplit_0Percent() public {
+        // Setup fee split - 0% means all fees go to fee collector
+        uint16 feeSplit = 0;
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify all fees went to fee collector
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore); // No change
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + avsFee);
+    }
+
+    function test_FeeSplit_100Percent() public {
+        // Setup fee split - 100% means all fees go to fee split collector
+        uint16 feeSplit = 10_000;
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify all fees went to fee split collector
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore + avsFee);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore); // No change
+    }
+
+    function test_FeeSplit_ZeroFeeAmount() public {
+        // Setup fee split
+        uint16 feeSplit = 5000; // 50%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Setup operator set with zero fee
+        mockTaskHook.setDefaultFee(0);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify no transfers occurred
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore);
+    }
+
+    function test_FeeSplit_WithSmallFee() public {
+        // Setup fee split
+        uint16 feeSplit = 3333; // 33.33%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Setup small fee
+        uint96 smallFee = 100; // 100 wei
+        mockTaskHook.setDefaultFee(smallFee);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify fee distribution with rounding
+        uint256 expectedFeeSplitAmount = (smallFee * feeSplit) / 10_000; // 33 wei
+        uint256 expectedFeeCollectorAmount = smallFee - expectedFeeSplitAmount; // 67 wei
+
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedFeeCollectorAmount);
+        assertEq(expectedFeeSplitAmount + expectedFeeCollectorAmount, smallFee); // Verify no wei lost
+    }
+
+    function test_FeeSplit_Rounding() public {
+        // Setup fee split that will cause rounding
+        uint16 feeSplit = 1; // 0.01%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Setup fee that won't divide evenly
+        uint96 oddFee = 10_001; // Will result in 1.0001 wei split
+        mockTaskHook.setDefaultFee(oddFee);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify rounding down occurs for fee split
+        uint256 expectedFeeSplitAmount = (oddFee * feeSplit) / 10_000; // 1 wei (rounded down from 1.0001)
+        uint256 expectedFeeCollectorAmount = oddFee - expectedFeeSplitAmount; // 10000 wei
+
+        assertEq(mockToken.balanceOf(feeSplitCollector), expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), expectedFeeCollectorAmount);
+        assertEq(expectedFeeSplitAmount + expectedFeeCollectorAmount, oddFee);
+    }
+
+    function testFuzz_FeeSplit(uint16 _feeSplit, uint96 _avsFee) public {
+        // Bound inputs
+        _feeSplit = uint16(bound(_feeSplit, 0, 10_000));
+        vm.assume(_avsFee > 0 && _avsFee <= 1000 ether);
+        vm.assume(_avsFee <= mockToken.balanceOf(creator));
+
+        // Setup fee split
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(_feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Setup fee
+        mockTaskHook.setDefaultFee(_avsFee);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balances
+        uint256 mailboxBalanceBefore = mockToken.balanceOf(address(taskMailbox));
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 feeSplitCollectorBalanceBefore = mockToken.balanceOf(feeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Calculate expected amounts
+        uint256 expectedFeeSplitAmount = (uint256(_avsFee) * _feeSplit) / 10_000;
+        uint256 expectedAvsAmount = _avsFee - expectedFeeSplitAmount;
+
+        // Verify balances
+        assertEq(mockToken.balanceOf(feeSplitCollector), feeSplitCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedAvsAmount);
+
+        // Verify total distribution equals original fee
+        assertEq(expectedFeeSplitAmount + expectedAvsAmount, _avsFee);
+    }
+
+    function test_FeeSplit_TaskUsesSnapshotValues() public {
+        // Setup initial fee split
+        uint16 initialFeeSplit = 2000; // 20%
+        address initialFeeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(initialFeeSplit);
+        taskMailbox.setFeeSplitCollector(initialFeeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Change fee split after task creation
+        uint16 newFeeSplit = 5000; // 50%
+        address newFeeSplitCollector = address(0xABC);
+        taskMailbox.setFeeSplit(newFeeSplit);
+        taskMailbox.setFeeSplitCollector(newFeeSplitCollector);
+
+        // Check initial balances
+        uint256 feeCollectorBalanceBefore = mockToken.balanceOf(feeCollector);
+        uint256 initialCollectorBalanceBefore = mockToken.balanceOf(initialFeeSplitCollector);
+        uint256 newCollectorBalanceBefore = mockToken.balanceOf(newFeeSplitCollector);
+
+        // Submit result
+        vm.warp(block.timestamp + 1);
+        bytes memory executorCert = abi.encode(_createValidBN254Certificate(newTaskHash));
+
+        vm.prank(aggregator);
+        taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
+
+        // Verify fee distribution uses snapshot values (20% to initial collector)
+        uint256 expectedFeeSplitAmount = (avsFee * initialFeeSplit) / 10_000;
+        uint256 expectedFeeCollectorAmount = avsFee - expectedFeeSplitAmount;
+
+        assertEq(mockToken.balanceOf(initialFeeSplitCollector), initialCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedFeeCollectorAmount);
+        assertEq(mockToken.balanceOf(newFeeSplitCollector), newCollectorBalanceBefore); // No change
+    }
 }
 
 // Test contract for refundFee function
@@ -1478,6 +1876,35 @@ contract TaskMailboxUnitTests_refundFee is TaskMailboxUnitTests {
         assertTrue(task.isFeeRefunded);
     }
 
+    function test_refundFee_WithFeeSplit() public {
+        // Setup fee split
+        uint16 feeSplit = 3000; // 30%
+        address feeSplitCollector = address(0x789);
+        taskMailbox.setFeeSplit(feeSplit);
+        taskMailbox.setFeeSplitCollector(feeSplitCollector);
+
+        // Create task
+        TaskParams memory taskParams = _createValidTaskParams();
+        vm.prank(creator);
+        bytes32 newTaskHash = taskMailbox.createTask(taskParams);
+
+        // Check initial balance
+        uint256 refundCollectorBalanceBefore = mockToken.balanceOf(refundCollector);
+
+        // Move time forward to expire the task
+        vm.warp(block.timestamp + taskSLA + 1);
+
+        // Refund fee
+        vm.prank(refundCollector);
+        taskMailbox.refundFee(newTaskHash);
+
+        // Verify full fee was refunded (fee split doesn't apply to refunds)
+        assertEq(mockToken.balanceOf(refundCollector), refundCollectorBalanceBefore + avsFee);
+
+        // Verify fee split collector got nothing
+        assertEq(mockToken.balanceOf(feeSplitCollector), 0);
+    }
+
     function test_refundFee_ZeroFee() public {
         // Set mock to return 0 fee
         mockTaskHook.setDefaultFee(0);
@@ -1534,6 +1961,10 @@ contract TaskMailboxUnitTests_ViewFunctions is TaskMailboxUnitTests {
         assertEq(taskMailbox.ECDSA_CERTIFICATE_VERIFIER(), address(mockECDSACertificateVerifier));
         assertEq(taskMailbox.version(), "1.0.0");
         assertEq(taskMailbox.owner(), address(this));
+
+        // Test fee split getters
+        assertEq(taskMailbox.getFeeSplit(), 0); // Default value from initialization
+        assertEq(taskMailbox.getFeeSplitCollector(), address(1)); // Default value from initialization
     }
 
     function test_getExecutorOperatorSetTaskConfig() public {
@@ -1775,7 +2206,7 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
     function test_Initialize_OnlyOnce() public {
         // Try to initialize again, should revert
         vm.expectRevert("Initializable: contract is already initialized");
-        taskMailbox.initialize(address(0x9999));
+        taskMailbox.initialize(address(0x9999), 0, address(1));
     }
 
     function test_Implementation_CannotBeInitialized() public {
@@ -1785,7 +2216,7 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
 
         // Try to initialize the implementation directly, should revert
         vm.expectRevert("Initializable: contract is already initialized");
-        newImpl.initialize(address(this));
+        newImpl.initialize(address(this), 0, address(1));
     }
 
     function test_ProxyUpgrade() public {
@@ -1879,11 +2310,11 @@ contract TaskMailboxUnitTests_Upgradeable is TaskMailboxUnitTests {
         TaskMailbox uninitializedTaskMailbox = TaskMailbox(address(uninitializedProxy));
 
         // Initialize it once
-        uninitializedTaskMailbox.initialize(address(this));
+        uninitializedTaskMailbox.initialize(address(this), 0, address(1));
         assertEq(uninitializedTaskMailbox.owner(), address(this));
 
         // Try to initialize again, should fail
         vm.expectRevert("Initializable: contract is already initialized");
-        uninitializedTaskMailbox.initialize(address(0x9999));
+        uninitializedTaskMailbox.initialize(address(0x9999), 0, address(1));
     }
 }

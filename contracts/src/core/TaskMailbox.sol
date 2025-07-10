@@ -56,13 +56,15 @@ contract TaskMailbox is
     /**
      * @notice Initializer for TaskMailbox
      * @param _owner The owner of the contract
+     * @param _feeSplit The initial fee split in basis points
+     * @param _feeSplitCollector The initial fee split collector address
      */
-    function initialize(
-        address _owner
-    ) external initializer {
+    function initialize(address _owner, uint16 _feeSplit, address _feeSplitCollector) external initializer {
         __Ownable_init();
         __ReentrancyGuard_init();
         _transferOwnership(_owner);
+        _setFeeSplit(_feeSplit);
+        _setFeeSplitCollector(_feeSplitCollector);
     }
 
     /**
@@ -145,7 +147,8 @@ contract TaskMailbox is
             taskParams.executorOperatorSet.id,
             taskParams.refundCollector,
             avsFee,
-            0, // TODO: Update with fee split % variable
+            feeSplit,
+            feeSplitCollector,
             false, // isFeeRefunded
             taskConfig,
             taskParams.payload,
@@ -204,9 +207,21 @@ contract TaskMailbox is
 
         // Transfer fee to the fee collector if there's a fee to transfer
         if (task.executorOperatorSetTaskConfig.feeToken != IERC20(address(0)) && task.avsFee > 0) {
-            task.executorOperatorSetTaskConfig.feeToken.safeTransfer(
-                task.executorOperatorSetTaskConfig.feeCollector, task.avsFee
-            );
+            // Calculate fee split amount
+            uint96 feeSplitAmount = ((uint256(task.avsFee) * task.feeSplit) / 10_000).toUint96();
+
+            // Transfer split to fee split collector if there's a split
+            if (feeSplitAmount > 0) {
+                task.executorOperatorSetTaskConfig.feeToken.safeTransfer(task.feeSplitCollector, feeSplitAmount);
+            }
+
+            // Transfer remaining fee to AVS fee collector
+            uint96 avsAmount = task.avsFee - feeSplitAmount;
+            if (avsAmount > 0) {
+                task.executorOperatorSetTaskConfig.feeToken.safeTransfer(
+                    task.executorOperatorSetTaskConfig.feeCollector, avsAmount
+                );
+            }
         }
 
         // Post-task result submission checks: AVS can update hook storage for task lifecycle if needed.
@@ -237,11 +252,49 @@ contract TaskMailbox is
         emit FeeRefunded(task.refundCollector, taskHash, task.avsFee);
     }
 
+    /// @inheritdoc ITaskMailbox
+    function setFeeSplit(
+        uint16 _feeSplit
+    ) external onlyOwner {
+        _setFeeSplit(_feeSplit);
+    }
+
+    /// @inheritdoc ITaskMailbox
+    function setFeeSplitCollector(
+        address _feeSplitCollector
+    ) external onlyOwner {
+        _setFeeSplitCollector(_feeSplitCollector);
+    }
+
     /**
      *
      *                         INTERNAL FUNCTIONS
      *
      */
+
+    /**
+     * @notice Sets the fee split percentage
+     * @param _feeSplit The fee split in basis points (0-10000)
+     */
+    function _setFeeSplit(
+        uint16 _feeSplit
+    ) internal {
+        require(_feeSplit <= 10_000, InvalidFeeSplit());
+        feeSplit = _feeSplit;
+        emit FeeSplitSet(_feeSplit);
+    }
+
+    /**
+     * @notice Sets the fee split collector address
+     * @param _feeSplitCollector The address to receive fee splits
+     */
+    function _setFeeSplitCollector(
+        address _feeSplitCollector
+    ) internal {
+        require(_feeSplitCollector != address(0), InvalidAddressZero());
+        feeSplitCollector = _feeSplitCollector;
+        emit FeeSplitCollectorSet(_feeSplitCollector);
+    }
 
     /**
      * @notice Gets the current status of a task
@@ -389,6 +442,7 @@ contract TaskMailbox is
             task.refundCollector,
             task.avsFee,
             task.feeSplit,
+            task.feeSplitCollector,
             task.isFeeRefunded,
             task.executorOperatorSetTaskConfig,
             task.payload,
@@ -427,5 +481,15 @@ contract TaskMailbox is
         IECDSACertificateVerifierTypes.ECDSACertificate memory cert
     ) external pure returns (bytes memory) {
         return abi.encode(cert);
+    }
+
+    /// @inheritdoc ITaskMailbox
+    function getFeeSplit() external view returns (uint16) {
+        return feeSplit;
+    }
+
+    /// @inheritdoc ITaskMailbox
+    function getFeeSplitCollector() external view returns (address) {
+        return feeSplitCollector;
     }
 }

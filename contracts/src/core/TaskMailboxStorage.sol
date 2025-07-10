@@ -28,6 +28,12 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
     /// @notice Mapping from executor operator set key to its task configuration
     mapping(bytes32 operatorSetKey => ExecutorOperatorSetTaskConfig config) public executorOperatorSetTaskConfigs;
 
+    /// @notice The fee split percentage in basis points (0-10000)
+    uint16 public feeSplit;
+
+    /// @notice The address that receives the fee split
+    address public feeSplitCollector;
+
     /**
      * @notice Constructor for TaskMailboxStorage
      * @param _bn254CertificateVerifier Address of the BN254 certificate verifier
@@ -43,5 +49,5 @@ abstract contract TaskMailboxStorage is ITaskMailbox {
      * variables without shifting down storage in the inheritance chain.
      * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
      */
-    uint256[46] private __gap;
+    uint256[44] private __gap;
 }
