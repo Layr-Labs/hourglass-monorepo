@@ -24,11 +24,11 @@ contract SetupAVSTaskMailboxConfig is Script {
         // Set the Executor Operator Set Task Config
         ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig = ITaskMailboxTypes
             .ExecutorOperatorSetTaskConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(taskHook),
-            feeToken: IERC20(address(0)),
-            feeCollector: address(0),
             taskSLA: 60,
+            feeToken: IERC20(address(0)),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            feeCollector: address(0),
             consensus: ITaskMailboxTypes.Consensus({
                 consensusType: ITaskMailboxTypes.ConsensusType.STAKE_PROPORTION_THRESHOLD,
                 value: abi.encode(uint16(10_000))

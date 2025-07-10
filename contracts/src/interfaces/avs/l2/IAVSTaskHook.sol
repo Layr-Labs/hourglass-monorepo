@@ -11,8 +11,6 @@ import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/Operato
  * @dev This interface allows AVSs to implement custom validation logic for tasks.
  */
 interface IAVSTaskHook {
-    // TODO: Should this contract be ERC165 compliant?
-
     /**
      * @notice Validates a task before it is created
      * @param caller Address that is creating the task

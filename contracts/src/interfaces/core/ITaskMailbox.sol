@@ -36,21 +36,24 @@ interface ITaskMailboxTypes {
 
     /**
      * @notice Configuration for the executor operator set
-     * @param curveType The curve type used for signature verification
      * @param taskHook Address of the AVS task hook contract
-     * @param feeToken ERC20 token used for task fees
-     * @param feeCollector Address to receive AVS fees
      * @param taskSLA Time (in seconds) within which the task must be completed
+     * @param feeToken ERC20 token used for task fees
+     * @param curveType The curve type used for signature verification
+     * @param feeCollector Address to receive AVS fees
      * @param consensus Consensus configuration for task verification
      * @param taskMetadata Additional metadata for task execution
      */
     struct ExecutorOperatorSetTaskConfig {
-        // TODO: Pack storage efficiently.
-        IKeyRegistrarTypes.CurveType curveType;
+        // Storage slot 1: taskHook (20 bytes) + taskSLA (12 bytes) = 32 bytes
         IAVSTaskHook taskHook;
-        IERC20 feeToken;
-        address feeCollector;
         uint96 taskSLA;
+        // Storage slot 2: feeToken (20 bytes) + curveType (1 byte) = 21 bytes (11 bytes unused)
+        IERC20 feeToken;
+        IKeyRegistrarTypes.CurveType curveType;
+        // Storage slot 3: feeCollector (20 bytes) = 20 bytes (12 bytes unused)
+        address feeCollector;
+        // Dynamic storage slots
         Consensus consensus;
         bytes taskMetadata;
     }
@@ -82,13 +85,12 @@ interface ITaskMailboxTypes {
      * @notice Complete task information
      * @param creator Address that created the task
      * @param creationTime Block timestamp when task was created
-     * @param status Current status of the task
      * @param avs Address of the AVS handling the task
-     * @param executorOperatorSetId ID of the operator set executing the task
-     * @param refundCollector Address to receive refunds
      * @param avsFee Fee paid to the AVS
+     * @param refundCollector Address to receive refunds
+     * @param executorOperatorSetId ID of the operator set executing the task
      * @param feeSplit Percentage split of fees taken by the TaskMailbox in basis points
-     * @param feeSplitCollector Address to receive the fee split
+     * @param status Current status of the task
      * @param isFeeRefunded Whether the fee has been refunded
      * @param executorOperatorSetTaskConfig Configuration for executor operator set task execution
      * @param payload Task payload
@@ -96,17 +98,19 @@ interface ITaskMailboxTypes {
      * @param result Task execution result data
      */
     struct Task {
-        // TODO: Pack storage efficiently.
+        // Storage slot 1: creator (20 bytes) + creationTime (12 bytes) = 32 bytes
         address creator;
         uint96 creationTime;
-        TaskStatus status;
+        // Storage slot 2: avs (20 bytes) + avsFee (12 bytes) = 32 bytes
         address avs;
-        uint32 executorOperatorSetId;
-        address refundCollector;
         uint96 avsFee;
+        // Storage slot 3: refundCollector (20 bytes) + executorOperatorSetId (4 bytes) + feeSplit (2 bytes) + status (1 byte) + isFeeRefunded (1 byte) = 28 bytes (4 bytes unused)
+        address refundCollector;
+        uint32 executorOperatorSetId;
         uint16 feeSplit;
-        address feeSplitCollector;
+        TaskStatus status;
         bool isFeeRefunded;
+        // Dynamic storage slots
         ExecutorOperatorSetTaskConfig executorOperatorSetTaskConfig;
         bytes payload;
         bytes executorCert;

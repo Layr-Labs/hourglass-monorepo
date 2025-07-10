@@ -97,11 +97,11 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
 
     function _createValidExecutorOperatorSetTaskConfig() internal view returns (ExecutorOperatorSetTaskConfig memory) {
         return ExecutorOperatorSetTaskConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(address(mockTaskHook)),
-            feeToken: IERC20(address(mockToken)),
-            feeCollector: feeCollector,
             taskSLA: taskSLA,
+            feeToken: IERC20(address(mockToken)),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            feeCollector: feeCollector,
             consensus: Consensus({
                 consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
                 value: abi.encode(stakeProportionThreshold)
@@ -259,11 +259,11 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
         ExecutorOperatorSetTaskConfig memory config = ExecutorOperatorSetTaskConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(fuzzTaskHook),
-            feeToken: IERC20(fuzzFeeToken),
-            feeCollector: fuzzFeeCollector,
             taskSLA: fuzzTaskSLA,
+            feeToken: IERC20(fuzzFeeToken),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            feeCollector: fuzzFeeCollector,
             consensus: Consensus({
                 consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
                 value: abi.encode(fuzzStakeProportionThreshold)
@@ -329,7 +329,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(
             entries[0].topics[0],
             keccak256(
-                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(uint8,address,address,address,uint96,(uint8,bytes),bytes))"
+                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,uint96,address,uint8,address,(uint8,bytes),bytes))"
             )
         );
 
@@ -581,7 +581,6 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         assertEq(task.refundCollector, fuzzRefundCollector);
         assertEq(task.avsFee, fuzzAvsFee);
         assertEq(task.feeSplit, 0);
-        assertEq(task.feeSplitCollector, address(1)); // From initialization
         assertEq(task.payload, fuzzPayload);
 
         // Verify token transfer if fee > 0
@@ -789,10 +788,9 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.prank(creator);
         bytes32 taskHash = taskMailbox.createTask(taskParams);
 
-        // Verify task captured current fee split values
+        // Verify task captured current fee split value
         Task memory task = taskMailbox.getTaskInfo(taskHash);
         assertEq(task.feeSplit, feeSplit);
-        assertEq(task.feeSplitCollector, feeSplitCollector);
 
         // Change fee split values
         uint16 newFeeSplit = 3000; // 30%
@@ -804,15 +802,16 @@ contract TaskMailboxUnitTests_createTask is TaskMailboxUnitTests {
         vm.prank(creator);
         bytes32 newTaskHash = taskMailbox.createTask(taskParams);
 
-        // Verify new task has new values while old task retains old values
+        // Verify new task has new fee split while old task retains old value
         Task memory newTask = taskMailbox.getTaskInfo(newTaskHash);
         assertEq(newTask.feeSplit, newFeeSplit);
-        assertEq(newTask.feeSplitCollector, newFeeSplitCollector);
 
-        // Verify old task still has old values
+        // Verify old task still has old fee split value
         task = taskMailbox.getTaskInfo(taskHash);
         assertEq(task.feeSplit, feeSplit);
-        assertEq(task.feeSplitCollector, feeSplitCollector);
+
+        // Verify that the global feeSplitCollector is used (not captured in task)
+        assertEq(taskMailbox.feeSplitCollector(), newFeeSplitCollector);
     }
 }
 
@@ -1686,7 +1685,7 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         assertEq(expectedFeeSplitAmount + expectedAvsAmount, _avsFee);
     }
 
-    function test_FeeSplit_TaskUsesSnapshotValues() public {
+    function test_FeeSplit_TaskUsesSnapshotFeeSplitAndCurrentCollector() public {
         // Setup initial fee split
         uint16 initialFeeSplit = 2000; // 20%
         address initialFeeSplitCollector = address(0x789);
@@ -1716,13 +1715,13 @@ contract TaskMailboxUnitTests_submitResult is TaskMailboxUnitTests {
         vm.prank(aggregator);
         taskMailbox.submitResult(newTaskHash, executorCert, bytes("result"));
 
-        // Verify fee distribution uses snapshot values (20% to initial collector)
+        // Verify fee distribution uses snapshot feeSplit (20%) but current collector (newFeeSplitCollector)
         uint256 expectedFeeSplitAmount = (avsFee * initialFeeSplit) / 10_000;
         uint256 expectedFeeCollectorAmount = avsFee - expectedFeeSplitAmount;
 
-        assertEq(mockToken.balanceOf(initialFeeSplitCollector), initialCollectorBalanceBefore + expectedFeeSplitAmount);
+        assertEq(mockToken.balanceOf(initialFeeSplitCollector), initialCollectorBalanceBefore); // No change
         assertEq(mockToken.balanceOf(feeCollector), feeCollectorBalanceBefore + expectedFeeCollectorAmount);
-        assertEq(mockToken.balanceOf(newFeeSplitCollector), newCollectorBalanceBefore); // No change
+        assertEq(mockToken.balanceOf(newFeeSplitCollector), newCollectorBalanceBefore + expectedFeeSplitAmount); // Gets the fee split
     }
 }
 
