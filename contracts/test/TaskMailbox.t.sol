@@ -97,11 +97,11 @@ contract TaskMailboxUnitTests is Test, ITaskMailboxTypes, ITaskMailboxErrors, IT
 
     function _createValidExecutorOperatorSetTaskConfig() internal view returns (ExecutorOperatorSetTaskConfig memory) {
         return ExecutorOperatorSetTaskConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(address(mockTaskHook)),
-            feeToken: IERC20(address(mockToken)),
-            feeCollector: feeCollector,
             taskSLA: taskSLA,
+            feeToken: IERC20(address(mockToken)),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            feeCollector: feeCollector,
             consensus: Consensus({
                 consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
                 value: abi.encode(stakeProportionThreshold)
@@ -259,11 +259,11 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         OperatorSet memory operatorSet = OperatorSet(avs, executorOperatorSetId);
 
         ExecutorOperatorSetTaskConfig memory config = ExecutorOperatorSetTaskConfig({
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
             taskHook: IAVSTaskHook(fuzzTaskHook),
-            feeToken: IERC20(fuzzFeeToken),
-            feeCollector: fuzzFeeCollector,
             taskSLA: fuzzTaskSLA,
+            feeToken: IERC20(fuzzFeeToken),
+            curveType: IKeyRegistrarTypes.CurveType.BN254,
+            feeCollector: fuzzFeeCollector,
             consensus: Consensus({
                 consensusType: ConsensusType.STAKE_PROPORTION_THRESHOLD,
                 value: abi.encode(fuzzStakeProportionThreshold)
@@ -329,7 +329,7 @@ contract TaskMailboxUnitTests_setExecutorOperatorSetTaskConfig is TaskMailboxUni
         assertEq(
             entries[0].topics[0],
             keccak256(
-                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(uint8,address,address,address,uint96,(uint8,bytes),bytes))"
+                "ExecutorOperatorSetTaskConfigSet(address,address,uint32,(address,uint96,address,uint8,address,(uint8,bytes),bytes))"
             )
         );
 
