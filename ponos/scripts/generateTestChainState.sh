@@ -243,23 +243,40 @@ function lowercaseAddress() {
     echo "$1" | tr '[:upper:]' '[:lower:]'
 }
 
+deployAccountPublicKey=$(cast wallet public-key --private-key $deployAccountPk)
+avsAccountPublicKey=$(cast wallet public-key --private-key $avsAccountPk)
+appAccountPublicKey=$(cast wallet public-key --private-key $appAccountPk)
+operatorAccountPublicKey=$(cast wallet public-key --private-key $operatorAccountPk)
+execOperatorAccountPublicKey=$(cast wallet public-key --private-key $execOperatorAccountPk)
+aggStakerAccountPublicKey=$(cast wallet public-key --private-key $aggStakerAccountPk)
+execStakerAccountPublicKey=$(cast wallet public-key --private-key $execStakerAccountPk)
+deployAccountAddress=$(lowercaseAddress $deployAccountAddress)
+
+
 # create a heredoc json file and dump it to internal/testData/chain-config.json
 cat <<EOF > internal/testData/chain-config.json
 {
       "deployAccountAddress": "$deployAccountAddress",
       "deployAccountPk": "$deployAccountPk",
+      "deployAccountPublicKey": "$deployAccountPublicKey",
       "avsAccountAddress": "$avsAccountAddress",
       "avsAccountPk": "$avsAccountPk",
+      "avsAccountPublicKey": "$avsAccountPublicKey",
       "appAccountAddress": "$appAccountAddress",
       "appAccountPk": "$appAccountPk",
+      "appAccountPublicKey": "$appAccountPublicKey",
       "operatorAccountAddress": "$operatorAccountAddress",
       "operatorAccountPk": "$operatorAccountPk",
+      "operatorAccountPublicKey": "$operatorAccountPublicKey",
       "execOperatorAccountAddress": "$execOperatorAccountAddress",
       "execOperatorAccountPk": "$execOperatorAccountPk",
+      "execOperatorAccountPublicKey": "$execOperatorAccountPublicKey",
       "aggStakerAccountAddress": "$aggStakerAccountAddress",
       "aggStakerAccountPk": "$aggStakerAccountPk",
+      "aggStakerAccountPublicKey": "$aggStakerAccountPublicKey",
       "execStakerAccountAddress": "$execStakerAccountAddress",
       "execStakerAccountPk": "$execStakerAccountPk",
+      "execStakerAccountPublicKey": "$execStakerAccountPublicKey",
       "mailboxContractAddressL1": "$mailboxContractAddressL1",
       "mailboxContractAddressL2": "$mailboxContractAddressL2",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",

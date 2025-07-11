@@ -355,7 +355,7 @@ func TestDockerContainerManager_DefaultConfig_Integration(t *testing.T) {
 	containerPort := 8080
 	networkName := "test-default-network"
 
-	config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName)
+	config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName, nil)
 
 	t.Run("default configuration creates valid container", func(t *testing.T) {
 		// Create container with default config

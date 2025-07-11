@@ -94,6 +94,7 @@ func TestCreateDefaultContainerConfig(t *testing.T) {
 				tt.imageDigest,
 				tt.containerPort,
 				tt.networkName,
+				nil,
 			)
 
 			// Verify hostname format (should include hash and timestamp)

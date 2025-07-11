@@ -29,6 +29,7 @@ type AvsPerformerConfig struct {
 	WorkerCount         int
 	SigningCurve        string // bn254, bls381, etc
 	AVSRegistrarAddress string
+	Envs                []config.AVSPerformerEnv
 }
 
 func (ap *AvsPerformerConfig) Validate() error {
@@ -58,6 +59,11 @@ func (ap *AvsPerformerConfig) Validate() error {
 
 	if ap.AVSRegistrarAddress == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("avsRegistrarAddress"), "avsRegistrarAddress is required"))
+	}
+	for i, env := range ap.Envs {
+		if err := env.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("envs").Index(i), env, err.Error()))
+		}
 	}
 
 	if len(allErrors) > 0 {
