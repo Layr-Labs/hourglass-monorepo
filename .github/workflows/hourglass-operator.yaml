@@ -44,11 +44,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set release version
-        env:
-          REF: ${{ github.ref }}
-        run: |
-          cd ponos && ./scripts/version.sh $REF
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -69,6 +64,6 @@ jobs:
           REGISTRY: "public.ecr.aws/z6g0f8n7"
           REPOSITORY: "eigenlayer/hourglass-operator"
         run: |
-          VERSION=$(cat ./ponos/VERSION | tr -d '[:space:]' | sed 's/+/_/g')
-          echo "Building docker image for version $VERSION"
-          docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
+          echo "Building docker image for version ${{ github.ref }}"
+          cd hourglass-operator
+          docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:${{ github.ref }} -t $REGISTRY/$REPOSITORY:latest --push .
