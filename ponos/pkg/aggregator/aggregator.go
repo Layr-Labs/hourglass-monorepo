@@ -18,6 +18,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"strings"
@@ -25,12 +26,12 @@ import (
 )
 
 type AggregatorConfig struct {
-	Address       string
-	AggregatorUrl string
-	PrivateKey    string
-	AVSs          []*aggregatorConfig.AggregatorAvs
-	Chains        []*aggregatorConfig.Chain
-	L1ChainId     config.ChainId
+	Address          string
+	AggregatorUrl    string
+	PrivateKeyConfig *config.ECDSAKeyConfig
+	AVSs             []*aggregatorConfig.AggregatorAvs
+	Chains           []*aggregatorConfig.Chain
+	L1ChainId        config.ChainId
 }
 
 type Aggregator struct {
@@ -227,10 +228,9 @@ func (a *Aggregator) initializePollers() error {
 
 func InitializeContractCaller(
 	chain *aggregatorConfig.Chain,
-	privateKey string,
+	privateKeyConfig *config.ECDSAKeyConfig,
 	contractStore contractStore.IContractStore,
 	avsRegistrarAddress string,
-	isL1Chain bool,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
 	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -255,13 +255,18 @@ func InitializeContractCaller(
 		return nil, err
 	}
 
+	txSigner, err := transactionSigner.NewTransactionSigner(privateKeyConfig, ethereumContractCaller, logger)
+	if err != nil {
+		logger.Sugar().Errorw("failed to create transaction signer", "error", err)
+		return nil, fmt.Errorf("failed to create transaction signer: %w", err)
+	}
+
 	callerConfig := &caller.ContractCallerConfig{
-		PrivateKey:          privateKey,
 		AVSRegistrarAddress: avsRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
 	}
 
-	return caller.NewContractCaller(callerConfig, ethereumContractCaller, logger)
+	return caller.NewContractCaller(callerConfig, ethereumContractCaller, txSigner, logger)
 }
 
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
@@ -271,10 +276,9 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 
 		cc, err := InitializeContractCaller(
 			chain,
-			a.config.PrivateKey,
+			a.config.PrivateKeyConfig,
 			a.contractStore,
 			a.config.AVSs[0].AVSRegistrarAddress,
-			chain.ChainId == a.config.L1ChainId,
 			a.logger,
 		)
 		if err != nil {

@@ -16,7 +16,8 @@ serverConfig:
 
 operator:
   address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
-  operatorPrivateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
+  operatorPrivateKey:
+    privateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
   signingKeys:
     bls:
       keystoreFile: "/ponos-config/testKeys/aggregator/key_bn254.json"

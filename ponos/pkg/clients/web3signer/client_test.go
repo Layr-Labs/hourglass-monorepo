@@ -280,3 +280,153 @@ func TestWeb3SignerError_Error(t *testing.T) {
 	expected := "Web3Signer error -32000: Account not found"
 	assert.Equal(t, expected, err.Error())
 }
+
+func TestNewConfigWithTLS(t *testing.T) {
+	t.Run("http url without tls", func(t *testing.T) {
+		config := NewConfigWithTLS("http://localhost:9000", "ca-cert", "client-cert", "client-key")
+		assert.Equal(t, "http://localhost:9000", config.BaseURL)
+		assert.Nil(t, config.TLS, "TLS config should be nil for HTTP URLs")
+	})
+
+	t.Run("https url with tls config", func(t *testing.T) {
+		config := NewConfigWithTLS("https://localhost:9000", "ca-cert", "client-cert", "client-key")
+		assert.Equal(t, "https://localhost:9000", config.BaseURL)
+		assert.NotNil(t, config.TLS, "TLS config should be set for HTTPS URLs with TLS parameters")
+		assert.Equal(t, "ca-cert", config.TLS.CACert)
+		assert.Equal(t, "client-cert", config.TLS.ClientCert)
+		assert.Equal(t, "client-key", config.TLS.ClientKey)
+	})
+
+	t.Run("https url without tls config", func(t *testing.T) {
+		config := NewConfigWithTLS("https://localhost:9000", "", "", "")
+		assert.Equal(t, "https://localhost:9000", config.BaseURL)
+		assert.Nil(t, config.TLS, "TLS config should be nil when no TLS parameters provided")
+	})
+
+	t.Run("https url with partial tls config", func(t *testing.T) {
+		config := NewConfigWithTLS("https://localhost:9000", "ca-cert", "", "")
+		assert.Equal(t, "https://localhost:9000", config.BaseURL)
+		assert.NotNil(t, config.TLS, "TLS config should be set when any TLS parameter is provided")
+		assert.Equal(t, "ca-cert", config.TLS.CACert)
+		assert.Equal(t, "", config.TLS.ClientCert)
+		assert.Equal(t, "", config.TLS.ClientKey)
+	})
+}
+
+func TestClient_SignRaw(t *testing.T) {
+	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+		Debug: false,
+	})
+	assert.Nil(t, loggerErr)
+
+	t.Run("successful raw signing", func(t *testing.T) {
+		expectedSignature := "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9"
+		testData := []byte("Hello, Web3Signer!")
+		identifier := "0x1234567890abcdef"
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			assert.Equal(t, "/api/v1/eth1/sign/"+identifier, r.URL.Path)
+
+			var payload map[string]interface{}
+			err := json.NewDecoder(r.Body).Decode(&payload)
+			require.NoError(t, err)
+
+			expectedDataHex := "0x48656c6c6f2c20576562335369676e657221"
+			assert.Equal(t, expectedDataHex, payload["data"])
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(expectedSignature)
+		}))
+		defer server.Close()
+
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
+
+		signature, err := client.SignRaw(context.Background(), identifier, testData)
+		require.NoError(t, err)
+		assert.Equal(t, expectedSignature, signature)
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		identifier := "0x1234567890abcdef"
+		testData := []byte("test data")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte("Bad request"))
+		}))
+		defer server.Close()
+
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
+
+		_, err = client.SignRaw(context.Background(), identifier, testData)
+		require.Error(t, err)
+
+		var web3SignerErr *Web3SignerError
+		assert.ErrorAs(t, err, &web3SignerErr)
+		assert.Equal(t, 400, web3SignerErr.Code)
+	})
+}
+
+func TestTLSClientCreation(t *testing.T) {
+	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+		Debug: false,
+	})
+	assert.Nil(t, loggerErr)
+
+	t.Run("http client creation", func(t *testing.T) {
+		config := &Config{
+			BaseURL: "http://localhost:9000",
+			Timeout: 30 * time.Second,
+		}
+		client, err := NewClient(config, l)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("https client creation without tls config", func(t *testing.T) {
+		config := &Config{
+			BaseURL: "https://localhost:9000",
+			Timeout: 30 * time.Second,
+		}
+		client, err := NewClient(config, l)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("https client creation with tls config", func(t *testing.T) {
+		config := &Config{
+			BaseURL: "https://localhost:9000",
+			Timeout: 30 * time.Second,
+			TLS: &TLSConfig{
+				InsecureSkipVerify: true, // For testing - skip cert validation
+			},
+		}
+		client, err := NewClient(config, l)
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("invalid client certificate", func(t *testing.T) {
+		config := &Config{
+			BaseURL: "https://localhost:9000",
+			Timeout: 30 * time.Second,
+			TLS: &TLSConfig{
+				ClientCert: "invalid-cert",
+				ClientKey:  "invalid-key",
+			},
+		}
+		client, err := NewClient(config, l)
+		assert.Error(t, err)
+		assert.Nil(t, client)
+		assert.Contains(t, err.Error(), "failed to load client certificate and key")
+	})
+}

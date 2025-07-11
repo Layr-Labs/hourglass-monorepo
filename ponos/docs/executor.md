@@ -5,7 +5,8 @@ The config can be provided as a yaml or json file with the following structure:
 ```yaml
 operator:
   address: "0xoperator..."            # The operator address
-  operatorPrivateKey: "..."           # The private key of the operator used for signing blockchain transactions
+  operatorPrivateKey:
+    privateKey: "..."           # The private key of the operator used for signing blockchain transactions
   signingKeys:                        # available signing keys, only one key per type is needed and will depend on what is required by the AVS
     ecdsa:
       privateKey: ""

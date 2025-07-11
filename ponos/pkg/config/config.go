@@ -160,8 +160,8 @@ func GetContractsMapForChain(chainId ChainId) *CoreContractAddresses {
 
 type OperatorConfig struct {
 	Address string `json:"address" yaml:"address"`
-	// OperatorPrivateKey is the private key of the operator used for signing transactions
-	OperatorPrivateKey string `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
+	// OperatorPrivateKey is the private key of the operator used for signing transactions.
+	OperatorPrivateKey *ECDSAKeyConfig `json:"operatorPrivateKey" yaml:"operatorPrivateKey"`
 	// SigningKeys contains the signing keys for the operator (BLS or ECDSA)
 	SigningKeys SigningKeys `json:"signingKeys" yaml:"signingKeys"`
 }
@@ -171,7 +171,7 @@ func (oc *OperatorConfig) Validate() error {
 	if oc.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
 	}
-	if oc.OperatorPrivateKey == "" {
+	if oc.OperatorPrivateKey == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("operatorPrivateKey"), "operatorPrivateKey is required"))
 	}
 	if err := oc.SigningKeys.Validate(); err != nil {
@@ -202,9 +202,24 @@ func (sk *SigningKey) Validate() error {
 	return nil
 }
 
+type RemoteSignerConfig struct {
+	Url         string `json:"url" yaml:"url"`
+	CACert      string `json:"caCert" yaml:"caCert"`
+	Cert        string `json:"cert" yaml:"cert"`
+	Key         string `json:"key" yaml:"key"`
+	FromAddress string `json:"fromAddress" yaml:"fromAddress"`
+	PublicKey   string `json:"publicKey" yaml:"publicKey"`
+}
+
+type ECDSAKeyConfig struct {
+	UseRemoteSigner    bool                `json:"remoteSigner" yaml:"remoteSigner"`
+	RemoteSignerConfig *RemoteSignerConfig `json:"remoteSignerConfig" yaml:"remoteSignerConfig"`
+	PrivateKey         string              `json:"privateKey" yaml:"privateKey"`
+}
+
 type SigningKeys struct {
-	BLS   *SigningKey `json:"bls"`
-	ECDSA string      `json:"ecdsa"`
+	BLS   *SigningKey     `json:"bls"`
+	ECDSA *ECDSAKeyConfig `json:"ecdsa"`
 }
 
 func (sk *SigningKeys) Validate() error {

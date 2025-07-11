@@ -35,7 +35,7 @@ func generateKeyData(operator *Operator, cc contractCaller.IContractCaller) ([]b
 	if operator.Curve == config.CurveTypeECDSA {
 		pk, ok := operator.SigningPrivateKey.(*ecdsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("signing private key is not of type crypto-libs/ecds.PrivateKey")
+			return nil, fmt.Errorf("signing private key is not of type crypto-libs/ecds.PrivateKeyConfig")
 		}
 		address, err := pk.DeriveAddress()
 		if err != nil {
@@ -46,7 +46,7 @@ func generateKeyData(operator *Operator, cc contractCaller.IContractCaller) ([]b
 	if operator.Curve == config.CurveTypeBN254 {
 		privateKey, ok := operator.SigningPrivateKey.(*bn254.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("signing private key is not of type *bn254.PrivateKey")
+			return nil, fmt.Errorf("signing private key is not of type *bn254.PrivateKeyConfig")
 		}
 		keyData, err := cc.EncodeBN254KeyData(privateKey.Public())
 		if err != nil {
@@ -115,7 +115,7 @@ func RegisterOperatorToOperatorSets(
 		case config.CurveTypeECDSA:
 			pk, ok := operator.SigningPrivateKey.(*ecdsa.PrivateKey)
 			if !ok {
-				return nil, fmt.Errorf("signing private key is not of type *ecdsa.PrivateKey")
+				return nil, fmt.Errorf("signing private key is not of type *ecdsa.PrivateKeyConfig")
 			}
 
 			address, err := pk.DeriveAddress()
@@ -161,7 +161,7 @@ func RegisterOperatorToOperatorSets(
 			}
 			pk, ok := operator.SigningPrivateKey.(*bn254.PrivateKey)
 			if !ok {
-				return nil, fmt.Errorf("signing private key is not of type *bn254.PrivateKey")
+				return nil, fmt.Errorf("signing private key is not of type *bn254.PrivateKeyConfig")
 			}
 			sig, err := pk.SignSolidityCompatible(messageHash)
 			if err != nil {
