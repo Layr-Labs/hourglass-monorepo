@@ -1,0 +1,141 @@
+{{- if .Values.rbac.create }}
+# ServiceAccount for the operator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "hourglass-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: true
+
+---
+# ClusterRole for the operator (needs cluster-wide permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "hourglass-operator.clusterRoleName" . }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+rules:
+# Performer CRD management (cluster-wide)
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# Performer status management
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/status"]
+  verbs: ["get", "patch", "update"]
+
+# Performer finalizers management
+- apiGroups: ["hourglass.eigenlayer.io"]
+  resources: ["performers/finalizers"]
+  verbs: ["update"]
+
+# Pod management (for performer pods)
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# Service management (for performer services)
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+
+# Events (for operator events)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
+
+# ConfigMaps (for operator configuration)
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+
+# Secrets (for operator secrets)
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+
+# Node information (for scheduling decisions)
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+
+# Namespaces (for cross-namespace operations)
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+# Leader election (for HA)
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
+
+{{- if .Values.webhook.enabled }}
+# Webhook configuration
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations", "validatingwebhookconfigurations"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+{{- end }}
+
+---
+# ClusterRoleBinding for the operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "hourglass-operator.clusterRoleBindingName" . }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "hourglass-operator.clusterRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ include "hourglass-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+
+---
+# Role for leader election in the operator namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "hourglass-operator.fullname" . }}-leader-election-role
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+# RoleBinding for leader election
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "hourglass-operator.fullname" . }}-leader-election-rolebinding
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "hourglass-operator.fullname" . }}-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "hourglass-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
