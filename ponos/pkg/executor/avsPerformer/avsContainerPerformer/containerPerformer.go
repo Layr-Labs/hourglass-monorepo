@@ -177,17 +177,7 @@ func (aps *AvsContainerPerformer) buildDockerEnvsFromConfig(image avsPerformer.P
 	for _, env := range image.Envs {
 		val := env.Value
 		if env.ValueFromEnv != "" {
-			eVal, ok := os.LookupEnv(env.ValueFromEnv)
-			if ok {
-				val = eVal
-			} else {
-				// If the environment variable is not set, log a warning
-				aps.logger.Sugar().Warn("Environment variable not found",
-					zap.String("envName", env.ValueFromEnv),
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("image", fmt.Sprintf("%s:%s", image.Repository, image.Tag)),
-				)
-			}
+			val = os.Getenv(env.ValueFromEnv)
 		}
 		dockerEnvs = append(dockerEnvs, fmt.Sprintf("%s=%s", env.Name, val))
 	}
