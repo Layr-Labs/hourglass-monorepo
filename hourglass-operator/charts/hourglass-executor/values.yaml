@@ -1,0 +1,291 @@
+# Default values for hourglass-executor.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  # Operator namespace where the singleton operator is deployed
+  operatorNamespace: hourglass-system
+
+# Executor configuration
+executor:
+  # Name of the executor (will be used as StatefulSet name)
+  name: ""  # Required: must be set by user
+  
+  # Container image configuration
+  image:
+    repository: hourglass/executor
+    tag: "v1.2.0"
+    pullPolicy: IfNotPresent
+  
+  # Number of executor replicas
+  replicaCount: 1
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  
+  # Environment variables
+  env:
+    # Deployment mode (always kubernetes for this chart)
+    deploymentMode: kubernetes
+    # Logging configuration
+    logLevel: info
+    logFormat: json
+    # Health check configuration
+    healthCheckPort: 8090
+    metricsPort: 8080
+
+# Aggregator connection configuration
+aggregator:
+  # Aggregator endpoint (required)
+  endpoint: ""  # Required: must be set by user
+  # TLS configuration
+  tls:
+    enabled: false
+  timeout: 30s
+
+# Blockchain configuration
+chains:
+  # Ethereum mainnet configuration
+  ethereum:
+    enabled: true
+    chainId: 1
+    rpcUrl: ""  # Required: must be set by user
+    wsUrl: ""   # Optional
+    taskMailboxAddress: ""  # Required: must be set by user
+    blockConfirmations: 12
+    gasLimit: 300000
+    gasPriceMultiplier: 1.1
+    fromBlock: "latest"
+    retryAttempts: 3
+    retryBackoff: "5s"
+  
+  # Base network configuration  
+  base:
+    enabled: false
+    chainId: 8453
+    rpcUrl: ""
+    wsUrl: ""
+    taskMailboxAddress: ""
+    blockConfirmations: 3
+    gasLimit: 300000
+    gasPriceMultiplier: 1.1
+    fromBlock: "latest"
+    retryAttempts: 3
+    retryBackoff: "5s"
+
+# AVS configuration
+avs:
+  # List of supported AVS configurations
+  supportedAvs:
+    - address: ""  # Required: must be set by user
+      name: "default-avs"
+      performer:
+        image: ""  # Required: must be set by user
+        version: "latest"
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+      # Hardware requirements
+      hardware:
+        gpu:
+          required: false
+          type: ""
+          count: 0
+        tee:
+          required: false
+          type: ""
+      # Scheduling configuration
+      scheduling:
+        nodeSelector: {}
+        tolerations: []
+        affinity: {}
+        priorityClassName: ""
+        runtimeClass: ""
+
+# Performer management configuration
+performer:
+  # Service discovery pattern
+  servicePattern: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+  defaultPort: 9090
+  connectionTimeout: 30s
+  startupTimeout: 300s
+  retryAttempts: 3
+  maxPerformers: 10
+  healthCheckInterval: 30s
+  healthCheckTimeout: 10s
+  resourceMonitoringEnabled: true
+  resourceMonitoringInterval: 60s
+
+# Secrets configuration
+secrets:
+  # Operator private keys
+  operatorKeys:
+    # ECDSA private key (required)
+    ecdsaPrivateKey: ""  # Required: must be set by user (base64 encoded)
+    # BLS private key (optional)
+    blsPrivateKey: ""    # Optional: base64 encoded
+  
+  # Docker registry secret (optional)
+  imagePullSecrets:
+    enabled: false
+    name: executor-registry-secret
+    dockerConfigJson: ""  # base64 encoded docker config
+  
+  # TLS certificates (optional)
+  tls:
+    enabled: false
+    cert: ""  # base64 encoded certificate
+    key: ""   # base64 encoded private key
+    ca: ""    # base64 encoded CA certificate
+
+# Service Account configuration
+serviceAccount:
+  # Name of the service account
+  name: executor-service-account
+  # Annotations for the service account (e.g., for IRSA on EKS)
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  # Whether to create RBAC resources
+  create: true
+  # Additional rules for the role (optional)
+  additionalRules: []
+
+# Storage configuration
+persistence:
+  # Whether to enable persistence
+  enabled: true
+  # Storage class name
+  storageClass: ""  # Uses cluster default if empty
+  # Storage size
+  size: 10Gi
+  # Access mode
+  accessMode: ReadWriteOnce
+
+# Service configuration
+service:
+  # Service type
+  type: ClusterIP
+  # Service ports
+  ports:
+    metrics: 8080
+    health: 8090
+    grpc: 9095
+  # Service annotations
+  annotations: {}
+
+# Metrics and monitoring configuration
+metrics:
+  enabled: true
+  port: 8080
+  path: /metrics
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    annotations: {}
+
+# Health checks configuration
+healthChecks:
+  enabled: true
+  livenessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 2
+  startupProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+
+# Pod configuration
+pod:
+  # Pod annotations
+  annotations: {}
+  # Pod labels
+  labels: {}
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # Container security context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+# Scheduling configuration
+scheduling:
+  # Node selector
+  nodeSelector: {}
+  # Pod anti-affinity for HA deployments
+  podAntiAffinity:
+    enabled: false
+    # required or preferred
+    type: preferred
+    # topologyKey for anti-affinity
+    topologyKey: kubernetes.io/hostname
+  # Node affinity
+  nodeAffinity: {}
+  # Tolerations
+  tolerations: []
+  # Priority class name
+  priorityClassName: ""
+
+# Network policies
+networkPolicy:
+  enabled: false
+  # Ingress rules
+  ingress: []
+  # Egress rules  
+  egress: []
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: ""
+
+# Cleanup configuration
+cleanup:
+  # Whether to cleanup performers on shutdown
+  onShutdown: true
+  # Cleanup timeout
+  timeout: 60s
+
+# Development/testing configuration
+development:
+  # Enable development mode features
+  enabled: false
+  # Mock external services
+  mockServices: false
