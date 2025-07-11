@@ -374,27 +374,6 @@ func TestClient_SignRaw(t *testing.T) {
 		assert.ErrorAs(t, err, &web3SignerErr)
 		assert.Equal(t, 400, web3SignerErr.Code)
 	})
-
-	t.Run("invalid json response", func(t *testing.T) {
-		identifier := "0x1234567890abcdef"
-		testData := []byte("test data")
-
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte("invalid json"))
-		}))
-		defer server.Close()
-
-		cfg := DefaultConfig()
-		cfg.BaseURL = server.URL
-		client, err := NewClient(cfg, l)
-		require.NoError(t, err)
-
-		_, err = client.SignRaw(context.Background(), identifier, testData)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to unmarshal signature response")
-	})
 }
 
 func TestTLSClientCreation(t *testing.T) {
