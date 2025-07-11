@@ -12,10 +12,20 @@
 //
 // Example usage:
 //
+//	// Basic HTTP configuration
 //	cfg := web3signer.DefaultConfig()
 //	cfg.BaseURL = "http://localhost:9000"
 //	cfg.Timeout = 30 * time.Second
-//	client := web3signer.NewClient(cfg, logger)
+//	client, err := web3signer.NewClient(cfg, logger)
+//
+//	// HTTPS with TLS configuration
+//	tlsConfig := web3signer.NewConfigWithTLS(
+//		"https://web3signer.example.com:9000",
+//		caCert,    // PEM-encoded CA certificate
+//		clientCert, // PEM-encoded client certificate
+//		clientKey,  // PEM-encoded client private key
+//	)
+//	secureClient, err := web3signer.NewClient(tlsConfig, logger)
 //
 //	// Sign a transaction
 //	signature, err := client.EthSignTransaction(ctx, "0x1234...", txData)
@@ -33,6 +43,8 @@ package web3signer
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,6 +75,24 @@ type Config struct {
 	BaseURL string
 	// Timeout is the maximum duration for HTTP requests
 	Timeout time.Duration
+	// TLS configuration for HTTPS connections
+	TLS *TLSConfig
+}
+
+// TLSConfig holds TLS configuration for secure connections to Web3Signer.
+// According to the Web3Signer TLS documentation, this supports:
+// - Server certificate verification using custom CA certificates
+// - Mutual TLS authentication using client certificates
+// - Optional certificate verification skipping for testing
+type TLSConfig struct {
+	// CACert is the PEM-encoded CA certificate to verify the server's certificate
+	CACert string
+	// ClientCert is the PEM-encoded client certificate for mutual TLS authentication
+	ClientCert string
+	// ClientKey is the PEM-encoded client private key for mutual TLS authentication
+	ClientKey string
+	// InsecureSkipVerify skips server certificate verification (not recommended for production)
+	InsecureSkipVerify bool
 }
 
 // DefaultConfig returns a default configuration for the Web3Signer client.
@@ -72,6 +102,34 @@ func DefaultConfig() *Config {
 		BaseURL: "http://localhost:9000",
 		Timeout: 30 * time.Second,
 	}
+}
+
+// NewConfigWithTLS creates a Web3Signer Config with TLS configuration.
+// This is a convenience function to create a config with TLS settings for secure connections.
+//
+// Parameters:
+//   - baseURL: The Web3Signer service URL (e.g., "https://web3signer.example.com:9000")
+//   - caCert: PEM-encoded CA certificate to verify the server's certificate (optional)
+//   - clientCert: PEM-encoded client certificate for mutual TLS authentication (optional)
+//   - clientKey: PEM-encoded client private key for mutual TLS authentication (optional)
+//
+// TLS configuration is only applied for HTTPS URLs. For HTTP URLs, TLS settings are ignored.
+// If any TLS parameter is provided for an HTTPS URL, a TLS config will be created.
+func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Config {
+	config := DefaultConfig()
+	config.BaseURL = baseURL
+	
+	// Only configure TLS if we have HTTPS and at least one TLS field
+	if strings.HasPrefix(baseURL, "https://") && (caCert != "" || clientCert != "" || clientKey != "") {
+		tlsConfig := &TLSConfig{
+			CACert:     caCert,
+			ClientCert: clientCert,
+			ClientKey:  clientKey,
+		}
+		config.TLS = tlsConfig
+	}
+	
+	return config
 }
 
 // NewClient creates a new Web3Signer client with the given configuration and logger.
@@ -85,11 +143,16 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("logger cannot be nil")
 	}
 
-	httpClient := &http.Client{
-		Timeout: cfg.Timeout,
+	httpClient, err := createHTTPClient(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	logger.Sugar().Debugw("Creating new Web3Signer client", zap.Any("config", cfg))
+	logger.Sugar().Debugw("Creating new Web3Signer client", 
+		zap.String("baseURL", cfg.BaseURL),
+		zap.Duration("timeout", cfg.Timeout),
+		zap.Bool("tlsEnabled", cfg.TLS != nil),
+	)
 
 	return &Client{
 		Logger:     logger,
@@ -97,6 +160,64 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		config:     cfg,
 		requestID:  0,
 	}, nil
+}
+
+// createHTTPClient creates an HTTP client with appropriate TLS configuration
+func createHTTPClient(cfg *Config, logger *zap.Logger) (*http.Client, error) {
+	transport := &http.Transport{}
+
+	// Only configure TLS for HTTPS URLs
+	if strings.HasPrefix(cfg.BaseURL, "https://") && cfg.TLS != nil {
+		tlsConfig, err := buildTLSConfig(cfg.TLS, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build TLS config: %w", err)
+		}
+		transport.TLSClientConfig = tlsConfig
+		logger.Sugar().Debugw("Configured TLS for Web3Signer client")
+	} else if strings.HasPrefix(cfg.BaseURL, "https://") {
+		// HTTPS without custom TLS config - use default TLS
+		transport.TLSClientConfig = &tls.Config{}
+		logger.Sugar().Debugw("Using default TLS configuration for HTTPS")
+	} else {
+		// HTTP connection - no TLS needed
+		logger.Sugar().Debugw("Using HTTP connection (no TLS)")
+	}
+
+	return &http.Client{
+		Timeout:   cfg.Timeout,
+		Transport: transport,
+	}, nil
+}
+
+// buildTLSConfig creates a TLS configuration from the provided TLS config
+func buildTLSConfig(tlsConfig *TLSConfig, logger *zap.Logger) (*tls.Config, error) {
+	config := &tls.Config{
+		InsecureSkipVerify: tlsConfig.InsecureSkipVerify,
+	}
+
+	// Configure CA certificate for server verification
+	if tlsConfig.CACert != "" {
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM([]byte(tlsConfig.CACert)) {
+			return nil, fmt.Errorf("failed to parse CA certificate")
+		}
+		config.RootCAs = caCertPool
+		logger.Sugar().Debugw("Configured custom CA certificate")
+	}
+
+	// Configure client certificate for mutual TLS
+	if tlsConfig.ClientCert != "" && tlsConfig.ClientKey != "" {
+		clientCert, err := tls.X509KeyPair([]byte(tlsConfig.ClientCert), []byte(tlsConfig.ClientKey))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate and key: %w", err)
+		}
+		config.Certificates = []tls.Certificate{clientCert}
+		logger.Sugar().Debugw("Configured client certificate for mutual TLS")
+	} else if tlsConfig.ClientCert != "" || tlsConfig.ClientKey != "" {
+		return nil, fmt.Errorf("both client certificate and key must be provided for mutual TLS")
+	}
+
+	return config, nil
 }
 
 // SetHttpClient allows setting a custom HTTP client for the Web3Signer client.
