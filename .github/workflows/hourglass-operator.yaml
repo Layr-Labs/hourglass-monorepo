@@ -64,6 +64,6 @@ jobs:
           REGISTRY: "public.ecr.aws/z6g0f8n7"
           REPOSITORY: "eigenlayer/hourglass-operator"
         run: |
-          echo "Building docker image for version ${{ github.ref }}"
+          echo "Building docker image for version ${{ github.sha }}"
           cd hourglass-operator
-          docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:${{ github.ref }} -t $REGISTRY/$REPOSITORY:latest --push .
+          docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:${{ github.sha }} -t $REGISTRY/$REPOSITORY:latest --push .
