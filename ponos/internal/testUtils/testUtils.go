@@ -49,23 +49,27 @@ func GetProjectRootPath() string {
 }
 
 type ChainConfig struct {
-	AVSAccountAddress           string `json:"avsAccountAddress"`
-	AVSAccountPrivateKey        string `json:"avsAccountPk"`
-	AppAccountAddress           string `json:"appAccountAddress"`
-	AppAccountPrivateKey        string `json:"appAccountPk"`
-	OperatorAccountPrivateKey   string `json:"operatorAccountPk"`
-	OperatorAccountAddress      string `json:"operatorAccountAddress"`
-	ExecOperatorAccountPk       string `json:"execOperatorAccountPk"`
-	ExecOperatorAccountAddress  string `json:"execOperatorAccountAddress"`
-	MailboxContractAddressL1    string `json:"mailboxContractAddressL1"`
-	MailboxContractAddressL2    string `json:"mailboxContractAddressL2"`
-	AVSTaskRegistrarAddress     string `json:"avsTaskRegistrarAddress"`
-	AVSTaskHookAddressL1        string `json:"avsTaskHookAddressL1"`
-	AVSTaskHookAddressL2        string `json:"avsTaskHookAddressL2"`
-	AggStakerAccountPrivateKey  string `json:"aggStakerAccountPk"`
-	AggStakerAccountAddress     string `json:"aggStakerAccountAddress"`
-	ExecStakerAccountPrivateKey string `json:"execStakerAccountPk"`
-	ExecStakerAccountAddress    string `json:"execStakerAccountAddress"`
+	AVSAccountAddress            string `json:"avsAccountAddress"`
+	AVSAccountPrivateKey         string `json:"avsAccountPk"`
+	AVSAccountPublicKey          string `json:"avsAccountPublicKey"`
+	AppAccountAddress            string `json:"appAccountAddress"`
+	AppAccountPrivateKey         string `json:"appAccountPk"`
+	AppAccountPublicKey          string `json:"appAccountPublicKey"`
+	OperatorAccountPrivateKey    string `json:"operatorAccountPk"`
+	OperatorAccountAddress       string `json:"operatorAccountAddress"`
+	OperatorAccountPublicKey     string `json:"operatorAccountPublicKey"`
+	ExecOperatorAccountPk        string `json:"execOperatorAccountPk"`
+	ExecOperatorAccountAddress   string `json:"execOperatorAccountAddress"`
+	ExecOperatorAccountPublicKey string `json:"execOperatorAccountPublicKey"`
+	MailboxContractAddressL1     string `json:"mailboxContractAddressL1"`
+	MailboxContractAddressL2     string `json:"mailboxContractAddressL2"`
+	AVSTaskRegistrarAddress      string `json:"avsTaskRegistrarAddress"`
+	AVSTaskHookAddressL1         string `json:"avsTaskHookAddressL1"`
+	AVSTaskHookAddressL2         string `json:"avsTaskHookAddressL2"`
+	AggStakerAccountPrivateKey   string `json:"aggStakerAccountPk"`
+	AggStakerAccountAddress      string `json:"aggStakerAccountAddress"`
+	ExecStakerAccountPrivateKey  string `json:"execStakerAccountPk"`
+	ExecStakerAccountAddress     string `json:"execStakerAccountAddress"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {

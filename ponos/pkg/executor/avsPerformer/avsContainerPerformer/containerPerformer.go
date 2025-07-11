@@ -9,6 +9,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/ethereum/go-ethereum/crypto"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -171,6 +172,28 @@ func (aps *AvsContainerPerformer) generatePerformerID() string {
 	return fmt.Sprintf("performer-%s-%s", aps.config.AvsAddress, uuid.New().String())
 }
 
+func (aps *AvsContainerPerformer) buildDockerEnvsFromConfig(image avsPerformer.PerformerImage) []string {
+	dockerEnvs := make([]string, 0)
+	for _, env := range image.Envs {
+		val := env.Value
+		if env.ValueFromEnv != "" {
+			eVal, ok := os.LookupEnv(env.ValueFromEnv)
+			if ok {
+				val = eVal
+			} else {
+				// If the environment variable is not set, log a warning
+				aps.logger.Sugar().Warn("Environment variable not found",
+					zap.String("envName", env.ValueFromEnv),
+					zap.String("avsAddress", aps.config.AvsAddress),
+					zap.String("image", fmt.Sprintf("%s:%s", image.Repository, image.Tag)),
+				)
+			}
+		}
+		dockerEnvs = append(dockerEnvs, fmt.Sprintf("%s=%s", env.Name, val))
+	}
+	return dockerEnvs
+}
+
 // createAndStartContainer creates, starts, and prepares a container for the AVS performer
 func (aps *AvsContainerPerformer) createAndStartContainer(
 	ctx context.Context,
@@ -295,6 +318,7 @@ func (aps *AvsContainerPerformer) Initialize(ctx context.Context) error {
 			aps.config.Image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
+			aps.buildDockerEnvsFromConfig(aps.config.Image),
 		),
 		containerManager.NewDefaultAvsPerformerLivenessConfig(),
 	)
@@ -488,6 +512,7 @@ func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetC
 			targetContainer.image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
+			aps.buildDockerEnvsFromConfig(targetContainer.image),
 		), containerManager.NewDefaultAvsPerformerLivenessConfig())
 	if err != nil {
 		aps.logger.Error("Failed to recreate container",
@@ -627,6 +652,7 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 			image.Digest,
 			internalContainerPort,
 			aps.config.PerformerNetworkName,
+			aps.buildDockerEnvsFromConfig(image),
 		), containerManager.NewDefaultAvsPerformerLivenessConfig())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create container")

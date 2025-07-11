@@ -107,6 +107,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			image := avsPerformer.PerformerImage{
 				Repository: avs.Image.Repository,
 				Tag:        avs.Image.Tag,
+				Envs:       avs.Envs,
 			}
 
 			result, err := performer.Deploy(ctx, image)

@@ -169,7 +169,7 @@ func (suite *ContainerManagerTestSuite) TestUtilityFunctions() {
 		containerPort := 8080
 		networkName := "test-network"
 
-		config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName)
+		config := CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest, containerPort, networkName, nil)
 
 		// Verify hostname format (should include hash and timestamp)
 		expectedPrefix := "avs-performer-" + HashAvsAddress(avsAddress) + "-"

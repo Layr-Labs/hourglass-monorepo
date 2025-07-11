@@ -2,6 +2,7 @@ package avsPerformer
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
@@ -18,6 +19,7 @@ type PerformerImage struct {
 	Repository string
 	Tag        string
 	Digest     string
+	Envs       []config.AVSPerformerEnv
 }
 
 // PerformerStatus represents the health status of a performer container

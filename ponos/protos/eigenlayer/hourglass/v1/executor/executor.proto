@@ -45,6 +45,7 @@ message DeployArtifactRequest {
   string avs_address = 1;
   string digest = 2;
   string registry_url = 3;
+  repeated PerformerEnv env = 4;
 }
 
 message DeployArtifactResponse {
@@ -57,6 +58,12 @@ message DeployArtifactResponse {
 message ListPerformersRequest {
   // Optional: filter by AVS address
   string avs_address = 1;
+}
+
+message PerformerEnv {
+  string name = 1;
+  string value = 2;
+  string value_from_env = 3;
 }
 
 // Performer contains information about a single performer

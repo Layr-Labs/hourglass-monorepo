@@ -242,3 +242,16 @@ type OverrideContract struct {
 type OverrideContracts struct {
 	TaskMailbox *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
 }
+
+type AVSPerformerEnv struct {
+	Name         string
+	Value        string // Value is a direct value, passed to the Executor and forwarded
+	ValueFromEnv string // ValueFromEnv is the name of an environment variable that should be forwarded to the Performer
+}
+
+func (a *AVSPerformerEnv) Validate() error {
+	if a.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}

@@ -20,7 +20,7 @@ func HashAvsAddress(avsAddress string) string {
 // CreateDefaultContainerConfig creates a default container configuration for AVS performers
 // If imageDigest is provided (non-empty), it will be used with @ notation (repo@digest)
 // Otherwise, imageTag will be used with : notation (repo:tag)
-func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest string, containerPort int, networkName string) *ContainerConfig {
+func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest string, containerPort int, networkName string, envs []string) *ContainerConfig {
 	// Use predictable hostname for DNS resolution in Docker networks
 	hostname := fmt.Sprintf("avs-performer-%s", HashAvsAddress(avsAddress))
 
@@ -60,6 +60,7 @@ func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest s
 		ReadOnly:      false,
 		MemoryLimit:   0, // No limit by default, could be configurable
 		CPUShares:     0, // No limit by default, could be configurable
+		Env:           envs,
 	}
 }
 

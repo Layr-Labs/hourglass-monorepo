@@ -75,6 +75,13 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	image := avsPerformer.PerformerImage{
 		Repository: req.GetRegistryUrl(),
 		Digest:     req.GetDigest(),
+		Envs: util.Map(req.GetEnv(), func(env *executorV1.PerformerEnv, i uint64) config.AVSPerformerEnv {
+			return config.AVSPerformerEnv{
+				Name:         env.GetName(),
+				Value:        env.GetValue(),
+				ValueFromEnv: env.GetValueFromEnv(),
+			}
+		}),
 	}
 
 	result, err := performer.Deploy(ctx, image)
