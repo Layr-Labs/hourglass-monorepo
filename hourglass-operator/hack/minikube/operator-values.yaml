@@ -1,0 +1,5 @@
+operator:
+  image:
+    repository: public.ecr.aws/z6g0f8n7/eigenlayer/hourglass-operator
+    tag: "latest"
+    pullPolicy: Always
