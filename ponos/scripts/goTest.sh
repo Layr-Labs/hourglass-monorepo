@@ -7,10 +7,12 @@ set -o pipefail  # Exit if any command in a pipe fails
 # spin up a new web3signer docker container for L1
 web3signerL1Name="web3signer-l1"
 web3signerL1Port=9100
+web3signerL1HttpPort=9101
 web3signerL1ChainId=31337
 
 web3signerL2Name="web3signer-l2"
-web3signerL2Port=9101
+web3signerL2Port=9200
+web3signerL2HttpPort=9201
 web3signerL2ChainId=31338
 
 cleanup_containers() {

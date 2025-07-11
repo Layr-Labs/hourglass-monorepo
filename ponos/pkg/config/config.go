@@ -208,6 +208,7 @@ type RemoteSignerConfig struct {
 	Cert        string `json:"cert" yaml:"cert"`
 	Key         string `json:"key" yaml:"key"`
 	FromAddress string `json:"fromAddress" yaml:"fromAddress"`
+	PublicKey   string `json:"publicKey" yaml:"publicKey"`
 }
 
 type ECDSAKeyConfig struct {

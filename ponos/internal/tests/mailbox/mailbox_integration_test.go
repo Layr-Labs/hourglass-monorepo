@@ -57,20 +57,20 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	root := testUtils.GetProjectRootPath()
 	t.Logf("Project root path: %s", root)
 
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
 	// aggregator is bn254, executor is ecdsa
-	aggKeysBN254, _, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254)
+	aggKeysBN254, _, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys for curve type %s: %v", config.CurveTypeBN254, err)
 	}
 
-	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA)
+	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys for curve type %s: %v", config.CurveTypeECDSA, err)
-	}
-
-	chainConfig, err := testUtils.ReadChainConfig(root)
-	if err != nil {
-		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
 	coreContracts, err := eigenlayer.LoadContracts()

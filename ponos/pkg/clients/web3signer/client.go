@@ -45,6 +45,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -285,6 +286,76 @@ func (c *Client) ListPublicKeys(ctx context.Context) ([]string, error) {
 // This is a convenience method that calls EthSign.
 func (c *Client) Sign(ctx context.Context, account string, data string) (string, error) {
 	return c.EthSign(ctx, account, data)
+}
+
+// SignRaw performs raw ECDSA signing using the REST API endpoint.
+// This method signs raw data without Ethereum message prefixes, making it
+// compatible with generic ECDSA libraries like crypto-libs.
+// The identifier parameter is the signing key identifier (typically an address).
+func (c *Client) SignRaw(ctx context.Context, identifier string, data []byte) (string, error) {
+	// Convert data to hex format
+	dataHex := "0x" + hex.EncodeToString(data)
+	
+	// Create the request payload
+	payload := map[string]interface{}{
+		"type": "MESSAGE",
+		"data": dataHex,
+	}
+	
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+	
+	// Build the REST API URL
+	url := strings.TrimSuffix(c.config.BaseURL, "/") + "/api/v1/eth1/sign/" + identifier
+	
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	
+	c.Logger.Sugar().Debugw("Making Web3Signer REST API sign request",
+		zap.String("identifier", identifier),
+		zap.String("url", url),
+		zap.Int("dataLength", len(data)),
+		zap.String("dataHex", dataHex),
+	)
+	
+	// Make HTTP request
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("REST API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// Read response body
+	responseData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+	
+	c.Logger.Sugar().Debugw("Web3Signer REST API response received",
+		zap.Int("status_code", resp.StatusCode),
+		zap.String("response", string(responseData)),
+	)
+	
+	// Check HTTP status
+	if resp.StatusCode >= 400 {
+		return "", c.handleHTTPError(resp.StatusCode, responseData)
+	}
+	
+	// Parse the response - Web3Signer REST API returns just the signature as plain text
+	signature := strings.TrimSpace(string(responseData))
+	
+	// Remove any quotes if present (some implementations might return quoted strings)
+	signature = strings.Trim(signature, `"`)
+	
+	return signature, nil
 }
 
 // makeJSONRPCRequest performs a JSON-RPC request to the Web3Signer service.

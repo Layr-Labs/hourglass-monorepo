@@ -313,6 +313,90 @@ func TestNewConfigWithTLS(t *testing.T) {
 	})
 }
 
+func TestClient_SignRaw(t *testing.T) {
+	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
+		Debug: false,
+	})
+	assert.Nil(t, loggerErr)
+
+	t.Run("successful raw signing", func(t *testing.T) {
+		expectedSignature := "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9"
+		testData := []byte("Hello, Web3Signer!")
+		identifier := "0x1234567890abcdef"
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			assert.Equal(t, "/api/v1/eth1/sign/"+identifier, r.URL.Path)
+
+			var payload map[string]interface{}
+			err := json.NewDecoder(r.Body).Decode(&payload)
+			require.NoError(t, err)
+			
+			expectedDataHex := "0x48656c6c6f2c20576562335369676e657221"
+			assert.Equal(t, expectedDataHex, payload["data"])
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(expectedSignature)
+		}))
+		defer server.Close()
+
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
+
+		signature, err := client.SignRaw(context.Background(), identifier, testData)
+		require.NoError(t, err)
+		assert.Equal(t, expectedSignature, signature)
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		identifier := "0x1234567890abcdef"
+		testData := []byte("test data")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte("Bad request"))
+		}))
+		defer server.Close()
+
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
+
+		_, err = client.SignRaw(context.Background(), identifier, testData)
+		require.Error(t, err)
+
+		var web3SignerErr *Web3SignerError
+		assert.ErrorAs(t, err, &web3SignerErr)
+		assert.Equal(t, 400, web3SignerErr.Code)
+	})
+
+	t.Run("invalid json response", func(t *testing.T) {
+		identifier := "0x1234567890abcdef"
+		testData := []byte("test data")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("invalid json"))
+		}))
+		defer server.Close()
+
+		cfg := DefaultConfig()
+		cfg.BaseURL = server.URL
+		client, err := NewClient(cfg, l)
+		require.NoError(t, err)
+
+		_, err = client.SignRaw(context.Background(), identifier, testData)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to unmarshal signature response")
+	})
+}
+
 func TestTLSClientCreation(t *testing.T) {
 	l, loggerErr := logger.NewLogger(&logger.LoggerConfig{
 		Debug: false,
