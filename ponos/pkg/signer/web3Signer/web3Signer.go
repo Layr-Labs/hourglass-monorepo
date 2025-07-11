@@ -27,7 +27,7 @@ type Web3Signer struct {
 
 // NewWeb3Signer creates a new Web3Signer that implements the ISigner interface.
 // It only supports ECDSA curve type - attempting to use BN254 will result in errors.
-// The publicKey parameter should be the hex-encoded public key (with or without 0x prefix) 
+// The publicKey parameter should be the hex-encoded public key (with or without 0x prefix)
 // that corresponds to the fromAddress.
 func NewWeb3Signer(client *web3signer.Client, fromAddress common.Address, publicKey string, curveType config.CurveType, logger *zap.Logger) (signer.ISigner, error) {
 	if curveType != config.CurveTypeECDSA {

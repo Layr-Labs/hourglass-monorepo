@@ -332,7 +332,7 @@ func TestClient_SignRaw(t *testing.T) {
 			var payload map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&payload)
 			require.NoError(t, err)
-			
+
 			expectedDataHex := "0x48656c6c6f2c20576562335369676e657221"
 			assert.Equal(t, expectedDataHex, payload["data"])
 

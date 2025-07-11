@@ -119,7 +119,7 @@ func DefaultConfig() *Config {
 func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Config {
 	config := DefaultConfig()
 	config.BaseURL = baseURL
-	
+
 	// Only configure TLS if we have HTTPS and at least one TLS field
 	if strings.HasPrefix(baseURL, "https://") && (caCert != "" || clientCert != "" || clientKey != "") {
 		tlsConfig := &TLSConfig{
@@ -129,7 +129,7 @@ func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Con
 		}
 		config.TLS = tlsConfig
 	}
-	
+
 	return config
 }
 
@@ -149,7 +149,7 @@ func NewClient(cfg *Config, logger *zap.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	logger.Sugar().Debugw("Creating new Web3Signer client", 
+	logger.Sugar().Debugw("Creating new Web3Signer client",
 		zap.String("baseURL", cfg.BaseURL),
 		zap.Duration("timeout", cfg.Timeout),
 		zap.Bool("tlsEnabled", cfg.TLS != nil),
@@ -295,66 +295,66 @@ func (c *Client) Sign(ctx context.Context, account string, data string) (string,
 func (c *Client) SignRaw(ctx context.Context, identifier string, data []byte) (string, error) {
 	// Convert data to hex format
 	dataHex := "0x" + hex.EncodeToString(data)
-	
+
 	// Create the request payload
 	payload := map[string]interface{}{
 		"type": "MESSAGE",
 		"data": dataHex,
 	}
-	
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request payload: %w", err)
 	}
-	
+
 	// Build the REST API URL
 	url := strings.TrimSuffix(c.config.BaseURL, "/") + "/api/v1/eth1/sign/" + identifier
-	
+
 	// Create HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create HTTP request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	
+
 	c.Logger.Sugar().Debugw("Making Web3Signer REST API sign request",
 		zap.String("identifier", identifier),
 		zap.String("url", url),
 		zap.Int("dataLength", len(data)),
 		zap.String("dataHex", dataHex),
 	)
-	
+
 	// Make HTTP request
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("REST API request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response body
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
-	
+
 	c.Logger.Sugar().Debugw("Web3Signer REST API response received",
 		zap.Int("status_code", resp.StatusCode),
 		zap.String("response", string(responseData)),
 	)
-	
+
 	// Check HTTP status
 	if resp.StatusCode >= 400 {
 		return "", c.handleHTTPError(resp.StatusCode, responseData)
 	}
-	
+
 	// Parse the response - Web3Signer REST API returns just the signature as plain text
 	signature := strings.TrimSpace(string(responseData))
-	
+
 	// Remove any quotes if present (some implementations might return quoted strings)
 	signature = strings.Trim(signature, `"`)
-	
+
 	return signature, nil
 }
 

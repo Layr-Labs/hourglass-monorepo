@@ -611,6 +611,7 @@ func Test_CompareWeb3SignerToInMemorySigner(t *testing.T) {
 	cfg := web3signer.DefaultConfig()
 	cfg.BaseURL = testUtils.L1Web3SignerUrl // http://localhost:9100
 	client, err := web3signer.NewClient(cfg, l)
+	require.NoError(t, err)
 
 	web3Signer, err := NewWeb3Signer(client, common.HexToAddress(chainConfig.OperatorAccountAddress), chainConfig.OperatorAccountPublicKey, config.CurveTypeECDSA, l)
 	require.NoError(t, err)
