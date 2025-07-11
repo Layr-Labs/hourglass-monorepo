@@ -1,0 +1,169 @@
+# Default values for hourglass-operator
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Operator configuration
+operator:
+  # Container image configuration
+  image:
+    repository: hourglass/operator
+    tag: "v1.2.0"
+    pullPolicy: IfNotPresent
+  
+  # Number of operator replicas (should be 1 for singleton)
+  replicaCount: 1
+  
+  # Resource configuration
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Environment variables
+  env:
+    logLevel: info
+    logFormat: json
+    metricsPort: 8080
+    healthCheckPort: 8081
+    leaderElection: true
+    # Webhook configuration
+    webhookPort: 9443
+    certDir: /tmp/k8s-webhook-server/serving-certs
+
+# Service Account configuration
+serviceAccount:
+  # Whether to create a service account
+  create: true
+  # Name of the service account
+  name: hourglass-operator
+  # Annotations for the service account
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  # Whether to create RBAC resources
+  create: true
+
+# CRD configuration
+crd:
+  # Whether to install CRDs
+  install: true
+
+# Service configuration
+service:
+  # Service type
+  type: ClusterIP
+  # Service ports
+  ports:
+    metrics: 8080
+    health: 8081
+    webhook: 9443
+  # Service annotations
+  annotations: {}
+
+# Metrics and monitoring configuration
+metrics:
+  enabled: true
+  port: 8080
+  path: /metrics
+  # ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    annotations: {}
+
+# Health checks configuration
+healthChecks:
+  enabled: true
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Pod configuration
+pod:
+  # Pod annotations
+  annotations: {}
+  # Pod labels
+  labels: {}
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  # Container security context
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+
+# Scheduling configuration
+scheduling:
+  # Node selector
+  nodeSelector: {}
+  # Tolerations
+  tolerations: []
+  # Affinity
+  affinity: {}
+  # Priority class name
+  priorityClassName: ""
+
+# Webhook configuration
+webhook:
+  # Whether to enable admission webhooks
+  enabled: false
+  # Certificate configuration
+  certificate:
+    # How to manage certificates: "cert-manager" or "manual"
+    provider: cert-manager
+    # Certificate duration
+    duration: 8760h # 1 year
+    # Certificate renewal before expiry
+    renewBefore: 720h # 30 days
+  # Webhook configuration
+  validatingWebhooks:
+    - name: performer-validation
+      enabled: true
+      failurePolicy: Fail
+      admissionReviewVersions: ["v1", "v1beta1"]
+  mutatingWebhooks:
+    - name: performer-mutation
+      enabled: true
+      failurePolicy: Fail
+      admissionReviewVersions: ["v1", "v1beta1"]
+
+# Network policies
+networkPolicy:
+  enabled: false
+  # Ingress rules
+  ingress: []
+  # Egress rules
+  egress: []
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Development/testing configuration
+development:
+  # Enable development mode features
+  enabled: false
