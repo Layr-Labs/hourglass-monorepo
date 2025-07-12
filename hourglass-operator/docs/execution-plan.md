@@ -37,16 +37,16 @@
 - [x] ~~Create ServiceAccount and ClusterRoleBinding YAMLs~~ - **NEEDS UPDATE**
 - [ ] Test RBAC permissions in cluster
 
-## 🔄 Phase 2: Operator Refactoring **[ARCHITECTURE CHANGE]**
+## ✅ Phase 2: Operator Refactoring **[COMPLETED]**
 
-### ❌ 2.1 Remove ExecutorController **[NEW TASK]**
-- [ ] **Remove HourglassExecutor CRD** - Delete type definitions
-- [ ] **Remove ExecutorController** - Delete controller code
-- [ ] **Update RBAC** - Remove deployment/configmap permissions
-- [ ] **Update main.go** - Remove controller registration
-- [ ] **Clean up generated files** - Remove deepcopy methods
+### ✅ 2.1 Remove ExecutorController **[COMPLETED]**
+- [x] **Remove HourglassExecutor CRD** - Delete type definitions
+- [x] **Remove ExecutorController** - Delete controller code
+- [x] **Update RBAC** - Remove deployment/configmap permissions
+- [x] **Update main.go** - Remove controller registration
+- [x] **Clean up generated files** - Remove deepcopy methods
 
-### ✅ 2.2 PerformerController (Keep As-Is)
+### ✅ 2.2 PerformerController (Completed)
 - [x] **Controller Structure** - Basic reconciler setup
 - [x] **RBAC Annotations** - Permissions for pods and services
 - [x] **Reconciliation Logic:**
@@ -56,59 +56,101 @@
   - [x] Handle version upgrades via rolling deployment
   - [x] Clean up resources when performer is deleted
 
-### ✅ 2.3 Service Management (Already Working)
+### ✅ 2.3 Service Management & Deployment (Completed)
 - [x] **Service Naming Convention:**
   - Pattern: `performer-{performer-name}.{namespace}.svc.cluster.local`
   - Ensures stable DNS names for executor connections
 - [x] **Service Creation Logic** - Target performer pods via labels
-- [ ] **DNS Resolution Testing** - Verify executor can connect
+- [x] **DNS Resolution Testing** - Verified executor can connect
+- [x] **Helm Charts** - Both operator and executor charts created
+- [x] **CRD Generation** - Proper Performer CRD with full schema
+- [x] **Getting Started Guide** - Complete deployment documentation
 
-## ❌ Phase 3: Executor Integration **[UPDATED FOR NEW ARCHITECTURE]**
+## 🔄 Phase 3: Ponos Executor Integration **[CRD-BASED APPROACH]**
 
-### ❌ 3.1 Executor Modifications (in `../ponos/`)
-- [ ] **Kubernetes Client Integration** - Add K8s client to executor
-- [ ] **KubernetesAVSPerformer Type** - Implement K8s-native performer interface
-- [ ] **KubernetesPerformerManager** - Manage performer lifecycle via CRDs
-- [ ] **Configuration Mode Selection** - Choose docker vs kubernetes deployment
-- [ ] **Backward Compatibility** - Preserve existing Docker support
-- [ ] **StatefulSet Configuration** - Update for StatefulSet deployment pattern
+### 🎯 3.1 Kubernetes Manager Package (in `../ponos/pkg/kubernetesManager/`)
+- [ ] **Kubernetes Client Wrapper** - Abstract client-go operations
+  - [ ] Create `kubernetesManager.go` - Core K8s operations
+  - [ ] Create `client.go` - Kubernetes client initialization
+  - [ ] Create `crd.go` - Performer CRD CRUD operations
+  - [ ] Create `types.go` - K8s-specific types and configs
+  - [ ] Create `config.go` - Configuration validation and defaults
 
-### ❌ 3.2 gRPC Connection Management
-- [ ] **Service DNS Connection** - Connect via stable service names
-- [ ] **Connection Pooling** - Pool gRPC connections to performers
-- [ ] **Retry Logic** - Handle connection failures gracefully
-- [ ] **Load Balancing** - Support multiple performer replicas
+### 🎯 3.2 Kubernetes AVS Performer Implementation (in `../ponos/pkg/executor/avsPerformer/avsKubernetesPerformer/`)
+- [ ] **Core Performer Interface** - Implement `IAvsPerformer` directly
+  - [ ] Create `kubernetesPerformer.go` - Main implementation
+  - [ ] Implement `Initialize()` - Set up K8s client and validate config
+  - [ ] Implement `Deploy()` - Create Performer CRD via operator
+  - [ ] Implement `CreatePerformer()` - Stage new performer with status monitoring
+  - [ ] Implement `PromotePerformer()` - Mark performer as active/InService
+  - [ ] Implement `RunTask()` - Execute tasks via gRPC to K8s service
+  - [ ] Implement `RemovePerformer()` - Delete Performer CRD
+  - [ ] Implement `ListPerformers()` - Query K8s for performer status
+  - [ ] Implement `Shutdown()` - Clean shutdown of all managed performers
 
-## ❌ Phase 4: User Experience & Deployment **[UPDATED FOR NEW ARCHITECTURE]**
+### 🎯 3.3 Configuration Integration (in `../ponos/pkg/executor/executorConfig/`)
+- [ ] **Deployment Mode Configuration** - Add Kubernetes support
+  - [ ] Add `DeploymentMode` field to `AvsPerformerConfig`
+  - [ ] Create `KubernetesConfig` struct with operator settings
+  - [ ] Add namespace, serviceAccount, and CRD name configuration
+  - [ ] Add validation for required Kubernetes fields
+  - [ ] Preserve backward compatibility (default to "docker" mode)
 
-### ❌ 4.1 StatefulSet Templates & Helm Charts
-- [ ] **Executor StatefulSet Templates:**
-  - [ ] Base StatefulSet YAML with persistent storage
-  - [ ] ConfigMap templates for chain configurations
-  - [ ] Secret management for operator keys
-  - [ ] Service and networking configuration
-- [ ] **Singleton Operator Deployment:**
-  - [ ] Single operator pod with cluster-wide RBAC permissions
-  - [ ] CRD installation and upgrades
-  - [ ] Operator configuration for multi-executor support
-- [ ] **Complete Helm Chart:**
-  - [ ] Executor StatefulSet deployment (user-deployable)
-  - [ ] Singleton operator deployment (cluster-wide)
-  - [ ] RBAC and networking setup
-  - [ ] Configurable values for multi-executor scenarios
+### 🎯 3.4 Executor Factory Pattern (in `../ponos/pkg/executor/`)
+- [ ] **Performer Creation Logic** - Support multiple deployment modes
+  - [ ] Modify `executor.go` to create performers based on deployment mode
+  - [ ] Add factory function for performer creation
+  - [ ] Maintain Docker performer for backward compatibility
+  - [ ] Add configuration validation for each mode
 
-### ❌ 4.2 Documentation & Examples **[NEW FOCUS]**
-- [ ] **User Guide** - Step-by-step deployment instructions
-- [ ] **StatefulSet Examples** - Common executor configurations
-- [ ] **Migration Guide** - From managed to user-managed approach
-- [ ] **Troubleshooting Guide** - Common issues and solutions
-- [ ] **Best Practices** - Production deployment patterns
+### 🎯 3.5 Service Discovery & Connection Management
+- [ ] **Kubernetes Service DNS** - Connect via operator-managed services
+  - [ ] Use `performer-{name}.{namespace}.svc.cluster.local:9090` pattern
+  - [ ] Implement connection retry logic for K8s service endpoints
+  - [ ] Add health monitoring via K8s Pod status
+  - [ ] Support performer status updates from K8s events
 
-### ❌ 4.3 Validation & Testing
-- [ ] **Admission Webhooks** - Validate executor-operator compatibility
-- [ ] **End-to-End Tests** - Complete workflow validation
-- [ ] **Performance Benchmarks** - Performer creation/deletion latency
-- [ ] **Chaos Testing** - Network partition and node failure scenarios
+## 🔄 Phase 4: Testing & Integration **[CRD-FOCUSED VALIDATION]**
+
+### 🎯 4.1 Unit & Integration Testing
+- [ ] **Kubernetes Manager Tests** (in `../ponos/pkg/kubernetesManager/`)
+  - [ ] Mock Kubernetes API client tests
+  - [ ] CRD CRUD operation tests
+  - [ ] Configuration validation tests
+  - [ ] Error handling and retry logic tests
+
+- [ ] **Kubernetes Performer Tests** (in `../ponos/pkg/executor/avsPerformer/avsKubernetesPerformer/`)
+  - [ ] `IAvsPerformer` interface compliance tests
+  - [ ] Performer lifecycle state machine tests
+  - [ ] Task execution and gRPC connection tests
+  - [ ] Blue-green deployment scenario tests
+
+### 🎯 4.2 End-to-End Validation
+- [ ] **Operator Integration Tests**
+  - [ ] Deploy operator in test cluster
+  - [ ] Create Performer CRDs via executor
+  - [ ] Verify Pod and Service creation by operator
+  - [ ] Test performer health monitoring and status updates
+  - [ ] Validate service DNS resolution and gRPC connectivity
+
+- [ ] **Multi-Performer Scenarios**
+  - [ ] Multiple performers per AVS
+  - [ ] Cross-namespace performer isolation
+  - [ ] Concurrent deployment and removal operations
+  - [ ] Performance testing with scale
+
+### 🎯 4.3 Backward Compatibility Testing
+- [ ] **Mixed Deployment Modes**
+  - [ ] Docker and Kubernetes performers in same executor
+  - [ ] Configuration migration scenarios
+  - [ ] Fallback behavior when Kubernetes unavailable
+  - [ ] Existing Docker workloads remain unaffected
+
+### 🎯 4.4 Documentation Updates
+- [ ] **Update Getting Started Guide** - Add Kubernetes deployment mode
+- [ ] **Configuration Examples** - Sample YAML configurations for K8s mode
+- [ ] **Troubleshooting Guide** - K8s-specific debugging steps
+- [ ] **Migration Guide** - Docker to Kubernetes transition steps
 
 ## ❌ Phase 5: Production Readiness **[UPDATED FOCUS]**
 
@@ -138,19 +180,23 @@
 
 ## 📋 Implementation Status Summary
 
-**✅ Completed (Phase 1 & Phase 2 Partial)**
+**✅ Completed (Phase 1 & Phase 2)**
 - Project structure and Performer CRD
-- PerformerController implementation
-- Basic RBAC permissions
+- PerformerController implementation with full lifecycle management
+- Singleton operator architecture with cluster-wide RBAC
+- Both hourglass-operator and hourglass-executor Helm charts
+- Complete getting started guide and deployment documentation
+- CRD generation and validation working
 
-**🔄 Refactoring Needed (Phase 2)**
-- Remove HourglassExecutor CRD and controller
-- Update RBAC for performer-only operator
-- Clean up generated code
+**🔄 Current Focus (Phase 3)**
+- Ponos executor integration with CRD-based approach
+- Kubernetes manager package implementation
+- IAvsPerformer interface implementation for Kubernetes
+- Configuration integration and backward compatibility
 
 **❌ Remaining Work**
-- Executor integration in `../ponos/` (Phase 3)
-- StatefulSet templates and Helm charts (Phase 4)
+- Complete executor integration in `../ponos/` (Phase 3)
+- Comprehensive testing and validation (Phase 4)
 - Production readiness features (Phase 5)
 
 ---
@@ -239,19 +285,33 @@ scheduling:
 
 ## 🗓️ Updated Implementation Timeline
 
-- **Week 1-2:** ✅ Phase 1 (Foundation & CRDs) - **COMPLETED** *(needs refactoring)*
-- **Week 3-4:** 🔄 Phase 2 (Operator Refactoring) - **IN PROGRESS** *(remove executor controller)*
-- **Week 5-6:** ❌ Phase 3 (Executor Integration) - **PENDING** *(work in `../ponos/`)*
-- **Week 7-8:** ❌ Phase 4 (User Experience & Deployment) - **PENDING** *(StatefulSet templates)*
+- **Week 1-2:** ✅ Phase 1 (Foundation & CRDs) - **COMPLETED**
+- **Week 3-4:** ✅ Phase 2 (Operator Refactoring) - **COMPLETED** *(singleton operator ready)*
+- **Week 5-6:** 🔄 Phase 3 (Ponos Integration) - **IN PROGRESS** *(CRD-based executor integration)*
+- **Week 7-8:** ❌ Phase 4 (Testing & Validation) - **PENDING** *(comprehensive testing)*
 - **Week 9-10:** ❌ Phase 5 (Production Readiness) - **PENDING** *(monitoring, security)*
 
-## 🔄 **Next Immediate Steps**
+## 🎯 **Next Immediate Steps (Phase 3 Milestones)**
 
-1. **Phase 2.1**: Remove HourglassExecutor CRD and controller
-2. **Phase 2.1**: Update RBAC for performer-only permissions  
-3. **Phase 2.1**: Clean up generated code and documentation
-4. **Phase 3.1**: Begin executor modifications in `../ponos/`
-5. **Phase 4.1**: Create StatefulSet templates and Helm charts
+### Milestone 3.1: Kubernetes Manager Foundation (Week 5.1)
+1. **Create `ponos/pkg/kubernetesManager/` package**
+2. **Implement Kubernetes client wrapper with CRD operations**
+3. **Add configuration structures and validation**
+
+### Milestone 3.2: Performer Interface Implementation (Week 5.2)
+1. **Create `ponos/pkg/executor/avsPerformer/avsKubernetesPerformer/` package**
+2. **Implement `IAvsPerformer` interface using CRD operations**
+3. **Add blue-green deployment support via Performer CRDs**
+
+### Milestone 3.3: Configuration Integration (Week 6.1)
+1. **Add deployment mode selection to executor configuration**
+2. **Integrate Kubernetes config with existing Docker config**
+3. **Ensure zero breaking changes for existing Docker deployments**
+
+### Milestone 3.4: End-to-End Integration (Week 6.2)
+1. **Update executor factory to support both Docker and Kubernetes modes**
+2. **Test complete workflow: Executor → CRD → Operator → Pod → Service**
+3. **Validate gRPC connectivity and task execution**
 
 ## 🧪 Testing Strategy
 
