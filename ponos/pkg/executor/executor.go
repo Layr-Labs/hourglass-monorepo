@@ -3,15 +3,16 @@ package executor
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"strings"
 	"sync"
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsKubernetesPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -83,27 +84,17 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := avsContainerPerformer.NewAvsContainerPerformer(
-				&avsPerformer.AvsPerformerConfig{
-					AvsAddress:           avsAddress,
-					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-					WorkerCount:          avs.WorkerCount,
-					PerformerNetworkName: e.config.PerformerNetworkName,
-					SigningCurve:         avs.SigningCurve,
-				},
-				e.peeringFetcher,
-				e.l1ContractCaller,
-				e.logger,
-			)
+			performer, err := e.createPerformer(avs, avsAddress)
 			if err != nil {
 				return fmt.Errorf("failed to create AVS performer for %s: %v", avs.ProcessType, err)
 			}
+			
 			err = performer.Initialize(ctx)
 			if err != nil {
 				return err
 			}
 
-			// Deploy container using the performer's Deploy method
+			// Deploy performer using the performer's Deploy method
 			image := avsPerformer.PerformerImage{
 				Repository: avs.Image.Repository,
 				Tag:        avs.Image.Tag,
@@ -112,15 +103,17 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 			result, err := performer.Deploy(ctx, image)
 			if err != nil {
-				e.logger.Sugar().Errorw("Failed to deploy container for AVS performer during startup",
+				e.logger.Sugar().Errorw("Failed to deploy performer during startup",
 					zap.String("avsAddress", avsAddress),
+					zap.String("deploymentMode", string(avs.DeploymentMode)),
 					zap.Error(err),
 				)
-				return fmt.Errorf("failed to deploy container for AVS %s: %w", avsAddress, err)
+				return fmt.Errorf("failed to deploy performer for AVS %s: %w", avsAddress, err)
 			}
 
-			e.logger.Sugar().Infow("AVS performer container deployed successfully",
+			e.logger.Sugar().Infow("AVS performer deployed successfully",
 				zap.String("avsAddress", avsAddress),
+				zap.String("deploymentMode", string(avs.DeploymentMode)),
 				zap.String("deploymentId", result.ID),
 				zap.String("performerId", result.PerformerID),
 			)
@@ -157,6 +150,70 @@ func (e *Executor) Initialize(ctx context.Context) error {
 	}()
 
 	return nil
+}
+
+// createPerformer creates an AVS performer based on the deployment mode
+func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+	// Use default deployment mode if not specified
+	deploymentMode := avs.DeploymentMode
+	if deploymentMode == "" {
+		deploymentMode = executorConfig.DeploymentModeDocker
+	}
+
+	switch deploymentMode {
+	case executorConfig.DeploymentModeDocker:
+		return e.createDockerPerformer(avs, avsAddress)
+	case executorConfig.DeploymentModeKubernetes:
+		return e.createKubernetesPerformer(avs, avsAddress)
+	default:
+		return nil, fmt.Errorf("unsupported deployment mode: %s", deploymentMode)
+	}
+}
+
+// createDockerPerformer creates a Docker-based AVS performer
+func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+	return avsContainerPerformer.NewAvsContainerPerformer(
+		&avsPerformer.AvsPerformerConfig{
+			AvsAddress:           avsAddress,
+			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
+			WorkerCount:          avs.WorkerCount,
+			PerformerNetworkName: e.config.PerformerNetworkName,
+			SigningCurve:         avs.SigningCurve,
+		},
+		e.peeringFetcher,
+		e.l1ContractCaller,
+		e.logger,
+	)
+}
+
+// createKubernetesPerformer creates a Kubernetes-based AVS performer
+func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+	if e.config.Kubernetes == nil {
+		return nil, fmt.Errorf("kubernetes configuration is required for kubernetes deployment mode")
+	}
+
+	// Convert executor config to kubernetes manager config
+	kubernetesConfig := &kubernetesManager.Config{
+		Namespace:         e.config.Kubernetes.Namespace,
+		OperatorNamespace: e.config.Kubernetes.OperatorNamespace,
+		CRDGroup:          e.config.Kubernetes.CRDGroup,
+		CRDVersion:        e.config.Kubernetes.CRDVersion,
+		ConnectionTimeout: e.config.Kubernetes.ConnectionTimeout,
+		KubeconfigPath:    e.config.Kubernetes.KubeConfigPath,
+	}
+
+	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
+		&avsPerformer.AvsPerformerConfig{
+			AvsAddress:   avsAddress,
+			ProcessType:  avsPerformer.AvsProcessType(avs.ProcessType),
+			WorkerCount:  avs.WorkerCount,
+			SigningCurve: avs.SigningCurve,
+		},
+		kubernetesConfig,
+		e.peeringFetcher,
+		e.l1ContractCaller,
+		e.logger,
+	)
 }
 
 func (e *Executor) Run(ctx context.Context) error {

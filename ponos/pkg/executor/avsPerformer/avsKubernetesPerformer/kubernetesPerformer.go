@@ -614,6 +614,9 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 				continue
 			}
 			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
+			if err != nil {
+				continue
+			}
 		}
 
 		if err != nil {

@@ -1,8 +1,12 @@
 package executorConfig
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_ExecutorConfig(t *testing.T) {
@@ -48,6 +52,327 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.NotNil(t, err)
 
 		})
+	})
+}
+
+// TestDeploymentMode tests the deployment mode functionality
+func TestDeploymentMode(t *testing.T) {
+	t.Run("Should default to docker mode when not specified", func(t *testing.T) {
+		config := &AvsPerformerConfig{
+			AvsAddress:          "0x123",
+			ProcessType:         "server",
+			WorkerCount:         1,
+			SigningCurve:        "bn254",
+			AVSRegistrarAddress: "0x456",
+			Image: &PerformerImage{
+				Repository: "test/image",
+				Tag:        "v1.0.0",
+			},
+		}
+		
+		err := config.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentModeDocker, config.DeploymentMode)
+	})
+
+	t.Run("Should accept kubernetes mode", func(t *testing.T) {
+		config := &AvsPerformerConfig{
+			AvsAddress:          "0x123",
+			ProcessType:         "server",
+			WorkerCount:         1,
+			SigningCurve:        "bn254",
+			AVSRegistrarAddress: "0x456",
+			DeploymentMode:      DeploymentModeKubernetes,
+			Image: &PerformerImage{
+				Repository: "test/image",
+				Tag:        "v1.0.0",
+			},
+		}
+		
+		err := config.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, DeploymentModeKubernetes, config.DeploymentMode)
+	})
+
+	t.Run("Should reject invalid deployment mode", func(t *testing.T) {
+		config := &AvsPerformerConfig{
+			AvsAddress:          "0x123",
+			ProcessType:         "server",
+			WorkerCount:         1,
+			SigningCurve:        "bn254",
+			AVSRegistrarAddress: "0x456",
+			DeploymentMode:      "invalid",
+			Image: &PerformerImage{
+				Repository: "test/image",
+				Tag:        "v1.0.0",
+			},
+		}
+		
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "deploymentMode must be one of [docker, kubernetes]")
+	})
+}
+
+// TestKubernetesConfig tests the Kubernetes configuration
+func TestKubernetesConfig(t *testing.T) {
+	t.Run("Should create default kubernetes config", func(t *testing.T) {
+		config := NewDefaultKubernetesConfig()
+		
+		assert.Equal(t, "default", config.Namespace)
+		assert.Equal(t, "hourglass-system", config.OperatorNamespace)
+		assert.Equal(t, "hourglass.eigenlayer.io", config.CRDGroup)
+		assert.Equal(t, "v1alpha1", config.CRDVersion)
+		assert.Equal(t, 30*time.Second, config.ConnectionTimeout)
+		assert.True(t, config.InCluster)
+		assert.Empty(t, config.KubeConfigPath)
+	})
+
+	t.Run("Should validate required fields", func(t *testing.T) {
+		config := &KubernetesConfig{}
+		
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "namespace is required")
+		assert.Contains(t, err.Error(), "operatorNamespace is required")
+		assert.Contains(t, err.Error(), "crdGroup is required")
+		assert.Contains(t, err.Error(), "crdVersion is required")
+		assert.Contains(t, err.Error(), "connectionTimeout is required")
+	})
+
+	t.Run("Should require kubeconfig path when not in cluster", func(t *testing.T) {
+		config := &KubernetesConfig{
+			Namespace:         "test",
+			OperatorNamespace: "hourglass-system",
+			CRDGroup:          "hourglass.eigenlayer.io",
+			CRDVersion:        "v1alpha1",
+			ConnectionTimeout: 30 * time.Second,
+			InCluster:         false,
+		}
+		
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "kubeConfigPath is required when not running in cluster")
+	})
+
+	t.Run("Should validate successfully with all fields", func(t *testing.T) {
+		config := &KubernetesConfig{
+			Namespace:         "test",
+			OperatorNamespace: "hourglass-system",
+			CRDGroup:          "hourglass.eigenlayer.io",
+			CRDVersion:        "v1alpha1",
+			ConnectionTimeout: 30 * time.Second,
+			InCluster:         true,
+		}
+		
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+}
+
+// TestExecutorConfigKubernetes tests the executor configuration with Kubernetes support
+func TestExecutorConfigKubernetes(t *testing.T) {
+	t.Run("Should require kubernetes config when performer uses kubernetes mode", func(t *testing.T) {
+		config := &ExecutorConfig{
+			Operator: &config.OperatorConfig{
+				Address:            "0x123",
+				OperatorPrivateKey: "private_key",
+				SigningKeys: config.SigningKeys{
+					BLS: &config.SigningKey{
+						Keystore: "keystore_content",
+						Password: "password",
+					},
+				},
+			},
+			AvsPerformers: []*AvsPerformerConfig{
+				{
+					AvsAddress:          "0x456",
+					ProcessType:         "server",
+					WorkerCount:         1,
+					SigningCurve:        "bn254",
+					AVSRegistrarAddress: "0x789",
+					DeploymentMode:      DeploymentModeKubernetes,
+					Image: &PerformerImage{
+						Repository: "test/image",
+						Tag:        "v1.0.0",
+					},
+				},
+			},
+			L1Chain: &Chain{
+				RpcUrl:  "http://localhost:8545",
+				ChainId: 1,
+			},
+		}
+		
+		err := config.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "kubernetes configuration is required when using kubernetes deployment mode")
+	})
+
+	t.Run("Should validate successfully with kubernetes config", func(t *testing.T) {
+		config := &ExecutorConfig{
+			Operator: &config.OperatorConfig{
+				Address:            "0x123",
+				OperatorPrivateKey: "private_key",
+				SigningKeys: config.SigningKeys{
+					BLS: &config.SigningKey{
+						Keystore: "keystore_content",
+						Password: "password",
+					},
+				},
+			},
+			AvsPerformers: []*AvsPerformerConfig{
+				{
+					AvsAddress:          "0x456",
+					ProcessType:         "server",
+					WorkerCount:         1,
+					SigningCurve:        "bn254",
+					AVSRegistrarAddress: "0x789",
+					DeploymentMode:      DeploymentModeKubernetes,
+					Image: &PerformerImage{
+						Repository: "test/image",
+						Tag:        "v1.0.0",
+					},
+				},
+			},
+			L1Chain: &Chain{
+				RpcUrl:  "http://localhost:8545",
+				ChainId: 1,
+			},
+			Kubernetes: NewDefaultKubernetesConfig(),
+		}
+		
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+
+	t.Run("Should allow mixed deployment modes", func(t *testing.T) {
+		config := &ExecutorConfig{
+			Operator: &config.OperatorConfig{
+				Address:            "0x123",
+				OperatorPrivateKey: "private_key",
+				SigningKeys: config.SigningKeys{
+					BLS: &config.SigningKey{
+						Keystore: "keystore_content",
+						Password: "password",
+					},
+				},
+			},
+			AvsPerformers: []*AvsPerformerConfig{
+				{
+					AvsAddress:          "0x456",
+					ProcessType:         "server",
+					WorkerCount:         1,
+					SigningCurve:        "bn254",
+					AVSRegistrarAddress: "0x789",
+					DeploymentMode:      DeploymentModeDocker,
+					Image: &PerformerImage{
+						Repository: "test/image",
+						Tag:        "v1.0.0",
+					},
+				},
+				{
+					AvsAddress:          "0xabc",
+					ProcessType:         "server",
+					WorkerCount:         1,
+					SigningCurve:        "bn254",
+					AVSRegistrarAddress: "0xdef",
+					DeploymentMode:      DeploymentModeKubernetes,
+					Image: &PerformerImage{
+						Repository: "test/image2",
+						Tag:        "v1.0.0",
+					},
+				},
+			},
+			L1Chain: &Chain{
+				RpcUrl:  "http://localhost:8545",
+				ChainId: 1,
+			},
+			Kubernetes: NewDefaultKubernetesConfig(),
+		}
+		
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+}
+
+// TestConfigSerialization tests YAML/JSON serialization with new fields
+func TestConfigSerialization(t *testing.T) {
+	t.Run("Should parse kubernetes config from YAML", func(t *testing.T) {
+		yamlWithKubernetes := `
+operator:
+  address: "0xoperator..."
+  operatorPrivateKey: "..."
+  signingKeys:
+    bls: 
+      keystore: ""
+      password: ""
+avsPerformers:
+- image:
+    repository: "eigenlabs/avs"
+    tag: "v1.0.0"
+  processType: "server"
+  avsAddress: "0xavs1..."
+  deploymentMode: "kubernetes"
+  signingCurve: "bn254"
+  workerCount: 1
+  avsRegistrarAddress: "0x789"
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 1
+kubernetes:
+  namespace: "test-namespace"
+  operatorNamespace: "hourglass-system"
+  crdGroup: "hourglass.eigenlayer.io"
+  crdVersion: "v1alpha1"
+  connectionTimeout: 30000000000
+  inCluster: true
+`
+		
+		config, err := NewExecutorConfigFromYamlBytes([]byte(yamlWithKubernetes))
+		require.NoError(t, err)
+		require.NotNil(t, config)
+		
+		assert.Equal(t, DeploymentModeKubernetes, config.AvsPerformers[0].DeploymentMode)
+		assert.NotNil(t, config.Kubernetes)
+		assert.Equal(t, "test-namespace", config.Kubernetes.Namespace)
+		assert.Equal(t, "hourglass-system", config.Kubernetes.OperatorNamespace)
+		assert.Equal(t, "hourglass.eigenlayer.io", config.Kubernetes.CRDGroup)
+		assert.Equal(t, "v1alpha1", config.Kubernetes.CRDVersion)
+		assert.Equal(t, 30*time.Second, config.Kubernetes.ConnectionTimeout)
+		assert.True(t, config.Kubernetes.InCluster)
+	})
+
+	t.Run("Should parse docker config from YAML (backward compatibility)", func(t *testing.T) {
+		yamlWithDocker := `
+operator:
+  address: "0xoperator..."
+  operatorPrivateKey: "..."
+  signingKeys:
+    bls: 
+      keystore: ""
+      password: ""
+avsPerformers:
+- image:
+    repository: "eigenlabs/avs"
+    tag: "v1.0.0"
+  processType: "server"
+  avsAddress: "0xavs1..."
+  deploymentMode: "docker"
+  signingCurve: "bn254"
+  workerCount: 1
+  avsRegistrarAddress: "0x789"
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 1
+`
+		
+		config, err := NewExecutorConfigFromYamlBytes([]byte(yamlWithDocker))
+		require.NoError(t, err)
+		require.NotNil(t, config)
+		
+		assert.Equal(t, DeploymentModeDocker, config.AvsPerformers[0].DeploymentMode)
+		assert.Nil(t, config.Kubernetes)
 	})
 }
 

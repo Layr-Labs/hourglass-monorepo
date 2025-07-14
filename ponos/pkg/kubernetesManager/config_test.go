@@ -332,7 +332,7 @@ func TestValidateResourceRequirements(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "resource value cannot be empty",
+			errorMsg:    "CPU value cannot be empty",
 		},
 		{
 			name: "empty limit value",
@@ -342,7 +342,7 @@ func TestValidateResourceRequirements(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "resource value cannot be empty",
+			errorMsg:    "memory value cannot be empty",
 		},
 	}
 
@@ -385,7 +385,7 @@ func TestValidateResourceValue(t *testing.T) {
 			key:         "cpu",
 			value:       "",
 			expectError: true,
-			errorMsg:    "resource value cannot be empty",
+			errorMsg:    "CPU value cannot be empty",
 		},
 		{
 			name:        "empty cpu value",
