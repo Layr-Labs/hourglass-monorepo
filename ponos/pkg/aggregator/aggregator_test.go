@@ -588,8 +588,6 @@ avsPerformers:
     tag: "latest"
   processType: "server"
   avsAddress: "0xavs1..."
-  workerCount: 1
-  signingCurve: "bn254"
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 
@@ -652,7 +650,6 @@ operator:
 avss:
   - address: "0xavs1..."
     responseTimeout: 3000
-    signingCurve: "bn254"
     chainIds: [31338]
     avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `

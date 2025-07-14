@@ -129,6 +129,7 @@ func (a *Aggregator) Initialize() error {
 			SupportedChainIds:        supportedChains,
 			MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
 			L1ChainId:                a.config.L1ChainId,
+			AggregatorAddress:        a.config.Address,
 		},
 			a.chainContractCallers,
 			a.signer,
