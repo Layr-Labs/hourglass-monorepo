@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/iden3/go-iden3-crypto/keccak256"
 	"github.com/stretchr/testify/assert"
@@ -119,20 +120,28 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
+			if err != nil {
+				t.Fatalf("Failed to create AVS private key signer: %v", err)
+			}
+
 			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				PrivateKey:          chainConfig.AVSAccountPrivateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-			}, ethClient, l)
+			}, ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.privateKey, ethClient, l)
+			if err != nil {
+				t.Fatalf("Failed to create operator private key signer: %v", err)
+			}
+
 			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				PrivateKey:          tc.privateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-			}, ethClient, l)
+			}, ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}
@@ -325,20 +334,28 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
+			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
+			if err != nil {
+				t.Fatalf("Failed to create AVS private key signer: %v", err)
+			}
+
 			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				PrivateKey:          chainConfig.AVSAccountPrivateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-			}, ethClient, l)
+			}, ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
 
+			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.txPrivateKey, ethClient, l)
+			if err != nil {
+				t.Fatalf("Failed to create operator private key signer: %v", err)
+			}
+
 			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				PrivateKey:          tc.txPrivateKey,
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-			}, ethClient, l)
+			}, ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}

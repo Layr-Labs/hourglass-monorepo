@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
@@ -32,20 +33,28 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create AVS private key signer: %v", err)
+	}
+
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, ethClient, l)
+	}, ethClient, avsPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
 	}
 
+	aggregatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, ethClient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create aggregator private key signer: %v", err)
+	}
+
 	aggregatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, ethClient, l)
+	}, ethClient, aggregatorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator contract caller: %v", err)
 	}
@@ -78,11 +87,15 @@ func SetupOperatorPeering(
 		zap.String("transactionHash", result.TxHash.String()),
 	)
 
+	executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, ethClient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create executor private key signer: %v", err)
+	}
+
 	executorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, ethClient, l)
+	}, ethClient, executorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor contract caller: %v", err)
 	}
@@ -196,9 +209,12 @@ func DelegateStakeToOperator(
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategyAddress", strategyAddress),
 	)
-	stakerCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey: stakerPrivateKey,
-	}, ethclient, l)
+	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, ethclient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create staker private key signer: %v", err)
+	}
+
+	stakerCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{}, ethclient, stakerPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker contract caller: %v", err)
 	}
@@ -211,9 +227,12 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)
 	}
 
-	opCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey: operatorPrivateKey,
-	}, ethclient, l)
+	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, ethclient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create operator private key signer: %v", err)
+	}
+
+	opCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{}, ethclient, opPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator contract caller: %v", err)
 	}

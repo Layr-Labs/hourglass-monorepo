@@ -12,7 +12,7 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, ec)
 			assert.Equal(t, "0xoperator...", ec.Operator.Address)
-			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey)
+			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey.PrivateKey)
 			assert.NotNil(t, ec.Operator.SigningKeys.BLS)
 
 			assert.Equal(t, "v1.0.0", ec.AvsPerformers[0].Image.Tag)
@@ -33,7 +33,7 @@ func Test_ExecutorConfig(t *testing.T) {
 			assert.Nil(t, err)
 			assert.NotNil(t, ec)
 			assert.Equal(t, "0xoperator...", ec.Operator.Address)
-			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey)
+			assert.Equal(t, "...", ec.Operator.OperatorPrivateKey.PrivateKey)
 			assert.NotNil(t, ec.Operator.SigningKeys.BLS)
 
 			assert.Equal(t, "v1.0.0", ec.AvsPerformers[0].Image.Tag)
@@ -56,7 +56,8 @@ const (
 ---
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls: 
         keystore: ""
@@ -85,7 +86,8 @@ overrideContracts:
 ---
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
         keystore: ""
@@ -101,7 +103,9 @@ avsPerformers:
 	jsonValid = `{
   "operator": {
     "address": "0xoperator...",
-    "operatorPrivateKey": "...",
+    "operatorPrivateKey": {
+        "privateKey": "..."
+    },
     "signingKeys": {
       "bls": {
         "keystore": "",
@@ -124,7 +128,9 @@ avsPerformers:
 	jsonInvalid = `{
   "operator": {
     "address": "0xoperator...",
-    "operatorPrivateKey": "...",
+    "operatorPrivateKey": {
+        "privateKey": "..."
+    },
     "signingKeys": {
       "bls": {
         "keystore": "",

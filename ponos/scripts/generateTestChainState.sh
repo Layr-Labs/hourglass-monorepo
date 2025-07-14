@@ -286,3 +286,4 @@ cat <<EOF > internal/testData/chain-config.json
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock
 }
+

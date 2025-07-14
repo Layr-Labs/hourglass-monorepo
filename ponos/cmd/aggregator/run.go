@@ -115,10 +115,16 @@ var runCmd = &cobra.Command{
 				return fmt.Errorf("l1 chain not found in config")
 			}
 
-			cc, err := aggregator.InitializeContractCaller(&aggregatorConfig.Chain{
-				ChainId: l1Chain.ChainId,
-				RpcURL:  l1Chain.RpcURL,
-			}, "", imContractStore, Config.Avss[0].AVSRegistrarAddress, true, log)
+			cc, err := aggregator.InitializeContractCaller(
+				&aggregatorConfig.Chain{
+					ChainId: l1Chain.ChainId,
+					RpcURL:  l1Chain.RpcURL,
+				},
+				Config.Operator.OperatorPrivateKey,
+				imContractStore,
+				Config.Avss[0].AVSRegistrarAddress,
+				log,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to initialize contract caller: %w", err)
 			}
@@ -129,12 +135,12 @@ var runCmd = &cobra.Command{
 		agg, err := aggregator.NewAggregatorWithRpcServer(
 			Config.ServerConfig.Port,
 			&aggregator.AggregatorConfig{
-				AVSs:          Config.Avss,
-				Chains:        Config.Chains,
-				Address:       Config.Operator.Address,
-				PrivateKey:    Config.Operator.OperatorPrivateKey,
-				AggregatorUrl: Config.ServerConfig.AggregatorUrl,
-				L1ChainId:     Config.L1ChainId,
+				AVSs:             Config.Avss,
+				Chains:           Config.Chains,
+				Address:          Config.Operator.Address,
+				PrivateKeyConfig: Config.Operator.OperatorPrivateKey,
+				AggregatorUrl:    Config.ServerConfig.AggregatorUrl,
+				L1ChainId:        Config.L1ChainId,
 			},
 			imContractStore,
 			tlp,

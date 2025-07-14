@@ -6,15 +6,17 @@ import (
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/common"
 	"testing"
 )
 
 type WrappedKeyPair struct {
-	PrivateKey interface{} // This can be *bn254.PrivateKey or *ecdsa.PrivateKey
-	PublicKey  interface{} // This can be *bn254.PublicKey or *ecdsa.PublicKey
+	PrivateKey interface{}    // This can be *bn254.PrivateKey or *ecdsa.PrivateKeyConfig
+	PublicKey  interface{}    // This can be *bn254.PublicKey or *ecdsa.PublicKey
+	Address    common.Address // This can be a string or a common.Address type
 }
 
-func GetKeysForCurveType(t *testing.T, curve config.CurveType) (*WrappedKeyPair, *WrappedKeyPair, config.CurveType, error) {
+func GetKeysForCurveType(t *testing.T, curve config.CurveType, chainConfig *ChainConfig) (*WrappedKeyPair, *WrappedKeyPair, config.CurveType, error) {
 	if curve == config.CurveTypeBN254 {
 		aggPrivateKey, aggPublicKey, err := bn254.GenerateKeyPair()
 		if err != nil {
@@ -34,16 +36,16 @@ func GetKeysForCurveType(t *testing.T, curve config.CurveType) (*WrappedKeyPair,
 			}, curve, nil
 	}
 	if curve == config.CurveTypeECDSA {
-		aggPrivateKey, _, err := cryptoLibsEcdsa.GenerateKeyPair()
+		aggPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(chainConfig.OperatorAccountPrivateKey)
 		if err != nil {
-			t.Fatalf("Failed to generate key pair: %v", err)
+			t.Fatalf("Failed to parse key pair: %v", err)
 		}
 		derivedAggAddress, err := aggPrivateKey.DeriveAddress()
 		if err != nil {
 			t.Fatalf("Failed to derive address: %v", err)
 		}
 
-		execPrivateKey, _, err := cryptoLibsEcdsa.GenerateKeyPair()
+		execPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(chainConfig.ExecOperatorAccountPk)
 		if err != nil {
 			t.Fatalf("Failed to generate key pair: %v", err)
 		}
@@ -53,10 +55,12 @@ func GetKeysForCurveType(t *testing.T, curve config.CurveType) (*WrappedKeyPair,
 		}
 		return &WrappedKeyPair{
 				PrivateKey: aggPrivateKey,
-				PublicKey:  derivedAggAddress,
+				Address:    derivedAggAddress,
+				PublicKey:  chainConfig.OperatorAccountPublicKey,
 			}, &WrappedKeyPair{
 				PrivateKey: execPrivateKey,
-				PublicKey:  derivedExecAddress,
+				Address:    derivedExecAddress,
+				PublicKey:  chainConfig.ExecOperatorAccountPublicKey,
 			}, curve, nil
 	}
 	return nil, nil, curve, fmt.Errorf("unsupported curve type: %s", curve)
@@ -83,7 +87,7 @@ func ParseKeysFromConfig(
 		}
 		genericExecutorSigningKey = bn254PrivateSigningKey
 	} else if curveType == config.CurveTypeECDSA {
-		ecdsaPrivateSigningKey, err = cryptoLibsEcdsa.NewPrivateKeyFromHexString(operatorConfig.SigningKeys.ECDSA)
+		ecdsaPrivateSigningKey, err = cryptoLibsEcdsa.NewPrivateKeyFromHexString(operatorConfig.SigningKeys.ECDSA.PrivateKey)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get ECDSA private key: %w", err)
 		}

@@ -23,6 +23,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -60,7 +61,9 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
-	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
 	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
@@ -76,7 +79,9 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
-	simAggConfig.Operator.SigningKeys.ECDSA = chainConfig.OperatorAccountPrivateKey
+	simAggConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.OperatorAccountPrivateKey,
+	}
 	simAggConfig.Operator.Address = chainConfig.OperatorAccountAddress
 	simAggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	simAggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
@@ -128,11 +133,15 @@ func testWithKeyType(
 	}
 	t.Logf("L1 Chain ID: %s", l1ChainId.String())
 
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 private key signer: %v", err)
+	}
+
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l1EthClient, l)
+	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
@@ -301,7 +310,8 @@ const (
 grpcPort: 9090
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
       keystore: |

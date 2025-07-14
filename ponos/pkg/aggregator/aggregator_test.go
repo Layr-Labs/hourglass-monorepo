@@ -23,6 +23,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	goEthereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -72,8 +73,12 @@ func Test_Aggregator(t *testing.T) {
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
-	execConfig.Operator.SigningKeys.ECDSA = chainConfig.ExecOperatorAccountPk
-	execConfig.Operator.OperatorPrivateKey = chainConfig.ExecOperatorAccountPk
+	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
+	execConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	}
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
@@ -93,7 +98,9 @@ func Test_Aggregator(t *testing.T) {
 	}
 
 	aggConfig.Operator.Address = chainConfig.OperatorAccountAddress
-	aggConfig.Operator.OperatorPrivateKey = chainConfig.OperatorAccountPrivateKey
+	aggConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
+		PrivateKey: chainConfig.OperatorAccountPrivateKey,
+	}
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 	aggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	aggConfig.Avss[0].ChainIds = []uint{
@@ -181,20 +188,28 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
+	l1AggPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 aggregator private key signer: %v", err)
+	}
+
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.OperatorAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, l1AggPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 
+	l1ExecPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 executor private key signer: %v", err)
+	}
+
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.ExecOperatorAccountPk,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, l1ExecPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
@@ -291,11 +306,15 @@ func Test_Aggregator(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
 
+	avsCcL1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L1 private key signer: %v", err)
+	}
+
 	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
-	}, l1EthClient, l)
+	}, l1EthClient, avsCcL1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -311,11 +330,15 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to set up task mailbox: %v", err)
 	}
 
+	avsCcL2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L2 private key signer: %v", err)
+	}
+
 	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
+	}, l2EthClient, avsCcL2PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -369,12 +392,12 @@ func Test_Aggregator(t *testing.T) {
 	agg, err := NewAggregatorWithRpcServer(
 		aggConfig.ServerConfig.Port,
 		&AggregatorConfig{
-			AVSs:          aggConfig.Avss,
-			Chains:        aggConfig.Chains,
-			Address:       aggConfig.Operator.Address,
-			PrivateKey:    aggConfig.Operator.OperatorPrivateKey,
-			AggregatorUrl: aggConfig.ServerConfig.AggregatorUrl,
-			L1ChainId:     aggConfig.L1ChainId,
+			AVSs:             aggConfig.Avss,
+			Chains:           aggConfig.Chains,
+			Address:          aggConfig.Operator.Address,
+			PrivateKeyConfig: aggConfig.Operator.OperatorPrivateKey,
+			AggregatorUrl:    aggConfig.ServerConfig.AggregatorUrl,
+			L1ChainId:        aggConfig.L1ChainId,
 		},
 		imContractStore,
 		tlp,
@@ -475,11 +498,15 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Push a message to the mailbox
 	// ------------------------------------------------------------------------
+	l2AppPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 app private key signer: %v", err)
+	}
+
 	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l2EthClient, l)
+	}, l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
 		t.Errorf("Failed to create contract caller: %v", err)
 		cancel()
@@ -516,7 +543,8 @@ const (
 grpcPort: 9000
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls:
       keystore: |
@@ -583,7 +611,9 @@ chains:
 l1ChainId: 31337
 operator:
   address: "0x1234aggregator"
-  operatorPrivateKey: "0x..."
+  operatorPrivateKey:
+    privateKey: "0x..."
+
   signingKeys:
     bls:
       password: ""

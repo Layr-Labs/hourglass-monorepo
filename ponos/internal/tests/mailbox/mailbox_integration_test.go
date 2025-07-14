@@ -19,6 +19,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,20 +57,20 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	root := testUtils.GetProjectRootPath()
 	t.Logf("Project root path: %s", root)
 
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
 	// aggregator is bn254, executor is ecdsa
-	aggKeysBN254, _, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254)
+	aggKeysBN254, _, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys for curve type %s: %v", config.CurveTypeBN254, err)
 	}
 
-	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA)
+	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys for curve type %s: %v", config.CurveTypeECDSA, err)
-	}
-
-	chainConfig, err := testUtils.ReadChainConfig(root)
-	if err != nil {
-		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
 	coreContracts, err := eigenlayer.LoadContracts()
@@ -175,22 +176,30 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 private key signer: %v", err)
+	}
+
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AppAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-	}, l1EthClient, l)
+	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
 
 	var l2CC *caller.ContractCaller
 	if networkTarget == NetworkTarget_L2 {
+		l2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
+		if err != nil {
+			t.Fatalf("Failed to create L2 private key signer: %v", err)
+		}
+
 		l2CC, err = caller.NewContractCaller(&caller.ContractCallerConfig{
-			PrivateKey:          chainConfig.AppAccountPrivateKey,
 			AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
 			TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
-		}, l2EthClient, l)
+		}, l2EthClient, l2PrivateKeySigner, l)
 		if err != nil {
 			t.Fatalf("Failed to create L2 contract caller: %v", err)
 		}
@@ -296,11 +305,15 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsTaskHookAddress = chainConfig.AVSTaskHookAddressL2
 	}
 
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, mailboxEthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS private key signer: %v", err)
+	}
+
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          chainConfig.AVSAccountPrivateKey,
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
 		TaskMailboxAddress:  mailboxContractAddress,
-	}, mailboxEthClient, l)
+	}, mailboxEthClient, avsPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}

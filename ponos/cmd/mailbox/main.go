@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"math/big"
 )
@@ -37,11 +38,15 @@ func main() {
 		panic(err)
 	}
 
+	privateKeySigner, err := transactionSigner.NewPrivateKeySigner("0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214", ethCaller, l)
+	if err != nil {
+		panic(err)
+	}
+
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		PrivateKey:          "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214",
 		AVSRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357",
 		TaskMailboxAddress:  "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
-	}, ethCaller, l)
+	}, ethCaller, privateKeySigner, l)
 	if err != nil {
 		panic(err)
 	}
