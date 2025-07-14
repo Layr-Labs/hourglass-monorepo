@@ -62,9 +62,7 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0x3334567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -165,9 +163,7 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0x4434567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -232,9 +228,7 @@ func TestDeploymentIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0x8834567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -280,9 +274,7 @@ func TestDeploymentIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0x9934567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 5 * time.Minute, // Very long interval to force timeout
 		}
 
@@ -330,9 +322,7 @@ func TestDeploymentIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0xaa34567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 30 * time.Second,
 		}
 
@@ -386,9 +376,7 @@ func TestDeploymentIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0xbb34567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -487,9 +475,7 @@ func TestListPerformersIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0xcc34567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -518,9 +504,7 @@ func TestListPerformersIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0xdd34567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 
@@ -571,9 +555,7 @@ func TestListPerformersIntegration(t *testing.T) {
 		performerConfig := &avsPerformer.AvsPerformerConfig{
 			AvsAddress:                     "0xee34567890abcdef",
 			ProcessType:                    "server",
-			SigningCurve:                   "bn254",
 			PerformerNetworkName:           "",
-			WorkerCount:                    1,
 			ApplicationHealthCheckInterval: 1 * time.Second,
 		}
 

@@ -2,13 +2,13 @@ package executorConfig
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/spf13/viper"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/yaml"
-	"slices"
 )
 
 const (
@@ -107,8 +107,6 @@ type AvsPerformerConfig struct {
 	Image               *PerformerImage
 	ProcessType         string
 	AvsAddress          string
-	WorkerCount         int
-	SigningCurve        string // bn254, bls381, etc
 	AVSRegistrarAddress string
 	Envs                []config.AVSPerformerEnv
 	DeploymentMode      DeploymentMode `json:"deploymentMode" yaml:"deploymentMode"`
@@ -129,15 +127,6 @@ func (ap *AvsPerformerConfig) Validate() error {
 		if ap.Image.Tag == "" {
 			allErrors = append(allErrors, field.Required(field.NewPath("image.tag"), "image.tag is required"))
 		}
-	}
-	if ap.SigningCurve == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
-	} else if !slices.Contains([]string{"bn254", "bls381"}, ap.SigningCurve) {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), ap.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
-	}
-
-	if ap.WorkerCount == 0 {
-		allErrors = append(allErrors, field.Required(field.NewPath("workerCount"), "workerCount is required"))
 	}
 
 	if ap.AVSRegistrarAddress == "" {
@@ -162,10 +151,6 @@ func (ap *AvsPerformerConfig) Validate() error {
 	return nil
 }
 
-type SimulationConfig struct {
-	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
-}
-
 type Chain struct {
 	RpcUrl  string         `json:"rpcUrl" yaml:"rpcUrl"`
 	ChainId config.ChainId `json:"chainId" yaml:"chainId"`
@@ -177,7 +162,6 @@ type ExecutorConfig struct {
 	PerformerNetworkName string                    `json:"performerNetworkName" yaml:"performerNetworkName"`
 	Operator             *config.OperatorConfig    `json:"operator" yaml:"operator"`
 	AvsPerformers        []*AvsPerformerConfig     `json:"avsPerformers" yaml:"avsPerformers"`
-	Simulation           *SimulationConfig         `json:"simulation" yaml:"simulation"`
 	L1Chain              *Chain                    `json:"l1Chain" yaml:"l1Chain"`
 	Contracts            json.RawMessage           `json:"contracts" yaml:"contracts"`
 	OverrideContracts    *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`

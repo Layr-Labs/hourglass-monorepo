@@ -73,9 +73,7 @@ type AvsPerformerConfig struct {
 	AvsAddress                     string
 	ProcessType                    AvsProcessType
 	Image                          PerformerImage
-	WorkerCount                    int
 	PerformerNetworkName           string
-	SigningCurve                   string        // bn254, bls381, etc
 	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
 	SkipConnectionTest             bool          // Skip gRPC connection test during performer creation (for testing)
 }

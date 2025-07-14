@@ -7,10 +7,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"time"
 
@@ -18,13 +16,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 var runCmd = &cobra.Command{
@@ -97,49 +93,35 @@ var runCmd = &cobra.Command{
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
 
-		var pdf peering.IPeeringDataFetcher
-		if Config.SimulationConfig != nil && Config.SimulationConfig.SimulatePeering != nil && Config.SimulationConfig.SimulatePeering.Enabled {
-			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.SimulationConfig.SimulatePeering.OperatorPeers)
-			if err != nil {
-				log.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
-			}
-
-			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-				OperatorPeers: simulatedPeers,
-			}, log)
-		} else {
-			l1Chain := util.Find(Config.Chains, func(c *aggregatorConfig.Chain) bool {
-				return c.ChainId == Config.L1ChainId
-			})
-			if l1Chain == nil {
-				return fmt.Errorf("l1 chain not found in config")
-			}
-
-			cc, err := aggregator.InitializeContractCaller(
-				&aggregatorConfig.Chain{
-					ChainId: l1Chain.ChainId,
-					RpcURL:  l1Chain.RpcURL,
-				},
-				Config.Operator.OperatorPrivateKey,
-				imContractStore,
-				Config.Avss[0].AVSRegistrarAddress,
-				log,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to initialize contract caller: %w", err)
-			}
-
-			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, log)
+		l1Chain := util.Find(Config.Chains, func(c *aggregatorConfig.Chain) bool {
+			return c.ChainId == Config.L1ChainId
+		})
+		if l1Chain == nil {
+			return fmt.Errorf("l1 chain not found in config")
 		}
 
-		agg, err := aggregator.NewAggregatorWithRpcServer(
-			Config.ServerConfig.Port,
+		cc, err := aggregator.InitializeContractCaller(
+			&aggregatorConfig.Chain{
+				ChainId: l1Chain.ChainId,
+				RpcURL:  l1Chain.RpcURL,
+			},
+			Config.Operator.OperatorPrivateKey,
+			imContractStore,
+			Config.Avss[0].AVSRegistrarAddress,
+			log,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to initialize contract caller: %w", err)
+		}
+
+		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, log)
+
+		agg, err := aggregator.NewAggregator(
 			&aggregator.AggregatorConfig{
 				AVSs:             Config.Avss,
 				Chains:           Config.Chains,
 				Address:          Config.Operator.Address,
 				PrivateKeyConfig: Config.Operator.OperatorPrivateKey,
-				AggregatorUrl:    Config.ServerConfig.AggregatorUrl,
 				L1ChainId:        Config.L1ChainId,
 			},
 			imContractStore,
