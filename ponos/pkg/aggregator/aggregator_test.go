@@ -389,14 +389,12 @@ func Test_Aggregator(t *testing.T) {
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(l1AggCc, l)
 
-	agg, err := NewAggregatorWithRpcServer(
-		aggConfig.ServerConfig.Port,
+	agg, err := NewAggregator(
 		&AggregatorConfig{
 			AVSs:             aggConfig.Avss,
 			Chains:           aggConfig.Chains,
 			Address:          aggConfig.Operator.Address,
 			PrivateKeyConfig: aggConfig.Operator.OperatorPrivateKey,
-			AggregatorUrl:    aggConfig.ServerConfig.AggregatorUrl,
 			L1ChainId:        aggConfig.L1ChainId,
 		},
 		imContractStore,

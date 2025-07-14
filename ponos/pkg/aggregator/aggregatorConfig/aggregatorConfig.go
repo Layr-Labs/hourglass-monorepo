@@ -47,10 +47,7 @@ func (c *Chain) IsAnvilRpc() bool {
 
 type AggregatorAvs struct {
 	Address             string `json:"address" yaml:"address"`
-	PrivateKey          string `json:"privateKey" yaml:"privateKey"`
-	ResponseTimeout     int    `json:"responseTimeout" yaml:"responseTimeout"`
 	ChainIds            []uint `json:"chainIds" yaml:"chainIds"`
-	SigningCurve        string `json:"signingCurve" yaml:"signingCurve"`
 	AVSRegistrarAddress string `json:"avsRegistrarAddress" yaml:"avsRegistrarAddress"`
 }
 
@@ -59,11 +56,6 @@ func (aa *AggregatorAvs) Validate() error {
 	if aa.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
 	}
-	if aa.SigningCurve == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("signingCurve"), "signingCurve is required"))
-	} else if !slices.Contains([]string{"bn254", "bls381"}, aa.SigningCurve) {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("signingCurve"), aa.SigningCurve, "signingCurve must be one of [bn254, bls381]"))
-	}
 	if aa.AVSRegistrarAddress == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("avsRegistrarAddress"), "avsRegistrarAddress is required"))
 	}
@@ -71,16 +63,6 @@ func (aa *AggregatorAvs) Validate() error {
 		return allErrors.ToAggregate()
 	}
 	return nil
-}
-
-type ExecutorPeerConfig struct {
-	Port      int    `json:"port" yaml:"port"`
-	PublicKey string `json:"publicKey" yaml:"publicKey"`
-}
-
-type SimulationConfig struct {
-	// SimulatePeering is used by the LocalPeeringDataFetcher to simulate fetching peering data on-chain
-	SimulatePeering *config.SimulatedPeeringConfig `json:"simulatePeering" yaml:"simulatePeering"`
 }
 
 type ServerConfig struct {
@@ -94,9 +76,6 @@ type AggregatorConfig struct {
 	// Operator represents who is actually running the aggregator for the AVS
 	Operator *config.OperatorConfig `json:"operator" yaml:"operator"`
 
-	// ServerConfig contains the configuration for the ExecutionManager grpc server
-	ServerConfig ServerConfig `json:"serverConfig" yaml:"serverConfig"`
-
 	L1ChainId config.ChainId `json:"l1ChainId" yaml:"l1ChainId"`
 
 	// Chains contains the list of chains that the aggregator supports
@@ -104,9 +83,6 @@ type AggregatorConfig struct {
 
 	// Avss contains the list of AVSs that the aggregator is collecting and distributing tasks for
 	Avss []*AggregatorAvs `json:"avss" yaml:"avss"`
-
-	// SimulationConfig contains the configuration for the simulation mode
-	SimulationConfig *SimulationConfig `json:"simulationConfig" yaml:"simulationConfig"`
 
 	// Contracts is an optional field to override the addresses and ABIs for the core contracts that are loaded
 	Contracts json.RawMessage `json:"contracts" yaml:"contracts"`
@@ -175,7 +151,6 @@ func NewAggregatorConfigFromYamlBytes(data []byte) (*AggregatorConfig, error) {
 
 func NewAggregatorConfig() *AggregatorConfig {
 	return &AggregatorConfig{
-		Debug:            viper.GetBool(config.NormalizeFlagName(Debug)),
-		SimulationConfig: &SimulationConfig{},
+		Debug: viper.GetBool(config.NormalizeFlagName(Debug)),
 	}
 }
