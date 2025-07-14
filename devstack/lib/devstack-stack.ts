@@ -1,8 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { generateUserDataScript } from './utils/user-data-generator';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface DevstackStackProps extends cdk.StackProps {
   // None of these are required as we'll use parameters
@@ -15,8 +18,8 @@ export class DevstackStack extends cdk.Stack {
     // Parameters - simplified for devkit approach
     const forkUrl = new cdk.CfnParameter(this, 'ForkUrl', {
       type: 'String',
-      default: 'https://fragrant-intensive-resonance.quiknode.pro/d13303176efa5210c6b9f264823045bf2400fd16/',
-      description: 'Ethereum fork URL (defaults to Holesky)',
+      default: 'https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/',
+      description: 'Ethereum fork URL (defaults to Sepolia)',
     });
 
     const instanceType = new cdk.CfnParameter(this, 'InstanceType', {
@@ -24,6 +27,125 @@ export class DevstackStack extends cdk.Stack {
       default: 't3.large',
       description: 'EC2 instance type',
       allowedValues: ['t3.large', 't3.xlarge', 't3.2xlarge', 'm5.large', 'm5.xlarge'],
+    });
+
+    // Create SSM Parameter for systemd service file
+    const systemdServiceContent = fs.readFileSync(
+      path.join(__dirname, 'config', 'devnet.service'),
+      'utf-8'
+    );
+
+    const systemdParameter = new ssm.StringParameter(this, 'DevnetSystemdService', {
+      parameterName: '/devstack/systemd/devnet.service',
+      stringValue: systemdServiceContent,
+      description: 'Systemd service definition for Hourglass DevNet',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    // Create SSM Parameter for CloudWatch Agent configuration
+    const cloudwatchConfig = {
+      agent: {
+        metrics_collection_interval: 60,
+        run_as_user: "cwagent"
+      },
+      logs: {
+        logs_collected: {
+          files: {
+            collect_list: [
+              {
+                file_path: "/var/log/user-data.log",
+                log_group_name: "/aws/ec2/devstack/user-data",
+                log_stream_name: "{instance_id}",
+                timezone: "UTC"
+              },
+              {
+                file_path: "/var/log/devnet.log",
+                log_group_name: "/aws/ec2/devstack/devnet",
+                log_stream_name: "{instance_id}",
+                timezone: "UTC"
+              }
+            ]
+          }
+        }
+      }
+    };
+
+    const cloudwatchParameter = new ssm.StringParameter(this, 'CloudWatchAgentConfig', {
+      parameterName: '/devstack/cloudwatch/agent-config.json',
+      stringValue: JSON.stringify(cloudwatchConfig, null, 2),
+      description: 'CloudWatch Agent configuration for DevStack',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    // Create SSM Document for service management
+    const serviceManagementDocument = new ssm.CfnDocument(this, 'DevnetServiceManagement', {
+      documentType: 'Command',
+      name: 'DevStack-ServiceManagement',
+      documentFormat: 'YAML',
+      content: {
+        schemaVersion: '2.2',
+        description: 'Manage DevNet service on DevStack instances',
+        parameters: {
+          action: {
+            type: 'String',
+            description: 'Action to perform on the service',
+            allowedValues: ['start', 'stop', 'restart', 'status', 'logs'],
+            default: 'status',
+          },
+          lines: {
+            type: 'String',
+            description: 'Number of log lines to show (only for logs action)',
+            default: '50',
+          },
+        },
+        mainSteps: [
+          {
+            action: 'aws:runShellScript',
+            name: 'ManageService',
+            inputs: {
+              runCommand: [
+                '#!/bin/bash',
+                'ACTION="{{ action }}"',
+                'LINES="{{ lines }}"',
+                '',
+                'case "$ACTION" in',
+                '  start)',
+                '    echo "Starting devnet service..."',
+                '    sudo systemctl start devnet.service',
+                '    sudo systemctl status devnet.service --no-pager',
+                '    ;;',
+                '  stop)',
+                '    echo "Stopping devnet service..."',
+                '    sudo systemctl stop devnet.service',
+                '    sudo systemctl status devnet.service --no-pager',
+                '    ;;',
+                '  restart)',
+                '    echo "Restarting devnet service..."',
+                '    sudo systemctl restart devnet.service',
+                '    sleep 5',
+                '    sudo systemctl status devnet.service --no-pager',
+                '    ;;',
+                '  status)',
+                '    echo "Devnet service status:"',
+                '    sudo systemctl status devnet.service --no-pager',
+                '    echo ""',
+                '    echo "Port status:"',
+                '    ss -tlnp | grep -E "(9090|8081|8545)" || echo "No services listening on expected ports"',
+                '    ;;',
+                '  logs)',
+                '    echo "Recent devnet service logs (last $LINES lines):"',
+                '    sudo journalctl -u devnet.service -n "$LINES" --no-pager',
+                '    ;;',
+                '  *)',
+                '    echo "Invalid action: $ACTION"',
+                '    exit 1',
+                '    ;;',
+                'esac',
+              ],
+            },
+          },
+        ],
+      },
     });
 
     // VPC - create a new one with minimal subnets to save costs
@@ -94,10 +216,45 @@ export class DevstackStack extends cdk.Stack {
       resources: ['*'],
     }));
 
+    // Add permissions for SSM Parameter Store access
+    role.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'ssm:GetParameter',
+        'ssm:GetParameters',
+        'ssm:GetParameterHistory',
+        'ssm:GetParametersByPath',
+      ],
+      resources: [
+        `arn:aws:ssm:${this.region}:${this.account}:parameter/devstack/*`,
+      ],
+    }));
+
+    // Add permission to check SSM agent status
+    role.addToPolicy(new iam.PolicyStatement({
+      actions: ['ssm:DescribeInstanceInformation'],
+      resources: ['*'],
+    }));
+
+    // Add permissions for CloudWatch Logs
+    role.addToPolicy(new iam.PolicyStatement({
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+        'logs:DescribeLogStreams',
+      ],
+      resources: [
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/devstack/*`,
+      ],
+    }));
+
     // EC2 Instance
     const instance = new ec2.Instance(this, 'DevstackInstance', {
       instanceType: new ec2.InstanceType(instanceType.valueAsString),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+      machineImage: ec2.MachineImage.lookup({
+        name: 'ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*',
+        owners: ['099720109477'], // Canonical
+      }),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
@@ -105,8 +262,8 @@ export class DevstackStack extends cdk.Stack {
       securityGroup,
       role,
       blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(50, {
+        deviceName: '/dev/sda1',
+        volume: ec2.BlockDeviceVolume.ebs(1000, {
           volumeType: ec2.EbsDeviceVolumeType.GP3,
           deleteOnTermination: true,
         }),
@@ -123,7 +280,7 @@ export class DevstackStack extends cdk.Stack {
     // Enable EC2 Instance Connect for temporary SSH access
     instance.addUserData(
       '# Install EC2 Instance Connect',
-      'sudo yum install -y ec2-instance-connect'
+      'sudo apt-get install -y ec2-instance-connect'
     );
     
     // Add a tag with user data hash to force instance replacement when script changes
@@ -146,11 +303,6 @@ export class DevstackStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DevnetRpcUrl', {
       value: `http://${instance.instancePublicIp}:8545`,
       description: 'Ethereum RPC endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'SessionManagerCommand', {
-      value: `aws ssm start-session --target ${instance.instanceId}`,
-      description: 'Connect to instance via Session Manager',
     });
 
     new cdk.CfnOutput(this, 'InstanceId', {

@@ -79,21 +79,30 @@ DevStack provides a one-click deployment solution for running EigenLayer AVS dev
 
 ### Infrastructure Components
 
-- **EC2 Instance**: Runs Amazon Linux 2023 with Docker pre-installed
+- **EC2 Instance**: Runs Ubuntu 22.04 LTS with Docker pre-installed
 - **Security Groups**: Configured for:
   - Executor gRPC (9090)
   - Aggregator gRPC (8081)
+  - Aggregator metrics (9000)
   - Ethereum RPC (8545)
-  - SSH (22)
-- **IAM Role**: Permissions for ECR access and Systems Manager
-- **EBS Storage**: 50 GB GP3 volume for blockchain data and containers
+- **IAM Role**: Permissions for:
+  - ECR access (for container images)
+  - Systems Manager (for remote management)
+  - Parameter Store (for configuration)
+  - CloudWatch Logs (for centralized logging)
+- **EBS Storage**: 100 GB GP3 volume for blockchain data and containers
+- **Systems Manager Integration**:
+  - Systemd service definition stored in Parameter Store
+  - SSM Document for service management (start/stop/restart/logs)
+  - Session Manager for secure shell access (no SSH keys needed)
 
 ### Software Stack
 
 The EC2 instance automatically installs and configures:
 
 - Docker (required by DevKit for container orchestration)
-- DevKit CLI v0.0.8 (manages the entire AVS development environment)
+- DevKit CLI v0.0.9 (manages the entire AVS development environment)
+- CloudWatch Agent (for log aggregation)
 - systemd service for persistent devnet operation
 
 DevKit then handles:
@@ -127,7 +136,7 @@ After deployment, the stack provides these outputs:
 - **ExecutorEndpoint**: Executor gRPC endpoint (port 9090) for hgctl connectivity
 - **AggregatorEndpoint**: Aggregator gRPC endpoint (port 8081)
 - **DevnetRpcUrl**: Ethereum RPC endpoint (port 8545) for blockchain interactions
-- **SSHCommand**: SSH command for direct instance access
+- **SessionManagerCommand**: Connect to instance via AWS Session Manager
 - **InstanceId**: EC2 instance ID for AWS operations
 
 ## Management Commands
@@ -146,8 +155,8 @@ npm run destroy        # Remove all resources
 
 ### Debugging
 ```bash
-# SSH into the instance
-ssh ec2-user@<instance-ip>
+# Connect via Session Manager (no SSH keys needed)
+aws ssm start-session --target <instance-id>
 
 # Check devnet service status
 sudo systemctl status devnet
@@ -158,9 +167,6 @@ tail -f /var/log/user-data.log
 
 # Check Docker containers
 docker ps
-
-# Use the convenience script
-devnet-status.sh
 ```
 
 ## Cost Optimization
@@ -172,8 +178,8 @@ devnet-status.sh
 ## Security Considerations
 
 - Security groups are configured for open access (0.0.0.0/0) by default
-- For production use, restrict SSH and service access to specific IP ranges
-- Consider using AWS Systems Manager Session Manager instead of SSH
+- For production use, restrict service access to specific IP ranges
+- Instance access is managed through AWS Systems Manager (no SSH keys)
 - Use AWS Secrets Manager for sensitive configuration values
 
 ## Troubleshooting

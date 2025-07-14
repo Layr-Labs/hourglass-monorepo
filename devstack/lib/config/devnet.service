@@ -1,0 +1,39 @@
+[Unit]
+Description=Hourglass DevNet Service
+Documentation=https://github.com/hourglass-monorepo
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/devstack
+
+# Environment setup
+Environment="PATH=/usr/local/bin:/usr/local/go/bin:/home/ubuntu/.foundry/bin:/usr/bin:/bin"
+Environment="HOME=/home/ubuntu"
+
+# Service command
+ExecStartPre=/usr/bin/docker compose version
+ExecStart=/usr/local/bin/devkit avs devnet start
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging - output to file for CloudWatch
+StandardOutput=append:/var/log/devnet.log
+StandardError=append:/var/log/devnet.log
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
