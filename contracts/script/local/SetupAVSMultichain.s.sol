@@ -26,13 +26,6 @@ contract SetupAVSMultichain is Script {
     function run() public {
         // Load the private key from the environment variable
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
-        uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
-        uint256 l2ChainId = uint32(vm.envUint("L2_CHAIN_ID"));
-
-        // Holesky is 17000, but when we run anvil it becomes 31337, so we need to whitelist 31337 as valid
-        uint256[] memory chainIds = new uint256[](2);
-        chainIds[0] = l1ChainId;
-        chainIds[1] = l2ChainId;
 
         vm.startBroadcast(avsPrivateKey);
         address avs = vm.addr(avsPrivateKey);
@@ -48,9 +41,9 @@ contract SetupAVSMultichain is Script {
 
             // aggregator is bn254, executor is ecdsa
             if (i == 0) {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config, chainIds);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config);
             } else {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config, chainIds);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config);
             }
 
             console.log("Generation reservation created for operator set", i);
