@@ -86,25 +86,51 @@ The initial processing is similar to BN254:
 
 ### Step 2: Signature Collection
 
-Instead of aggregation, ECDSA uses collection:
+Instead of mathematical aggregation, ECDSA uses a collection-based approach that maintains individual signatures in a structured format:
 
-1. **First Signature**: Initialize a map storing operator address → signature bytes
-2. **Subsequent Signatures**: Add each new signature to the map
-3. **Public Key Tracking**: Maintain a separate list of signer addresses
-4. **Threshold Checking**: Count signatures to determine when threshold is met
+1. **First Signature Processing**: When the first valid signature arrives, the system initializes the `aggregatedECDSAOperators` structure with:
+   - A map (`signersSignatures`) storing operator address → raw signature bytes
+   - A list (`signersPublicKeys`) containing the signer's Ethereum address (used as public key)
+   - A total signer count starting at 1
+   - Reference to the last received response for final certificate generation
+
+2. **Subsequent Signature Processing**: Each additional signature is processed by:
+   - Adding the signature bytes to the map using the operator's address as the key
+   - Appending the operator's public key (Ethereum address) to the signers list
+   - Incrementing the total signer count
+   - Updating the last received response reference
+
+3. **Key Structural Differences**: Unlike BN254's mathematical aggregation, ECDSA maintains:
+   - Individual signatures in a map structure rather than combining them cryptographically
+   - Ethereum addresses as both operator identifiers and public keys
+   - No cryptographic combination of public keys - just collection in a list
+
+4. **Threshold Checking**: After each signature addition, the system checks if the required number of signatures has been collected based on the threshold percentage
 
 ### Step 3: Final Certificate Generation
 
-When threshold is reached:
+When the threshold is reached, the system performs several deterministic operations to create a consistent certificate:
 
-1. **Signer Sorting**: All signer addresses are sorted deterministically to ensure consistent certificate format
-2. **Non-Signer Identification**: Operators who didn't sign are identified
-3. **Signature Concatenation**: All individual signatures are concatenated into a single byte array
-4. **Certificate Assembly**: The final certificate contains:
-   - The task ID and response payload
-   - A map of individual signatures keyed by operator address
-   - Sorted lists of signer addresses and non-signer addresses
-   - The concatenated signature bytes for on-chain submission
+1. **Deterministic Signer Ordering**: All signer addresses are extracted from the signatures map and sorted by their hexadecimal representation to ensure consistent certificate format regardless of signature arrival order
+
+2. **Non-Signer Identification**: The system identifies operators who didn't sign by:
+   - Comparing the complete operator set against the signer addresses
+   - Using slice operations to find addresses not present in the signers list
+   - Collecting their public keys (Ethereum addresses) for the non-signers list
+
+3. **Comprehensive Operator Mapping**: The system creates sorted lists of all operators by:
+   - Extracting all operator addresses and sorting them deterministically
+   - Mapping each address back to its corresponding public key (Ethereum address)
+   - Ensuring consistent ordering for certificate verification
+
+4. **Certificate Assembly**: The final `AggregatedECDSACertificate` structure contains:
+   - Task ID and response payload from the last received response
+   - The complete map of individual signatures (`SignersSignatures`) keyed by operator address
+   - Sorted list of signer public keys (`SignersPublicKeys`)
+   - List of non-signer public keys (`NonSignersPubKeys`)
+   - All operator public keys (`AllOperatorsPubKeys`) for verification context
+
+5. **Signature Concatenation for On-Chain Submission**: The `GetFinalSignature()` method concatenates all individual signatures into a single byte array, with each signature expected to be 65 bytes (64 bytes + recovery ID), enabling efficient on-chain parsing
 
 ### ECDSA Certificate Verification
 
