@@ -176,7 +176,9 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 		config := &ExecutorConfig{
 			Operator: &config.OperatorConfig{
 				Address:            "0x123",
-				OperatorPrivateKey: "private_key",
+				OperatorPrivateKey: &config.ECDSAKeyConfig{
+					PrivateKey: "private_key",
+				},
 				SigningKeys: config.SigningKeys{
 					BLS: &config.SigningKey{
 						Keystore: "keystore_content",
@@ -213,7 +215,9 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 		config := &ExecutorConfig{
 			Operator: &config.OperatorConfig{
 				Address:            "0x123",
-				OperatorPrivateKey: "private_key",
+				OperatorPrivateKey: &config.ECDSAKeyConfig{
+					PrivateKey: "private_key",
+				},
 				SigningKeys: config.SigningKeys{
 					BLS: &config.SigningKey{
 						Keystore: "keystore_content",
@@ -250,7 +254,9 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 		config := &ExecutorConfig{
 			Operator: &config.OperatorConfig{
 				Address:            "0x123",
-				OperatorPrivateKey: "private_key",
+				OperatorPrivateKey: &config.ECDSAKeyConfig{
+					PrivateKey: "private_key",
+				},
 				SigningKeys: config.SigningKeys{
 					BLS: &config.SigningKey{
 						Keystore: "keystore_content",
@@ -302,7 +308,8 @@ func TestConfigSerialization(t *testing.T) {
 		yamlWithKubernetes := `
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls: 
       keystore: ""
@@ -347,7 +354,8 @@ kubernetes:
 		yamlWithDocker := `
 operator:
   address: "0xoperator..."
-  operatorPrivateKey: "..."
+  operatorPrivateKey:
+    privateKey: "..."
   signingKeys:
     bls: 
       keystore: ""

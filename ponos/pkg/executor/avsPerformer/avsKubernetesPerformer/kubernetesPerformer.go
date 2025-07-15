@@ -11,7 +11,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
@@ -36,16 +36,17 @@ const (
 
 // PerformerResource holds information about a Kubernetes performer
 type PerformerResource struct {
-	performerID     string
-	avsAddress      string
-	image           avsPerformer.PerformerImage
-	status          avsPerformer.PerformerResourceStatus
-	client          performerV1.PerformerServiceClient
-	endpoint        string
-	performerHealth *avsPerformer.PerformerHealth
-	statusChan      chan avsPerformer.PerformerStatusEvent
-	createdAt       time.Time
-	lastHealthCheck time.Time
+	performerID       string
+	avsAddress        string
+	image             avsPerformer.PerformerImage
+	status            avsPerformer.PerformerResourceStatus
+	client            performerV1.PerformerServiceClient
+	connectionManager *clients.ConnectionManager
+	endpoint          string
+	performerHealth   *avsPerformer.PerformerHealth
+	statusChan        chan avsPerformer.PerformerStatusEvent
+	createdAt         time.Time
+	lastHealthCheck   time.Time
 }
 
 // AvsKubernetesPerformer implements IAvsPerformer using Kubernetes CRDs
@@ -236,28 +237,43 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		return nil, fmt.Errorf("performer not ready: %w", err)
 	}
 
-	// Create gRPC client
-	client, err := avsPerformerClient.NewAvsPerformerClient(createResponse.Endpoint, true)
+	// Create connection manager with retry logic
+	retryConfig := &clients.RetryConfig{
+		MaxRetries:        5,
+		InitialDelay:      2 * time.Second,
+		MaxDelay:          30 * time.Second,
+		BackoffMultiplier: 2.0,
+		ConnectionTimeout: 15 * time.Second,
+	}
+	
+	connectionManager := clients.NewConnectionManager(createResponse.Endpoint, true, retryConfig)
+	
+	// Get initial connection to test connectivity
+	conn, err := connectionManager.GetConnection()
 	if err != nil {
 		// Clean up on failure
 		if cleanupErr := akp.kubernetesManager.DeletePerformer(ctx, performerID); cleanupErr != nil {
-			akp.logger.Error("Failed to clean up performer after client creation failure",
+			akp.logger.Error("Failed to clean up performer after connection failure",
 				zap.String("performerID", performerID),
 				zap.Error(cleanupErr),
 			)
 		}
-		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
+		return nil, fmt.Errorf("failed to establish gRPC connection: %w", err)
 	}
+	
+	// Create gRPC client using the connection
+	client := performerV1.NewPerformerServiceClient(conn)
 
 	performerResource := &PerformerResource{
-		performerID: performerID,
-		avsAddress:  akp.config.AvsAddress,
-		image:       image,
-		status:      avsPerformer.PerformerResourceStatusStaged,
-		client:      client,
-		endpoint:    createResponse.Endpoint,
-		statusChan:  make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:   time.Now(),
+		performerID:       performerID,
+		avsAddress:        akp.config.AvsAddress,
+		image:             image,
+		status:            avsPerformer.PerformerResourceStatusStaged,
+		client:            client,
+		connectionManager: connectionManager,
+		endpoint:          createResponse.Endpoint,
+		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
+		createdAt:         time.Now(),
 		performerHealth: &avsPerformer.PerformerHealth{
 			ContainerIsHealthy:   true,
 			ApplicationIsHealthy: true,
@@ -335,7 +351,33 @@ func (akp *AvsKubernetesPerformer) performApplicationHealthCheck(ctx context.Con
 	healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := performer.client.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
+	// Check if circuit breaker is open
+	if performer.connectionManager.IsCircuitOpen() {
+		akp.logger.Warn("Circuit breaker is open for performer, skipping health check",
+			zap.String("performerID", performer.performerID),
+			zap.Any("connectionStats", performer.connectionManager.GetConnectionStats()),
+		)
+		performer.performerHealth.ApplicationIsHealthy = false
+		performer.performerHealth.ConsecutiveApplicationHealthFailures++
+		return
+	}
+
+	// Get a healthy connection
+	conn, err := performer.connectionManager.GetConnection()
+	if err != nil {
+		akp.logger.Warn("Failed to get healthy connection for health check",
+			zap.String("performerID", performer.performerID),
+			zap.Error(err),
+		)
+		performer.performerHealth.ApplicationIsHealthy = false
+		performer.performerHealth.ConsecutiveApplicationHealthFailures++
+		return
+	}
+
+	// Create a new client with the healthy connection
+	client := performerV1.NewPerformerServiceClient(conn)
+
+	_, err = client.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
 	performer.lastHealthCheck = time.Now()
 	performer.performerHealth.LastHealthCheck = time.Now()
 
@@ -348,6 +390,7 @@ func (akp *AvsKubernetesPerformer) performApplicationHealthCheck(ctx context.Con
 			zap.String("performerID", performer.performerID),
 			zap.Error(err),
 			zap.Int("consecutiveFailures", performer.performerHealth.ConsecutiveApplicationHealthFailures),
+			zap.Any("connectionStats", performer.connectionManager.GetConnectionStats()),
 		)
 
 		// Send unhealthy status event
@@ -518,6 +561,16 @@ func (akp *AvsKubernetesPerformer) RemovePerformer(ctx context.Context, performe
 		close(targetPerformer.statusChan)
 	}
 
+	// Close connection manager
+	if targetPerformer.connectionManager != nil {
+		if err := targetPerformer.connectionManager.Close(); err != nil {
+			akp.logger.Warn("Failed to close connection manager",
+				zap.String("performerID", performerID),
+				zap.Error(err),
+			)
+		}
+	}
+
 	// Delete the Kubernetes performer resource
 	if err := akp.kubernetesManager.DeletePerformer(ctx, performerID); err != nil {
 		akp.logger.Error("Failed to delete Kubernetes performer",
@@ -545,8 +598,13 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	}
 
 	currentPerformer := current.(*PerformerResource)
-	if currentPerformer == nil || currentPerformer.client == nil {
-		return nil, fmt.Errorf("no current performer client available to execute task")
+	if currentPerformer == nil || currentPerformer.connectionManager == nil {
+		return nil, fmt.Errorf("no current performer connection manager available to execute task")
+	}
+
+	// Check if circuit breaker is open
+	if currentPerformer.connectionManager.IsCircuitOpen() {
+		return nil, fmt.Errorf("circuit breaker is open for performer %s, task execution unavailable", currentPerformer.performerID)
 	}
 
 	// Track this task with the performer's WaitGroup
@@ -554,8 +612,23 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	wg.Add(1)
 	defer wg.Done()
 
+	// Get a healthy connection for task execution
+	conn, err := currentPerformer.connectionManager.GetConnection()
+	if err != nil {
+		akp.logger.Error("Failed to get healthy connection for task execution",
+			zap.String("performerID", currentPerformer.performerID),
+			zap.String("taskID", task.TaskID),
+			zap.Error(err),
+			zap.Any("connectionStats", currentPerformer.connectionManager.GetConnectionStats()),
+		)
+		return nil, fmt.Errorf("failed to get healthy connection: %w", err)
+	}
+
+	// Create a new client with the healthy connection
+	client := performerV1.NewPerformerServiceClient(conn)
+
 	// Execute the task
-	res, err := currentPerformer.client.ExecuteTask(ctx, &performerV1.TaskRequest{
+	res, err := client.ExecuteTask(ctx, &performerV1.TaskRequest{
 		TaskId:  []byte(task.TaskID),
 		Payload: task.Payload,
 	})
@@ -564,6 +637,7 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 			zap.String("performerID", currentPerformer.performerID),
 			zap.String("taskID", task.TaskID),
 			zap.Error(err),
+			zap.Any("connectionStats", currentPerformer.connectionManager.GetConnectionStats()),
 		)
 		return nil, err
 	}
@@ -859,6 +933,16 @@ func (akp *AvsKubernetesPerformer) startDrainAndRemove(performer *PerformerResou
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
+		// Close connection manager
+		if performer.connectionManager != nil {
+			if err := performer.connectionManager.Close(); err != nil {
+				akp.logger.Warn("Failed to close connection manager during drain",
+					zap.String("performerID", performerID),
+					zap.Error(err),
+				)
+			}
+		}
+
 		if err := akp.kubernetesManager.DeletePerformer(ctx, performerID); err != nil {
 			akp.logger.Error("Failed to remove drained performer",
 				zap.String("performerID", performerID),
@@ -898,6 +982,14 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 	// Shutdown current performer
 	if current := akp.currentPerformer.Load(); current != nil {
 		currentPerformer := current.(*PerformerResource)
+		
+		// Close connection manager
+		if currentPerformer.connectionManager != nil {
+			if err := currentPerformer.connectionManager.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to close current performer connection manager: %w", err))
+			}
+		}
+		
 		if err := akp.kubernetesManager.DeletePerformer(ctx, currentPerformer.performerID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown current performer: %w", err))
 		}
@@ -907,6 +999,13 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 
 	// Shutdown next performer
 	if akp.nextPerformer != nil {
+		// Close connection manager
+		if akp.nextPerformer.connectionManager != nil {
+			if err := akp.nextPerformer.connectionManager.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to close next performer connection manager: %w", err))
+			}
+		}
+		
 		if err := akp.kubernetesManager.DeletePerformer(ctx, akp.nextPerformer.performerID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown next performer: %w", err))
 		}
