@@ -160,23 +160,171 @@
 - [x] **Troubleshooting Guide** - K8s-specific debugging steps
 - [x] **Migration Guide** - Docker to Kubernetes transition steps
 
-## ❌ Phase 5: Production Readiness **[UPDATED FOCUS]**
+## ❌ Phase 5: End-to-End Integration Testing & Production Readiness **[UPDATED FOCUS]**
 
-### ❌ 5.1 Monitoring & Observability
+### 🎯 5.1 Kind-Based Integration Testing **[NEW MILESTONE]**
+- [ ] **Complete End-to-End Integration Test Suite** - Adapt existing aggregator test for Kubernetes
+- [ ] **Kind Cluster Management** - Create/destroy Kind clusters per test run
+- [ ] **Operator Deployment in Kind** - Deploy hourglass-operator in test clusters
+- [ ] **Blockchain Integration** - Test with Anvil L1/L2 nodes + Kind cluster
+- [ ] **Task Flow Validation** - Verify TaskCreated → K8s performer execution → TaskVerified
+
+#### 🔄 Milestone 5.1.1: Test Infrastructure Setup (Week 9.1)
+- [ ] **Kind Cluster Helper Functions** - Setup/teardown with custom configuration
+- [ ] **Operator Deployment Automation** - Deploy hourglass-operator in Kind
+- [ ] **Image Management** - Build and load test images into Kind cluster
+- [ ] **Network Configuration** - Enable Kind cluster to reach Anvil nodes
+- [ ] **Test Namespace Management** - Create isolated test environments
+
+#### 🔄 Milestone 5.1.2: Aggregator Test Adaptation (Week 9.2)
+- [ ] **Shared Test Logic Extraction** - Create `runAggregatorIntegrationTest(deploymentMode)`
+- [ ] **Configuration Generation** - Generate Docker vs Kubernetes executor configs
+- [ ] **Test Function Refactoring** - `Test_Aggregator_Docker` and `Test_Aggregator_Kubernetes`
+- [ ] **Kubernetes-Specific Setup** - Add K8s infrastructure to existing test flow
+- [ ] **Validation Enhancement** - Verify performer pods and services are created
+
+#### 🔄 Milestone 5.1.3: Test Execution & Validation (Week 9.3)
+- [ ] **Performer Pod Validation** - Verify operator creates pods from CRDs
+- [ ] **Service DNS Resolution** - Test `performer-{name}.{namespace}.svc.cluster.local`
+- [ ] **Task Flow Verification** - Validate tasks flow through K8s-deployed performers
+- [ ] **Performance Comparison** - Compare Docker vs K8s test execution times
+- [ ] **Error Handling** - Test failure scenarios and cleanup procedures
+
+#### 🔄 Milestone 5.1.4: CI/CD Integration (Week 9.4)
+- [ ] **GitHub Actions Integration** - Add Kind-based tests to CI pipeline
+- [ ] **Test Parallelization** - Run Docker and K8s tests in parallel
+- [ ] **Resource Management** - Optimize test resource usage for CI
+- [ ] **Debugging Support** - Collect logs and diagnostics on test failures
+- [ ] **Test Reliability** - Ensure consistent test execution across environments
+
+### 🎯 5.1 Test Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Integration Test Environment                          │
+│                                                                             │
+│  ┌─────────────────┐    ┌─────────────────────────────────────────────────┐ │
+│  │ Host Network    │    │              Kind Cluster                       │ │
+│  │                 │    │                                                 │ │
+│  │ ┌─────────────┐ │    │ ┌─────────────────┐  ┌─────────────────────────┐ │ │
+│  │ │ L1 Anvil    │ │    │ │ Hourglass       │  │ Test Executor           │ │ │
+│  │ │ :8545       │ │    │ │ Operator        │  │ (K8s Mode)              │ │ │
+│  │ └─────────────┘ │    │ │                 │  │                         │ │ │
+│  │                 │    │ └─────────────────┘  └─────────────────────────┘ │ │
+│  │ ┌─────────────┐ │    │          │                      │                │ │
+│  │ │ L2 Anvil    │ │    │          │ Creates Performer    │ Creates         │ │
+│  │ │ :9545       │ │    │          │ Pods                 │ Performer CRDs  │ │
+│  │ └─────────────┘ │    │          ▼                      ▼                │ │
+│  │                 │    │ ┌─────────────────────────────────────────────────┐ │ │
+│  │ ┌─────────────┐ │    │ │           Test Performer Pods                  │ │ │
+│  │ │ Aggregator  │ │◄───┤ │ ┌─────────────┐ ┌─────────────────────────────┐ │ │ │
+│  │ │ (Host)      │ │    │ │ │ Performer-1 │ │ Performer-2                 │ │ │ │
+│  │ └─────────────┘ │    │ │ └─────────────┘ └─────────────────────────────┘ │ │ │
+│  └─────────────────┘    │ └─────────────────────────────────────────────────┘ │ │
+│                         └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 🎯 5.2 Test Execution Strategy
+
+#### **Test Function Structure:**
+```go
+func Test_Aggregator_Docker(t *testing.T) {
+    runAggregatorIntegrationTest(t, "docker")
+}
+
+func Test_Aggregator_Kubernetes(t *testing.T) {
+    runAggregatorIntegrationTest(t, "kubernetes")
+}
+
+func runAggregatorIntegrationTest(t *testing.T, deploymentMode string) {
+    // Shared setup: Anvil nodes, contracts, aggregator
+    
+    if deploymentMode == "kubernetes" {
+        // Kind cluster setup
+        // Operator deployment
+        // Image loading
+    }
+    
+    // Executor configuration based on deployment mode
+    // Task submission and validation
+    // Cleanup
+}
+```
+
+#### **Infrastructure Management:**
+- **Kind Cluster**: Create/destroy per test run for isolation
+- **Operator Deployment**: Deploy hourglass-operator via kubectl/Helm
+- **Image Loading**: Build and load test performer images into Kind
+- **Network Connectivity**: Configure Kind to reach Anvil nodes on host
+
+#### **Test Validation Points:**
+- **Infrastructure**: Verify Kind cluster and operator are ready
+- **CRD Creation**: Confirm executor creates Performer CRDs
+- **Pod Creation**: Validate operator creates performer pods
+- **Service DNS**: Test `performer-{name}.{namespace}.svc.cluster.local` resolution
+- **Task Flow**: Verify TaskCreated → K8s execution → TaskVerified
+- **Performance**: Compare execution times between Docker and K8s modes
+
+### 🎯 5.3 Performance & Timing Expectations
+
+#### **Test Execution Overhead:**
+- **Kind Cluster Setup**: ~30-60 seconds
+- **Operator Deployment**: ~10-20 seconds
+- **Image Loading**: ~5-10 seconds
+- **Test Execution**: ~2-3 minutes (same as Docker test)
+- **Total K8s Test Time**: ~4-5 minutes vs ~2-3 minutes for Docker
+
+#### **Optimization Strategies:**
+- **Parallel Setup**: Run Kind setup during Anvil startup
+- **Image Pre-loading**: Cache images between test runs
+- **Resource Limits**: Use minimal resource requests for test pods
+- **Fast Cleanup**: Efficient cluster destruction and resource cleanup
+
+### 🎯 5.4 CI/CD Integration Plan
+
+#### **GitHub Actions Structure:**
+```yaml
+name: Integration Tests
+jobs:
+  test-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Docker Integration Test
+        run: go test -v ./pkg/aggregator -run Test_Aggregator_Docker
+        
+  test-kubernetes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Kind
+        uses: helm/kind-action@v1.4.0
+      - name: Run Kubernetes Integration Test
+        run: go test -v ./pkg/aggregator -run Test_Aggregator_Kubernetes
+```
+
+#### **Resource Management:**
+- **Docker-in-Docker**: Required for Kind in CI
+- **Memory Limits**: Optimize for CI resource constraints
+- **Parallel Execution**: Run tests concurrently where possible
+- **Artifact Collection**: Capture logs and diagnostics on failures
+
+## ❌ Phase 6: Production Readiness **[UPDATED FOCUS]**
+
+### ❌ 6.1 Monitoring & Observability
 - [ ] **Prometheus Metrics** - Singleton operator and performer health metrics
 - [ ] **Custom Metrics** - Multi-executor performer lifecycle events
 - [ ] **Logging Integration** - Cluster logging stack integration
 - [ ] **Health Checks** - Readiness and liveness probes
 - [ ] **Distributed Tracing** - Request flow through multiple executors and performers
 
-### ❌ 5.2 Security & Compliance
+### ❌ 6.2 Security & Compliance
 - [ ] **Pod Security Standards** - Compliance implementation
 - [ ] **Network Policies** - Performer isolation rules
 - [ ] **Secret Management** - Secure configuration handling
 - [ ] **RBAC Hardening** - Principle of least privilege
 - [ ] **Audit Logging** - Security event tracking
 
-### ❌ 5.3 Advanced Features
+### ❌ 6.3 Advanced Features
 - [ ] **Multi-Executor Coordination** - Singleton operator managing multiple executors
 - [ ] **Auto-scaling** - HPA integration for performers
 - [ ] **Blue-Green Deployments** - Safe performer upgrades
@@ -211,8 +359,11 @@
 **✅ Completed (Phase 4)**
 - ✅ Documentation updates **[COMPLETED - Milestone 4.4]**
 
-**❌ Remaining Work**
-- Production readiness features (Phase 5)
+**🎯 Next Phase (Phase 5)**
+- End-to-end integration testing with Kind
+
+**❌ Future Work (Phase 6)**
+- Production readiness features
 
 **📊 Progress Summary**
 - **Milestone 3.1**: ✅ **COMPLETED** - Kubernetes Manager Foundation
@@ -371,39 +522,46 @@ scheduling:
 - **Week 1-2:** ✅ Phase 1 (Foundation & CRDs) - **COMPLETED**
 - **Week 3-4:** ✅ Phase 2 (Operator Refactoring) - **COMPLETED** *(singleton operator ready)*
 - **Week 5-6:** ✅ Phase 3 (Ponos Integration) - **COMPLETED** *(CRD-based executor integration)*
-- **Week 7-8:** 🔄 Phase 4 (Testing & Validation) - **IN PROGRESS** *(comprehensive testing)*
-- **Week 9-10:** ❌ Phase 5 (Production Readiness) - **PENDING** *(monitoring, security)*
+- **Week 7-8:** ✅ Phase 4 (Testing & Validation) - **COMPLETED** *(comprehensive testing)*
+- **Week 9-10:** 🔄 Phase 5 (Kind Integration Testing) - **NEXT** *(end-to-end validation)*
+- **Week 11+:** ❌ Phase 6 (Production Readiness) - **FUTURE** *(monitoring, security)*
 
-## 🎯 **Next Immediate Steps (Phase 4 Milestones)**
+## 🎯 **Next Immediate Steps (Phase 5 Milestones)**
 
-### ✅ Milestone 3.1: Kubernetes Manager Foundation (Week 5.1) **[COMPLETED]**
-1. [x] **Create `ponos/pkg/kubernetesManager/` package** - Complete package structure
-2. [x] **Implement Kubernetes client wrapper with CRD operations** - Full CRUD support
-3. [x] **Add configuration structures and validation** - Production-ready config management
-4. [x] **Comprehensive unit testing** - 99 test cases with 100% core functionality coverage
-5. [x] **Production features** - Resource requirements, hardware specs, scheduling configs
+### 🔄 Milestone 5.1.1: Test Infrastructure Setup (Week 9.1) **[NEXT]**
+1. [ ] **Kind Cluster Helper Functions** - Setup/teardown with custom configuration
+2. [ ] **Operator Deployment Automation** - Deploy hourglass-operator in Kind
+3. [ ] **Image Management** - Build and load test images into Kind cluster
+4. [ ] **Network Configuration** - Enable Kind cluster to reach Anvil nodes
+5. [ ] **Test Namespace Management** - Create isolated test environments
 
-### ✅ Milestone 3.2: Performer Interface Implementation (Week 5.2) **[COMPLETED]**
-1. [x] **Create `ponos/pkg/executor/avsPerformer/avsKubernetesPerformer/` package**
-2. [x] **Implement `IAvsPerformer` interface using CRD operations**
-3. [x] **Add blue-green deployment support via Performer CRDs**
+### 🔄 Milestone 5.1.2: Aggregator Test Adaptation (Week 9.2) **[PENDING]**
+1. [ ] **Shared Test Logic Extraction** - Create `runAggregatorIntegrationTest(deploymentMode)`
+2. [ ] **Configuration Generation** - Generate Docker vs Kubernetes executor configs
+3. [ ] **Test Function Refactoring** - `Test_Aggregator_Docker` and `Test_Aggregator_Kubernetes`
+4. [ ] **Kubernetes-Specific Setup** - Add K8s infrastructure to existing test flow
+5. [ ] **Validation Enhancement** - Verify performer pods and services are created
 
-### ✅ Milestone 3.3: Configuration Integration (Week 6.1) **[COMPLETED]**
-1. [x] **Add deployment mode selection to executor configuration**
-2. [x] **Integrate Kubernetes config with existing Docker config**
-3. [x] **Ensure zero breaking changes for existing Docker deployments**
+### 🔄 Milestone 5.1.3: Test Execution & Validation (Week 9.3) **[PENDING]**
+1. [ ] **Performer Pod Validation** - Verify operator creates pods from CRDs
+2. [ ] **Service DNS Resolution** - Test `performer-{name}.{namespace}.svc.cluster.local`
+3. [ ] **Task Flow Verification** - Validate tasks flow through K8s-deployed performers
+4. [ ] **Performance Comparison** - Compare Docker vs K8s test execution times
+5. [ ] **Error Handling** - Test failure scenarios and cleanup procedures
 
-### ✅ Milestone 3.4: Executor Factory Pattern (Week 6.2) **[COMPLETED]**
-1. [x] **Update executor factory to support both Docker and Kubernetes modes**
-2. [x] **Add configuration validation for each deployment mode**
-3. [x] **Maintain backward compatibility for existing Docker deployments**
+### 🔄 Milestone 5.1.4: CI/CD Integration (Week 9.4) **[PENDING]**
+1. [ ] **GitHub Actions Integration** - Add Kind-based tests to CI pipeline
+2. [ ] **Test Parallelization** - Run Docker and K8s tests in parallel
+3. [ ] **Resource Management** - Optimize test resource usage for CI
+4. [ ] **Debugging Support** - Collect logs and diagnostics on test failures
+5. [ ] **Test Reliability** - Ensure consistent test execution across environments
 
-### ✅ Milestone 3.5: Service Discovery & Connection Management (Week 6.3) **[COMPLETED]**
-1. [x] **Kubernetes Service DNS connection pattern** - `performer-{name}.{namespace}.svc.cluster.local:9090`
-2. [x] **Advanced connection retry logic** - Exponential backoff with configurable parameters
-3. [x] **Circuit breaker pattern** - Prevents cascading failures during outages
-4. [x] **Connection health monitoring** - Real-time connection state tracking
-5. [x] **Enhanced error handling** - Graceful degradation on connection failures
+---
+
+### ✅ **Completed Phase 3-4 Milestones Summary**
+
+**Milestone 3.1-3.5**: ✅ **COMPLETED** - Kubernetes Integration Foundation
+**Milestone 4.1-4.4**: ✅ **COMPLETED** - Testing & Documentation
 
 ## 🧪 Testing Strategy
 

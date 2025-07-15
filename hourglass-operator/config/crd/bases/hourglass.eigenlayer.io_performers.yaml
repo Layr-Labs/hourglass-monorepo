@@ -113,6 +113,14 @@ spec:
               image:
                 description: Image is the AVS performer container image
                 type: string
+              imagePullPolicy:
+                description: ImagePullPolicy defines the pull policy for the container image
+                type: string
+                enum:
+                - "Always"
+                - "Never"
+                - "IfNotPresent"
+                default: "IfNotPresent"
               imagePullSecrets:
                 description: ImagePullSecrets for private container registries
                 items:
@@ -1202,6 +1210,9 @@ spec:
               podName:
                 description: PodName is the name of the associated pod
                 type: string
+              ready:
+                description: Ready indicates if the performer is ready to accept requests
+                type: boolean
               readyTime:
                 description: ReadyTime indicates when the performer became ready
                 format: date-time

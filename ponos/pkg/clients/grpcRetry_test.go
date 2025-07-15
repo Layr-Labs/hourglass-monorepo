@@ -12,7 +12,7 @@ import (
 
 func TestDefaultRetryConfig(t *testing.T) {
 	config := DefaultRetryConfig()
-	
+
 	if config.MaxRetries != 5 {
 		t.Errorf("Expected MaxRetries to be 5, got %d", config.MaxRetries)
 	}
@@ -34,14 +34,14 @@ func TestNewGrpcClientWithRetry_Success(t *testing.T) {
 	// Create a test server
 	listener := bufconn.Listen(1024 * 1024)
 	server := grpc.NewServer()
-	
+
 	go func() {
 		if err := server.Serve(listener); err != nil {
 			t.Logf("Server error: %v", err)
 		}
 	}()
 	defer server.Stop()
-	
+
 	// Test with bufconn (which should work immediately)
 	config := &RetryConfig{
 		MaxRetries:        2,
@@ -50,14 +50,14 @@ func TestNewGrpcClientWithRetry_Success(t *testing.T) {
 		BackoffMultiplier: 2.0,
 		ConnectionTimeout: 5 * time.Second,
 	}
-	
+
 	// This will fail because we can't actually connect to bufconn with regular dial
 	// But we can test the retry logic with a mock server
 	_, err := NewGrpcClientWithRetry("localhost:0", true, config)
 	if err == nil {
 		t.Error("Expected error for invalid address, got nil")
 	}
-	
+
 	// Test that error contains retry information
 	if err != nil && !contains(err.Error(), "failed to establish gRPC connection after") {
 		t.Errorf("Expected retry error message, got: %v", err)
@@ -72,12 +72,12 @@ func TestNewGrpcClientWithRetry_InvalidAddress(t *testing.T) {
 		BackoffMultiplier: 2.0,
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
-	
+
 	_, err := NewGrpcClientWithRetry("invalid-address:99999", true, config)
 	if err == nil {
 		t.Error("Expected error for invalid address, got nil")
 	}
-	
+
 	// Should contain retry count
 	if !contains(err.Error(), "failed to establish gRPC connection after 3 attempts") {
 		t.Errorf("Expected retry count in error, got: %v", err)
@@ -89,7 +89,7 @@ func TestNewGrpcClientWithRetry_NilConfig(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for invalid address, got nil")
 	}
-	
+
 	// Should use default config (5 retries + 1 initial = 6 attempts)
 	if !contains(err.Error(), "failed to establish gRPC connection after 6 attempts") {
 		t.Errorf("Expected default retry count in error, got: %v", err)
@@ -104,9 +104,9 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 		BackoffMultiplier: 2.0,
 		ConnectionTimeout: 5 * time.Second,
 	}
-	
+
 	cm := NewConnectionManager("localhost:8080", true, config)
-	
+
 	if cm.url != "localhost:8080" {
 		t.Errorf("Expected URL to be 'localhost:8080', got %s", cm.url)
 	}
@@ -123,7 +123,7 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 
 func TestConnectionManager_NewConnectionManager_NilConfig(t *testing.T) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
-	
+
 	if cm.retryConfig == nil {
 		t.Error("Expected retryConfig to be set to default, got nil")
 	}
@@ -140,14 +140,14 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 		BackoffMultiplier: 2.0,
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
-	
+
 	cm := NewConnectionManager("localhost:0", true, config)
-	
+
 	_, err := cm.GetConnection()
 	if err == nil {
 		t.Error("Expected error for invalid address, got nil")
 	}
-	
+
 	if !contains(err.Error(), "failed to create connection") {
 		t.Errorf("Expected connection creation error, got: %v", err)
 	}
@@ -155,12 +155,12 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 
 func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
-	
+
 	// Test with nil connection
 	if cm.isConnectionHealthy() {
 		t.Error("Expected false for nil connection, got true")
 	}
-	
+
 	// Test with mock connection (this is limited without actual connection)
 	if cm.conn != nil {
 		t.Error("Expected conn to be nil initially")
@@ -169,20 +169,20 @@ func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
 
 func TestConnectionManager_IsCircuitOpen(t *testing.T) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
-	
+
 	// Initially circuit should be closed
 	if cm.IsCircuitOpen() {
 		t.Error("Expected circuit to be closed initially, got open")
 	}
-	
+
 	// Simulate failures
 	cm.unhealthyCount = 6
 	cm.lastHealthy = time.Now().Add(-2 * time.Minute)
-	
+
 	if !cm.IsCircuitOpen() {
 		t.Error("Expected circuit to be open after failures, got closed")
 	}
-	
+
 	// Test with recent healthy time
 	cm.lastHealthy = time.Now()
 	if cm.IsCircuitOpen() {
@@ -192,9 +192,9 @@ func TestConnectionManager_IsCircuitOpen(t *testing.T) {
 
 func TestConnectionManager_GetConnectionStats(t *testing.T) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
-	
+
 	stats := cm.GetConnectionStats()
-	
+
 	if stats["state"] != connectivity.Shutdown.String() {
 		t.Errorf("Expected state to be %s, got %v", connectivity.Shutdown.String(), stats["state"])
 	}
@@ -211,13 +211,13 @@ func TestConnectionManager_GetConnectionStats(t *testing.T) {
 
 func TestConnectionManager_Close(t *testing.T) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
-	
+
 	// Test closing without connection
 	err := cm.Close()
 	if err != nil {
 		t.Errorf("Expected no error closing without connection, got %v", err)
 	}
-	
+
 	// Test that connection is nil after close
 	if cm.conn != nil {
 		t.Error("Expected conn to be nil after close")
@@ -266,7 +266,7 @@ func TestIsRetryableError(t *testing.T) {
 			expected: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isRetryableError(tt.err)
@@ -282,7 +282,7 @@ func TestTestConnection(t *testing.T) {
 	if testConnection(nil) {
 		t.Error("Expected false for nil connection, got true")
 	}
-	
+
 	// We can't easily test with real connections without a lot of setup
 	// This test mainly ensures the function doesn't panic with nil input
 }
@@ -305,7 +305,7 @@ func containsHelper(str, substr string) bool {
 func BenchmarkNewConnectionManager(b *testing.B) {
 	config := DefaultRetryConfig()
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_ = NewConnectionManager("localhost:8080", true, config)
 	}
@@ -315,7 +315,7 @@ func BenchmarkIsCircuitOpen(b *testing.B) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
 	cm.unhealthyCount = 3
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_ = cm.IsCircuitOpen()
 	}
@@ -324,7 +324,7 @@ func BenchmarkIsCircuitOpen(b *testing.B) {
 func BenchmarkGetConnectionStats(b *testing.B) {
 	cm := NewConnectionManager("localhost:8080", true, nil)
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		_ = cm.GetConnectionStats()
 	}

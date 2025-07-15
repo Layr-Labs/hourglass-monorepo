@@ -76,7 +76,7 @@ func TestGetDefaultKubeconfigPath(t *testing.T) {
 	// Save original environment
 	originalKubeconfig := os.Getenv("KUBECONFIG")
 	originalHome := os.Getenv("HOME")
-	
+
 	defer func() {
 		// Restore original environment
 		if originalKubeconfig != "" {
@@ -94,44 +94,44 @@ func TestGetDefaultKubeconfigPath(t *testing.T) {
 	t.Run("with KUBECONFIG environment variable", func(t *testing.T) {
 		expectedPath := "/custom/kubeconfig/path"
 		os.Setenv("KUBECONFIG", expectedPath)
-		
+
 		result := getDefaultKubeconfigPath()
 		assert.Equal(t, expectedPath, result)
 	})
 
 	t.Run("with default home directory path", func(t *testing.T) {
 		os.Unsetenv("KUBECONFIG")
-		
+
 		// Create a temporary directory to simulate home
 		tempDir, err := os.MkdirTemp("", "test-home")
 		require.NoError(t, err)
 		defer os.RemoveAll(tempDir)
-		
+
 		// Create .kube/config file
 		kubeDir := filepath.Join(tempDir, ".kube")
 		err = os.MkdirAll(kubeDir, 0755)
 		require.NoError(t, err)
-		
+
 		configPath := filepath.Join(kubeDir, "config")
 		err = os.WriteFile(configPath, []byte("test-config"), 0644)
 		require.NoError(t, err)
-		
+
 		os.Setenv("HOME", tempDir)
-		
+
 		result := getDefaultKubeconfigPath()
 		assert.Equal(t, configPath, result)
 	})
 
 	t.Run("no kubeconfig found", func(t *testing.T) {
 		os.Unsetenv("KUBECONFIG")
-		
+
 		// Set HOME to a directory without .kube/config
 		tempDir, err := os.MkdirTemp("", "test-home-empty")
 		require.NoError(t, err)
 		defer os.RemoveAll(tempDir)
-		
+
 		os.Setenv("HOME", tempDir)
-		
+
 		result := getDefaultKubeconfigPath()
 		assert.Empty(t, result)
 	})
@@ -139,7 +139,7 @@ func TestGetDefaultKubeconfigPath(t *testing.T) {
 	t.Run("no home directory", func(t *testing.T) {
 		os.Unsetenv("KUBECONFIG")
 		os.Unsetenv("HOME")
-		
+
 		result := getDefaultKubeconfigPath()
 		assert.Empty(t, result)
 	})
@@ -183,7 +183,7 @@ func TestClientWrapper_Getters(t *testing.T) {
 
 func TestClientWrapper_Close(t *testing.T) {
 	client := &ClientWrapper{}
-	
+
 	err := client.Close()
 	assert.NoError(t, err)
 }
@@ -211,7 +211,7 @@ func TestGetKubernetesConfig_Scenarios(t *testing.T) {
 			// This test just verifies the function can be called without panicking
 			// Actual Kubernetes configuration testing would require a real environment
 			_, err := getKubernetesConfig(tt.kubeconfigPath)
-			
+
 			// We may or may not get an error depending on environment
 			// Both outcomes are acceptable in unit tests
 			t.Logf("getKubernetesConfig with path '%s': %v (%s)", tt.kubeconfigPath, err, tt.description)
@@ -223,11 +223,11 @@ func TestConfig_Integration(t *testing.T) {
 	t.Run("config flow with defaults", func(t *testing.T) {
 		config := NewDefaultConfig()
 		config.Namespace = "custom-namespace"
-		
+
 		// Validate the config
 		err := config.Validate()
 		assert.NoError(t, err)
-		
+
 		// Verify values
 		assert.Equal(t, "custom-namespace", config.Namespace)
 		assert.Equal(t, DefaultOperatorNamespace, config.OperatorNamespace)
@@ -239,10 +239,10 @@ func TestConfig_Integration(t *testing.T) {
 		config := &Config{
 			Namespace: "test-namespace",
 		}
-		
+
 		config.ApplyDefaults()
 		err := config.Validate()
-		
+
 		assert.NoError(t, err)
 		assert.Equal(t, "test-namespace", config.Namespace)
 		assert.Equal(t, DefaultOperatorNamespace, config.OperatorNamespace)

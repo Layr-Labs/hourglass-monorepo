@@ -112,6 +112,7 @@ type AvsPerformerConfig struct {
 	AVSRegistrarAddress string
 	Envs                []config.AVSPerformerEnv
 	DeploymentMode      DeploymentMode `json:"deploymentMode" yaml:"deploymentMode"`
+	SkipConnectionTest  bool           `json:"skipConnectionTest" yaml:"skipConnectionTest"`
 }
 
 func (ap *AvsPerformerConfig) Validate() error {

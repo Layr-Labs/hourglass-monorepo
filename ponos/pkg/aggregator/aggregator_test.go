@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"math/big"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -42,11 +43,21 @@ const (
 // Test_Aggregator is an integration test for the Aggregator component of the system.
 //
 // This test is designed to simulate an E2E on-chain flow with all components.
-// - Both the aggreagator and executor are registered as operators with the AllocationManager/AVSRegistrar with their peering data
+// - Both the aggregator and executor are registered as operators with the AllocationManager/AVSRegistrar with their peering data
 // - The executor is started and boots up the performers
 // - The aggregator is started with a poller calling a local anvil node
 // - The test pushes a message to the mailbox and waits for the TaskVerified event to be emitted
 func Test_Aggregator(t *testing.T) {
+	t.Run("Docker", func(t *testing.T) {
+		runAggregatorTest(t, "docker")
+	})
+
+	t.Run("Kubernetes", func(t *testing.T) {
+		runAggregatorTest(t, "kubernetes")
+	})
+}
+
+func runAggregatorTest(t *testing.T, mode string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -63,10 +74,72 @@ func Test_Aggregator(t *testing.T) {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
+	// Setup Kind cluster for Kubernetes mode only
+	var cluster *testUtils.KindCluster
+	if mode == "kubernetes" {
+		// Clean up any existing test clusters first to prevent port conflicts
+		if err := testUtils.CleanupAllTestClusters(l.Sugar()); err != nil {
+			t.Logf("Warning: Failed to cleanup existing test clusters: %v", err)
+		}
+
+		// Create Kind cluster
+		kindConfig := testUtils.DefaultKindClusterConfig(l.Sugar())
+		var clusterCleanup func()
+		cluster, clusterCleanup, err = testUtils.CreateKindCluster(ctx, t, kindConfig)
+		if err != nil {
+			t.Fatalf("Failed to create Kind cluster: %v", err)
+		}
+		defer func() {
+			// Nuclear option: just delete the cluster to avoid hanging cleanup
+			t.Log("Using fast cluster deletion to avoid hanging cleanup")
+			clusterCleanup()
+		}()
+
+		// Load performer image from executor config (assumes image is already built)
+		if err := loadPerformerImage(ctx, cluster, l.Sugar()); err != nil {
+			t.Fatalf("Failed to load performer image: %v", err)
+		}
+
+		// Install CRDs first (required for Performer objects)
+		if err := installPerformerCRD(ctx, cluster, root, l.Sugar()); err != nil {
+			t.Fatalf("Failed to install Performer CRD: %v", err)
+		}
+
+		// Load pre-built operator image
+		if err := loadOperatorImage(ctx, cluster, l.Sugar()); err != nil {
+			t.Fatalf("Failed to load operator image: %v", err)
+		}
+
+		// Deploy Hourglass operator
+		operatorConfig := testUtils.DefaultOperatorDeploymentConfig(root, l.Sugar())
+		operator, operatorCleanup, err := testUtils.DeployOperator(ctx, cluster, operatorConfig)
+		if err != nil {
+			t.Fatalf("Failed to deploy operator: %v", err)
+		}
+		defer func() {
+			// Run cleanup with timeout to avoid hanging
+			t.Log("Running operator cleanup with timeout")
+			done := make(chan struct{})
+			go func() {
+				operatorCleanup()
+				close(done)
+			}()
+
+			select {
+			case <-done:
+				t.Log("Operator cleanup completed successfully")
+			case <-time.After(45 * time.Second):
+				t.Log("Operator cleanup timed out, proceeding with cluster deletion")
+			}
+		}()
+
+		t.Logf("Operator deployed successfully: %s", operator.ReleaseName)
+	}
+
 	// ------------------------------------------------------------------------
 	// Executor setup
 	// ------------------------------------------------------------------------
-	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(executorConfigYaml))
+	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode)))
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
@@ -80,8 +153,13 @@ func Test_Aggregator(t *testing.T) {
 		PrivateKey: chainConfig.ExecOperatorAccountPk,
 	}
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
-
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
+
+	// Configure Kubernetes config based on mode
+	if mode == "kubernetes" {
+		// Set the actual kubeconfig path for the Kind cluster
+		execConfig.Kubernetes.KubeConfigPath = cluster.KubeConfig
+	}
 
 	_, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
 	if err != nil {
@@ -92,7 +170,9 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Aggregator setup
 	// ------------------------------------------------------------------------
-	aggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggregatorConfigYaml))
+	aggConfigYaml := getAggregatorConfigYaml(L1RPCUrl, L2RPCUrl)
+
+	aggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggConfigYaml))
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
@@ -121,8 +201,13 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	anvilWg := &sync.WaitGroup{}
 
+	// Both Docker and Kubernetes modes use localhost for executor/aggregator
+	l1RpcUrl := L1RPCUrl
+	l2RpcUrl := L2RPCUrl
+	l2WsUrl := L2WSUrl
+
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L1RPCUrl,
+		BaseUrl:   l1RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
@@ -131,7 +216,7 @@ func Test_Aggregator(t *testing.T) {
 	}
 
 	l2EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L2RPCUrl,
+		BaseUrl:   l2RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 	l2EthClient, err := l2EthereumClient.GetEthereumContractCaller()
@@ -153,7 +238,7 @@ func Test_Aggregator(t *testing.T) {
 	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
 
 	// ------------------------------------------------------------------------
-	// L2Chain & l1Anvil setup
+	// L2Chain & l2Anvil setup
 	// ------------------------------------------------------------------------
 	anvilWg.Add(1)
 	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
@@ -230,7 +315,7 @@ func Test_Aggregator(t *testing.T) {
 	// register peering data
 	// ------------------------------------------------------------------------
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
-	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
+	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
 	aggOpsetId := uint32(0)
 	execOpsetId := uint32(1)
 	allOperatorSetIds := []uint32{aggOpsetId, execOpsetId}
@@ -365,12 +450,12 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Setup the executor
 	// ------------------------------------------------------------------------
+	// Create executor normally for both modes - it runs in the test process
 	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
-	exec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf, l1ExecCc)
+	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf, l1ExecCc)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
-	_ = exec
 
 	// ------------------------------------------------------------------------
 	// Setup the aggregator
@@ -406,26 +491,22 @@ func Test_Aggregator(t *testing.T) {
 		l,
 	)
 	if err != nil {
-		t.Logf("Failed to create aggregator: %v", err)
+		t.Fatalf("Failed to create aggregator: %v", err)
 	}
 
 	// ------------------------------------------------------------------------
 	// Boot up everything
 	// ------------------------------------------------------------------------
-	if err := exec.Initialize(ctx); err != nil {
-		t.Logf("Failed to initialize executor: %v", err)
-		cancel()
+	// Initialize and run executor (same for both modes)
+	if err := realExec.Initialize(ctx); err != nil {
+		t.Fatalf("Failed to initialize executor: %v", err)
 	}
-
-	if err := exec.Run(ctx); err != nil {
-		t.Logf("Failed to run executor: %v", err)
-		cancel()
+	if err := realExec.Run(ctx); err != nil {
+		t.Fatalf("Failed to run executor: %v", err)
 	}
 
 	if err := agg.Initialize(); err != nil {
-		cancel()
-		t.Logf("Failed to initialize aggregator: %v", err)
-
+		t.Fatalf("Failed to initialize aggregator: %v", err)
 	}
 
 	go func() {
@@ -437,10 +518,9 @@ func Test_Aggregator(t *testing.T) {
 	// ------------------------------------------------------------------------
 	// Listen for TaskVerified event to know that the test is done
 	// ------------------------------------------------------------------------
-	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(L2WSUrl)
+	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(l2WsUrl)
 	if err != nil {
-		t.Errorf("Failed to get websocket connection: %v", err)
-		cancel()
+		t.Fatalf("Failed to get websocket connection: %v", err)
 	}
 
 	taskVerified := false
@@ -450,9 +530,7 @@ func Test_Aggregator(t *testing.T) {
 		Addresses: []common.Address{common.HexToAddress(chainConfig.MailboxContractAddressL2)},
 	}, eventsChan)
 	if err != nil {
-		t.Errorf("Failed to subscribe to events: %v", err)
-		cancel()
-
+		t.Fatalf("Failed to subscribe to events: %v", err)
 	}
 	defer close(eventsChan)
 	go func() {
@@ -490,7 +568,6 @@ func Test_Aggregator(t *testing.T) {
 					taskVerified = true
 					cancel()
 				}
-
 			}
 		}
 	}()
@@ -508,15 +585,13 @@ func Test_Aggregator(t *testing.T) {
 		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
-		t.Errorf("Failed to create contract caller: %v", err)
-		cancel()
+		t.Fatalf("Failed to create contract caller: %v", err)
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
-		t.Errorf("Failed to publish message to inbox: %v", err)
-		cancel()
+		t.Fatalf("Failed to publish message to inbox: %v", err)
 	}
 	t.Logf("Task published: %+v", task)
 
@@ -524,7 +599,7 @@ func Test_Aggregator(t *testing.T) {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
 	case <-time.After(150 * time.Second):
-		t.Logf("Timeout after 90 seconds")
+		t.Logf("Timeout after 150 seconds")
 		cancel()
 	}
 	fmt.Printf("Test completed\n")
@@ -537,8 +612,185 @@ func Test_Aggregator(t *testing.T) {
 	cancel()
 }
 
-const (
-	executorConfigYaml = `
+// loadPerformerImage loads the performer image referenced in executorConfigYaml into the Kind cluster
+func loadPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
+	// Parse executor config to extract image info
+	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml("kubernetes")))
+	if err != nil {
+		return fmt.Errorf("failed to parse executor config: %v", err)
+	}
+
+	if len(execConfig.AvsPerformers) == 0 {
+		return fmt.Errorf("no AVS performers found in executor config")
+	}
+
+	// Get the first performer's image (assuming single performer for now)
+	performer := execConfig.AvsPerformers[0]
+	imageName := fmt.Sprintf("%s:%s", performer.Image.Repository, performer.Image.Tag)
+
+	logger.Infof("Loading performer image into Kind cluster: %s", imageName)
+
+	// Load the image into Kind cluster (assumes image is already built locally)
+	if err := cluster.LoadDockerImage(ctx, imageName); err != nil {
+		return fmt.Errorf("failed to load image into Kind cluster: %v", err)
+	}
+
+	logger.Infof("Successfully loaded performer image: %s", imageName)
+	return nil
+}
+
+// installPerformerCRD installs the Performer CRD required for the test
+func installPerformerCRD(ctx context.Context, cluster *testUtils.KindCluster, projectRoot string, logger *zap.SugaredLogger) error {
+	// Path to the Performer CRD file
+	crdPath := filepath.Join(projectRoot, "..", "hourglass-operator", "config", "crd", "bases", "hourglass.eigenlayer.io_performers.yaml")
+
+	logger.Infof("Installing Performer CRD from: %s", crdPath)
+
+	// Apply the CRD
+	output, err := cluster.RunKubectl(ctx, "apply", "-f", crdPath)
+	if err != nil {
+		return fmt.Errorf("failed to apply Performer CRD: %v\nOutput: %s", err, string(output))
+	}
+
+	logger.Infof("Performer CRD installed successfully")
+	return nil
+}
+
+// getAggregatorConfigYaml returns the aggregator configuration with configurable RPC URLs
+func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string) string {
+	return fmt.Sprintf(`
+---
+chains:
+  - name: ethereum
+    network: sepolia
+    chainId: 31337
+    rpcUrl: %s
+    pollIntervalSeconds: 5
+  - name: base
+    network: sepolia
+    chainId: 31338
+    rpcUrl: %s
+    pollIntervalSeconds: 5
+l1ChainId: 31337
+operator:
+  address: "0x1234aggregator"
+  operatorPrivateKey:
+    privateKey: "0x..."
+  signingKeys:
+    bls:
+      password: ""
+      keystore: | 
+        {
+          "crypto": {
+            "kdf": {
+              "function": "scrypt",
+              "params": {
+                "dklen": 32,
+                "n": 262144,
+                "p": 1,
+                "r": 8,
+                "salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
+              },
+              "message": ""
+            },
+            "checksum": {
+              "function": "sha256",
+              "params": {},
+              "message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
+            },
+            "cipher": {
+              "function": "aes-128-ctr",
+              "params": {
+                "iv": "677edd29eff1f8635a51f66f71bc5c83"
+              },
+              "message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
+            }
+          },
+          "pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
+          "path": "m/1/0/0",
+          "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
+          "version": 4,
+          "curveType": "bn254"
+        }
+avss:
+  - address: "0xavs1..."
+    responseTimeout: 3000
+    signingCurve: "bn254"
+    chainIds: [31338]
+    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+`, l1RpcUrl, l2RpcUrl)
+}
+
+func getExecutorConfigYaml(mode string) string {
+	if mode == "kubernetes" {
+		return `
+---
+grpcPort: 9000
+operator:
+  address: "0xoperator..."
+  operatorPrivateKey:
+    privateKey: "..."
+  signingKeys:
+    bls:
+      keystore: |
+        {
+          "crypto": {
+            "kdf": {
+              "function": "scrypt",
+              "params": {
+                "dklen": 32,
+                "n": 262144,
+                "p": 1,
+                "r": 8,
+                "salt": "be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"
+              },
+              "message": ""
+            },
+            "checksum": {
+              "function": "sha256",
+              "params": {},
+              "message": "28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"
+            },
+            "cipher": {
+              "function": "aes-128-ctr",
+              "params": {
+                "iv": "cbaff55d36de018603dc9a336ac3bdc7"
+              },
+              "message": "3d261076c91fdc6b1de390d0136b22c2838d55dd646218b7cec58396"
+            }
+          },
+          "pubkey": "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9",
+          "path": "m/1/0/0",
+          "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
+          "version": 4,
+          "curveType": "bn254"
+        }
+      password: ""
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 31337
+kubernetes:
+  namespace: "default"
+  operatorNamespace: "hourglass-system"
+  crdGroup: "hourglass.eigenlayer.io"
+  crdVersion: "v1alpha1"
+  connectionTimeout: 30000000000
+  inCluster: false
+  kubeConfigPath: "/tmp/kind-kubeconfig"
+avsPerformers:
+- image:
+    repository: "hello-performer"
+    tag: "latest"
+  processType: "server"
+  avsAddress: "0xavs1..."
+  workerCount: 1
+  signingCurve: "bn254"
+  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+  deploymentMode: "kubernetes"
+  skipConnectionTest: true
+`
+	} else {
+		return `
 ---
 grpcPort: 9000
 operator:
@@ -593,69 +845,20 @@ avsPerformers:
   workerCount: 1
   signingCurve: "bn254"
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+  deploymentMode: "docker"
 `
+	}
+}
 
-	aggregatorConfigYaml = `
----
-chains:
-  - name: ethereum
-    network: sepolia
-    chainId: 31337
-    rpcUrl: http://localhost:8545
-    pollIntervalSeconds: 5
-  - name: base
-    network: sepolia
-    chainId: 31338
-    rpcUrl: http://localhost:9545
-    pollIntervalSeconds: 5
-l1ChainId: 31337
-operator:
-  address: "0x1234aggregator"
-  operatorPrivateKey:
-    privateKey: "0x..."
+// loadOperatorImage loads the pre-built Hourglass operator image into the Kind cluster
+func loadOperatorImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
+	logger.Info("Loading pre-built Hourglass operator image into Kind cluster")
 
-  signingKeys:
-    bls:
-      password: ""
-      keystore: | 
-        {
-          "crypto": {
-            "kdf": {
-              "function": "scrypt",
-              "params": {
-                "dklen": 32,
-                "n": 262144,
-                "p": 1,
-                "r": 8,
-                "salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
-              },
-              "message": ""
-            },
-            "checksum": {
-              "function": "sha256",
-              "params": {},
-              "message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
-            },
-            "cipher": {
-              "function": "aes-128-ctr",
-              "params": {
-                "iv": "677edd29eff1f8635a51f66f71bc5c83"
-              },
-              "message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
-            }
-          },
-          "pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
-          "path": "m/1/0/0",
-          "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
-          "version": 4,
-          "curveType": "bn254"
-        }
+	// Load the pre-built operator image
+	if err := cluster.LoadDockerImage(ctx, "hourglass/operator:test"); err != nil {
+		return fmt.Errorf("failed to load operator image to Kind: %v", err)
+	}
 
-avss:
-  - address: "0xavs1..."
-    responseTimeout: 3000
-    signingCurve: "bn254"
-    chainIds: [31338]
-    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-`
-)
+	logger.Info("Successfully loaded Hourglass operator image")
+	return nil
+}

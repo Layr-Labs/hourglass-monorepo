@@ -55,6 +55,11 @@ type PerformerSpec struct {
 	// +kubebuilder:validation:Required
 	Image string `json:"image"`
 
+	// ImagePullPolicy defines the pull policy for the container image
+	// +kubebuilder:validation:Enum=Always;Never;IfNotPresent
+	// +kubebuilder:default="IfNotPresent"
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+
 	// Version is the container image version for upgrade tracking
 	Version string `json:"version,omitempty"`
 
@@ -99,6 +104,9 @@ type PerformerStatus struct {
 	// Phase represents the current performer lifecycle phase
 	// +kubebuilder:validation:Enum=Pending;Running;Upgrading;Terminating;Failed
 	Phase string `json:"phase,omitempty"`
+
+	// Ready indicates if the performer is ready to accept requests
+	Ready bool `json:"ready,omitempty"`
 
 	// PodName is the name of the associated pod
 	PodName string `json:"podName,omitempty"`

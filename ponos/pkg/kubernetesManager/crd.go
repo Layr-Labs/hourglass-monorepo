@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -20,8 +21,13 @@ type PerformerCRD struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   PerformerSpec       `json:"spec,omitempty"`
+	Spec   PerformerSpec      `json:"spec,omitempty"`
 	Status PerformerStatusCRD `json:"status,omitempty"`
+}
+
+// GetObjectKind returns the object kind for the PerformerCRD
+func (p *PerformerCRD) GetObjectKind() schema.ObjectKind {
+	return &p.TypeMeta
 }
 
 // PerformerSpec defines the desired state of Performer
@@ -31,6 +37,9 @@ type PerformerSpec struct {
 
 	// Image is the AVS performer container image
 	Image string `json:"image"`
+
+	// ImagePullPolicy defines the pull policy for the container image
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
 
 	// Version is the container image version for upgrade tracking
 	Version string `json:"version,omitempty"`
@@ -70,6 +79,9 @@ type PerformerConfig struct {
 type PerformerStatusCRD struct {
 	// Phase represents the current performer lifecycle phase
 	Phase string `json:"phase,omitempty"`
+
+	// Ready indicates if the performer is ready to accept requests
+	Ready bool `json:"ready,omitempty"`
 
 	// PodName is the name of the associated pod
 	PodName string `json:"podName,omitempty"`
@@ -254,9 +266,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			},
 		},
 		Spec: PerformerSpec{
-			AVSAddress: req.AVSAddress,
-			Image:      req.Image,
-			Version:    req.ImageTag,
+			AVSAddress:      req.AVSAddress,
+			Image:           req.Image,
+			ImagePullPolicy: corev1.PullPolicy(req.ImagePullPolicy),
+			Version:         req.ImageTag,
 			Config: PerformerConfig{
 				GRPCPort:    req.GRPCPort,
 				Environment: req.Environment,
@@ -291,12 +304,12 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 		PerformerID: req.Name,
 		Endpoint:    endpoint,
 		Status: PerformerStatus{
-			Phase:       avsPerformer.PerformerResourceStatusStaged,
-			ServiceName: fmt.Sprintf("performer-%s", req.Name),
+			Phase:        avsPerformer.PerformerResourceStatusStaged,
+			ServiceName:  fmt.Sprintf("performer-%s", req.Name),
 			GRPCEndpoint: endpoint,
-			Ready:       false,
-			Message:     "Performer CRD created, waiting for operator to provision resources",
-			LastUpdated: time.Now(),
+			Ready:        false,
+			Message:      "Performer CRD created, waiting for operator to provision resources",
+			LastUpdated:  time.Now(),
 		},
 	}, nil
 }
@@ -368,7 +381,7 @@ func (c *CRDOperations) ListPerformers(ctx context.Context) ([]PerformerInfo, er
 		APIVersion: fmt.Sprintf("%s/%s", c.config.CRDGroup, c.config.CRDVersion),
 		Kind:       "PerformerList",
 	}
-	
+
 	err := c.client.List(ctx, performerList, client.InNamespace(c.namespace))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Performer CRDs: %w", err)
@@ -386,7 +399,7 @@ func (c *CRDOperations) ListPerformers(ctx context.Context) ([]PerformerInfo, er
 				PodName:      performer.Status.PodName,
 				ServiceName:  performer.Status.ServiceName,
 				GRPCEndpoint: performer.Status.GRPCEndpoint,
-				Ready:        performer.Status.Phase == "Running",
+				Ready:        performer.Status.Ready,
 				Message:      extractConditionMessage(performer.Status.Conditions),
 				LastUpdated:  time.Now(),
 			},
@@ -411,7 +424,7 @@ func (c *CRDOperations) GetPerformerStatus(ctx context.Context, name string) (*P
 		PodName:      performer.Status.PodName,
 		ServiceName:  performer.Status.ServiceName,
 		GRPCEndpoint: performer.Status.GRPCEndpoint,
-		Ready:        performer.Status.Phase == "Running",
+		Ready:        performer.Status.Ready,
 		Message:      extractConditionMessage(performer.Status.Conditions),
 		LastUpdated:  time.Now(),
 	}
@@ -452,7 +465,7 @@ func extractConditionMessage(conditions []metav1.Condition) string {
 	if len(conditions) == 0 {
 		return ""
 	}
-	
+
 	// Return the most recent condition message
 	latest := conditions[len(conditions)-1]
 	return latest.Message

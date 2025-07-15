@@ -96,109 +96,166 @@ func (r *PerformerReconciler) handleDeletion(ctx context.Context, performer *v1a
 }
 
 func (r *PerformerReconciler) reconcilePod(ctx context.Context, performer *v1alpha1.Performer) error {
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.getPodName(performer),
-			Namespace: performer.Namespace,
+	podName := r.getPodName(performer)
+
+	// Check if pod already exists
+	existingPod := &corev1.Pod{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      podName,
+		Namespace: performer.Namespace,
+	}, existingPod)
+
+	if err == nil {
+		// Pod exists - check if it needs to be recreated
+		if r.shouldRecreatePod(existingPod, performer) {
+			// Delete existing pod, it will be recreated on next reconcile
+			return r.Delete(ctx, existingPod)
+		}
+		// Pod is fine, do nothing
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		// Some other error occurred
+		return err
+	}
+
+	// Pod doesn't exist, create it
+	pod := r.buildPodSpec(performer)
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(performer, pod, r.Scheme); err != nil {
+		return err
+	}
+
+	return r.Create(ctx, pod)
+}
+
+// shouldRecreatePod determines if a pod should be recreated
+func (r *PerformerReconciler) shouldRecreatePod(existingPod *corev1.Pod, performer *v1alpha1.Performer) bool {
+	// Recreate if pod is in a failed state
+	if existingPod.Status.Phase == corev1.PodFailed {
+		return true
+	}
+
+	// Recreate if pod is stuck in pending for too long (more than 5 minutes)
+	if existingPod.Status.Phase == corev1.PodPending {
+		if time.Since(existingPod.CreationTimestamp.Time) > 5*time.Minute {
+			return true
+		}
+	}
+
+	// Check if the image has changed
+	if len(existingPod.Spec.Containers) > 0 {
+		if existingPod.Spec.Containers[0].Image != performer.Spec.Image {
+			return true
+		}
+	}
+
+	// Pod is healthy, keep it
+	return false
+}
+
+// buildPodSpec builds the pod specification
+func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev1.Pod {
+	// Generate labels for pod
+	labels := map[string]string{
+		"app":                               "hourglass-performer",
+		"hourglass.eigenlayer.io/performer": performer.Name,
+		"hourglass.eigenlayer.io/avs":       r.sanitizeLabel(performer.Spec.AVSAddress),
+	}
+
+	// Build container spec
+	container := corev1.Container{
+		Name:            "performer",
+		Image:           performer.Spec.Image,
+		ImagePullPolicy: performer.Spec.ImagePullPolicy,
+	}
+
+	// Set command and args if specified
+	if len(performer.Spec.Config.Command) > 0 {
+		container.Command = performer.Spec.Config.Command
+	}
+	if len(performer.Spec.Config.Args) > 0 {
+		container.Args = performer.Spec.Config.Args
+	}
+
+	// Configure gRPC port
+	grpcPort := int32(8080) // Default to 8080 to match hello-performer
+	if performer.Spec.Config.GRPCPort != 0 {
+		grpcPort = performer.Spec.Config.GRPCPort
+	}
+	container.Ports = []corev1.ContainerPort{
+		{
+			Name:          "grpc",
+			ContainerPort: grpcPort,
+			Protocol:      corev1.ProtocolTCP,
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pod, func() error {
-		// Generate labels for pod
-		labels := map[string]string{
-			"app":                               "hourglass-performer",
-			"hourglass.eigenlayer.io/performer": performer.Name,
-			"hourglass.eigenlayer.io/avs":       r.sanitizeLabel(performer.Spec.AVSAddress),
+	// Set environment variables
+	if performer.Spec.Config.Environment != nil {
+		for key, value := range performer.Spec.Config.Environment {
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name:  key,
+				Value: value,
+			})
 		}
+	}
 
-		pod.Labels = labels
+	// Set resources
+	container.Resources = performer.Spec.Resources
 
-		// Build container spec
-		container := corev1.Container{
-			Name:  "performer",
-			Image: performer.Spec.Image,
-		}
+	// Apply hardware requirements to resources
+	if performer.Spec.HardwareRequirements != nil {
+		r.applyHardwareRequirements(&container, performer.Spec.HardwareRequirements)
+	}
 
-		// Set command and args if specified
-		if len(performer.Spec.Config.Command) > 0 {
-			container.Command = performer.Spec.Config.Command
-		}
-		if len(performer.Spec.Config.Args) > 0 {
-			container.Args = performer.Spec.Config.Args
-		}
-
-		// Configure gRPC port
-		grpcPort := int32(9090)
-		if performer.Spec.Config.GRPCPort != 0 {
-			grpcPort = performer.Spec.Config.GRPCPort
-		}
-		container.Ports = []corev1.ContainerPort{
-			{
-				Name:          "grpc",
-				ContainerPort: grpcPort,
-				Protocol:      corev1.ProtocolTCP,
+	// Configure probes
+	container.LivenessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(grpcPort),
 			},
-		}
-
-		// Set environment variables
-		if performer.Spec.Config.Environment != nil {
-			for key, value := range performer.Spec.Config.Environment {
-				container.Env = append(container.Env, corev1.EnvVar{
-					Name:  key,
-					Value: value,
-				})
-			}
-		}
-
-		// Set resources
-		container.Resources = performer.Spec.Resources
-
-		// Apply hardware requirements to resources
-		if performer.Spec.HardwareRequirements != nil {
-			r.applyHardwareRequirements(&container, performer.Spec.HardwareRequirements)
-		}
-
-		// Configure probes
-		container.LivenessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt32(grpcPort),
-				},
+		},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+	}
+	container.ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(grpcPort),
 			},
-			InitialDelaySeconds: 30,
-			PeriodSeconds:       10,
-		}
-		container.ReadinessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt32(grpcPort),
-				},
-			},
-			InitialDelaySeconds: 5,
-			PeriodSeconds:       5,
-		}
+		},
+		InitialDelaySeconds: 5,
+		PeriodSeconds:       5,
+	}
 
-		// Build pod spec
-		pod.Spec = corev1.PodSpec{
-			Containers:       []corev1.Container{container},
-			ImagePullSecrets: performer.Spec.ImagePullSecrets,
-			RestartPolicy:    corev1.RestartPolicyAlways,
+	// Build pod spec
+	podSpec := corev1.PodSpec{
+		Containers:       []corev1.Container{container},
+		ImagePullSecrets: performer.Spec.ImagePullSecrets,
+		RestartPolicy:    corev1.RestartPolicyAlways,
+	}
+
+	// Apply scheduling constraints
+	if performer.Spec.Scheduling != nil {
+		podSpec.NodeSelector = performer.Spec.Scheduling.NodeSelector
+		podSpec.Affinity = performer.Spec.Scheduling.Affinity
+		podSpec.Tolerations = performer.Spec.Scheduling.Tolerations
+		if performer.Spec.Scheduling.RuntimeClass != nil {
+			podSpec.RuntimeClassName = performer.Spec.Scheduling.RuntimeClass
 		}
+	}
 
-		// Apply scheduling constraints
-		if performer.Spec.Scheduling != nil {
-			pod.Spec.NodeSelector = performer.Spec.Scheduling.NodeSelector
-			pod.Spec.Affinity = performer.Spec.Scheduling.Affinity
-			pod.Spec.Tolerations = performer.Spec.Scheduling.Tolerations
-			if performer.Spec.Scheduling.RuntimeClass != nil {
-				pod.Spec.RuntimeClassName = performer.Spec.Scheduling.RuntimeClass
-			}
-		}
-
-		return controllerutil.SetControllerReference(performer, pod, r.Scheme)
-	})
-
-	return err
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.getPodName(performer),
+			Namespace: performer.Namespace,
+			Labels:    labels,
+		},
+		Spec: podSpec,
+	}
 }
 
 func (r *PerformerReconciler) reconcileService(ctx context.Context, performer *v1alpha1.Performer) error {
@@ -210,7 +267,7 @@ func (r *PerformerReconciler) reconcileService(ctx context.Context, performer *v
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-		grpcPort := int32(9090)
+		grpcPort := int32(8080) // Default to 8080 to match hello-performer
 		if performer.Spec.Config.GRPCPort != 0 {
 			grpcPort = performer.Spec.Config.GRPCPort
 		}
@@ -237,42 +294,70 @@ func (r *PerformerReconciler) reconcileService(ctx context.Context, performer *v
 }
 
 func (r *PerformerReconciler) updateStatus(ctx context.Context, performer *v1alpha1.Performer) error {
-	// Get the pod to check status
-	pod := &corev1.Pod{}
-	podName := r.getPodName(performer)
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      podName,
-		Namespace: performer.Namespace,
-	}, pod); err != nil {
-		if errors.IsNotFound(err) {
-			performer.Status.Phase = "Pending"
-			performer.Status.PodName = ""
-		} else {
+	// Retry logic for status updates to handle concurrent modifications
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		// Get the latest version of the performer
+		latest := &v1alpha1.Performer{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      performer.Name,
+			Namespace: performer.Namespace,
+		}, latest); err != nil {
 			return err
 		}
-	} else {
-		performer.Status.PodName = podName
-		performer.Status.Phase = string(pod.Status.Phase)
 
-		// Check if pod is ready
-		if pod.Status.Phase == corev1.PodRunning {
-			for _, condition := range pod.Status.Conditions {
-				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-					if performer.Status.ReadyTime == nil {
-						performer.Status.ReadyTime = &metav1.Time{Time: time.Now()}
+		// Get the pod to check status
+		pod := &corev1.Pod{}
+		podName := r.getPodName(latest)
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      podName,
+			Namespace: latest.Namespace,
+		}, pod); err != nil {
+			if errors.IsNotFound(err) {
+				latest.Status.Phase = "Pending"
+				latest.Status.PodName = ""
+			} else {
+				return err
+			}
+		} else {
+			latest.Status.PodName = podName
+			latest.Status.Phase = string(pod.Status.Phase)
+
+			// Check if pod is ready
+			latest.Status.Ready = false
+			if pod.Status.Phase == corev1.PodRunning {
+				for _, condition := range pod.Status.Conditions {
+					if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+						latest.Status.Ready = true
+						if latest.Status.ReadyTime == nil {
+							latest.Status.ReadyTime = &metav1.Time{Time: time.Now()}
+						}
+						break
 					}
-					break
 				}
 			}
 		}
+
+		// Set service information
+		latest.Status.ServiceName = r.getServiceName(latest)
+		latest.Status.GRPCEndpoint = fmt.Sprintf("%s.%s.svc.cluster.local",
+			latest.Status.ServiceName, latest.Namespace)
+
+		// Try to update the status
+		if err := r.Status().Update(ctx, latest); err != nil {
+			if errors.IsConflict(err) && i < maxRetries-1 {
+				// Wait a bit before retrying
+				time.Sleep(time.Duration(i+1) * 100 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+
+		// Success
+		return nil
 	}
 
-	// Set service information
-	performer.Status.ServiceName = r.getServiceName(performer)
-	performer.Status.GRPCEndpoint = fmt.Sprintf("%s.%s.svc.cluster.local",
-		performer.Status.ServiceName, performer.Namespace)
-
-	return r.Status().Update(ctx, performer)
+	return fmt.Errorf("failed to update status after %d retries", maxRetries)
 }
 
 func (r *PerformerReconciler) getPodName(performer *v1alpha1.Performer) string {

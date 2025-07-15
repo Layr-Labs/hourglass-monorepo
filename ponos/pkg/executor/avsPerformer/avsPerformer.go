@@ -77,6 +77,7 @@ type AvsPerformerConfig struct {
 	PerformerNetworkName           string
 	SigningCurve                   string        // bn254, bls381, etc
 	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
+	SkipConnectionTest             bool          // Skip gRPC connection test during performer creation (for testing)
 }
 
 // DeploymentStatus represents the current state of a deployment

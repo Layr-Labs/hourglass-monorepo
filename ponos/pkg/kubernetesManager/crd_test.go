@@ -17,12 +17,12 @@ import (
 // createTestScheme creates a runtime scheme with our CRD types registered
 func createTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
-	
+
 	// Register our CRD types with the proper GroupVersion
 	gv := schema.GroupVersion{Group: "hourglass.eigenlayer.io", Version: "v1alpha1"}
 	scheme.AddKnownTypes(gv, &PerformerCRD{}, &PerformerList{})
 	metav1.AddToGroupVersion(scheme, gv)
-	
+
 	return scheme
 }
 
@@ -60,7 +60,7 @@ func TestPerformerCRD_DeepCopy(t *testing.T) {
 
 	// Verify it's a different object
 	assert.NotSame(t, original, copied)
-	
+
 	// Verify contents are equal
 	assert.Equal(t, original.TypeMeta, copied.TypeMeta)
 	assert.Equal(t, original.ObjectMeta.Name, copied.ObjectMeta.Name)
@@ -76,7 +76,7 @@ func TestPerformerCRD_DeepCopy(t *testing.T) {
 func TestNewCRDOperations(t *testing.T) {
 	config := NewDefaultConfig()
 	config.Namespace = "test-namespace"
-	
+
 	scheme := createTestScheme()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -91,7 +91,7 @@ func TestNewCRDOperations(t *testing.T) {
 func TestCRDOperations_CreatePerformer(t *testing.T) {
 	// Register our types with the scheme
 	scheme := createTestScheme()
-	
+
 	tests := []struct {
 		name        string
 		request     *CreatePerformerRequest
@@ -217,7 +217,7 @@ func TestCRDOperations_CreatePerformerWithResources(t *testing.T) {
 func TestCRDOperations_GetPerformer(t *testing.T) {
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
-	
+
 	// Create a test performer
 	testPerformer := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
@@ -233,16 +233,16 @@ func TestCRDOperations_GetPerformer(t *testing.T) {
 			Image:      "test-image:latest",
 		},
 	}
-	
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(testPerformer).
 		Build()
-	
+
 	ops := NewCRDOperations(fakeClient, config)
 
 	ctx := context.Background()
-	
+
 	t.Run("existing performer", func(t *testing.T) {
 		performer, err := ops.GetPerformer(ctx, "test-performer")
 		assert.NoError(t, err)
@@ -250,7 +250,7 @@ func TestCRDOperations_GetPerformer(t *testing.T) {
 		assert.Equal(t, "test-performer", performer.Name)
 		assert.Equal(t, "0x123", performer.Spec.AVSAddress)
 	})
-	
+
 	t.Run("non-existing performer", func(t *testing.T) {
 		performer, err := ops.GetPerformer(ctx, "non-existing")
 		assert.Error(t, err)
@@ -261,7 +261,7 @@ func TestCRDOperations_GetPerformer(t *testing.T) {
 func TestCRDOperations_UpdatePerformer(t *testing.T) {
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
-	
+
 	// Create a test performer
 	testPerformer := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
@@ -278,12 +278,12 @@ func TestCRDOperations_UpdatePerformer(t *testing.T) {
 			Version:    "v1.0.0",
 		},
 	}
-	
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(testPerformer).
 		Build()
-	
+
 	ops := NewCRDOperations(fakeClient, config)
 
 	ctx := context.Background()
@@ -348,7 +348,7 @@ func TestCRDOperations_UpdatePerformer(t *testing.T) {
 func TestCRDOperations_DeletePerformer(t *testing.T) {
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
-	
+
 	// Create a test performer
 	testPerformer := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
@@ -364,21 +364,21 @@ func TestCRDOperations_DeletePerformer(t *testing.T) {
 			Image:      "test-image:latest",
 		},
 	}
-	
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(testPerformer).
 		Build()
-	
+
 	ops := NewCRDOperations(fakeClient, config)
 
 	ctx := context.Background()
-	
+
 	t.Run("delete existing performer", func(t *testing.T) {
 		err := ops.DeletePerformer(ctx, "test-performer")
 		assert.NoError(t, err)
 	})
-	
+
 	t.Run("delete non-existing performer", func(t *testing.T) {
 		err := ops.DeletePerformer(ctx, "non-existing")
 		// The fake client does return NotFound errors for non-existing resources
@@ -390,7 +390,7 @@ func TestCRDOperations_DeletePerformer(t *testing.T) {
 func TestCRDOperations_ListPerformers(t *testing.T) {
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
-	
+
 	// Create test performers
 	performer1 := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
@@ -410,7 +410,7 @@ func TestCRDOperations_ListPerformers(t *testing.T) {
 			Phase: "Running",
 		},
 	}
-	
+
 	performer2 := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "hourglass.eigenlayer.io/v1alpha1",
@@ -429,35 +429,35 @@ func TestCRDOperations_ListPerformers(t *testing.T) {
 			Phase: "Pending",
 		},
 	}
-	
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(performer1, performer2).
 		Build()
-	
+
 	ops := NewCRDOperations(fakeClient, config)
 
 	ctx := context.Background()
-	
+
 	// First, let's verify the objects were created by trying to get them directly
 	getPerformer1, getErr1 := ops.GetPerformer(ctx, "performer-1")
 	getPerformer2, getErr2 := ops.GetPerformer(ctx, "performer-2")
 	t.Logf("Get performer-1: %v (error: %v)", getPerformer1 != nil, getErr1)
 	t.Logf("Get performer-2: %v (error: %v)", getPerformer2 != nil, getErr2)
-	
+
 	performers, err := ops.ListPerformers(ctx)
 
 	if err != nil {
 		t.Logf("ListPerformers error: %v", err)
 	}
 	t.Logf("Found %d performers", len(performers))
-	
+
 	assert.NoError(t, err)
-	
+
 	// Note: The fake client has limitations with List operations for custom resources
 	// In a real Kubernetes environment, this would properly return the 2 performers
 	// For unit testing purposes, we verify that:
-	// 1. No error occurs during the List operation 
+	// 1. No error occurs during the List operation
 	// 2. Individual objects can be retrieved (verified above with Get calls)
 	if len(performers) == 2 {
 		// Check that both performers are returned (if fake client supports it)
@@ -477,7 +477,7 @@ func TestCRDOperations_ListPerformers(t *testing.T) {
 func TestCRDOperations_GetPerformerStatus(t *testing.T) {
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
-	
+
 	testPerformer := &PerformerCRD{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "hourglass.eigenlayer.io/v1alpha1",
@@ -498,16 +498,16 @@ func TestCRDOperations_GetPerformerStatus(t *testing.T) {
 			GRPCEndpoint: "test-endpoint:9090",
 		},
 	}
-	
+
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(testPerformer).
 		Build()
-	
+
 	ops := NewCRDOperations(fakeClient, config)
 
 	ctx := context.Background()
-	
+
 	t.Run("get status of existing performer", func(t *testing.T) {
 		status, err := ops.GetPerformerStatus(ctx, "test-performer")
 		assert.NoError(t, err)
@@ -517,7 +517,7 @@ func TestCRDOperations_GetPerformerStatus(t *testing.T) {
 		assert.Equal(t, "test-service", status.ServiceName)
 		assert.Equal(t, "test-endpoint:9090", status.GRPCEndpoint)
 	})
-	
+
 	t.Run("get status of non-existing performer", func(t *testing.T) {
 		status, err := ops.GetPerformerStatus(ctx, "non-existing")
 		assert.Error(t, err)
@@ -541,10 +541,10 @@ func TestConvertResourceRequirements(t *testing.T) {
 
 	assert.NotNil(t, k8sReq.Requests)
 	assert.NotNil(t, k8sReq.Limits)
-	
+
 	cpuRequest := k8sReq.Requests[corev1.ResourceCPU]
 	assert.Equal(t, resource.MustParse("100m"), cpuRequest)
-	
+
 	memoryLimit := k8sReq.Limits[corev1.ResourceMemory]
 	assert.Equal(t, resource.MustParse("512Mi"), memoryLimit)
 }

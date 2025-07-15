@@ -168,7 +168,7 @@ func TestConfig_ApplyDefaults_PreservesExistingValues(t *testing.T) {
 		RetryAttempts:     5,
 		RetryBackoff:      10 * time.Second,
 	}
-	
+
 	config.ApplyDefaults()
 
 	// Verify existing values are preserved

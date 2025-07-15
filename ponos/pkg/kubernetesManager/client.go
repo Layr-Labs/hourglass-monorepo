@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -57,8 +59,17 @@ func NewClientWrapper(cfg *Config) (*ClientWrapper, error) {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
+	// Create scheme with Performer CRD types
+	scheme := runtime.NewScheme()
+
+	// Add Performer CRD types with correct kind names
+	gv := schema.GroupVersion{Group: cfg.CRDGroup, Version: cfg.CRDVersion}
+	scheme.AddKnownTypeWithName(gv.WithKind("Performer"), &PerformerCRD{})
+	scheme.AddKnownTypeWithName(gv.WithKind("PerformerList"), &PerformerList{})
+	metav1.AddToGroupVersion(scheme, gv)
+
 	// Create controller-runtime client for CRD operations
-	crdClient, err := client.New(restConfig, client.Options{})
+	crdClient, err := client.New(restConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create CRD client: %w", err)
 	}

@@ -88,7 +88,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to create AVS performer for %s: %v", avs.ProcessType, err)
 			}
-			
+
 			err = performer.Initialize(ctx)
 			if err != nil {
 				return err
@@ -204,10 +204,11 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
-			AvsAddress:   avsAddress,
-			ProcessType:  avsPerformer.AvsProcessType(avs.ProcessType),
-			WorkerCount:  avs.WorkerCount,
-			SigningCurve: avs.SigningCurve,
+			AvsAddress:         avsAddress,
+			ProcessType:        avsPerformer.AvsProcessType(avs.ProcessType),
+			WorkerCount:        avs.WorkerCount,
+			SigningCurve:       avs.SigningCurve,
+			SkipConnectionTest: avs.SkipConnectionTest,
 		},
 		kubernetesConfig,
 		e.peeringFetcher,

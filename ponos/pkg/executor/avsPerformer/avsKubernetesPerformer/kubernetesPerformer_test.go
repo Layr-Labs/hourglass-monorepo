@@ -160,8 +160,8 @@ func TestAvsKubernetesPerformer_GeneratePerformerID(t *testing.T) {
 	id2 := performer.generatePerformerID()
 
 	assert.NotEqual(t, id1, id2)
-	assert.Contains(t, id1, "performer-0x123-")
-	assert.Contains(t, id2, "performer-0x123-")
+	assert.Contains(t, id1, "performer-7f8a79-")
+	assert.Contains(t, id2, "performer-7f8a79-")
 }
 
 func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
@@ -371,10 +371,10 @@ func TestAvsKubernetesPerformer_RunTask_NoCurrentPerformer(t *testing.T) {
 	ctx := context.Background()
 
 	task := &performerTask.PerformerTask{
-		TaskID:             "test-task",
-		Payload:            []byte("test-payload"),
-		AggregatorAddress:  "0xaggregator",
-		Signature:          []byte("test-signature"),
+		TaskID:            "test-task",
+		Payload:           []byte("test-payload"),
+		AggregatorAddress: "0xaggregator",
+		Signature:         []byte("test-signature"),
 	}
 
 	result, err := performer.RunTask(ctx, task)

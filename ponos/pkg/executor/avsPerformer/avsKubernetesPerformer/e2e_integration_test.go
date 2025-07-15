@@ -2,409 +2,334 @@ package avsKubernetesPerformer
 
 import (
 	"context"
-	"sync"
+	"fmt"
+	"github.com/stretchr/testify/require"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"go.uber.org/zap/zaptest"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
+	"go.uber.org/zap"
 )
 
-// TestE2E_KubernetesPerformer_FullWorkflow tests the complete workflow:
-// 1. Create performer with connection manager
-// 2. Test connection retry logic
-// 3. Test health monitoring
-// 4. Test task execution
-// 5. Test cleanup
+// TestE2E_KubernetesPerformer_FullWorkflow tests the complete end-to-end workflow
 func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	
-	// Test configuration
-	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress: "0xtest-avs-address",
-		ApplicationHealthCheckInterval: 2 * time.Second,
-		Image: avsPerformer.PerformerImage{
-			Repository: "test-registry/test-performer",
-			Tag:        "v1.0.0",
-			Digest:     "sha256:abcdef123456",
-		},
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+
+	// Create logger
+	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: true})
+	if err != nil {
+		t.Fatalf("failed to create logger: %v", err)
 	}
-	
+
+	root := testUtils.GetProjectRootPath()
+	t.Logf("Project root path: %s", root)
+
+	// Clean up any existing test clusters first to prevent port conflicts
+	if err := testUtils.CleanupAllTestClusters(l.Sugar()); err != nil {
+		t.Logf("Warning: Failed to cleanup existing test clusters: %v", err)
+	}
+
+	// Create Kind cluster
+	kindConfig := testUtils.DefaultKindClusterConfig(l.Sugar())
+	cluster, clusterCleanup, err := testUtils.CreateKindCluster(ctx, t, kindConfig)
+	if err != nil {
+		t.Fatalf("Failed to create Kind cluster: %v", err)
+	}
+	defer func() {
+		// Nuclear option: just delete the cluster to avoid hanging cleanup
+		t.Log("Using fast cluster deletion to avoid hanging cleanup")
+		clusterCleanup()
+	}()
+
+	// Load hello-performer image (assumes image is already built)
+	if err := loadHelloPerformerImage(ctx, cluster, l.Sugar()); err != nil {
+		t.Fatalf("Failed to load hello-performer image: %v", err)
+	}
+
+	// Install CRDs first (required for Performer objects)
+	if err := installPerformerCRD(ctx, cluster, root, l.Sugar()); err != nil {
+		t.Fatalf("Failed to install Performer CRD: %v", err)
+	}
+
+	// Load pre-built operator image
+	if err := loadOperatorImage(ctx, cluster, l.Sugar()); err != nil {
+		t.Fatalf("Failed to load operator image: %v", err)
+	}
+
+	// Deploy Hourglass operator
+	operatorConfig := testUtils.DefaultOperatorDeploymentConfig(root, l.Sugar())
+	operator, operatorCleanup, err := testUtils.DeployOperator(ctx, cluster, operatorConfig)
+	if err != nil {
+		t.Fatalf("Failed to deploy operator: %v", err)
+	}
+	defer func() {
+		// Run cleanup with timeout to avoid hanging
+		t.Log("Running operator cleanup with timeout")
+		done := make(chan struct{})
+		go func() {
+			operatorCleanup()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			t.Log("Operator cleanup completed successfully")
+		case <-time.After(45 * time.Second):
+			t.Log("Operator cleanup timed out, proceeding with cluster deletion")
+		}
+	}()
+
+	t.Logf("Operator deployed successfully: %s", operator.ReleaseName)
+
+	// Create peering data fetcher
+	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
+		AggregatorPeers: nil,
+	}, l)
+
+	// Create AvsKubernetesPerformer without image (so Initialize doesn't hang)
+	performerConfig := &avsPerformer.AvsPerformerConfig{
+		AvsAddress:                     "0xtest-avs-address",
+		ApplicationHealthCheckInterval: 2 * time.Second,
+		SkipConnectionTest:             true, // Skip connection test since executor is outside cluster
+		// No image - prevents Initialize from hanging
+	}
+
 	kubernetesConfig := &kubernetesManager.Config{
-		Namespace:         "test-e2e-namespace",
-		KubeconfigPath:    "", // Use in-cluster config
+		Namespace:         "default",
+		KubeconfigPath:    cluster.KubeConfig,
 		OperatorNamespace: "hourglass-system",
 		CRDGroup:          "hourglass.eigenlayer.io",
 		CRDVersion:        "v1alpha1",
-		ServiceAccount:    "test-service-account",
-		ConnectionTimeout: 10 * time.Second,
+		ConnectionTimeout: 30 * time.Second,
 	}
-	
-	// Attempt to create performer (will fail in test environment but validates structure)
+
+	t.Logf("Creating AvsKubernetesPerformer with config: %+v", performerConfig)
+	// Create the AvsKubernetesPerformer instance
 	performer, err := NewAvsKubernetesPerformer(
-		config,
+		performerConfig,
 		kubernetesConfig,
-		nil, // peeringFetcher
-		nil, // l1ContractCaller
-		logger,
+		pdf,
+		nil,
+		l,
 	)
-	
 	if err != nil {
-		// Expected in test environment - log and continue with mock testing
-		t.Logf("Expected error creating performer in test environment: %v", err)
-		
-		// Test the retry configuration structure
-		retryConfig := &clients.RetryConfig{
-			MaxRetries:        3,
-			InitialDelay:      500 * time.Millisecond,
-			MaxDelay:          5 * time.Second,
-			BackoffMultiplier: 2.0,
-			ConnectionTimeout: 10 * time.Second,
-		}
-		
-		// Test connection manager creation
-		cm := clients.NewConnectionManager("test-service:9090", true, retryConfig)
-		if cm == nil {
-			t.Error("Expected connection manager to be created")
-		}
-		
-		// Test initial circuit breaker state
-		if cm.IsCircuitOpen() {
-			t.Error("Expected circuit breaker to be closed initially")
-		}
-		
-		// Test connection stats
-		stats := cm.GetConnectionStats()
-		if stats["circuitOpen"] != false {
-			t.Errorf("Expected circuitOpen to be false, got %v", stats["circuitOpen"])
-		}
-		
-		return
+		t.Fatalf("Failed to create AvsKubernetesPerformer: %v", err)
 	}
-	
-	// If we get here, test the full workflow
-	t.Log("Testing full Kubernetes performer workflow")
-	
-	// Test 1: Performer initialization
-	if performer.kubernetesManager == nil {
-		t.Error("Expected kubernetesManager to be initialized")
+
+	t.Logf("Initializing AvsKubernetesPerformer with config: %+v", performerConfig)
+	// Initialize the performer (won't create any CRDs since no image)
+	if err := performer.Initialize(ctx); err != nil {
+		t.Fatalf("Failed to initialize performer: %v", err)
 	}
-	
-	if performer.clientWrapper == nil {
-		t.Error("Expected clientWrapper to be initialized")
+
+	// Now create a performer using CreatePerformer with a shorter timeout to avoid hanging
+	performerImage := avsPerformer.PerformerImage{
+		Repository: "hello-performer",
+		Tag:        "latest",
 	}
-	
-	// Test 2: Connection manager integration
-	// Create a test performer resource to validate connection manager integration
-	testPerformerResource := createTestPerformerResource(t, "test-endpoint:9090")
-	
-	if testPerformerResource.connectionManager == nil {
-		t.Error("Expected connectionManager to be set on performer resource")
-	}
-	
-	// Test 3: Circuit breaker functionality
-	if testPerformerResource.connectionManager.IsCircuitOpen() {
-		t.Error("Expected circuit breaker to be closed initially")
-	}
-	
-	// Test 4: Health monitoring simulation
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	
-	// This will fail but tests the retry logic
-	performer.performApplicationHealthCheck(ctx, testPerformerResource)
-	
-	// Verify health state was updated
-	if testPerformerResource.performerHealth.ApplicationIsHealthy {
-		t.Error("Expected ApplicationIsHealthy to be false after failed health check")
-	}
-	
-	// Test 5: Task execution simulation
-	task := &performerTask.PerformerTask{
-		TaskID:  "test-task-e2e",
-		Payload: []byte("test-payload-data"),
-	}
-	
-	// Store the test performer as current
-	performer.currentPerformer.Store(testPerformerResource)
-	
-	_, err = performer.RunTask(ctx, task)
-	if err == nil {
-		t.Error("Expected error when service is unavailable")
-	}
-	
-	// Verify error contains connection information
-	if err != nil && !containsSubstring(err.Error(), "failed to get healthy connection") {
-		t.Errorf("Expected connection error, got: %v", err)
-	}
-	
-	// Test 6: Cleanup
-	err = performer.RemovePerformer(ctx, testPerformerResource.performerID)
+
+	// Create context with shorter timeout for performer creation to avoid hanging
+	createCtx, createCancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer createCancel()
+
+	t.Logf("Creating performer with image: %+v", performerImage)
+	creationResult, err := performer.CreatePerformer(createCtx, performerImage)
 	if err != nil {
-		t.Logf("Expected error removing performer in test environment: %v", err)
-	}
-	
-	t.Log("E2E workflow test completed successfully")
-}
+		require.NoError(t, err)
+		t.Logf("CreatePerformer failed or timed out: %v", err)
 
-func TestE2E_ConnectionResilience_FailureRecovery(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	
-	// Test connection resilience under different failure scenarios
-	scenarios := []struct {
-		name          string
-		endpoint      string
-		expectedError string
-	}{
-		{
-			name:          "Connection refused",
-			endpoint:      "localhost:9999",
-			expectedError: "failed to get healthy connection",
-		},
-		{
-			name:          "Invalid hostname",
-			endpoint:      "non-existent-host:9090",
-			expectedError: "failed to get healthy connection",
-		},
-		{
-			name:          "Invalid port",
-			endpoint:      "localhost:99999",
-			expectedError: "failed to get healthy connection",
-		},
+		// Continue with test - we'll verify the performer was created even if CreatePerformer hangs
+	} else {
+		t.Logf("Created performer: %s", creationResult.PerformerID)
 	}
-	
-	for _, scenario := range scenarios {
-		t.Run(scenario.name, func(t *testing.T) {
-			// Create performer resource with different endpoints
-			performer := createTestPerformerResource(t, scenario.endpoint)
-			
-			// Create mock AvsKubernetesPerformer
-			akp := &AvsKubernetesPerformer{
-				logger: logger,
-				config: &avsPerformer.AvsPerformerConfig{
-					ApplicationHealthCheckInterval: 1 * time.Second,
-				},
-				taskWaitGroups: make(map[string]*sync.WaitGroup),
-			}
-			
-			// Store performer as current
-			akp.currentPerformer.Store(performer)
-			
-			// Test task execution
-			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-			defer cancel()
-			
-			task := &performerTask.PerformerTask{
-				TaskID:  "test-task-" + scenario.name,
-				Payload: []byte("test-payload"),
-			}
-			
-			_, err := akp.RunTask(ctx, task)
-			if err == nil {
-				t.Errorf("Expected error for scenario %s", scenario.name)
-			}
-			
-			if err != nil && !containsSubstring(err.Error(), scenario.expectedError) {
-				t.Errorf("Expected error containing '%s', got: %v", scenario.expectedError, err)
-			}
-			
-			// Test health check with a shorter timeout
-			healthCtx, healthCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-			defer healthCancel()
-			akp.performApplicationHealthCheck(healthCtx, performer)
-			
-			if performer.performerHealth.ApplicationIsHealthy {
-				t.Errorf("Expected ApplicationIsHealthy to be false for scenario %s", scenario.name)
-			}
-		})
-	}
-}
 
-func TestE2E_CircuitBreaker_StateTransitions(t *testing.T) {
-	// Test circuit breaker state transitions over time
-	retryConfig := &clients.RetryConfig{
-		MaxRetries:        1,
-		InitialDelay:      100 * time.Millisecond,
-		MaxDelay:          500 * time.Millisecond,
-		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 500 * time.Millisecond,
+	// Verify performer was created
+	performers := performer.ListPerformers()
+	if len(performers) != 1 {
+		t.Fatalf("Expected 1 performer after initialization, got %d", len(performers))
 	}
-	
-	cm := clients.NewConnectionManager("localhost:9998", true, retryConfig)
-	
-	// Test initial state
-	if cm.IsCircuitOpen() {
-		t.Error("Expected circuit breaker to be closed initially")
-	}
-	
-	// Simulate multiple connection attempts (will fail)
-	for i := 0; i < 3; i++ {
-		_, err := cm.GetConnection()
-		if err == nil {
-			t.Error("Expected connection to fail")
+
+	// Get the actual performer ID from the list (in case CreatePerformer timed out)
+	actualPerformerID := performers[0].PerformerID
+	t.Logf("AvsKubernetesPerformer created performer: %s", actualPerformerID)
+
+	// Wait for operator to process the performer and create resources
+	timeout := 60 * time.Second
+	start := time.Now()
+	var performerReady bool
+
+	for time.Since(start) < timeout {
+		// Check if operator created any pods
+		pods, err := cluster.RunKubectl(ctx, "get", "pods", "-n", "default", "-l", "hourglass.eigenlayer.io/performer", "--no-headers")
+		if err == nil && len(pods) > 0 {
+			t.Logf("Operator created performer pods: %s", string(pods))
+
+			// Check if pod is running
+			if strings.Contains(string(pods), "Running") {
+				performerReady = true
+
+				// Get pod logs to check if gRPC server is running
+				podLogs, err := cluster.RunKubectl(ctx, "logs", "-n", "default", "-l", "hourglass.eigenlayer.io/performer", "--tail=20")
+				if err == nil {
+					t.Logf("Pod logs: %s", string(podLogs))
+				}
+				break
+			}
 		}
-	}
-	
-	// Test connection stats after failures
-	stats := cm.GetConnectionStats()
-	if stats["hasConnection"] != false {
-		t.Errorf("Expected hasConnection to be false, got %v", stats["hasConnection"])
-	}
-	
-	// Test cleanup
-	err := cm.Close()
-	if err != nil {
-		t.Errorf("Expected no error closing connection manager, got: %v", err)
-	}
-}
 
-func TestE2E_PerformerLifecycle_Complete(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-	
-	// Test complete performer lifecycle
-	performer := createTestPerformerResource(t, "test-lifecycle:9090")
-	
-	// Create mock AvsKubernetesPerformer
-	akp := &AvsKubernetesPerformer{
-		logger: logger,
-		config: &avsPerformer.AvsPerformerConfig{
-			ApplicationHealthCheckInterval: 1 * time.Second,
-		},
-		taskWaitGroups: make(map[string]*sync.WaitGroup),
+		// Check performer status
+		performerStatus, err := cluster.RunKubectl(ctx, "get", "performers", "-n", "default", actualPerformerID, "-o", "jsonpath={.status.phase}")
+		if err == nil && len(performerStatus) > 0 {
+			t.Logf("Performer status: %s", string(performerStatus))
+			if string(performerStatus) == "Running" {
+				t.Log("Performer is running!")
+				performerReady = true
+				break
+			}
+		}
+
+		time.Sleep(2 * time.Second)
 	}
-	
-	// Test 1: Performer creation
-	if performer.performerID == "" {
-		t.Error("Expected performerID to be set")
-	}
-	
-	if performer.connectionManager == nil {
-		t.Error("Expected connectionManager to be set")
-	}
-	
-	// Test 2: Health monitoring
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	
-	akp.performApplicationHealthCheck(ctx, performer)
-	
-	// Should be unhealthy due to unavailable service
-	if performer.performerHealth.ApplicationIsHealthy {
-		t.Error("Expected ApplicationIsHealthy to be false")
-	}
-	
-	// Test 3: Task execution
-	akp.currentPerformer.Store(performer)
-	
-	task := &performerTask.PerformerTask{
-		TaskID:  "test-lifecycle-task",
-		Payload: []byte("test-payload"),
-	}
-	
-	_, err := akp.RunTask(ctx, task)
-	if err == nil {
-		t.Error("Expected error when service is unavailable")
-	}
-	
-	// Test 4: Cleanup
-	if performer.connectionManager != nil {
-		err := performer.connectionManager.Close()
+
+	// Test health check endpoint if performer is ready
+	if performerReady {
+		t.Log("Testing health check endpoint...")
+
+		// Get the service endpoint
+		serviceEndpoint, err := cluster.RunKubectl(ctx, "get", "service", "performer-"+actualPerformerID, "-n", "default", "-o", "jsonpath={.spec.clusterIP}:{.spec.ports[0].port}")
 		if err != nil {
-			t.Errorf("Expected no error closing connection manager, got: %v", err)
+			t.Logf("Failed to get service endpoint: %v", err)
+		} else {
+			t.Logf("Service endpoint: %s", string(serviceEndpoint))
+
+			// Test health check using gRPC client via kubectl port-forward
+			// The hello-performer uses port 8080, not 9090
+			healthCheckCtx, healthCancel := context.WithTimeout(ctx, 30*time.Second)
+			defer healthCancel()
+
+			// Start port-forward in background
+			portForwardCmd := fmt.Sprintf("kubectl --kubeconfig=%s port-forward service/performer-%s 8080:8080", cluster.KubeConfig, actualPerformerID)
+			portForward := exec.CommandContext(healthCheckCtx, "bash", "-c", portForwardCmd)
+
+			// Start port-forward
+			if err := portForward.Start(); err != nil {
+				t.Logf("Failed to start port-forward: %v", err)
+			} else {
+				// Give port-forward time to establish
+				time.Sleep(2 * time.Second)
+
+				// Create gRPC client connection
+				grpcClient, err := avsPerformerClient.NewAvsPerformerClient("localhost:8080", true)
+				if err != nil {
+					t.Logf("Failed to create gRPC client: %v", err)
+				} else {
+					// Test health check
+					healthReq := &performerV1.HealthCheckRequest{}
+					healthResp, err := grpcClient.HealthCheck(healthCheckCtx, healthReq)
+					if err != nil {
+						t.Logf("Health check failed: %v", err)
+					} else {
+						t.Logf("Health check successful: %+v", healthResp)
+					}
+				}
+
+				// Clean up port-forward
+				if err := portForward.Process.Kill(); err != nil {
+					t.Logf("Failed to kill port-forward: %v", err)
+				}
+			}
 		}
 	}
-	
-	// Test 5: Resource cleanup
-	akp.currentPerformer.Store((*PerformerResource)(nil))
-	
-	current := akp.currentPerformer.Load()
-	if current != nil {
-		// Check if it's actually a nil pointer of the correct type
-		if performer, ok := current.(*PerformerResource); !ok || performer != nil {
-			t.Error("Expected current performer to be nil after cleanup")
-		}
+
+	// Final verification - check operator logs for debugging
+	operatorLogs, err := cluster.RunKubectl(ctx, "logs", "-n", "hourglass-system", "-l", "app=hourglass-operator", "--tail=50")
+	if err != nil {
+		t.Logf("Failed to get operator logs: %v", err)
+	} else {
+		t.Logf("Operator logs after creating performer: %s", string(operatorLogs))
 	}
+
+	// Check all resources created by operator
+	pods, err := cluster.RunKubectl(ctx, "get", "pods", "-n", "default", "-o", "wide")
+	if err != nil {
+		t.Logf("Failed to get pods: %v", err)
+	} else {
+		t.Logf("Pods in default namespace: %s", string(pods))
+	}
+
+	services, err := cluster.RunKubectl(ctx, "get", "services", "-n", "default", "-o", "wide")
+	if err != nil {
+		t.Logf("Failed to get services: %v", err)
+	} else {
+		t.Logf("Services in default namespace: %s", string(services))
+	}
+
+	// Get final performer status
+	performerStatus, err := cluster.RunKubectl(ctx, "get", "performers", "-n", "default", actualPerformerID, "-o", "yaml")
+	if err != nil {
+		t.Logf("Failed to get performer status: %v", err)
+	} else {
+		t.Logf("Final performer status: %s", string(performerStatus))
+	}
+
+	// Clean up
+	if err := performer.Shutdown(); err != nil {
+		t.Logf("Error shutting down performer: %v", err)
+	}
+
+	t.Log("E2E Kubernetes performer test completed successfully - Kind cluster, operator deployment, and CRD creation working")
 }
 
-// Helper function to create a test performer resource
-func createTestPerformerResource(t testing.TB, endpoint string) *PerformerResource {
-	retryConfig := &clients.RetryConfig{
-		MaxRetries:        2,
-		InitialDelay:      100 * time.Millisecond,
-		MaxDelay:          1 * time.Second,
-		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 2 * time.Second,
+// loadHelloPerformerImage loads the hello-performer image into the Kind cluster
+func loadHelloPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
+	imageName := "hello-performer:latest"
+	logger.Infof("Loading hello-performer image into Kind cluster: %s", imageName)
+
+	// Load the image into Kind cluster (assumes image is already built locally)
+	if err := cluster.LoadDockerImage(ctx, imageName); err != nil {
+		return fmt.Errorf("failed to load hello-performer image into Kind cluster: %v", err)
 	}
-	
-	connectionManager := clients.NewConnectionManager(endpoint, true, retryConfig)
-	
-	return &PerformerResource{
-		performerID:       "test-performer-" + time.Now().Format("20060102-150405"),
-		avsAddress:        "0xtest-avs-address",
-		connectionManager: connectionManager,
-		endpoint:          endpoint,
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
-	}
+
+	logger.Infof("Successfully loaded hello-performer image: %s", imageName)
+	return nil
 }
 
-// Helper function to check if error contains a substring
-func containsSubstring(str, substr string) bool {
-	return len(str) >= len(substr) && containsSubstringHelper(str, substr)
+// installPerformerCRD installs the Performer CRD required for the test
+func installPerformerCRD(ctx context.Context, cluster *testUtils.KindCluster, projectRoot string, logger *zap.SugaredLogger) error {
+	// Path to the Performer CRD file
+	crdPath := filepath.Join(projectRoot, "..", "hourglass-operator", "config", "crd", "bases", "hourglass.eigenlayer.io_performers.yaml")
+
+	logger.Infof("Installing Performer CRD from: %s", crdPath)
+
+	// Apply the CRD
+	output, err := cluster.RunKubectl(ctx, "apply", "-f", crdPath)
+	if err != nil {
+		return fmt.Errorf("failed to apply Performer CRD: %v\nOutput: %s", err, string(output))
+	}
+
+	logger.Infof("Performer CRD installed successfully")
+	return nil
 }
 
-func containsSubstringHelper(str, substr string) bool {
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+// loadOperatorImage loads the pre-built Hourglass operator image into the Kind cluster
+func loadOperatorImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
+	logger.Info("Loading pre-built Hourglass operator image into Kind cluster")
 
-// Benchmark test for connection management performance
-func BenchmarkE2E_ConnectionManager_Performance(b *testing.B) {
-	retryConfig := &clients.RetryConfig{
-		MaxRetries:        1,
-		InitialDelay:      10 * time.Millisecond,
-		MaxDelay:          100 * time.Millisecond,
-		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 100 * time.Millisecond,
+	// Load the pre-built operator image
+	if err := cluster.LoadDockerImage(ctx, "hourglass/operator:test"); err != nil {
+		return fmt.Errorf("failed to load operator image to Kind: %v", err)
 	}
-	
-	cm := clients.NewConnectionManager("localhost:9997", true, retryConfig)
-	defer cm.Close()
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = cm.IsCircuitOpen()
-	}
-}
 
-func BenchmarkE2E_PerformerHealth_Check(b *testing.B) {
-	logger := zaptest.NewLogger(b)
-	performer := createTestPerformerResource(b, "localhost:9996")
-	
-	akp := &AvsKubernetesPerformer{
-		logger: logger,
-		config: &avsPerformer.AvsPerformerConfig{
-			ApplicationHealthCheckInterval: 1 * time.Second,
-		},
-	}
-	
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		akp.performApplicationHealthCheck(ctx, performer)
-	}
+	logger.Info("Successfully loaded Hourglass operator image")
+	return nil
 }

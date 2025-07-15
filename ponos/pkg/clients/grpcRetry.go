@@ -65,7 +65,7 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 	delay := retryConfig.InitialDelay
 	for attempt := 0; attempt <= retryConfig.MaxRetries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.Background(), retryConfig.ConnectionTimeout)
-		
+
 		conn, err = grpc.NewClient(url, opts...)
 		if err == nil {
 			// Wait for connection to be ready with timeout
@@ -78,7 +78,7 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 				}
 			}
 			waitCancel()
-			
+
 			// Connection failed test, close and retry
 			conn.Close()
 			err = fmt.Errorf("connection test failed")
@@ -112,11 +112,11 @@ func testConnection(conn *grpc.ClientConn) bool {
 
 // ConnectionManager manages gRPC connections with retry and health monitoring
 type ConnectionManager struct {
-	url          string
-	insecureConn bool
-	retryConfig  *RetryConfig
-	conn         *grpc.ClientConn
-	lastHealthy  time.Time
+	url            string
+	insecureConn   bool
+	retryConfig    *RetryConfig
+	conn           *grpc.ClientConn
+	lastHealthy    time.Time
 	unhealthyCount int
 }
 
@@ -191,11 +191,11 @@ func (cm *ConnectionManager) GetConnectionStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"state":           state.String(),
-		"lastHealthy":     cm.lastHealthy,
-		"unhealthyCount":  cm.unhealthyCount,
-		"circuitOpen":     cm.IsCircuitOpen(),
-		"hasConnection":   cm.conn != nil,
+		"state":          state.String(),
+		"lastHealthy":    cm.lastHealthy,
+		"unhealthyCount": cm.unhealthyCount,
+		"circuitOpen":    cm.IsCircuitOpen(),
+		"hasConnection":  cm.conn != nil,
 	}
 }
 

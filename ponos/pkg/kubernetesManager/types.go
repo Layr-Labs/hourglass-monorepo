@@ -47,6 +47,9 @@ type CreatePerformerRequest struct {
 	// Image is the container image to run
 	Image string
 
+	// ImagePullPolicy defines the pull policy for the container image
+	ImagePullPolicy string
+
 	// ImageTag is the specific tag/version of the image
 	ImageTag string
 
