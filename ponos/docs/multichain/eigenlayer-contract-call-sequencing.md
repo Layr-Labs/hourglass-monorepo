@@ -822,3 +822,171 @@ seenSignatures[signatureHash] = true;
 ```
 
 This comprehensive sequencing guide provides the exact steps needed to implement a production-ready EigenLayer multi-signature system with proper error handling, optimization, and security considerations.
+
+## Complete Flow Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant A as Aggregator
+    participant DM as DelegationManager
+    participant AM as AllocationManager
+    participant KR as KeyRegistrar
+    participant CCR as CrossChainRegistry
+    participant OTU as OperatorTableUpdater
+    participant OTC as OperatorTableCalculator
+    participant ECV as ECDSACertificateVerifier
+    participant BCV as BN254CertificateVerifier
+    participant TM as TaskManager
+
+    Note over O,TM: Phase 1: Initial Setup (One-Time Per Operator)
+    
+    O->>DM: 1. isOperator(operatorAddress)
+    DM-->>O: false
+    O->>DM: 2. registerAsOperator(earningsReceiver, delay, metadata)
+    DM-->>O: OperatorRegistered event
+    
+    O->>AM: 3. registerForOperatorSets(operator, params)
+    AM-->>O: OperatorRegistered event
+    
+    Note over A,KR: AVS Owner configures operator set
+    A->>KR: 4. configureOperatorSet(operatorSet, curveType)
+    KR-->>A: OperatorSetConfigured event
+    
+    alt ECDSA Key Registration
+        O->>KR: 5a. getECDSAKeyRegistrationMessageHash(operator, operatorSet, keyAddress)
+        KR-->>O: messageHash
+        Note over O: Sign messageHash with operator private key
+        O->>KR: 6a. registerKey(operator, operatorSet, encodedAddress, signature)
+        KR-->>O: KeyRegistered event
+    else BN254 Key Registration
+        O->>KR: 5b. encodeBN254KeyData(g1Point, g2Point)
+        KR-->>O: keyData
+        O->>KR: 6b. getBN254KeyRegistrationMessageHash(operator, operatorSet, keyData)
+        KR-->>O: messageHash
+        Note over O: Sign messageHash with operator private key
+        O->>KR: 7b. registerKey(operator, operatorSet, keyData, signature)
+        KR-->>O: KeyRegistered event
+    end
+    
+    Note over A,CCR: AVS Owner sets up cross-chain coordination
+    A->>CCR: 8. createGenerationReservation(operatorSet, calculator, config, chainIds)
+    CCR-->>A: GenerationReservationCreated event
+
+    Note over A,TM: Phase 2: Task Execution Flow (Per Task)
+    
+    A->>CCR: getOperatorTableUpdater(operatorSet)
+    CCR-->>A: operatorTableUpdater address
+    A->>OTU: 9. getLatestReferenceTimestamp()
+    OTU-->>A: referenceTimestamp
+    A->>OTU: 10. getReferenceBlockNumberByTimestamp(timestamp)
+    OTU-->>A: referenceBlockNumber
+    
+    A->>CCR: getOperatorTableCalculator(operatorSet)
+    CCR-->>A: operatorTableCalculator address
+    A->>AM: 11. getMembers(operatorSet)
+    AM-->>A: operators[]
+    A->>OTC: 12. getOperatorWeights(operatorSet)
+    OTC-->>A: operators[], weights[][]
+    
+    A->>KR: 13. getOperatorSetCurveType(operatorSet)
+    KR-->>A: curveType
+    loop For each operator
+        A->>KR: 14. getECDSAAddress(operatorSet, operator) [if ECDSA]
+        KR-->>A: ecdsaAddress
+        A->>KR: 14. getBN254Key(operatorSet, operator) [if BN254]
+        KR-->>A: g1Point, g2Point
+    end
+    
+    Note over A,O: Off-chain: Task Distribution
+    A->>O: Distribute task via gRPC/HTTP
+    O-->>A: Task acknowledgment
+
+    Note over O,TM: Phase 3: Individual Operator Response (Per Operator)
+    
+    Note over O: Off-chain: Validate task parameters
+    Note over O: Off-chain: Execute task workload
+    
+    alt ECDSA Signing
+        O->>ECV: 15a. calculateCertificateDigest(referenceTimestamp, resultHash)
+        ECV-->>O: digest
+    else BN254 Signing
+        Note over O: Use raw keccak256(taskResult) as digest
+    end
+    
+    Note over O: Off-chain: Sign digest with signing key
+    Note over O: Off-chain: Submit response to aggregator
+    O->>A: Submit task response (result, signature)
+
+    Note over A,TM: Phase 4: Aggregator Certificate Creation
+    
+    Note over A: Off-chain: Collect operator responses
+    
+    alt ECDSA Validation
+        A->>ECV: 16a. calculateCertificateDigest(referenceTimestamp, resultHash)
+        ECV-->>A: digest
+        loop For each operator
+            A->>KR: 17a. getECDSAAddress(operatorSet, operator)
+            KR-->>A: expectedSigner
+        end
+        Note over A: Off-chain: Validate ECDSA signatures via ecrecover
+    else BN254 Validation
+        Note over A: Use raw keccak256(result) as digest
+        loop For each operator
+            A->>KR: 17b. getBN254Key(operatorSet, operator)
+            KR-->>A: g1Point, g2Point
+        end
+        Note over A: Off-chain: Validate BN254 signatures via pairing
+    end
+    
+    Note over A: Off-chain: Sort and aggregate signatures
+    Note over A: Off-chain: Create certificate structure
+
+    Note over A,TM: Phase 5: Certificate Verification and Submission
+    
+    alt ECDSA Certificate
+        A->>ECV: 18a. verifyCertificateProportion(operatorSet, certificate, thresholds)
+        ECV-->>A: isValid
+    else BN254 Certificate
+        A->>BCV: 18b. verifyCertificateProportion(operatorSet, certificate, thresholds)
+        BCV-->>A: isValid
+    end
+    
+    alt Certificate is valid
+        A->>TM: 19. submitTaskResult(taskId, encodedCertificate, result)
+        TM-->>A: TaskCompleted event
+    else Certificate is invalid
+        Note over A: Handle certificate verification failure
+    end
+
+    Note over O,TM: Task Flow Complete
+```
+
+## Key Diagram Elements
+
+### **Participants**
+- **O**: Operator (signs and executes tasks)
+- **A**: Aggregator (coordinates tasks and creates certificates)
+- **DM**: DelegationManager (operator registration)
+- **AM**: AllocationManager (operator set membership)
+- **KR**: KeyRegistrar (cryptographic key management)
+- **CCR**: CrossChainRegistry (cross-chain coordination)
+- **OTU**: OperatorTableUpdater (reference timestamp management)
+- **OTC**: OperatorTableCalculator (stake weight calculation)
+- **ECV**: ECDSACertificateVerifier (ECDSA certificate verification)
+- **BCV**: BN254CertificateVerifier (BN254 certificate verification)
+- **TM**: TaskManager (final result submission)
+
+### **Flow Phases**
+1. **Phase 1**: Initial operator setup and key registration
+2. **Phase 2**: Task setup and operator state queries
+3. **Phase 3**: Individual operator task execution and signing
+4. **Phase 4**: Aggregator certificate creation and validation
+5. **Phase 5**: Certificate verification and final submission
+
+### **Key Decision Points**
+- **Curve Type**: ECDSA vs BN254 branching for key registration and signing
+- **Certificate Validation**: Different verification processes for each curve type
+- **Success/Failure**: Error handling and recovery mechanisms
+
+This diagram provides a complete visual representation of the entire EigenLayer multi-signature workflow, showing the exact sequence of on-chain transactions and off-chain operations required for successful task execution and certificate submission.
