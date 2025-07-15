@@ -184,14 +184,5 @@ func DebugOpsetData(
 		} else {
 			t.Fatalf("Unsupported curve type: %s", curveType)
 		}
-
-		transportDest, err := ccr.GetTransportDestinations(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get transport destinations for operator set %d: %v", opsetId, err)
-		}
-		t.Logf("Transport destinations for operator set %s %d: %+v\n", chainConfig.AVSAccountAddress, opsetId, transportDest)
 	}
 }
