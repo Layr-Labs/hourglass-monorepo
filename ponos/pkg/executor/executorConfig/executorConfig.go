@@ -196,19 +196,27 @@ func (ec *ExecutorConfig) Validate() error {
 	if len(ec.AvsPerformers) == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one AVS performer is required"))
 	} else {
-		// Check if any performers use Kubernetes mode
-		requiresKubernetes := false
+		// Validate single runtime configuration approach
+		dockerCount := 0
+		kubernetesCount := 0
 		for _, avs := range ec.AvsPerformers {
 			if err := avs.Validate(); err != nil {
 				allErrors = append(allErrors, field.Invalid(field.NewPath("avsPerformers"), avs, err.Error()))
 			}
-			if avs.DeploymentMode == DeploymentModeKubernetes {
-				requiresKubernetes = true
+			if avs.DeploymentMode == DeploymentModeDocker {
+				dockerCount++
+			} else if avs.DeploymentMode == DeploymentModeKubernetes {
+				kubernetesCount++
 			}
 		}
 
+		// Enforce single runtime configuration: all performers must use the same deployment mode
+		if dockerCount > 0 && kubernetesCount > 0 {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("avsPerformers"), ec.AvsPerformers, "mixed deployment modes not supported: all performers must use the same deployment mode (either 'docker' or 'kubernetes')"))
+		}
+
 		// If any performer uses Kubernetes mode, validate Kubernetes config
-		if requiresKubernetes {
+		if kubernetesCount > 0 {
 			if ec.Kubernetes == nil {
 				allErrors = append(allErrors, field.Required(field.NewPath("kubernetes"), "kubernetes configuration is required when using kubernetes deployment mode"))
 			} else {
