@@ -15,7 +15,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
@@ -27,7 +26,6 @@ import (
 
 type AggregatorConfig struct {
 	Address          string
-	AggregatorUrl    string
 	PrivateKeyConfig *config.ECDSAKeyConfig
 	AVSs             []*aggregatorConfig.AggregatorAvs
 	Chains           []*aggregatorConfig.Chain
@@ -35,9 +33,8 @@ type AggregatorConfig struct {
 }
 
 type Aggregator struct {
-	logger    *zap.Logger
-	rpcServer *rpcServer.RpcServer
-	config    *AggregatorConfig
+	logger *zap.Logger
+	config *AggregatorConfig
 
 	// chainPollers is a map of chainId to its chain poller
 	chainPollers map[config.ChainId]chainPoller.IChainPoller
@@ -68,27 +65,7 @@ type Aggregator struct {
 	chainEventsChan chan *chainPoller.LogWithBlock
 }
 
-func NewAggregatorWithRpcServer(
-	rpcPort int,
-	cfg *AggregatorConfig,
-	contractStore contractStore.IContractStore,
-	tlp *transactionLogParser.TransactionLogParser,
-	peeringDataFetcher peering.IPeeringDataFetcher,
-	signer signer.ISigner,
-	logger *zap.Logger,
-) (*Aggregator, error) {
-	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: rpcPort,
-	}, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create RPC server: %w", err)
-	}
-
-	return NewAggregator(rpc, cfg, contractStore, tlp, peeringDataFetcher, signer, logger)
-}
-
 func NewAggregator(
-	rpcServer *rpcServer.RpcServer,
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
@@ -100,7 +77,6 @@ func NewAggregator(
 		return nil, fmt.Errorf("L1ChainId must be set in AggregatorConfig")
 	}
 	agg := &Aggregator{
-		rpcServer:            rpcServer,
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
 		config:               cfg,
@@ -152,8 +128,8 @@ func (a *Aggregator) Initialize() error {
 			AvsAddress:               avs.Address,
 			SupportedChainIds:        supportedChains,
 			MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
-			AggregatorAddress:        a.config.Address,
 			L1ChainId:                a.config.L1ChainId,
+			AggregatorAddress:        a.config.Address,
 		},
 			a.chainContractCallers,
 			a.signer,
@@ -295,14 +271,6 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 // Start starts the aggregator and its components
 func (a *Aggregator) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
-
-	// start the RPC server
-	go func() {
-		if err := a.rpcServer.Start(ctx); err != nil {
-			a.logger.Sugar().Errorw("RPC server failed to start", "error", err)
-			cancel()
-		}
-	}()
 
 	// consume the events channel
 	go func() {

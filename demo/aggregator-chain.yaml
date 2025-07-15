@@ -1,18 +1,5 @@
 ---
 debug: false
-simulationConfig:
-  simulatePeering:
-    enabled: true
-    operatorPeers:
-      - networkAddress: "executor:9090"
-        operatorAddress: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
-        operatorSetId: 1
-        publicKey: "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9"
-
-
-serverConfig:
-  port: 9000
-  aggregatorUrl: "aggregator:9000"
 
 operator:
   address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
@@ -43,5 +30,4 @@ avss:
     chainIds:
     - 31337
     # - 31338
-    signingCurve: "bn254"
     avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
@@ -14,13 +15,9 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/simulations/peers"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
@@ -132,19 +129,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to initialize contract caller: %w", err)
 		}
 
-		var pdf peering.IPeeringDataFetcher
-		if Config.Simulation != nil && Config.Simulation.SimulatePeering != nil && Config.Simulation.SimulatePeering.Enabled {
-			simulatedPeers, err := peers.NewSimulatedPeersFromConfig(Config.Simulation.SimulatePeering.AggregatorPeers)
-			if err != nil {
-				l.Sugar().Fatalw("Failed to create simulated peers", zap.Error(err))
-			}
-			pdf = localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-				AggregatorPeers: simulatedPeers,
-			}, l)
-		} else {
-
-			pdf = peeringDataFetcher.NewPeeringDataFetcher(cc, l)
-		}
+		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 
 		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf, cc)
 

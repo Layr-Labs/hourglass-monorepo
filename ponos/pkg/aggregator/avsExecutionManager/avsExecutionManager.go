@@ -28,7 +28,6 @@ type AvsExecutionManagerConfig struct {
 	SupportedChainIds        []config.ChainId
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
-	AggregatorUrl            string
 	L1ChainId                config.ChainId
 }
 

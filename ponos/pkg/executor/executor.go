@@ -87,9 +87,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				&avsPerformer.AvsPerformerConfig{
 					AvsAddress:           avsAddress,
 					ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-					WorkerCount:          avs.WorkerCount,
 					PerformerNetworkName: e.config.PerformerNetworkName,
-					SigningCurve:         avs.SigningCurve,
 				},
 				e.peeringFetcher,
 				e.l1ContractCaller,
