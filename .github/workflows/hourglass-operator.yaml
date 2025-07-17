@@ -37,7 +37,7 @@ jobs:
           go-version: '1.23'
       - name: Run tests
         run: |
-          cd cd hourglass-operator
+          cd hourglass-operator
           make test
   build-container:
     runs-on: protocol-gha-runners-hourglass
