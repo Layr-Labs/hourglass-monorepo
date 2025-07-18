@@ -8,7 +8,7 @@ Build EigenLayer AVS performers in TypeScript with minimal setup and maximum typ
 
 ```bash
 # Create a new performer project
-npx @hourglass/create-performer my-avs
+npx @layr-labs/hourglass-performer my-avs
 
 # Navigate to the project
 cd my-avs
@@ -24,7 +24,7 @@ npm run dev
 
 ```typescript
 // performer.ts
-import { BaseWorker } from '@hourglass/performer';
+import { BaseWorker } from '@layr-labs/hourglass-performer';
 
 class MyBasicPerformer extends BaseWorker {
   async handleSimpleTask(input: any) {
@@ -41,7 +41,7 @@ new MyBasicPerformer().start();
 
 ```typescript
 // performer.ts
-import { SolidityWorker } from '@hourglass/performer';
+import { SolidityWorker } from '@layr-labs/hourglass-performer';
 
 class MySolidityPerformer extends SolidityWorker<any, 'processTask'> {
   async handleSolidityTask(params: { amount: bigint; user: string }) {
@@ -77,6 +77,8 @@ npm run docker:run
 - [Docker Deployment](#docker-deployment)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
+- [Monitoring](#monitoring)
+- [Development Workflow](#development-workflow)
 - [Contributing](#contributing)
 
 ## 📦 Installation
@@ -85,7 +87,7 @@ npm run docker:run
 
 ```bash
 # Create a new project with interactive setup
-npx @hourglass/create-performer my-avs
+npx @layr-labs/hourglass-performer my-avs
 
 # Options:
 # - Basic performer (no contracts)
@@ -96,7 +98,59 @@ npx @hourglass/create-performer my-avs
 ### Manual Installation
 
 ```bash
-npm install @hourglass/performer
+npm install @layr-labs/hourglass-performer
+```
+
+### Package Usage
+
+When using the SDK as a package dependency:
+
+```typescript
+import { PerformerServer, IWorker } from '@layr-labs/hourglass-performer';
+
+// Implement your worker
+class MyWorker implements IWorker {
+  async execute(payload: Uint8Array): Promise<Uint8Array> {
+    // Your task logic here
+    return new Uint8Array(Buffer.from('Hello from worker!'));
+  }
+}
+
+// Create and start the server
+const worker = new MyWorker();
+const server = new PerformerServer(worker, { port: 8080 });
+
+async function main() {
+  await server.start();
+  console.log('Performer server started on port 8080');
+}
+
+main().catch(console.error);
+```
+
+#### Protobuf File Resolution
+
+The SDK automatically resolves protobuf files from multiple possible locations:
+
+1. **Development environment**: `proto/performer.proto` relative to source
+2. **Package installation**: `node_modules/@layr-labs/hourglass-performer/proto/performer.proto`
+3. **Alternative paths**: Various fallback locations
+
+If you encounter protobuf resolution errors:
+
+```bash
+# Verify proto files are included
+ls node_modules/@layr-labs/hourglass-performer/proto/
+
+# Or use the utility function
+import { resolveProtoPath } from '@layr-labs/hourglass-performer';
+
+try {
+  const protoPath = resolveProtoPath('performer.proto');
+  console.log('Proto file found at:', protoPath);
+} catch (error) {
+  console.error('Proto file not found:', error.message);
+}
 ```
 
 ## 🔧 Core Concepts
@@ -107,7 +161,7 @@ npm install @hourglass/performer
 For simple task processing without contract interaction:
 
 ```typescript
-import { BaseWorker } from '@hourglass/performer';
+import { BaseWorker } from '@layr-labs/hourglass-performer';
 
 class SimpleWorker extends BaseWorker {
   async handleSimpleTask(input: any) {
@@ -121,7 +175,7 @@ class SimpleWorker extends BaseWorker {
 For type-safe Solidity contract interaction:
 
 ```typescript
-import { SolidityWorker } from '@hourglass/performer';
+import { SolidityWorker } from '@layr-labs/hourglass-performer';
 
 class ContractWorker extends SolidityWorker<MyContract, 'processTask'> {
   async handleSolidityTask(params: ProcessTaskParams) {
@@ -221,7 +275,7 @@ interface PerformerServerConfig {
 #### Advanced Usage
 
 ```typescript
-import { PerformerServer } from '@hourglass/performer';
+import { PerformerServer } from '@layr-labs/hourglass-performer';
 
 const server = new PerformerServer(worker, {
   port: 8080,
@@ -314,7 +368,7 @@ CORS_ORIGINS=https://yourdomain.com
 ### Configuration Loading
 
 ```typescript
-import { loadEnvironmentConfig } from '@hourglass/performer';
+import { loadEnvironmentConfig } from '@layr-labs/hourglass-performer';
 
 const config = loadEnvironmentConfig();
 console.log(`Server will run on port ${config.port}`);
@@ -338,7 +392,7 @@ console.log(`Server will run on port ${config.port}`);
 ### Basic Deployment
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -389,7 +443,7 @@ npm run docker:dev
 ### Basic Number Processing
 
 ```typescript
-import { BaseWorker } from '@hourglass/performer';
+import { BaseWorker } from '@layr-labs/hourglass-performer';
 
 class NumberProcessor extends BaseWorker {
   async handleSimpleTask(input: number) {
@@ -408,7 +462,7 @@ new NumberProcessor().start();
 ### ERC-20 Token Processing
 
 ```typescript
-import { SolidityWorker } from '@hourglass/performer';
+import { SolidityWorker } from '@layr-labs/hourglass-performer';
 import type { ERC20 } from './typechain-types';
 
 class TokenProcessor extends SolidityWorker<ERC20, 'transfer'> {
@@ -434,7 +488,7 @@ new TokenProcessor().start();
 ### Data Aggregation
 
 ```typescript
-import { BaseWorker } from '@hourglass/performer';
+import { BaseWorker } from '@layr-labs/hourglass-performer';
 
 class DataAggregator extends BaseWorker {
   async handleSimpleTask(data: { values: number[] }) {
@@ -479,6 +533,38 @@ docker logs <container-id>
 
 # Run in interactive mode
 docker run -it my-performer sh
+```
+
+#### "Could not find performer.proto file"
+
+**Solution**: Ensure the package was installed correctly and includes proto files:
+
+```bash
+# Reinstall the package
+npm uninstall @layr-labs/hourglass-performer
+npm install @layr-labs/hourglass-performer
+
+# Verify proto files exist
+ls node_modules/@layr-labs/hourglass-performer/proto/
+```
+
+#### gRPC Service Definition Not Found
+
+**Solution**: This typically happens when protobuf files can't be loaded. Use the protobuf troubleshooting steps above.
+
+#### Module Resolution in Monorepo
+
+**Solution**: If using in a monorepo, ensure proper module resolution:
+
+```typescript
+// In your tsconfig.json
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  }
+}
 ```
 
 ### Debug Mode

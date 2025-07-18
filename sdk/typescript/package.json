@@ -44,7 +44,7 @@
     "ethers": "^6.8.0"
   },
   "devDependencies": {
-    "@types/node": "^20.10.5",
+    "@types/node": "^24.0.0",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",
@@ -59,7 +59,7 @@
     "@typechain/ethers-v6": "^0.5.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "repository": {
     "type": "git",
@@ -71,7 +71,6 @@
     "proto/**/*",
     "generated/**/*",
     "README.md",
-    "PACKAGE_USAGE.md",
     "LICENSE"
   ]
 }

@@ -365,7 +365,7 @@ docker build -t my-performer .
 #### Solution
 ```dockerfile
 # Use specific Node version
-FROM node:18-alpine
+FROM node:24-alpine
 
 # Install build dependencies
 RUN apk add --no-cache python3 make g++
