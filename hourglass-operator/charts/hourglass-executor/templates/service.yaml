@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hourglass-executor.executorName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-executor.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - name: metrics
+    port: {{ .Values.service.ports.metrics }}
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: {{ .Values.service.ports.health }}
+    targetPort: health
+    protocol: TCP
+  - name: grpc
+    port: {{ .Values.service.ports.grpc }}
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    {{- include "hourglass-executor.selectorLabels" . | nindent 4 }}
+
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hourglass-executor.executorName" . }}-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-executor.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: {{ .Values.service.ports.grpc }}
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    {{- include "hourglass-executor.selectorLabels" . | nindent 4 }}

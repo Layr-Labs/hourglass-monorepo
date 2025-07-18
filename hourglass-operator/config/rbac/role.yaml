@@ -1,0 +1,45 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hourglass.eigenlayer.io
+  resources:
+  - performers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hourglass.eigenlayer.io
+  resources:
+  - performers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - hourglass.eigenlayer.io
+  resources:
+  - performers/status
+  verbs:
+  - get
+  - patch
+  - update

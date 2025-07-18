@@ -1,0 +1,284 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ${EXECUTOR_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${EXECUTOR_NAME}
+    component: executor
+    version: ${EXECUTOR_VERSION}
+spec:
+  serviceName: ${EXECUTOR_NAME}
+  replicas: ${REPLICA_COUNT:-1}
+  selector:
+    matchLabels:
+      app: ${EXECUTOR_NAME}
+      component: executor
+  template:
+    metadata:
+      labels:
+        app: ${EXECUTOR_NAME}
+        component: executor
+        version: ${EXECUTOR_VERSION}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: ${SERVICE_ACCOUNT_NAME:-executor-service-account}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+      - name: executor
+        image: ${EXECUTOR_IMAGE}:${EXECUTOR_VERSION}
+        imagePullPolicy: IfNotPresent
+        env:
+        # Deployment mode configuration
+        - name: DEPLOYMENT_MODE
+          value: "kubernetes"
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        # Aggregator connection
+        - name: AGGREGATOR_ENDPOINT
+          value: ${AGGREGATOR_ENDPOINT}
+        - name: AGGREGATOR_TLS_ENABLED
+          value: ${AGGREGATOR_TLS_ENABLED:-false}
+        
+        # Logging configuration
+        - name: LOG_LEVEL
+          value: ${LOG_LEVEL:-info}
+        - name: LOG_FORMAT
+          value: ${LOG_FORMAT:-json}
+        
+        # Performer management configuration
+        - name: PERFORMER_SERVICE_PATTERN
+          value: "performer-{name}.{namespace}.svc.cluster.local:{port}"
+        - name: PERFORMER_DEFAULT_PORT
+          value: ${PERFORMER_DEFAULT_PORT:-9090}
+        - name: PERFORMER_CONNECTION_TIMEOUT
+          value: ${PERFORMER_CONNECTION_TIMEOUT:-30s}
+        - name: PERFORMER_RETRY_ATTEMPTS
+          value: ${PERFORMER_RETRY_ATTEMPTS:-3}
+        
+        # Resource management
+        - name: MAX_PERFORMERS
+          value: ${MAX_PERFORMERS:-10}
+        - name: PERFORMER_STARTUP_TIMEOUT
+          value: ${PERFORMER_STARTUP_TIMEOUT:-300s}
+        
+        # Operator integration
+        - name: OPERATOR_NAMESPACE
+          value: ${OPERATOR_NAMESPACE:-hourglass-system}
+        
+        # Chain configuration (will be loaded from ConfigMap)
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        
+        # Secrets for operator keys
+        - name: ECDSA_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ${EXECUTOR_NAME}-keys
+              key: ecdsa-private-key
+        - name: BLS_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ${EXECUTOR_NAME}-keys
+              key: bls-private-key
+              optional: true
+        
+        # Health check configuration
+        - name: HEALTH_CHECK_PORT
+          value: ${HEALTH_CHECK_PORT:-8090}
+        - name: METRICS_PORT
+          value: ${METRICS_PORT:-8080}
+        
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        - containerPort: 8090
+          name: health
+          protocol: TCP
+        - containerPort: 9095
+          name: grpc
+          protocol: TCP
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        
+        resources:
+          requests:
+            cpu: ${CPU_REQUESTS:-500m}
+            memory: ${MEMORY_REQUESTS:-1Gi}
+          limits:
+            cpu: ${CPU_LIMITS:-2}
+            memory: ${MEMORY_LIMITS:-4Gi}
+        
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+          readOnly: true
+        - name: data
+          mountPath: /data
+        - name: tmp
+          mountPath: /tmp
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+      
+      # Pod scheduling configuration
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "hourglass"
+        effect: "NoSchedule"
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: [${EXECUTOR_NAME}]
+              topologyKey: kubernetes.io/hostname
+      
+      volumes:
+      - name: config
+        configMap:
+          name: ${EXECUTOR_NAME}-config
+      - name: tmp
+        emptyDir: {}
+      
+      # Image pull secrets
+      imagePullSecrets:
+      - name: ${IMAGE_PULL_SECRET:-executor-registry-secret}
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 60
+      
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+  
+  # Persistent volume claim templates
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: ${EXECUTOR_NAME}
+        component: executor
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: ${STORAGE_CLASS:-standard}
+      resources:
+        requests:
+          storage: ${DATA_STORAGE_SIZE:-10Gi}
+
+---
+# Service for the executor (for metrics, health checks, etc.)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${EXECUTOR_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${EXECUTOR_NAME}
+    component: executor
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: 8090
+    targetPort: health
+    protocol: TCP
+  - name: grpc
+    port: 9095
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    app: ${EXECUTOR_NAME}
+    component: executor
+
+---
+# Headless service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${EXECUTOR_NAME}-headless
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${EXECUTOR_NAME}
+    component: executor
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: grpc
+    port: 9095
+    targetPort: grpc
+    protocol: TCP
+  selector:
+    app: ${EXECUTOR_NAME}
+    component: executor

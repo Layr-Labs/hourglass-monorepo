@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hourglass-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.operator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hourglass-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hourglass-operator.selectorLabels" . | nindent 8 }}
+        {{- with .Values.pod.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if .Values.metrics.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: {{ .Values.metrics.path | quote }}
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        {{- end }}
+        {{- with .Values.pod.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "hourglass-operator.serviceAccountName" . }}
+      
+      {{- with .Values.pod.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      
+      containers:
+      - name: manager
+        image: "{{ .Values.operator.image.repository }}:{{ .Values.operator.image.tag }}"
+        imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
+        
+        args:
+        - --metrics-bind-address=0.0.0.0:{{ .Values.operator.env.metricsPort }}
+        - --health-probe-bind-address=0.0.0.0:{{ .Values.operator.env.healthCheckPort }}
+        {{- if .Values.operator.env.leaderElection }}
+        - --leader-elect
+        {{- end }}
+        {{- if .Values.development.enabled }}
+        - --zap-devel
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        - --webhook-port={{ .Values.operator.env.webhookPort }}
+        - --cert-dir={{ .Values.operator.env.certDir }}
+        {{- end }}
+        
+        env:
+        - name: LOG_LEVEL
+          value: {{ .Values.operator.env.logLevel | quote }}
+        - name: LOG_FORMAT
+          value: {{ .Values.operator.env.logFormat | quote }}
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        {{- if .Values.development.enabled }}
+        - name: DEVELOPMENT_MODE
+          value: "true"
+        {{- end }}
+        
+        ports:
+        - containerPort: {{ .Values.operator.env.metricsPort }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.operator.env.healthCheckPort }}
+          name: health
+          protocol: TCP
+        {{- if .Values.webhook.enabled }}
+        - containerPort: {{ .Values.operator.env.webhookPort }}
+          name: webhook
+          protocol: TCP
+        {{- end }}
+        
+        {{- if .Values.healthChecks.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: {{ .Values.healthChecks.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.livenessProbe.failureThreshold }}
+        
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: {{ .Values.healthChecks.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.readinessProbe.failureThreshold }}
+        {{- end }}
+        
+        resources:
+          {{- toYaml .Values.operator.resources | nindent 10 }}
+        
+        {{- if .Values.webhook.enabled }}
+        volumeMounts:
+        - name: webhook-certs
+          mountPath: {{ .Values.operator.env.certDir }}
+          readOnly: true
+        {{- end }}
+        
+        {{- with .Values.pod.containerSecurityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      
+      {{- if .Values.webhook.enabled }}
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: {{ include "hourglass-operator.webhookCertName" . }}
+      {{- end }}
+      
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      terminationGracePeriodSeconds: 10

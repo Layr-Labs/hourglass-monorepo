@@ -77,6 +77,10 @@ build/cmd/aggregator/darwin-amd64:
 build/local-container:
 	cd ../ && docker build -t hourglass:latest -f ./ponos/Dockerfile .
 
+.PHONY: build/operator-container
+build/operator-container:
+	cd ../hourglass-operator && $(MAKE) docker-build IMG=hourglass/operator:test
+
 # -----------------------------------------------------------------------------
 # Release builds
 # -----------------------------------------------------------------------------
@@ -134,7 +138,7 @@ test:
 	GOFLAGS="-count=1" ./scripts/goTest.sh -v -p 1 -parallel 1 ./...
 
 .PHONY: ci-test
-ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container test
+ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container build/operator-container test
 
 .PHONY: lint
 lint:

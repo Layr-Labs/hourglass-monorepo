@@ -1,0 +1,22 @@
+apiVersion: v2
+name: hourglass-operator
+description: A Helm chart for deploying the Hourglass Kubernetes Operator (singleton)
+type: application
+version: 0.1.0
+appVersion: "1.2.0"
+home: https://github.com/Layr-Labs/hourglass-monorepo
+sources:
+  - https://github.com/Layr-Labs/hourglass-monorepo
+maintainers:
+  - name: Hourglass Team
+    email: team@hourglass.com
+keywords:
+  - hourglass
+  - eigenlayer
+  - avs
+  - operator
+  - kubernetes
+  - blockchain
+annotations:
+  category: Blockchain
+  licenses: MIT

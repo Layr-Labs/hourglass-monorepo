@@ -1,0 +1,246 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "hourglass-executor.executorName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "hourglass-executor.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "hourglass-executor.executorName" . }}
+  replicas: {{ .Values.executor.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hourglass-executor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hourglass-executor.selectorLabels" . | nindent 8 }}
+        {{- with .Values.pod.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- if .Values.metrics.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: {{ .Values.metrics.path | quote }}
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        {{- end }}
+        {{- with .Values.pod.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "hourglass-executor.serviceAccountName" . }}
+      
+      {{- with .Values.pod.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- if .Values.scheduling.podAntiAffinity.enabled }}
+      affinity:
+        podAntiAffinity:
+          {{- if eq .Values.scheduling.podAntiAffinity.type "required" }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [{{ include "hourglass-executor.executorName" . | quote }}]
+            topologyKey: {{ .Values.scheduling.podAntiAffinity.topologyKey }}
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values: [{{ include "hourglass-executor.executorName" . | quote }}]
+              topologyKey: {{ .Values.scheduling.podAntiAffinity.topologyKey }}
+          {{- end }}
+        {{- with .Values.scheduling.nodeAffinity }}
+        nodeAffinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- else }}
+        {{- with .Values.scheduling.nodeAffinity }}
+      affinity:
+        nodeAffinity:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.scheduling.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      
+      containers:
+      - name: executor
+        image: "{{ .Values.executor.image.repository }}:{{ .Values.executor.image.tag }}"
+        imagePullPolicy: {{ .Values.executor.image.pullPolicy }}
+        
+        env:
+        - name: DEPLOYMENT_MODE
+          value: {{ .Values.executor.env.deploymentMode | quote }}
+        - name: KUBERNETES_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: AGGREGATOR_ENDPOINT
+          value: {{ .Values.aggregator.endpoint | quote }}
+        - name: AGGREGATOR_TLS_ENABLED
+          value: {{ .Values.aggregator.tls.enabled | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.executor.env.logLevel | quote }}
+        - name: LOG_FORMAT
+          value: {{ .Values.executor.env.logFormat | quote }}
+        - name: CONFIG_PATH
+          value: "/etc/executor/config.yaml"
+        - name: ECDSA_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "hourglass-executor.secretName" . }}
+              key: ecdsa-private-key
+        {{- if .Values.secrets.operatorKeys.blsPrivateKey }}
+        - name: BLS_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "hourglass-executor.secretName" . }}
+              key: bls-private-key
+        {{- end }}
+        - name: HEALTH_CHECK_PORT
+          value: {{ .Values.executor.env.healthCheckPort | quote }}
+        - name: METRICS_PORT
+          value: {{ .Values.executor.env.metricsPort | quote }}
+        {{- if .Values.development.enabled }}
+        - name: DEVELOPMENT_MODE
+          value: "true"
+        - name: MOCK_SERVICES
+          value: {{ .Values.development.mockServices | quote }}
+        {{- end }}
+        
+        ports:
+        - containerPort: {{ .Values.service.ports.metrics }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.service.ports.health }}
+          name: health
+          protocol: TCP
+        - containerPort: {{ .Values.service.ports.grpc }}
+          name: grpc
+          protocol: TCP
+        
+        {{- if .Values.healthChecks.enabled }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: {{ .Values.healthChecks.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.livenessProbe.failureThreshold }}
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: {{ .Values.healthChecks.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.readinessProbe.failureThreshold }}
+        
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: health
+          initialDelaySeconds: {{ .Values.healthChecks.startupProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthChecks.startupProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthChecks.startupProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthChecks.startupProbe.failureThreshold }}
+        {{- end }}
+        
+        resources:
+          {{- toYaml .Values.executor.resources | nindent 10 }}
+        
+        volumeMounts:
+        - name: config
+          mountPath: /etc/executor
+          readOnly: true
+        {{- if .Values.secrets.tls.enabled }}
+        - name: tls-certs
+          mountPath: /etc/tls
+          readOnly: true
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          mountPath: /data
+        {{- end }}
+        - name: tmp
+          mountPath: /tmp
+        
+        {{- with .Values.pod.containerSecurityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "hourglass-executor.configMapName" . }}
+      {{- if .Values.secrets.tls.enabled }}
+      - name: tls-certs
+        secret:
+          secretName: {{ include "hourglass-executor.tlsSecretName" . }}
+      {{- end }}
+      - name: tmp
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      {{- if .Values.secrets.imagePullSecrets.enabled }}
+      imagePullSecrets:
+      - name: {{ include "hourglass-executor.registrySecretName" . }}
+      {{- end }}
+      
+      terminationGracePeriodSeconds: 60
+      
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+  
+  {{- if .Values.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        {{- include "hourglass-executor.labels" . | nindent 8 }}
+    spec:
+      accessModes: [{{ .Values.persistence.accessMode | quote }}]
+      {{- if .Values.persistence.storageClass }}
+      storageClassName: {{ .Values.persistence.storageClass | quote }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistence.size | quote }}
+  {{- end }}
