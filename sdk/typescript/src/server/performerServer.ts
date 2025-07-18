@@ -23,6 +23,7 @@ import { TaskProcessor, TaskProcessorConfig } from './taskProcessor';
 import { HealthManager, HealthCheckConfig } from './healthManager';
 import { MetricsCollector, MetricsConfig } from '../utils/metrics';
 import { DiagnosticTool } from '../utils/diagnostics';
+import { resolveProtoPath } from '../utils/protoResolver';
 
 /**
  * PerformerServer class that implements the gRPC PerformerService
@@ -91,8 +92,9 @@ export class PerformerServer {
    * Set up the gRPC server with the PerformerService
    */
   private setupGrpcServer(): void {
-    // Load protobuf definition
-    const protoPath = path.join(__dirname, '../../proto/performer.proto');
+    // Load protobuf definition using the robust path resolver
+    const protoPath = resolveProtoPath('performer.proto');
+    
     const packageDefinition = protoLoader.loadSync(protoPath, {
       keepCase: true,
       longs: String,

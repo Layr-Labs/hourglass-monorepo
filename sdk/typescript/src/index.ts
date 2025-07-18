@@ -12,3 +12,4 @@ export * from './utils/structuredLogger';
 export * from './utils/metrics';
 export * from './utils/diagnostics';
 export * from './utils/abiUtils';
+export * from './utils/protoResolver';

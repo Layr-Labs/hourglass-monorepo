@@ -1,6 +1,6 @@
 {
-  "name": "@hourglass/performer",
-  "version": "0.1.0",
+  "name": "@layr-labs/hourglass-performer",
+  "version": "0.0.1-alpha.8",
   "description": "TypeScript SDK for building Hourglass AVS performers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -68,8 +68,10 @@
   },
   "files": [
     "dist/**/*",
-    "src/templates/**/*",
+    "proto/**/*",
+    "generated/**/*",
     "README.md",
+    "PACKAGE_USAGE.md",
     "LICENSE"
   ]
 }
