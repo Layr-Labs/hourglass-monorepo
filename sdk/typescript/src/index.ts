@@ -13,3 +13,4 @@ export * from './utils/metrics';
 export * from './utils/diagnostics';
 export * from './utils/abiUtils';
 export * from './utils/protoResolver';
+export * from './utils/envConfig';

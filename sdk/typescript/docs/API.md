@@ -362,7 +362,7 @@ function loadEnvironmentConfig(): EnvironmentConfig
 
 **Example:**
 ```typescript
-import { loadEnvironmentConfig } from '@hourglass/performer';
+import { loadEnvironmentConfig } from '@layr-labs/hourglass-performer';
 
 const config = loadEnvironmentConfig();
 console.log(`Server will run on port ${config.port}`);

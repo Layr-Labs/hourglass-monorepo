@@ -4,23 +4,7 @@ Build EigenLayer AVS performers in TypeScript with minimal setup and maximum typ
 
 ## 🚀 Quick Start
 
-### 1. Create a New Performer
-
-```bash
-# Create a new performer project
-npx @layr-labs/hourglass-performer my-avs
-
-# Navigate to the project
-cd my-avs
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-### 2. Basic Performer
+### 1. Basic Performer
 
 ```typescript
 // performer.ts
@@ -37,7 +21,7 @@ class MyBasicPerformer extends BaseWorker {
 new MyBasicPerformer().start();
 ```
 
-### 3. Solidity Contract Integration
+### 2. Solidity Contract Integration
 
 ```typescript
 // performer.ts
@@ -54,7 +38,7 @@ class MySolidityPerformer extends SolidityWorker<any, 'processTask'> {
 new MySolidityPerformer().start();
 ```
 
-### 4. Deploy with Docker
+### 3. Deploy with Docker
 
 ```bash
 # Build your performer
@@ -82,20 +66,6 @@ npm run docker:run
 - [Contributing](#contributing)
 
 ## 📦 Installation
-
-### Using the CLI (Recommended)
-
-```bash
-# Create a new project with interactive setup
-npx @layr-labs/hourglass-performer my-avs
-
-# Options:
-# - Basic performer (no contracts)
-# - Solidity performer (TypeChain integration)
-# - Advanced performer (monitoring + TypeChain)
-```
-
-### Manual Installation
 
 ```bash
 npm install @layr-labs/hourglass-performer

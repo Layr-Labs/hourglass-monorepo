@@ -21,7 +21,7 @@ Common issues and solutions for the Hourglass TypeScript Performer SDK.
 
 #### Problem
 ```bash
-npm install @hourglass/performer
+npm install @layr-labs/hourglass-performer
 # Error: Unable to resolve dependency tree
 ```
 
@@ -40,25 +40,7 @@ npm install
 yarn install
 ```
 
-### CLI Tool Not Found
 
-#### Problem
-```bash
-npx @hourglass/create-performer my-avs
-# Error: command not found
-```
-
-#### Solution
-```bash
-# Install globally first
-npm install -g @hourglass/performer
-
-# Or use full package name
-npx @hourglass/create-performer my-avs
-
-# Or specify exact version
-npx @hourglass/performer@latest my-avs
-```
 
 ### Permission Errors
 
@@ -74,10 +56,10 @@ npm config set prefix ~/.npm-global
 export PATH=~/.npm-global/bin:$PATH
 
 # Or use yarn
-yarn global add @hourglass/performer
+yarn global add @layr-labs/hourglass-performer
 
 # Or use sudo (not recommended)
-sudo npm install -g @hourglass/performer
+sudo npm install -g @layr-labs/hourglass-performer
 ```
 
 ## Build Issues
@@ -87,13 +69,13 @@ sudo npm install -g @hourglass/performer
 #### Problem
 ```bash
 npm run build
-# Error: Cannot find module '@hourglass/performer'
+# Error: Cannot find module '@layr-labs/hourglass-performer'
 ```
 
 #### Solution
 ```bash
 # Ensure the package is installed
-npm install @hourglass/performer
+npm install @layr-labs/hourglass-performer
 
 # Check tsconfig.json paths
 {
