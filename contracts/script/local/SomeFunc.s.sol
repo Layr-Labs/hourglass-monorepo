@@ -4,10 +4,7 @@ pragma solidity ^0.8.0;
 import "forge-std/Script.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
-import {
-    IKeyRegistrar,
-    IKeyRegistrarTypes
-} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
+import {IKeyRegistrar, IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 // Totally a scratch pad for validating ones sanity...
