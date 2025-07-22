@@ -6,9 +6,9 @@ import {ProxyAdmin} from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.s
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import {TaskMailbox} from "../../src/core/TaskMailbox.sol";
+import {TaskMailbox} from "@eigenlayer-contracts/src/contracts/avs/task/TaskMailbox.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
-import {ITaskMailboxTypes} from "../../src/interfaces/core/ITaskMailbox.sol";
+import {ITaskMailboxTypes} from "@eigenlayer-contracts/src/contracts/interfaces/ITaskMailbox.sol";
 
 contract DeployTaskMailbox is Script {
     function setUp() public {}

@@ -7,7 +7,7 @@ import "forge-std/Test.sol";
 import {
     IKeyRegistrar,
     IKeyRegistrarTypes
-} from "../../lib/eigenlayer-middleware/lib/eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
+} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 // Totally a scratch pad for validating ones sanity...

@@ -9,8 +9,8 @@ import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transp
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
-import {MockTaskAVSRegistrar} from "../../test/mocks/MockTaskAVSRegistrar.sol";
-import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
+import {MockTaskAVSRegistrar} from "@eigenlayer-middleware/test/mocks/MockTaskAVSRegistrar.sol";
+import {ITaskAVSRegistrarBaseTypes} from "@eigenlayer-middleware/src/interfaces/ITaskAVSRegistrarBase.sol";
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts

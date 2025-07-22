@@ -5,7 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
-import {MockAVSTaskHook} from "../../test/mocks/MockAVSTaskHook.sol";
+import {MockAVSTaskHook} from "@eigenlayer-contracts/src/test/mocks/MockAVSTaskHook.sol";
 
 contract DeployAVSL2Contracts is Script {
     function setUp() public {}
