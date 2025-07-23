@@ -214,7 +214,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
 	_ = currentBlock
-	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
+	// testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
 
 	time.Sleep(time.Second * 6)
 

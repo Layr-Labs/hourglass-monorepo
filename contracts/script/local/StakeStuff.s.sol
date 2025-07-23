@@ -31,7 +31,7 @@ interface IStETH {
 }
 
 contract StakeStuff is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a);
 
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
     IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);

@@ -11,7 +11,7 @@ import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN25
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a);
 
     function setUp() public {}
 
@@ -27,9 +27,9 @@ contract SetupAVSMultichain is Script {
 
         address[] memory tableUpdaters = new address[](2);
         // preprod holesky
-        tableUpdaters[0] = address(0xE12C4cebd680a917271145eDbFB091B1BdEFD74D);
+        tableUpdaters[0] = address(0xB02A15c6Bd0882b35e9936A9579f35FB26E11476);
         // base sepolia
-        tableUpdaters[1] = address(0xE12C4cebd680a917271145eDbFB091B1BdEFD74D);
+        tableUpdaters[1] = address(0xB02A15c6Bd0882b35e9936A9579f35FB26E11476);
 
         CROSS_CHAIN_REGISTRY.addChainIDsToWhitelist(chainIds, tableUpdaters);
 

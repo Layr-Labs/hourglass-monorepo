@@ -162,7 +162,7 @@ fmtcheck:
 anvil/start/l1:
 	anvil \
 		--fork-url https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/ \
-		--fork-block-number 8712202 \
+		--fork-block-number 8821720 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
 		--block-time 2
@@ -171,7 +171,7 @@ anvil/start/l1:
 anvil/start/l2:
 	anvil \
 		--fork-url https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/ \
-		--fork-block-number 28063258 \
+		--fork-block-number 28733490 \
 		--load-state ./internal/testData/anvil-l2-state.json \
 		--chain-id 31338 \
 		--port 9545 \

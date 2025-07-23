@@ -17,7 +17,7 @@ set -e
 L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
 
 anvilL1ChainId=31337
-anvilL1StartBlock=8712202
+anvilL1StartBlock=8821720
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -28,7 +28,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=28063258
+anvilL2StartBlock=28733490
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -143,8 +143,8 @@ export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 # Deploy mailbox contract
 # -----------------------------------------------------------------------------
 # Cert Verifier addresses are the same address across all chains
-bn254CertVerifierAddress="0x998535833f3feE44ce720440E735554699f728a5"
-ecdsaCertVerifierAddress="0xAD2F58A551bD0e77fa20b5531dA96eF440C392BF"
+bn254CertVerifierAddress="0xff58A373c18268F483C1F5cA03Cf885c0C43373a"
+ecdsaCertVerifierAddress="0xb3Cd1A457dEa9A9A6F6406c6419B1c326670A96F"
 echo "Deploying mailbox contract to L1..."
 forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $bn254CertVerifierAddress $ecdsaCertVerifierAddress
 mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
@@ -286,4 +286,5 @@ cat <<EOF > internal/testData/chain-config.json
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock
 }
+EOF
 
