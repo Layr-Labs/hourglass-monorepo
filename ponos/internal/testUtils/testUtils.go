@@ -152,7 +152,7 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "8821720"
+	forkBlockNumber := "8825090"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -182,7 +182,7 @@ func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "28733490"
+	forkBlockNumber := "28753690"
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
