@@ -45,6 +45,8 @@ IFS=$'\n'
 
 create_binding "IBN254TableCalculator"
 create_binding "IECDSATableCalculator"
+create_binding "ITaskAVSRegistrarBase"
+create_binding "TaskAVSRegistrarBase"
 
 # echo "Generating bindings for contracts..."
 # for contract_name in $contracts; do

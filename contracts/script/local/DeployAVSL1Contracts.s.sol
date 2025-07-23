@@ -9,13 +9,13 @@ import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transp
 import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 import {IKeyRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 
-import {MockTaskAVSRegistrar} from "../../test/mocks/MockTaskAVSRegistrar.sol";
-import {ITaskAVSRegistrarBaseTypes} from "../../src/interfaces/avs/l1/ITaskAVSRegistrarBase.sol";
+import {MockTaskAVSRegistrar} from "@eigenlayer-middleware/test/mocks/MockTaskAVSRegistrar.sol";
+import {ITaskAVSRegistrarBaseTypes} from "@eigenlayer-middleware/src/interfaces/ITaskAVSRegistrarBase.sol";
 
 contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
-    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0x78De554Ac8DfF368e3CAa73B3Df8AccCfD92928A);
+    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0xA4dB30D08d8bbcA00D40600bee9F029984dB162a);
 
     function setUp() public {}
 

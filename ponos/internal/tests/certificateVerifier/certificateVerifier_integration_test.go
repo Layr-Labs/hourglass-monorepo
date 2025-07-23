@@ -334,7 +334,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		taskId,
 		taskCreatedBlock,
 		1,
-		100,
+		10_000,
 		taskInputData,
 		&deadline,
 		operators,
@@ -448,7 +448,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	}
 	t.Logf("Final certificate: %+v", finalCert)
 
-	receipt, err := l1CC.VerifyECDSACertificate(
+	valid, signers, err := l1CC.VerifyECDSACertificate(
 		ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		taskResult.OperatorSetId,
@@ -457,7 +457,8 @@ func Test_CertificateVerifier(t *testing.T) {
 		10_000,
 	)
 	assert.Nil(t, err)
-	t.Logf("Certificate verification receipt: %+v", receipt)
+	assert.True(t, valid)
+	assert.NotEmpty(t, signers)
 
 	t.Cleanup(func() {
 		_ = testUtils.KillAnvil(l1Anvil)

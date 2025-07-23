@@ -231,9 +231,6 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	}, nil
 }
 
-// TODO(seanmcgary): since curves are oriented around the operator set ID. If we're dealing with an ECDSA key, we need
-// to call `calculateCertificateDigest(cert.referenceTimestamp, cert.messageHash)` to generate the digest
-
 // signResult signs the result of a task and returns the signature and the digest.
 func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, [32]byte, error) {
 	// Generate a keccak256 hash of the result so that our signature is fixed in size.

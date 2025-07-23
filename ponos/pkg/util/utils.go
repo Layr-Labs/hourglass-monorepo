@@ -3,6 +3,7 @@ package util
 import (
 	"crypto/ecdsa"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/ethereum/go-ethereum/common"
@@ -172,4 +173,21 @@ func DeriveAddressFromECDSAPrivateKey(pk *ecdsa.PrivateKey) (common.Address, err
 		return common.Address{0}, fmt.Errorf("private key is nil")
 	}
 	return cryptoUtils.DeriveAddress(pk.PublicKey), nil
+}
+
+func AbiEncodeUint16(value uint16) []byte {
+	// Create a 32-byte slice filled with zeros
+	result := make([]byte, 32)
+
+	// Put the uint16 value in the last 2 bytes (big-endian)
+	binary.BigEndian.PutUint16(result[30:32], value)
+
+	return result
+}
+
+func AbiDecodeUint16(encoded []byte) (uint16, error) {
+	if len(encoded) < 32 {
+		return 0, fmt.Errorf("encoded data is too short")
+	}
+	return binary.BigEndian.Uint16(encoded[30:32]), nil
 }

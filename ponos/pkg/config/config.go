@@ -53,6 +53,8 @@ const (
 	ChainId_EthereumMainnet  ChainId = 1
 	ChainId_EthereumHolesky  ChainId = 17000
 	ChainId_EthereumHoodi    ChainId = 560048
+	ChainId_EthereumSepolia  ChainId = 11155111
+	ChainId_BaseSepolia      ChainId = 84532
 	ChainId_EthereumAnvil    ChainId = 31337
 	ChainId_BaseSepoliaAnvil ChainId = 31338
 )
@@ -79,6 +81,7 @@ func IsL1Chain(chainId ChainId) bool {
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
 		ChainId_EthereumAnvil,
+		ChainId_EthereumSepolia,
 	}, chainId)
 }
 
@@ -93,6 +96,21 @@ type CoreContractAddresses struct {
 }
 
 var (
+	ethereumSepoliaCoreContracts = &CoreContractAddresses{
+		AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
+		DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+		TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+		KeyRegistrar:             "0xa4db30d08d8bbca00d40600bee9f029984db162a",
+		CrossChainRegistry:       "0x287381b1570d9048c4b4c7ec94d21ddb8aa1352a",
+		ECDSACertificateVerifier: "0xb3cd1a457dea9a9a6f6406c6419b1c326670a96f",
+		BN254CertificateVerifier: "0xff58a373c18268f483c1f5ca03cf885c0c43373a",
+	}
+	baseSepoliaCoreContracts = &CoreContractAddresses{
+		TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+		ECDSACertificateVerifier: "0xb3cd1a457dea9a9a6f6406c6419b1c326670a96f",
+		BN254CertificateVerifier: "0xff58a373c18268f483c1f5ca03cf885c0c43373a",
+	}
+
 	CoreContracts = map[ChainId]*CoreContractAddresses{
 		ChainId_EthereumMainnet: {
 			AllocationManager: "0x42583067658071247ec8CE0A516A58f682002d07",
@@ -109,21 +127,10 @@ var (
 			DelegationManager: "",
 			TaskMailbox:       "0xtaskMailbox",
 		},
-		// fork of ethereum sepolia
-		ChainId_EthereumAnvil: {
-			AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
-			DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
-			TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
-			KeyRegistrar:             "0x78de554ac8dff368e3caa73b3df8acccfd92928a",
-			CrossChainRegistry:       "0xe850d8a178777b483d37fd492a476e3e6004c816",
-			ECDSACertificateVerifier: "0xad2f58a551bd0e77fa20b5531da96ef440c392bf",
-			BN254CertificateVerifier: "0x998535833f3fee44ce720440e735554699f728a5",
-		},
-		ChainId_BaseSepoliaAnvil: {
-			TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
-			ECDSACertificateVerifier: "0xad2f58a551bd0e77fa20b5531da96ef440c392bf",
-			BN254CertificateVerifier: "0x998535833f3fee44ce720440e735554699f728a5",
-		},
+		ChainId_EthereumSepolia:  ethereumSepoliaCoreContracts,
+		ChainId_BaseSepolia:      baseSepoliaCoreContracts,
+		ChainId_EthereumAnvil:    ethereumSepoliaCoreContracts, // fork of ethereum sepolia
+		ChainId_BaseSepoliaAnvil: baseSepoliaCoreContracts,     // fork of base sepolia
 	}
 )
 

@@ -11,28 +11,21 @@ import {
 import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 import {IECDSATableCalculator} from "@eigenlayer-middleware/src/interfaces/IECDSATableCalculator.sol";
-import {BLSApkRegistry} from "../../lib/eigenlayer-middleware/src/BLSApkRegistry.sol";
+import {BLSApkRegistry} from "@eigenlayer-middleware/src/BLSApkRegistry.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0xe850D8A178777b483D37fD492a476e3E6004C816);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a);
     IBN254TableCalculator public BN254_TABLE_CALCULATOR =
-        IBN254TableCalculator(0xc2c0bc13571aC5115709C332dc7AE666606b08E8);
+        IBN254TableCalculator(0xa19E3B00cf4aC46B5e6dc0Bbb0Fb0c86D0D65603);
 
     IECDSATableCalculator public ECDSA_TABLE_CALCULATOR =
-        IECDSATableCalculator(0x5612Fd146C2d40f1269E0e73945A534ec706dCDc);
+        IECDSATableCalculator(0xaCB5DE6aa94a1908E6FA577C2ade65065333B450);
 
     function setUp() public {}
 
     function run() public {
         // Load the private key from the environment variable
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
-        uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
-        uint256 l2ChainId = uint32(vm.envUint("L2_CHAIN_ID"));
-
-        // Holesky is 17000, but when we run anvil it becomes 31337, so we need to whitelist 31337 as valid
-        uint256[] memory chainIds = new uint256[](2);
-        chainIds[0] = l1ChainId;
-        chainIds[1] = l2ChainId;
 
         vm.startBroadcast(avsPrivateKey);
         address avs = vm.addr(avsPrivateKey);
@@ -48,9 +41,9 @@ contract SetupAVSMultichain is Script {
 
             // aggregator is bn254, executor is ecdsa
             if (i == 0) {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config, chainIds);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config);
             } else {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config, chainIds);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config);
             }
 
             console.log("Generation reservation created for operator set", i);

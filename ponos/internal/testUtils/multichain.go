@@ -122,7 +122,7 @@ func DebugOpsetData(
 				t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
 			}
 
-			weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
+			weights, err := tableCalc.GetOperatorSetWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
 				Id:  opsetId,
 				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
 			})
@@ -154,7 +154,7 @@ func DebugOpsetData(
 				t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
 			}
 
-			weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IECDSATableCalculator.OperatorSet{
+			weights, err := tableCalc.GetOperatorSetWeights(&bind.CallOpts{}, IECDSATableCalculator.OperatorSet{
 				Id:  opsetId,
 				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
 			})
@@ -184,14 +184,5 @@ func DebugOpsetData(
 		} else {
 			t.Fatalf("Unsupported curve type: %s", curveType)
 		}
-
-		transportDest, err := ccr.GetTransportDestinations(&bind.CallOpts{}, ICrossChainRegistry.OperatorSet{
-			Id:  opsetId,
-			Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
-		})
-		if err != nil {
-			t.Fatalf("Failed to get transport destinations for operator set %d: %v", opsetId, err)
-		}
-		t.Logf("Transport destinations for operator set %s %d: %+v\n", chainConfig.AVSAccountAddress, opsetId, transportDest)
 	}
 }

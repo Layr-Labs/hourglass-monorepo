@@ -415,7 +415,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				task.TaskId,
 				task.BlockNumber,
 				task.OperatorSetId,
-				100,
+				6667,
 				task.Payload,
 				task.DeadlineUnixSeconds,
 				operators,

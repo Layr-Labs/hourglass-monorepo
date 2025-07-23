@@ -96,15 +96,15 @@ type aggregatedECDSAOperators struct {
 }
 
 type ECDSATaskResultAggregator struct {
-	mu                  sync.Mutex
-	TaskId              string
-	TaskCreatedBlock    uint64
-	OperatorSetId       uint32
-	ThresholdPercentage uint8
-	TaskData            []byte
-	TaskExpirationTime  *time.Time
-	Operators           []*Operator[common.Address]
-	ReceivedSignatures  map[string]*ReceivedECDSAResponseWithDigest // operator address -> signature
+	mu                 sync.Mutex
+	TaskId             string
+	TaskCreatedBlock   uint64
+	OperatorSetId      uint32
+	ThresholdBips      uint16
+	TaskData           []byte
+	TaskExpirationTime *time.Time
+	Operators          []*Operator[common.Address]
+	ReceivedSignatures map[string]*ReceivedECDSAResponseWithDigest // operator address -> signature
 
 	AggregatePublicKeys []common.Address
 
@@ -117,7 +117,7 @@ func NewECDSATaskResultAggregator(
 	taskId string,
 	taskCreatedBlock uint64,
 	operatorSetId uint32,
-	thresholdPercentage uint8,
+	thresholdBips uint16,
 	taskData []byte,
 	taskExpirationTime *time.Time,
 	operators []*Operator[common.Address],
@@ -128,7 +128,7 @@ func NewECDSATaskResultAggregator(
 	if len(operators) == 0 {
 		return nil, ErrNoOperatorAddresses
 	}
-	if thresholdPercentage == 0 || thresholdPercentage > 100 {
+	if thresholdBips == 0 || thresholdBips > 10_000 {
 		return nil, ErrInvalidThreshold
 	}
 
@@ -140,7 +140,7 @@ func NewECDSATaskResultAggregator(
 		TaskId:              taskId,
 		TaskCreatedBlock:    taskCreatedBlock,
 		OperatorSetId:       operatorSetId,
-		ThresholdPercentage: thresholdPercentage,
+		ThresholdBips:       thresholdBips,
 		TaskData:            taskData,
 		TaskExpirationTime:  taskExpirationTime,
 		Operators:           operators,
@@ -234,7 +234,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 
 func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 	// Check if threshold is met (by count)
-	required := int((float64(tra.ThresholdPercentage) / 100.0) * float64(len(tra.Operators)))
+	required := int((float64(tra.ThresholdBips) / 10_000.0) * float64(len(tra.Operators)))
 	if required == 0 {
 		required = 1 // Always require at least one
 	}

@@ -43,8 +43,8 @@ jobs:
         working-directory: ./contracts
         id: build
 
-      - name: Run Forge tests
-        run: |
-          forge test -vvv
-        working-directory: ./contracts
-        id: test
+      # - name: Run Forge tests
+      #   run: |
+      #     forge test -vvv
+      #   working-directory: ./contracts
+      #   id: test

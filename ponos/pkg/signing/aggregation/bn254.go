@@ -41,16 +41,16 @@ type AggregatedBN254Certificate struct {
 
 // BN254TaskResultAggregator represents the data needed to initialize a new aggregation task window.
 type BN254TaskResultAggregator struct {
-	mu                  sync.Mutex
-	TaskId              string
-	TaskCreatedBlock    uint64
-	OperatorSetId       uint32
-	ThresholdPercentage uint8
-	TaskData            []byte
-	TaskExpirationTime  *time.Time
-	Operators           []*Operator[signing.PublicKey]
-	ReceivedSignatures  map[string]*ReceivedBN254ResponseWithDigest // operator address -> signature
-	AggregatePublicKey  signing.PublicKey
+	mu                 sync.Mutex
+	TaskId             string
+	TaskCreatedBlock   uint64
+	OperatorSetId      uint32
+	ThresholdBips      uint16
+	TaskData           []byte
+	TaskExpirationTime *time.Time
+	Operators          []*Operator[signing.PublicKey]
+	ReceivedSignatures map[string]*ReceivedBN254ResponseWithDigest // operator address -> signature
+	AggregatePublicKey signing.PublicKey
 
 	aggregatedOperators *aggregatedBN254Operators
 	// Add more fields as needed for aggregation
@@ -63,7 +63,7 @@ func NewBN254TaskResultAggregator(
 	taskId string,
 	taskCreatedBlock uint64,
 	operatorSetId uint32,
-	thresholdPercentage uint8,
+	thresholdBips uint16,
 	taskData []byte,
 	taskExpirationTime *time.Time,
 	operators []*Operator[signing.PublicKey],
@@ -74,7 +74,7 @@ func NewBN254TaskResultAggregator(
 	if len(operators) == 0 {
 		return nil, ErrNoOperatorAddresses
 	}
-	if thresholdPercentage == 0 || thresholdPercentage > 100 {
+	if thresholdBips == 0 || thresholdBips > 10_000 {
 		return nil, ErrInvalidThreshold
 	}
 
@@ -86,14 +86,14 @@ func NewBN254TaskResultAggregator(
 	}
 
 	cert := &BN254TaskResultAggregator{
-		TaskId:              taskId,
-		TaskCreatedBlock:    taskCreatedBlock,
-		OperatorSetId:       operatorSetId,
-		ThresholdPercentage: thresholdPercentage,
-		TaskData:            taskData,
-		TaskExpirationTime:  taskExpirationTime,
-		Operators:           operators,
-		AggregatePublicKey:  aggPub,
+		TaskId:             taskId,
+		TaskCreatedBlock:   taskCreatedBlock,
+		OperatorSetId:      operatorSetId,
+		ThresholdBips:      thresholdBips,
+		TaskData:           taskData,
+		TaskExpirationTime: taskExpirationTime,
+		Operators:          operators,
+		AggregatePublicKey: aggPub,
 	}
 	return cert, nil
 }
@@ -130,7 +130,7 @@ type aggregatedBN254Operators struct {
 
 func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
 	// Check if threshold is met (by count)
-	required := int((float64(tra.ThresholdPercentage) / 100.0) * float64(len(tra.Operators)))
+	required := int((float64(tra.ThresholdBips) / 10_000.0) * float64(len(tra.Operators)))
 	if required == 0 {
 		required = 1 // Always require at least one
 	}
