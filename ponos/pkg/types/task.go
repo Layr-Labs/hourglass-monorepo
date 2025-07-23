@@ -37,7 +37,7 @@ type Task struct {
 	OperatorSetId       uint32         `json:"operatorSetId"`
 	CallbackAddr        string         `json:"callbackAddr"`
 	DeadlineUnixSeconds *time.Time     `json:"deadline"`
-	StakeRequired       float64        `json:"stakeRequired"`
+	ThresholdBips       uint16         `json:"stakeRequired"`
 	Payload             []byte         `json:"payload"`
 	ChainId             config.ChainId `json:"chainId"`
 	BlockNumber         uint64         `json:"blockNumber"`

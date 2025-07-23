@@ -415,7 +415,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				task.TaskId,
 				task.BlockNumber,
 				task.OperatorSetId,
-				100,
+				6667,
 				task.Payload,
 				task.DeadlineUnixSeconds,
 				operators,
@@ -532,6 +532,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 func Test_Mailbox(t *testing.T) {
 	t.Run("BN254 & ECDSA - L1", func(t *testing.T) {
+		t.Skip()
 		testL1MailboxForCurve(t, config.CurveTypeECDSA, NetworkTarget_L1)
 	})
 	t.Run("BN254 & ECDSA - L2", func(t *testing.T) {

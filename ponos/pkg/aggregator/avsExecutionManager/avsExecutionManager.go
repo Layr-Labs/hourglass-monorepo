@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
+	"math/big"
 	"strings"
 	"sync"
 )
@@ -30,6 +31,30 @@ type AvsExecutionManagerConfig struct {
 	AggregatorAddress        string
 	AggregatorUrl            string
 	L1ChainId                config.ChainId
+}
+
+type OperatorSet struct {
+	Avs common.Address
+	Id  uint32
+}
+
+type ConsensusType uint8
+
+const (
+	ConsensusTypeNone                     ConsensusType = 0
+	ConsensusTypeStakeProportionThreshold               = 1
+)
+
+type OperatorSetTaskConsensus struct {
+	ConsensusType ConsensusType
+	Threshold     uint16
+}
+
+type OperatorSetTaskConfig struct {
+	TaskSLA      *big.Int
+	CurveType    config.CurveType
+	TaskMetadata []byte
+	Consensus    OperatorSetTaskConsensus
 }
 
 type AvsExecutionManager struct {
@@ -48,6 +73,9 @@ type AvsExecutionManager struct {
 	taskQueue chan *types.Task
 
 	inflightTasks sync.Map
+
+	// operatorSetTaskConfigs is a map of OperatorSet to *OperatorSetTaskConfig
+	operatorSetTaskConfigs sync.Map
 }
 
 func NewAvsExecutionManager(
@@ -148,6 +176,64 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 	}
 }
 
+func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
+	ctx context.Context,
+	avsAddress string,
+	operatorSetId uint32,
+	taskChainId config.ChainId,
+) (*OperatorSetTaskConfig, error) {
+	opset := OperatorSet{
+		Avs: common.HexToAddress(avsAddress),
+		Id:  operatorSetId,
+	}
+	if val, ok := em.operatorSetTaskConfigs.Load(opset); ok {
+		if val != nil {
+			em.logger.Sugar().Infow("Found existing operator set task config in cache",
+				zap.String("avsAddress", avsAddress),
+				zap.Uint32("operatorSetId", operatorSetId),
+			)
+			return val.(*OperatorSetTaskConfig), nil
+		}
+	}
+
+	em.logger.Sugar().Infow("Fetching operator set task config from chain",
+		zap.String("avsAddress", avsAddress),
+		zap.Uint32("operatorSetId", operatorSetId),
+	)
+
+	cc, err := em.getContractCallerForChain(taskChainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract caller for chain %d: %w", taskChainId, err)
+	}
+
+	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(avsAddress), operatorSetId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set task config: %w", err)
+	}
+
+	curveType, err := opsetConfig.GetCurveType()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get curve type from operator set config: %w", err)
+	}
+
+	consensusValue, err := opsetConfig.GetConsensusValue()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consensus value from operator set config: %w", err)
+	}
+
+	taskConfig := &OperatorSetTaskConfig{
+		TaskSLA:      opsetConfig.TaskSLA,
+		CurveType:    curveType,
+		TaskMetadata: opsetConfig.TaskMetadata,
+		Consensus: OperatorSetTaskConsensus{
+			ConsensusType: ConsensusType(opsetConfig.Consensus.ConsensusType),
+			Threshold:     consensusValue,
+		},
+	}
+	em.operatorSetTaskConfigs.Store(opset, taskConfig)
+	return taskConfig, nil
+}
+
 // HandleLog processes logs from the chain poller
 func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	em.logger.Sugar().Infow("Received log from chain poller",
@@ -191,6 +277,17 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	}
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
+
+	taskConfig, err := em.getOrSetOperatorSetTaskConfig(ctx, task.AVSAddress, task.OperatorSetId, task.ChainId)
+	if err != nil {
+		em.logger.Sugar().Errorw("Failed to get or set operator set task config",
+			zap.String("taskId", task.TaskId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to get or set operator set task config: %w", err)
+	}
+
+	task.ThresholdBips = taskConfig.Consensus.Threshold
 
 	// TODO(seanmcgary): this should probably live in the taskSession package
 	// it also needs to be aware of the curve for the aggregator
@@ -487,6 +584,7 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 		)
 		return nil
 	}
+
 	em.taskQueue <- task
 	em.logger.Sugar().Infow("Added task to queue")
 	return nil

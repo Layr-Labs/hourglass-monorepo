@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
 	"math/big"
@@ -27,6 +28,27 @@ type OperatorTableData struct {
 type LatestReferenceTimeAndBlock struct {
 	LatestReferenceTimestamp   uint32
 	LatestReferenceBlockNumber uint32
+}
+
+type TaskMailboxExecutorOperatorSetConfig struct {
+	TaskHook     common.Address
+	TaskSLA      *big.Int
+	FeeToken     common.Address
+	CurveType    uint8
+	FeeCollector common.Address
+	Consensus    struct {
+		ConsensusType uint8
+		Value         []byte
+	}
+	TaskMetadata []byte
+}
+
+func (tm *TaskMailboxExecutorOperatorSetConfig) GetConsensusValue() (uint16, error) {
+	return util.AbiDecodeUint16(tm.Consensus.Value)
+}
+
+func (tm *TaskMailboxExecutorOperatorSetConfig) GetCurveType() (config.CurveType, error) {
+	return config.ConvertSolidityEnumToCurveType(tm.CurveType)
 }
 
 type IContractCaller interface {
@@ -81,6 +103,8 @@ type IContractCaller interface {
 	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
 
 	CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error)
+
+	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*TaskMailboxExecutorOperatorSetConfig, error)
 
 	// ------------------------------------------------------------------------
 	// Helper functions for test setup

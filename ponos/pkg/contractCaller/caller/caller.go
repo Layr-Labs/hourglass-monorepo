@@ -319,6 +319,26 @@ func (cc *ContractCaller) CalculateECDSACertificateDigest(ctx context.Context, r
 	return cc.ecdsaCertVerifier.CalculateCertificateDigest(&bind.CallOpts{}, referenceTimestamp, messageHash)
 }
 
+func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*contractCaller.TaskMailboxExecutorOperatorSetConfig, error) {
+	res, err := cc.taskMailbox.GetExecutorOperatorSetTaskConfig(&bind.CallOpts{}, ITaskMailbox.OperatorSet{
+		Avs: avsAddress,
+		Id:  opsetId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &contractCaller.TaskMailboxExecutorOperatorSetConfig{
+		TaskHook:     res.TaskHook,
+		TaskSLA:      res.TaskSLA,
+		FeeToken:     res.FeeToken,
+		CurveType:    res.CurveType,
+		FeeCollector: res.FeeCollector,
+		Consensus:    res.Consensus,
+		TaskMetadata: res.TaskMetadata,
+	}, nil
+}
+
 func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	avsAddress string,
 	operatorSetId uint32,

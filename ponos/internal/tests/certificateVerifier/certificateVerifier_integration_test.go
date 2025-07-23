@@ -334,7 +334,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		taskId,
 		taskCreatedBlock,
 		1,
-		100,
+		10_000,
 		taskInputData,
 		&deadline,
 		operators,

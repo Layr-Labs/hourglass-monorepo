@@ -184,3 +184,10 @@ func AbiEncodeUint16(value uint16) []byte {
 
 	return result
 }
+
+func AbiDecodeUint16(encoded []byte) (uint16, error) {
+	if len(encoded) < 32 {
+		return 0, fmt.Errorf("encoded data is too short")
+	}
+	return binary.BigEndian.Uint16(encoded[30:32]), nil
+}
