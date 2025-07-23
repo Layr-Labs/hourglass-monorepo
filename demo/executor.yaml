@@ -19,14 +19,4 @@ avsPerformers:
       tag: "latest"
     processType: "server"
     avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
-    workerCount: 1
-    signingCurve: "bn254"
     avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
-simulation:
-  simulatePeering:
-    enabled: true
-    aggregatorPeers:
-      - networkAddress: "localhost:9999"
-        operatorAddress: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
-        operatorSetId: 0
-        publicKey: "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169"

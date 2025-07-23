@@ -145,9 +145,7 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 		AvsAddress:           avsAddress,
 		ProcessType:          avsPerformer.AvsProcessTypeServer,
 		Image:                avsPerformer.PerformerImage{},
-		WorkerCount:          1,
 		PerformerNetworkName: e.config.PerformerNetworkName,
-		SigningCurve:         "bn254",
 	}
 
 	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(

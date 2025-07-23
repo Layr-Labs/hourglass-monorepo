@@ -27,8 +27,6 @@ func Test_AggregatorConfig(t *testing.T) {
 				assert.Equal(t, 1, len(c.Chains))
 				assert.Equal(t, 1, len(c.Avss))
 				assert.Equal(t, "0x1234avs", c.Avss[0].Address)
-				assert.Equal(t, "some private key", c.Avss[0].PrivateKey)
-				assert.Equal(t, 3000, c.Avss[0].ResponseTimeout)
 				assert.Equal(t, 1, len(c.Avss[0].ChainIds))
 			})
 			t.Run("Should fail to create a new aggregator config from an invalid json string", func(t *testing.T) {
@@ -59,8 +57,6 @@ func Test_AggregatorConfig(t *testing.T) {
 				assert.Equal(t, 1, len(c.Chains))
 				assert.Equal(t, 1, len(c.Avss))
 				assert.Equal(t, "0x1234avs", c.Avss[0].Address)
-				assert.Equal(t, "some private key", c.Avss[0].PrivateKey)
-				assert.Equal(t, 3000, c.Avss[0].ResponseTimeout)
 				assert.Equal(t, 1, len(c.Avss[0].ChainIds))
 			})
 			t.Run("Should fail to create a new aggregator config from an invalid yaml string", func(t *testing.T) {

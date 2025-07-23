@@ -176,9 +176,7 @@ func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig,
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-			WorkerCount:          avs.WorkerCount,
 			PerformerNetworkName: e.config.PerformerNetworkName,
-			SigningCurve:         avs.SigningCurve,
 		},
 		e.peeringFetcher,
 		e.l1ContractCaller,
@@ -206,8 +204,6 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:         avsAddress,
 			ProcessType:        avsPerformer.AvsProcessType(avs.ProcessType),
-			WorkerCount:        avs.WorkerCount,
-			SigningCurve:       avs.SigningCurve,
 			SkipConnectionTest: avs.SkipConnectionTest,
 		},
 		kubernetesConfig,

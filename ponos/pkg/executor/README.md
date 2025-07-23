@@ -87,8 +87,6 @@ avsPerformers:
     image:
       repository: "registry.io/avs/performer"
       tag: "v1.0.0"
-    workerCount: 1
-    signingCurve: "bn254"
     avsRegistrarAddress: "0xRegistrar123..."
     health:
       checkInterval: "30s"

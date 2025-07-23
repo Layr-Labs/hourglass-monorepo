@@ -61,8 +61,6 @@ func TestDeploymentMode(t *testing.T) {
 		config := &AvsPerformerConfig{
 			AvsAddress:          "0x123",
 			ProcessType:         "server",
-			WorkerCount:         1,
-			SigningCurve:        "bn254",
 			AVSRegistrarAddress: "0x456",
 			Image: &PerformerImage{
 				Repository: "test/image",
@@ -79,8 +77,6 @@ func TestDeploymentMode(t *testing.T) {
 		config := &AvsPerformerConfig{
 			AvsAddress:          "0x123",
 			ProcessType:         "server",
-			WorkerCount:         1,
-			SigningCurve:        "bn254",
 			AVSRegistrarAddress: "0x456",
 			DeploymentMode:      DeploymentModeKubernetes,
 			Image: &PerformerImage{
@@ -98,8 +94,6 @@ func TestDeploymentMode(t *testing.T) {
 		config := &AvsPerformerConfig{
 			AvsAddress:          "0x123",
 			ProcessType:         "server",
-			WorkerCount:         1,
-			SigningCurve:        "bn254",
 			AVSRegistrarAddress: "0x456",
 			DeploymentMode:      "invalid",
 			Image: &PerformerImage{
@@ -190,8 +184,6 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeKubernetes,
 					Image: &PerformerImage{
@@ -229,8 +221,6 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeKubernetes,
 					Image: &PerformerImage{
@@ -268,8 +258,6 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeDocker,
 					Image: &PerformerImage{
@@ -280,8 +268,6 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 				{
 					AvsAddress:          "0xabc",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0xdef",
 					DeploymentMode:      DeploymentModeKubernetes,
 					Image: &PerformerImage{
@@ -321,8 +307,6 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   deploymentMode: "kubernetes"
-  signingCurve: "bn254"
-  workerCount: 1
   avsRegistrarAddress: "0x789"
 l1Chain:
   rpcUrl: "http://localhost:8545"
@@ -367,8 +351,6 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   deploymentMode: "docker"
-  signingCurve: "bn254"
-  workerCount: 1
   avsRegistrarAddress: "0x789"
 l1Chain:
   rpcUrl: "http://localhost:8545"
@@ -502,8 +484,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeDocker, // Docker mode
 					Image: &PerformerImage{
@@ -514,8 +494,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0xabc",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0xdef",
 					DeploymentMode:      DeploymentModeKubernetes, // Kubernetes mode
 					Image: &PerformerImage{
@@ -553,8 +531,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeDocker,
 					Image: &PerformerImage{
@@ -565,8 +541,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0xabc",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0xdef",
 					DeploymentMode:      DeploymentModeDocker,
 					Image: &PerformerImage{
@@ -603,8 +577,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0x456",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0x789",
 					DeploymentMode:      DeploymentModeKubernetes,
 					Image: &PerformerImage{
@@ -615,8 +587,6 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 				{
 					AvsAddress:          "0xabc",
 					ProcessType:         "server",
-					WorkerCount:         1,
-					SigningCurve:        "bn254",
 					AVSRegistrarAddress: "0xdef",
 					DeploymentMode:      DeploymentModeKubernetes,
 					Image: &PerformerImage{

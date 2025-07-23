@@ -106,7 +106,6 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 	config := &avsPerformer.AvsPerformerConfig{
 		AvsAddress:                     "0x123",
 		ProcessType:                    avsPerformer.AvsProcessTypeServer,
-		WorkerCount:                    1,
 		ApplicationHealthCheckInterval: 5 * time.Second,
 	}
 
