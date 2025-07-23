@@ -42,7 +42,7 @@ type ConsensusType uint8
 
 const (
 	ConsensusTypeNone                     ConsensusType = 0
-	ConsensusTypeStakeProportionThreshold               = 1
+	ConsensusTypeStakeProportionThreshold ConsensusType = 1
 )
 
 type OperatorSetTaskConsensus struct {
