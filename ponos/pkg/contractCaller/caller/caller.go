@@ -11,12 +11,12 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableCalculator"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskAVSRegistrarBase"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/ITaskMailbox"
-	"github.com/Layr-Labs/hourglass-monorepo/contracts/pkg/bindings/TaskAVSRegistrarBase"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ITaskMailbox"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/TaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
@@ -470,7 +470,6 @@ func (cc *ContractCaller) PublishMessageToInbox(ctx context.Context, avsAddress 
 
 	tx, err := cc.taskMailbox.CreateTask(noSendTxOpts, ITaskMailbox.ITaskMailboxTypesTaskParams{
 		RefundCollector: address,
-		AvsFee:          new(big.Int).SetUint64(0),
 		ExecutorOperatorSet: ITaskMailbox.OperatorSet{
 			Avs: common.HexToAddress(avsAddress),
 			Id:  operatorSetId,
@@ -827,7 +826,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		zap.String("avsAddress", avsAddress.String()),
 		zap.Uint32("operatorSetId", operatorSetId),
 	)
-	operatorWeights, err := opTableCalculator.GetOperatorWeights(&bind.CallOpts{
+	operatorWeights, err := opTableCalculator.GetOperatorSetWeights(&bind.CallOpts{
 		Context:     ctx,
 		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	}, IOperatorTableCalculator.OperatorSet(operatorSet))
@@ -918,9 +917,12 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 			TaskHook: taskHookAddress,
 			//FeeToken:                 common.HexToAddress("0x"),
 			//FeeCollector:             common.HexToAddress("0x"),
-			TaskSLA:                  big.NewInt(60),
-			StakeProportionThreshold: 10_000,
-			TaskMetadata:             nil,
+			TaskSLA: big.NewInt(60),
+			Consensus: ITaskMailbox.ITaskMailboxTypesConsensus{
+				ConsensusType: 1,
+				Value:         util.AbiEncodeUint16(6667), // 66.67% consensus threshold
+			},
+			TaskMetadata: nil,
 		}
 
 		solidityCurveType, err := curveTypeStr.Uint8()
@@ -1046,21 +1048,16 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 	aggCert *aggregation.AggregatedECDSACertificate,
 	globalTableRootReferenceTimestamp uint32,
 	threshold uint16,
-) (*types.Receipt, error) {
-	txOpts, err := cc.buildTransactionOpts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build transaction options: %w", err)
-	}
-
+) (bool, []common.Address, error) {
 	if len(aggCert.TaskId) != 32 {
-		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+		return false, nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
 	}
 	var taskId [32]byte
 	copy(taskId[:], aggCert.TaskId)
 
 	finalSig, err := aggCert.GetFinalSignature()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get final signature: %w", err)
+		return false, nil, fmt.Errorf("failed to get final signature: %w", err)
 	}
 
 	cc.logger.Sugar().Infow("verifying ECDSA certificate",
@@ -1076,8 +1073,8 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 		Sig:                finalSig,
 	}
 
-	tx, err := cc.ecdsaCertVerifier.VerifyCertificateProportion(
-		txOpts,
+	return cc.ecdsaCertVerifier.VerifyCertificateProportion(
+		&bind.CallOpts{},
 		IECDSACertificateVerifier.OperatorSet{
 			Avs: avsAddress,
 			Id:  operatorSetId,
@@ -1085,8 +1082,4 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 		cert,
 		[]uint16{threshold},
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transaction: %w", err)
-	}
-	return cc.signAndSendTransaction(ctx, tx, "VerifyECDSACertificate")
 }

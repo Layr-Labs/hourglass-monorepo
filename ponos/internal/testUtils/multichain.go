@@ -122,7 +122,7 @@ func DebugOpsetData(
 				t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
 			}
 
-			weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
+			weights, err := tableCalc.GetOperatorSetWeights(&bind.CallOpts{}, IBN254TableCalculator.OperatorSet{
 				Id:  opsetId,
 				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
 			})
@@ -154,7 +154,7 @@ func DebugOpsetData(
 				t.Fatalf("Failed to create operator table calculator for operator set %d: %v", opsetId, err)
 			}
 
-			weights, err := tableCalc.GetOperatorWeights(&bind.CallOpts{}, IECDSATableCalculator.OperatorSet{
+			weights, err := tableCalc.GetOperatorSetWeights(&bind.CallOpts{}, IECDSATableCalculator.OperatorSet{
 				Id:  opsetId,
 				Avs: common.HexToAddress(chainConfig.AVSAccountAddress),
 			})

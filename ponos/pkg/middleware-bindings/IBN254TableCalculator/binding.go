@@ -57,7 +57,7 @@ type OperatorSet struct {
 
 // IBN254TableCalculatorMetaData contains all meta data concerning the IBN254TableCalculator contract.
 var IBN254TableCalculatorMetaData = &bind.MetaData{
-	ABI: "[{\"type\":\"function\",\"name\":\"calculateOperatorTable\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorSetInfo\",\"type\":\"tuple\",\"internalType\":\"structIOperatorTableCalculatorTypes.BN254OperatorSetInfo\",\"components\":[{\"name\":\"operatorInfoTreeRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"numOperators\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"aggregatePubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"totalWeights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"calculateOperatorTableBytes\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorTableBytes\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorInfos\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorInfos\",\"type\":\"tuple[]\",\"internalType\":\"structIOperatorTableCalculatorTypes.BN254OperatorInfo[]\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorWeight\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"weight\",\"type\":\"uint256\",\"internalType\":\"uint256\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorWeights\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operators\",\"type\":\"address[]\",\"internalType\":\"address[]\"},{\"name\":\"weights\",\"type\":\"uint256[][]\",\"internalType\":\"uint256[][]\"}],\"stateMutability\":\"view\"}]",
+	ABI: "[{\"type\":\"function\",\"name\":\"calculateOperatorTable\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorSetInfo\",\"type\":\"tuple\",\"internalType\":\"structIOperatorTableCalculatorTypes.BN254OperatorSetInfo\",\"components\":[{\"name\":\"operatorInfoTreeRoot\",\"type\":\"bytes32\",\"internalType\":\"bytes32\"},{\"name\":\"numOperators\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"aggregatePubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"totalWeights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"calculateOperatorTableBytes\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorTableBytes\",\"type\":\"bytes\",\"internalType\":\"bytes\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorInfos\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operatorInfos\",\"type\":\"tuple[]\",\"internalType\":\"structIOperatorTableCalculatorTypes.BN254OperatorInfo[]\",\"components\":[{\"name\":\"pubkey\",\"type\":\"tuple\",\"internalType\":\"structBN254.G1Point\",\"components\":[{\"name\":\"X\",\"type\":\"uint256\",\"internalType\":\"uint256\"},{\"name\":\"Y\",\"type\":\"uint256\",\"internalType\":\"uint256\"}]},{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}]}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorSetWeights\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]}],\"outputs\":[{\"name\":\"operators\",\"type\":\"address[]\",\"internalType\":\"address[]\"},{\"name\":\"weights\",\"type\":\"uint256[][]\",\"internalType\":\"uint256[][]\"}],\"stateMutability\":\"view\"},{\"type\":\"function\",\"name\":\"getOperatorWeights\",\"inputs\":[{\"name\":\"operatorSet\",\"type\":\"tuple\",\"internalType\":\"structOperatorSet\",\"components\":[{\"name\":\"avs\",\"type\":\"address\",\"internalType\":\"address\"},{\"name\":\"id\",\"type\":\"uint32\",\"internalType\":\"uint32\"}]},{\"name\":\"operator\",\"type\":\"address\",\"internalType\":\"address\"}],\"outputs\":[{\"name\":\"weights\",\"type\":\"uint256[]\",\"internalType\":\"uint256[]\"}],\"stateMutability\":\"view\"}]",
 }
 
 // IBN254TableCalculatorABI is the input ABI used to generate the binding from.
@@ -299,46 +299,15 @@ func (_IBN254TableCalculator *IBN254TableCalculatorCallerSession) GetOperatorInf
 	return _IBN254TableCalculator.Contract.GetOperatorInfos(&_IBN254TableCalculator.CallOpts, operatorSet)
 }
 
-// GetOperatorWeight is a free data retrieval call binding the contract method 0x1088794a.
+// GetOperatorSetWeights is a free data retrieval call binding the contract method 0xbff2de25.
 //
-// Solidity: function getOperatorWeight((address,uint32) operatorSet, address operator) view returns(uint256 weight)
-func (_IBN254TableCalculator *IBN254TableCalculatorCaller) GetOperatorWeight(opts *bind.CallOpts, operatorSet OperatorSet, operator common.Address) (*big.Int, error) {
-	var out []interface{}
-	err := _IBN254TableCalculator.contract.Call(opts, &out, "getOperatorWeight", operatorSet, operator)
-
-	if err != nil {
-		return *new(*big.Int), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-
-	return out0, err
-
-}
-
-// GetOperatorWeight is a free data retrieval call binding the contract method 0x1088794a.
-//
-// Solidity: function getOperatorWeight((address,uint32) operatorSet, address operator) view returns(uint256 weight)
-func (_IBN254TableCalculator *IBN254TableCalculatorSession) GetOperatorWeight(operatorSet OperatorSet, operator common.Address) (*big.Int, error) {
-	return _IBN254TableCalculator.Contract.GetOperatorWeight(&_IBN254TableCalculator.CallOpts, operatorSet, operator)
-}
-
-// GetOperatorWeight is a free data retrieval call binding the contract method 0x1088794a.
-//
-// Solidity: function getOperatorWeight((address,uint32) operatorSet, address operator) view returns(uint256 weight)
-func (_IBN254TableCalculator *IBN254TableCalculatorCallerSession) GetOperatorWeight(operatorSet OperatorSet, operator common.Address) (*big.Int, error) {
-	return _IBN254TableCalculator.Contract.GetOperatorWeight(&_IBN254TableCalculator.CallOpts, operatorSet, operator)
-}
-
-// GetOperatorWeights is a free data retrieval call binding the contract method 0x71ca71d9.
-//
-// Solidity: function getOperatorWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
-func (_IBN254TableCalculator *IBN254TableCalculatorCaller) GetOperatorWeights(opts *bind.CallOpts, operatorSet OperatorSet) (struct {
+// Solidity: function getOperatorSetWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorCaller) GetOperatorSetWeights(opts *bind.CallOpts, operatorSet OperatorSet) (struct {
 	Operators []common.Address
 	Weights   [][]*big.Int
 }, error) {
 	var out []interface{}
-	err := _IBN254TableCalculator.contract.Call(opts, &out, "getOperatorWeights", operatorSet)
+	err := _IBN254TableCalculator.contract.Call(opts, &out, "getOperatorSetWeights", operatorSet)
 
 	outstruct := new(struct {
 		Operators []common.Address
@@ -355,22 +324,53 @@ func (_IBN254TableCalculator *IBN254TableCalculatorCaller) GetOperatorWeights(op
 
 }
 
-// GetOperatorWeights is a free data retrieval call binding the contract method 0x71ca71d9.
+// GetOperatorSetWeights is a free data retrieval call binding the contract method 0xbff2de25.
 //
-// Solidity: function getOperatorWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
-func (_IBN254TableCalculator *IBN254TableCalculatorSession) GetOperatorWeights(operatorSet OperatorSet) (struct {
+// Solidity: function getOperatorSetWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorSession) GetOperatorSetWeights(operatorSet OperatorSet) (struct {
 	Operators []common.Address
 	Weights   [][]*big.Int
 }, error) {
-	return _IBN254TableCalculator.Contract.GetOperatorWeights(&_IBN254TableCalculator.CallOpts, operatorSet)
+	return _IBN254TableCalculator.Contract.GetOperatorSetWeights(&_IBN254TableCalculator.CallOpts, operatorSet)
 }
 
-// GetOperatorWeights is a free data retrieval call binding the contract method 0x71ca71d9.
+// GetOperatorSetWeights is a free data retrieval call binding the contract method 0xbff2de25.
 //
-// Solidity: function getOperatorWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
-func (_IBN254TableCalculator *IBN254TableCalculatorCallerSession) GetOperatorWeights(operatorSet OperatorSet) (struct {
+// Solidity: function getOperatorSetWeights((address,uint32) operatorSet) view returns(address[] operators, uint256[][] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorCallerSession) GetOperatorSetWeights(operatorSet OperatorSet) (struct {
 	Operators []common.Address
 	Weights   [][]*big.Int
 }, error) {
-	return _IBN254TableCalculator.Contract.GetOperatorWeights(&_IBN254TableCalculator.CallOpts, operatorSet)
+	return _IBN254TableCalculator.Contract.GetOperatorSetWeights(&_IBN254TableCalculator.CallOpts, operatorSet)
+}
+
+// GetOperatorWeights is a free data retrieval call binding the contract method 0xbdf3ad27.
+//
+// Solidity: function getOperatorWeights((address,uint32) operatorSet, address operator) view returns(uint256[] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorCaller) GetOperatorWeights(opts *bind.CallOpts, operatorSet OperatorSet, operator common.Address) ([]*big.Int, error) {
+	var out []interface{}
+	err := _IBN254TableCalculator.contract.Call(opts, &out, "getOperatorWeights", operatorSet, operator)
+
+	if err != nil {
+		return *new([]*big.Int), err
+	}
+
+	out0 := *abi.ConvertType(out[0], new([]*big.Int)).(*[]*big.Int)
+
+	return out0, err
+
+}
+
+// GetOperatorWeights is a free data retrieval call binding the contract method 0xbdf3ad27.
+//
+// Solidity: function getOperatorWeights((address,uint32) operatorSet, address operator) view returns(uint256[] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorSession) GetOperatorWeights(operatorSet OperatorSet, operator common.Address) ([]*big.Int, error) {
+	return _IBN254TableCalculator.Contract.GetOperatorWeights(&_IBN254TableCalculator.CallOpts, operatorSet, operator)
+}
+
+// GetOperatorWeights is a free data retrieval call binding the contract method 0xbdf3ad27.
+//
+// Solidity: function getOperatorWeights((address,uint32) operatorSet, address operator) view returns(uint256[] weights)
+func (_IBN254TableCalculator *IBN254TableCalculatorCallerSession) GetOperatorWeights(operatorSet OperatorSet, operator common.Address) ([]*big.Int, error) {
+	return _IBN254TableCalculator.Contract.GetOperatorWeights(&_IBN254TableCalculator.CallOpts, operatorSet, operator)
 }
