@@ -252,6 +252,7 @@ func testWithKeyType(
 		AvsAddress:        simAggConfig.Avss[0].Address,
 		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
+		OperatorSetId:     1,
 	})
 	if err != nil {
 		cancel()
