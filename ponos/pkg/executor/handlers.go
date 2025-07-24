@@ -250,7 +250,7 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 	var signerToUse signer.ISigner
 	if curveType == config.CurveTypeBN254 {
 		if e.bn254Signer == nil {
-			return nil, signedOverBytes, fmt.Errorf("BLS signer is not initialized")
+			return nil, signedOverBytes, fmt.Errorf("BN254 signer is not initialized")
 		}
 		signerToUse = e.bn254Signer
 
