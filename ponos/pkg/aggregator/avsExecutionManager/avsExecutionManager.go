@@ -15,7 +15,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
@@ -56,6 +55,12 @@ type OperatorSetTaskConfig struct {
 	Consensus    OperatorSetTaskConsensus
 }
 
+type AvsConfig struct {
+	contractCaller.AVSConfig
+
+	curveType config.CurveType
+}
+
 type AvsExecutionManager struct {
 	logger *zap.Logger
 	config *AvsExecutionManagerConfig
@@ -63,7 +68,7 @@ type AvsExecutionManager struct {
 	// will be a proper type when another PR is merged
 	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
 
-	signer signer.ISigner
+	signers signer.Signers
 
 	operatorManager *operatorManager.OperatorManager
 
@@ -75,12 +80,16 @@ type AvsExecutionManager struct {
 
 	// operatorSetTaskConfigs is a map of OperatorSet to *OperatorSetTaskConfig
 	operatorSetTaskConfigs sync.Map
+
+	avsConfigMutex sync.Mutex
+
+	avsConfig *AvsConfig
 }
 
 func NewAvsExecutionManager(
 	config *AvsExecutionManagerConfig,
 	chainContractCallers map[config.ChainId]contractCaller.IContractCaller,
-	signer signer.ISigner,
+	signers signer.Signers,
 	cs contractStore.IContractStore,
 	om *operatorManager.OperatorManager,
 	logger *zap.Logger,
@@ -106,7 +115,7 @@ func NewAvsExecutionManager(
 		config:               config,
 		logger:               logger,
 		chainContractCallers: chainContractCallers,
-		signer:               signer,
+		signers:              signers,
 		contractStore:        cs,
 		operatorManager:      om,
 		inflightTasks:        sync.Map{},
@@ -146,6 +155,11 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
 		zap.String("avsAddress", em.config.AvsAddress),
 	)
+	// initialize the task config for the first time
+	_, err := em.getOrSetAggregatorTaskConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get or set aggregator task config: %w", err)
+	}
 	return nil
 }
 
@@ -267,6 +281,37 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	return nil
 }
 
+func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context) (*AvsConfig, error) {
+	em.avsConfigMutex.Lock()
+	defer em.avsConfigMutex.Unlock()
+
+	if em.avsConfig != nil {
+		return em.avsConfig, nil
+	}
+
+	cc, ok := em.chainContractCallers[em.config.L1ChainId]
+	if !ok {
+		return nil, fmt.Errorf("no contract caller found for L1ChainId: %d", em.config.L1ChainId)
+	}
+	avsConfig, err := cc.GetAVSConfig(em.config.AvsAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AVS config: %w", err)
+	}
+
+	curveType, err := cc.GetOperatorSetCurveType(em.config.AvsAddress, avsConfig.AggregatorOperatorSetId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get curve type for operator set: %w", err)
+	}
+	em.avsConfig = &AvsConfig{
+		AVSConfig: contractCaller.AVSConfig{
+			AggregatorOperatorSetId: avsConfig.AggregatorOperatorSetId,
+			ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
+		},
+		curveType: curveType,
+	}
+	return em.avsConfig, nil
+}
+
 func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task) error {
 	em.logger.Sugar().Infow("Handling task",
 		zap.String("taskId", task.TaskId),
@@ -277,7 +322,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
-	taskConfig, err := em.getOrSetOperatorSetTaskConfig(ctx, task.AVSAddress, task.OperatorSetId, task.ChainId)
+	executorTaskConfig, err := em.getOrSetOperatorSetTaskConfig(ctx, task.AVSAddress, task.OperatorSetId, task.ChainId)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set operator set task config",
 			zap.String("taskId", task.TaskId),
@@ -286,14 +331,32 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get or set operator set task config: %w", err)
 	}
 
-	task.ThresholdBips = taskConfig.Consensus.Threshold
+	task.ThresholdBips = executorTaskConfig.Consensus.Threshold
 
-	// TODO(seanmcgary): this should probably live in the taskSession package
-	// it also needs to be aware of the curve for the aggregator
+	avsConfig, err := em.getOrSetAggregatorTaskConfig(ctx)
+	if err != nil {
+		em.logger.Sugar().Errorw("Failed to get or set aggregator task config",
+			zap.String("taskId", task.TaskId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to get or set aggregator task config: %w", err)
+	}
 
-	// hash the payload and sign it
-	payloadHash := util.GetKeccak256Digest(task.Payload)
-	sig, err := em.signer.SignMessage(payloadHash[:])
+	var signerToUse signer.ISigner
+	switch avsConfig.curveType {
+	case config.CurveTypeBN254:
+		signerToUse = em.signers.BLSSigner
+	case config.CurveTypeECDSA:
+		signerToUse = em.signers.ECDSASigner
+	default:
+		em.logger.Sugar().Errorw("Unsupported curve type for task",
+			zap.String("taskId", task.TaskId),
+			zap.String("curveType", avsConfig.curveType.String()),
+		)
+		return fmt.Errorf("unsupported curve type: %s", avsConfig.curveType)
+	}
+
+	sig, err := signerToUse.SignMessage(task.Payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}

@@ -218,10 +218,39 @@ type RemoteSignerConfig struct {
 	PublicKey   string `json:"publicKey" yaml:"publicKey"`
 }
 
+func (rsc *RemoteSignerConfig) Validate() error {
+	var allErrors field.ErrorList
+	if rsc.FromAddress == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("fromAddress"), "fromAddress is required"))
+	}
+	if rsc.PublicKey == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("publicKey"), "publicKey is required"))
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
+}
+
 type ECDSAKeyConfig struct {
 	UseRemoteSigner    bool                `json:"remoteSigner" yaml:"remoteSigner"`
 	RemoteSignerConfig *RemoteSignerConfig `json:"remoteSignerConfig" yaml:"remoteSignerConfig"`
 	PrivateKey         string              `json:"privateKey" yaml:"privateKey"`
+}
+
+func (ekc *ECDSAKeyConfig) Validate() error {
+	var allErrors field.ErrorList
+	if ekc.UseRemoteSigner {
+		if ekc.RemoteSignerConfig == nil {
+			allErrors = append(allErrors, field.Required(field.NewPath("remoteSignerConfig"), "remoteSignerConfig is required when UseRemoteSigner is true"))
+		} else if err := ekc.RemoteSignerConfig.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("remoteSignerConfig"), ekc.RemoteSignerConfig, err.Error()))
+		}
+	}
+	if len(allErrors) > 0 {
+		return allErrors.ToAggregate()
+	}
+	return nil
 }
 
 type SigningKeys struct {
@@ -231,11 +260,18 @@ type SigningKeys struct {
 
 func (sk *SigningKeys) Validate() error {
 	var allErrors field.ErrorList
-	if sk.BLS == nil {
-		allErrors = append(allErrors, field.Required(field.NewPath("bls"), "bls is required"))
+	if sk.BLS == nil && sk.ECDSA == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("bls"), "at least one signing key (BLS or ECDSA) is required"))
 	}
-	if err := sk.BLS.Validate(); err != nil {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("bls"), sk.BLS, err.Error()))
+	if sk.BLS != nil {
+		if err := sk.BLS.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("bls"), sk.BLS, err.Error()))
+		}
+	}
+	if sk.ECDSA != nil {
+		if err := sk.ECDSA.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("ecdsa"), sk.ECDSA, err.Error()))
+		}
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()

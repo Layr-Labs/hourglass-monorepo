@@ -9,6 +9,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -135,7 +136,7 @@ func testWithKeyType(
 
 	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create L1 private key signer: %v", err)
+		t.Fatalf("Failed to create L1 private key ecdsaSigner: %v", err)
 	}
 
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
@@ -206,7 +207,10 @@ func testWithKeyType(
 
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 
-	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, pdf, l1CC)
+	signers := signer.Signers{
+		ECDSASigner: execSigner,
+	}
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
@@ -234,9 +238,7 @@ func testWithKeyType(
 	time.Sleep(5 * time.Second)
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	payloadHash := util.GetKeccak256Digest(payloadJsonBytes)
-
-	payloadSig, err := aggSigner.SignMessage(payloadHash[:])
+	payloadSig, err := aggSigner.SignMessage(payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to sign task payload: %v", err)
 	}
@@ -250,6 +252,7 @@ func testWithKeyType(
 		AvsAddress:        simAggConfig.Avss[0].Address,
 		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
+		OperatorSetId:     1,
 	})
 	if err != nil {
 		cancel()

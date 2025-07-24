@@ -48,6 +48,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"io"
 	"net/http"
 	"strings"
@@ -131,6 +132,21 @@ func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Con
 	}
 
 	return config
+}
+
+func NewWeb3SignerClientFromRemoteSignerConfig(cfg *config.RemoteSignerConfig, l *zap.Logger) (*Client, error) {
+	var web3SignerConfig *Config
+	if cfg != nil {
+		web3SignerConfig = NewConfigWithTLS(
+			cfg.Url,
+			cfg.CACert,
+			cfg.Cert,
+			cfg.Key,
+		)
+	} else {
+		web3SignerConfig = DefaultConfig()
+	}
+	return NewClient(web3SignerConfig, l)
 }
 
 // NewClient creates a new Web3Signer client with the given configuration and logger.

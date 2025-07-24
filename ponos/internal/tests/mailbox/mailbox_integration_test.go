@@ -434,7 +434,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			taskOutputHash := util.GetKeccak256Digest(outputResult)
 
 			// for ecdsa only
-			ecdsaDigest, err := avsCc.CalculateECDSACertificateDigest(
+			ecdsaDigestBytes, err := avsCc.CalculateECDSACertificateDigestBytes(
 				ctx,
 				operatorPeersWeight.RootReferenceTimestamp,
 				taskOutputHash,
@@ -445,6 +445,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				cancel()
 				return
 			}
+			ecdsaDigest := util.GetKeccak256Digest(ecdsaDigestBytes)
 
 			taskResult := &types.TaskResult{
 				TaskId:          task.TaskId,
@@ -456,13 +457,14 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				OutputDigest:    nil,
 			}
 			signer := inMemorySigner.NewInMemorySigner(execKeysECDSA.PrivateKey, config.CurveTypeECDSA)
-			sig, err := signer.SignMessageForSolidity(ecdsaDigest)
+			sig, err := signer.SignMessageForSolidity(ecdsaDigestBytes)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to sign message: %v", err)
 				cancel()
 				return
 			}
+
 			taskResult.Signature = sig
 			taskResult.OutputDigest = ecdsaDigest[:]
 

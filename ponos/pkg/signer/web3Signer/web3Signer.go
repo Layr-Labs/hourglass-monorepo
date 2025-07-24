@@ -106,7 +106,7 @@ func (w3s *Web3Signer) SignMessage(data []byte) ([]byte, error) {
 // SignMessageForSolidity signs data in a format compatible with Solidity verification.
 // For ECDSA, this uses the same signing method as SignMessage since Web3Signer
 // produces Ethereum-standard ECDSA signatures that are Solidity-compatible.
-func (w3s *Web3Signer) SignMessageForSolidity(data [32]byte) ([]byte, error) {
+func (w3s *Web3Signer) SignMessageForSolidity(data []byte) ([]byte, error) {
 	if w3s.curveType != config.CurveTypeECDSA {
 		return nil, fmt.Errorf("web3signer only supports ECDSA curve type")
 	}

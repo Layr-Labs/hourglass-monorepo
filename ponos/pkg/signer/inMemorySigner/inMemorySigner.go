@@ -5,6 +5,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 )
 
 type InMemorySigner struct {
@@ -20,9 +21,11 @@ func NewInMemorySigner(privateKey interface{}, curveType config.CurveType) *InMe
 }
 
 func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
+	hashedData := util.GetKeccak256Digest(data)
+
 	if ims.curveType == config.CurveTypeBN254 {
 		pk := ims.privateKey.(*bn254.PrivateKey)
-		sig, err := pk.Sign(data)
+		sig, err := pk.Sign(hashedData[:])
 		if err != nil {
 			return nil, err
 		}
@@ -30,7 +33,7 @@ func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
 	}
 	if ims.curveType == config.CurveTypeECDSA {
 		pk := ims.privateKey.(*ecdsa.PrivateKey)
-		sig, err := pk.Sign(data)
+		sig, err := pk.Sign(hashedData[:])
 		if err != nil {
 			return nil, err
 		}
@@ -39,10 +42,12 @@ func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
 	return nil, fmt.Errorf("SignMessage is not implemented for curve type %s", ims.curveType)
 }
 
-func (ims *InMemorySigner) SignMessageForSolidity(data [32]byte) ([]byte, error) {
+func (ims *InMemorySigner) SignMessageForSolidity(data []byte) ([]byte, error) {
+	hashedData := util.GetKeccak256Digest(data)
+
 	if ims.curveType == config.CurveTypeBN254 {
 		pk := ims.privateKey.(*bn254.PrivateKey)
-		sig, err := pk.SignSolidityCompatible(data)
+		sig, err := pk.SignSolidityCompatible(hashedData)
 		if err != nil {
 			return nil, err
 		}
@@ -50,7 +55,7 @@ func (ims *InMemorySigner) SignMessageForSolidity(data [32]byte) ([]byte, error)
 	}
 	if ims.curveType == config.CurveTypeECDSA {
 		pk := ims.privateKey.(*ecdsa.PrivateKey)
-		sig, err := pk.Sign(data[:])
+		sig, err := pk.Sign(hashedData[:])
 		if err != nil {
 			return nil, err
 		}

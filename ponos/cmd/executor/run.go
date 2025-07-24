@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/signerUtils"
 	"time"
 
-	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
@@ -17,7 +17,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
@@ -40,28 +39,10 @@ var runCmd = &cobra.Command{
 
 		l.Sugar().Infow("executor run")
 
-		// Load up the keystore
-		var err error
-		var storedKeys *keystore.EIP2335Keystore
-		if Config.Operator.SigningKeys.BLS.Keystore != "" {
-			storedKeys, err = keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
-			if err != nil {
-				return fmt.Errorf("failed to parse keystore JSON: %w", err)
-			}
-		} else {
-			storedKeys, err = keystore.LoadKeystoreFile(Config.Operator.SigningKeys.BLS.KeystoreFile)
-			if err != nil {
-				return fmt.Errorf("failed to load keystore file: '%s' %w", Config.Operator.SigningKeys.BLS.KeystoreFile, err)
-			}
-		}
-
-		privateSigningKey, err := storedKeys.GetBN254PrivateKey(Config.Operator.SigningKeys.BLS.Password)
+		execSigners, err := signerUtils.ParseSignersFromOperatorConfig(Config.Operator, l)
 		if err != nil {
-			return fmt.Errorf("failed to get private key: %w", err)
+			return fmt.Errorf("failed to parse signers from operator config: %w", err)
 		}
-
-		// TODO(seanmcgary): update this
-		sig := inMemorySigner.NewInMemorySigner(privateSigningKey, config.CurveTypeBN254)
 
 		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 			GrpcPort: Config.GrpcPort,
@@ -131,7 +112,7 @@ var runCmd = &cobra.Command{
 
 		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, sig, pdf, cc)
+		exec := executor.NewExecutor(Config, baseRpcServer, l, execSigners, pdf, cc)
 
 		ctx, cancel := context.WithCancel(context.Background())
 

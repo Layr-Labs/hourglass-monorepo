@@ -102,7 +102,7 @@ type IContractCaller interface {
 
 	GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error)
 
-	CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error)
+	CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
 
 	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*TaskMailboxExecutorOperatorSetConfig, error)
 
