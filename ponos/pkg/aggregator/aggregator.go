@@ -229,8 +229,8 @@ func InitializeContractCaller(
 
 	txSigner, err := transactionSigner.NewTransactionSigner(privateKeyConfig, ethereumContractCaller, logger)
 	if err != nil {
-		logger.Sugar().Errorw("failed to create transaction bn254Signer", "error", err)
-		return nil, fmt.Errorf("failed to create transaction bn254Signer: %w", err)
+		logger.Sugar().Errorw("failed to create transactionSigner", "error", err)
+		return nil, fmt.Errorf("failed to create transactionSigner: %w", err)
 	}
 
 	callerConfig := &caller.ContractCallerConfig{
