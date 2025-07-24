@@ -3,24 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"time"
-
-	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/signerUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"time"
 )
 
 var runCmd = &cobra.Command{
@@ -28,52 +25,35 @@ var runCmd = &cobra.Command{
 	Short: "Run the aggregator",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		initRunCmd(cmd)
-		log, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
-		sugar := log.Sugar()
+		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
+		sugar := l.Sugar()
 
 		if err := Config.Validate(); err != nil {
 			sugar.Errorw("Invalid configuration", "error", err)
 			return err
 		}
 
-		// Load up the keystore
-		var err error
-		var storedKeys *keystore.EIP2335Keystore
-		if Config.Operator.SigningKeys.BLS.Keystore != "" {
-			storedKeys, err = keystore.ParseKeystoreJSON(Config.Operator.SigningKeys.BLS.Keystore)
-			if err != nil {
-				return fmt.Errorf("failed to parse keystore JSON: %w", err)
-			}
-		} else {
-			storedKeys, err = keystore.LoadKeystoreFile(Config.Operator.SigningKeys.BLS.KeystoreFile)
-			if err != nil {
-				return fmt.Errorf("failed to load keystore file: '%s' %w", Config.Operator.SigningKeys.BLS.KeystoreFile, err)
-			}
-		}
-
-		privateSigningKey, err := storedKeys.GetBN254PrivateKey(Config.Operator.SigningKeys.BLS.Password)
+		signers, err := signerUtils.ParseSignersFromOperatorConfig(Config.Operator, l)
 		if err != nil {
-			return fmt.Errorf("failed to get private key: %w", err)
+			return fmt.Errorf("failed to parse signers from operator config: %w", err)
 		}
-
-		sig := inMemorySigner.NewInMemorySigner(privateSigningKey, config.CurveTypeBN254)
 
 		// load the contracts and create the store
 		var coreContracts []*contracts.Contract
 		if len(Config.Contracts) > 0 {
-			log.Sugar().Infow("Loading core contracts from runtime config")
+			l.Sugar().Infow("Loading core contracts from runtime config")
 			coreContracts, err = eigenlayer.LoadContractsFromRuntime(string(Config.Contracts))
 			if err != nil {
 				return fmt.Errorf("failed to load core contracts from runtime: %w", err)
 			}
 		} else {
-			log.Sugar().Infow("Loading core contracts from embedded config")
+			l.Sugar().Infow("Loading core contracts from embedded config")
 			coreContracts, err = eigenlayer.LoadContracts()
 			if err != nil {
 				return fmt.Errorf("failed to load core contracts: %w", err)
 			}
 		}
-		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, log)
+		imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
 
 		// Allow overriding contracts from the runtime config
 		if Config.OverrideContracts != nil {
@@ -88,7 +68,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, log)
+		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 
 		sugar.Infof("Aggregator config: %+v\n", Config)
 		sugar.Infow("Building aggregator components...")
@@ -108,13 +88,13 @@ var runCmd = &cobra.Command{
 			Config.Operator.OperatorPrivateKey,
 			imContractStore,
 			Config.Avss[0].AVSRegistrarAddress,
-			log,
+			l,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to initialize contract caller: %w", err)
 		}
 
-		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, log)
+		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 
 		agg, err := aggregator.NewAggregator(
 			&aggregator.AggregatorConfig{
@@ -127,8 +107,8 @@ var runCmd = &cobra.Command{
 			imContractStore,
 			tlp,
 			pdf,
-			sig,
-			log,
+			signers,
+			l,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create aggregator: %w", err)
@@ -149,9 +129,9 @@ var runCmd = &cobra.Command{
 		gracefulShutdownNotifier := shutdown.CreateGracefulShutdownChannel()
 		done := make(chan bool)
 		shutdown.ListenForShutdown(gracefulShutdownNotifier, done, func() {
-			log.Sugar().Info("Shutting down...")
+			l.Sugar().Info("Shutting down...")
 			cancel()
-		}, time.Second*5, log)
+		}, time.Second*5, l)
 
 		return nil
 	},

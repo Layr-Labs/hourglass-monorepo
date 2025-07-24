@@ -54,11 +54,7 @@ type Aggregator struct {
 	// peeringDataFetcher is used to fetch peering data (typically from the L1)
 	peeringDataFetcher peering.IPeeringDataFetcher
 
-	// signer is used to sign transactions and communicate securely with executors
-	// Since we're only using bn254 at the moment, we only need one signer.
-	// In the future, this should be passed to the executionManager based on which
-	// curve it requires.
-	signer signer.ISigner
+	signers signer.Signers
 
 	// chainEventsChan is a channel for receiving events from the chain pollers and
 	// sequentially processing them
@@ -70,7 +66,7 @@ func NewAggregator(
 	contractStore contractStore.IContractStore,
 	tlp *transactionLogParser.TransactionLogParser,
 	peeringDataFetcher peering.IPeeringDataFetcher,
-	signer signer.ISigner,
+	signers signer.Signers,
 	logger *zap.Logger,
 ) (*Aggregator, error) {
 	if cfg.L1ChainId == 0 {
@@ -81,7 +77,7 @@ func NewAggregator(
 		transactionLogParser: tlp,
 		config:               cfg,
 		logger:               logger,
-		signer:               signer,
+		signers:              signers,
 		peeringDataFetcher:   peeringDataFetcher,
 		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
@@ -132,7 +128,7 @@ func (a *Aggregator) Initialize() error {
 			AggregatorAddress:        a.config.Address,
 		},
 			a.chainContractCallers,
-			a.signer,
+			a.signers,
 			a.contractStore,
 			om,
 			a.logger,
@@ -233,8 +229,8 @@ func InitializeContractCaller(
 
 	txSigner, err := transactionSigner.NewTransactionSigner(privateKeyConfig, ethereumContractCaller, logger)
 	if err != nil {
-		logger.Sugar().Errorw("failed to create transaction signer", "error", err)
-		return nil, fmt.Errorf("failed to create transaction signer: %w", err)
+		logger.Sugar().Errorw("failed to create transaction bn254Signer", "error", err)
+		return nil, fmt.Errorf("failed to create transaction bn254Signer: %w", err)
 	}
 
 	callerConfig := &caller.ContractCallerConfig{

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
 	"path/filepath"
 	"sync"
@@ -275,7 +276,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1AggPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create L1 aggregator private key signer: %v", err)
+		t.Fatalf("Failed to create L1 aggregator private key bn254Signer: %v", err)
 	}
 
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
@@ -288,7 +289,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1ExecPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, l1EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create L1 executor private key signer: %v", err)
+		t.Fatalf("Failed to create L1 executor private key bn254Signer: %v", err)
 	}
 
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
@@ -393,7 +394,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create AVS L1 private key signer: %v", err)
+		t.Fatalf("Failed to create AVS L1 private key bn254Signer: %v", err)
 	}
 
 	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
@@ -417,7 +418,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL2PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l2EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create AVS L2 private key signer: %v", err)
+		t.Fatalf("Failed to create AVS L2 private key bn254Signer: %v", err)
 	}
 
 	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
@@ -452,7 +453,10 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// ------------------------------------------------------------------------
 	// Create executor normally for both modes - it runs in the test process
 	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
-	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, execSigner, execPdf, l1ExecCc)
+	signers := signer.Signers{
+		ECDSASigner: execSigner,
+	}
+	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
@@ -485,7 +489,9 @@ func runAggregatorTest(t *testing.T, mode string) {
 		imContractStore,
 		tlp,
 		aggPdf,
-		aggSigner,
+		signer.Signers{
+			BLSSigner: aggSigner,
+		},
 		l,
 	)
 	if err != nil {
@@ -564,6 +570,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 				if decodedLog.EventName == "TaskVerified" {
 					t.Logf("Task verified: %+v", decodedLog)
 					taskVerified = true
+					wsEthClient.Client().Close()
 					cancel()
 				}
 			}
@@ -575,7 +582,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// ------------------------------------------------------------------------
 	l2AppPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
 	if err != nil {
-		t.Fatalf("Failed to create L2 app private key signer: %v", err)
+		t.Fatalf("Failed to create L2 app private key bn254Signer: %v", err)
 	}
 
 	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{

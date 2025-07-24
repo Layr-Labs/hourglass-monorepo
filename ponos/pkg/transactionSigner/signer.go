@@ -31,20 +31,7 @@ type ITransactionSigner interface {
 
 func NewTransactionSigner(cfg *config.ECDSAKeyConfig, ethClient *ethclient.Client, logger *zap.Logger) (ITransactionSigner, error) {
 	if cfg.UseRemoteSigner {
-		// Create web3signer config with TLS support
-		var web3SignerConfig *web3signer.Config
-		if cfg.RemoteSignerConfig != nil {
-			web3SignerConfig = web3signer.NewConfigWithTLS(
-				cfg.RemoteSignerConfig.Url,
-				cfg.RemoteSignerConfig.CACert,
-				cfg.RemoteSignerConfig.Cert,
-				cfg.RemoteSignerConfig.Key,
-			)
-		} else {
-			web3SignerConfig = web3signer.DefaultConfig()
-		}
-
-		web3SignerClient, err := web3signer.NewClient(web3SignerConfig, logger)
+		web3SignerClient, err := web3signer.NewWeb3SignerClientFromRemoteSignerConfig(cfg.RemoteSignerConfig, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create web3signer client: %w", err)
 		}

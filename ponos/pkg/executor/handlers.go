@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"strings"
 	"time"
 
@@ -232,7 +233,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 // signResult signs the result of a task and returns the signature and the digest.
 func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
 	// the bytes of the result that we need to sign over.
-	// the signer will end up hashing this to get the digest, so
+	// the ecdsaSigner will end up hashing this to get the digest, so
 	// this value is the raw []bytes that get hashed
 	var signedOverBytes []byte
 
@@ -246,9 +247,20 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		return nil, signedOverBytes, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
 
+	var signerToUse signer.ISigner
 	if curveType == config.CurveTypeBN254 {
+		if e.bn254Signer == nil {
+			return nil, signedOverBytes, fmt.Errorf("BLS signer is not initialized")
+		}
+		signerToUse = e.bn254Signer
+
 		signedOverBytes = result.Result
 	} else if curveType == config.CurveTypeECDSA {
+		if e.ecdsaSigner == nil {
+			return nil, signedOverBytes, fmt.Errorf("ECDSA signer is not initialized")
+		}
+		signerToUse = e.ecdsaSigner
+
 		digestBytes := util.GetKeccak256Digest(result.Result)
 		// ecdsa is a special snowflake and requires an EIP-712 digest calculation
 		digest, err := e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
@@ -264,7 +276,7 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		return nil, signedOverBytes, fmt.Errorf("unsupported curve type: %s", curveType)
 	}
 
-	sig, err := e.signer.SignMessageForSolidity(signedOverBytes)
+	sig, err := signerToUse.SignMessageForSolidity(signedOverBytes)
 	if err != nil {
 		e.logger.Error("Failed to sign result",
 			zap.String("taskId", task.TaskID),

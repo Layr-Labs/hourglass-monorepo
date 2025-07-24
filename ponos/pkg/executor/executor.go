@@ -25,7 +25,8 @@ type Executor struct {
 	config        *executorConfig.ExecutorConfig
 	avsPerformers map[string]avsPerformer.IAvsPerformer
 	rpcServer     *rpcServer.RpcServer
-	signer        signer.ISigner
+	ecdsaSigner   signer.ISigner
+	bn254Signer   signer.ISigner
 	inflightTasks *sync.Map
 
 	l1ContractCaller contractCaller.IContractCaller
@@ -37,7 +38,7 @@ func NewExecutorWithRpcServer(
 	port int,
 	config *executorConfig.ExecutorConfig,
 	logger *zap.Logger,
-	signer signer.ISigner,
+	signers signer.Signers,
 	peeringFetcher peering.IPeeringDataFetcher,
 	l1ContractCaller contractCaller.IContractCaller,
 ) (*Executor, error) {
@@ -48,14 +49,14 @@ func NewExecutorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signer, peeringFetcher, l1ContractCaller), nil
+	return NewExecutor(config, rpc, logger, signers, peeringFetcher, l1ContractCaller), nil
 }
 
 func NewExecutor(
 	config *executorConfig.ExecutorConfig,
 	rpcServer *rpcServer.RpcServer,
 	logger *zap.Logger,
-	signer signer.ISigner,
+	signers signer.Signers,
 	peeringFetcher peering.IPeeringDataFetcher,
 	l1ContractCaller contractCaller.IContractCaller,
 ) *Executor {
@@ -64,7 +65,8 @@ func NewExecutor(
 		config:           config,
 		avsPerformers:    make(map[string]avsPerformer.IAvsPerformer),
 		rpcServer:        rpcServer,
-		signer:           signer,
+		ecdsaSigner:      signers.ECDSASigner,
+		bn254Signer:      signers.BLSSigner,
 		inflightTasks:    &sync.Map{},
 		peeringFetcher:   peeringFetcher,
 		l1ContractCaller: l1ContractCaller,

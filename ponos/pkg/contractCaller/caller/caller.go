@@ -304,7 +304,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 
 	certBytes, err := cc.taskMailbox.GetECDSACertificateBytes(&bind.CallOpts{}, cert)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
+		return nil, fmt.Errorf("failed to call GetECDSACertificateBytes: %w", err)
 	}
 
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
