@@ -315,8 +315,8 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
 }
 
-func (cc *ContractCaller) CalculateECDSACertificateDigest(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([32]byte, error) {
-	return cc.ecdsaCertVerifier.CalculateCertificateDigest(&bind.CallOpts{}, referenceTimestamp, messageHash)
+func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+	return cc.ecdsaCertVerifier.CalculateCertificateDigestBytes(&bind.CallOpts{}, referenceTimestamp, messageHash)
 }
 
 func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*contractCaller.TaskMailboxExecutorOperatorSetConfig, error) {

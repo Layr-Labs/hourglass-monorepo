@@ -230,11 +230,11 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 }
 
 // signResult signs the result of a task and returns the signature and the digest.
-func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, [32]byte, error) {
-	// Generate a keccak256 hash of the result so that our signature is fixed in size.
-	// This is for compatibility with the certificate verifier.
-	var digestBytes [32]byte
-	digestBytes = util.GetKeccak256Digest(result.Result)
+func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
+	// the bytes of the result that we need to sign over.
+	// the signer will end up hashing this to get the digest, so
+	// this value is the raw []bytes that get hashed
+	var signedOverBytes []byte
 
 	curveType, err := e.l1ContractCaller.GetOperatorSetCurveType(task.Avs, task.OperatorSetId)
 	if err != nil {
@@ -243,32 +243,41 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 			zap.Uint32("operatorSetId", task.OperatorSetId),
 			zap.Error(err),
 		)
-		return nil, digestBytes, fmt.Errorf("failed to get operator set curve type: %w", err)
+		return nil, signedOverBytes, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
 
-	// ecdsa is a special snowflake and requires a different digest calculation
-	if curveType == config.CurveTypeECDSA {
-		digest, err := e.l1ContractCaller.CalculateECDSACertificateDigest(
+	if curveType == config.CurveTypeBN254 {
+		signedOverBytes = result.Result
+	} else if curveType == config.CurveTypeECDSA {
+		digestBytes := util.GetKeccak256Digest(result.Result)
+		// ecdsa is a special snowflake and requires an EIP-712 digest calculation
+		digest, err := e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
 			context.Background(),
 			task.ReferenceTimestamp,
 			digestBytes,
 		)
 		if err != nil {
-			return nil, digestBytes, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
+			return nil, signedOverBytes, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
 		}
-		digestBytes = digest
+		signedOverBytes = digest
+	} else {
+		return nil, signedOverBytes, fmt.Errorf("unsupported curve type: %s", curveType)
 	}
 
-	sig, err := e.signer.SignMessageForSolidity(digestBytes)
+	sig, err := e.signer.SignMessageForSolidity(signedOverBytes)
 	if err != nil {
 		e.logger.Error("Failed to sign result",
 			zap.String("taskId", task.TaskID),
 			zap.String("avsAddress", task.Avs),
 			zap.Error(err),
 		)
-		return nil, digestBytes, fmt.Errorf("failed to sign result: %w", err)
+		return nil, signedOverBytes, fmt.Errorf("failed to sign result: %w", err)
 	}
-	return sig, digestBytes, nil
+	// signResult() is expected to return the digest of what was signed over.
+	// We do this as the very last thing since some signing backends hash the raw bytes themselves
+	// but dont return the digest.
+	signedOverDigest := util.GetKeccak256Digest(signedOverBytes)
+	return sig, signedOverDigest[:], nil
 }
 
 // ListPerformers returns a list of all performers and their status

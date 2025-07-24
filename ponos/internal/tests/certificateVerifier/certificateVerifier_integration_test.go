@@ -354,7 +354,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	}
 	messageHash := util.GetKeccak256Digest(taskResult.Output)
 	// Sign the result
-	ecdsaDigest, err := l1CC.CalculateECDSACertificateDigest(
+	ecdsaDigestBytes, err := l1CC.CalculateECDSACertificateDigestBytes(
 		ctx,
 		operatorPeersWeight.RootReferenceTimestamp,
 		messageHash,
@@ -362,24 +362,24 @@ func Test_CertificateVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to calculate ECDSA certificate digest: %v", err)
 	}
+	ecdsaDigest := util.GetKeccak256Digest(ecdsaDigestBytes)
 
-	t.Logf("ECDSA digest to sign: %s", hexutil.Encode(ecdsaDigest[:]))
+	t.Logf("ECDSA digest to sign: %s", hexutil.Encode(ecdsaDigestBytes[:]))
 
 	// Test signing 32-byte data to verify both signers use the same key
-	testData := [32]byte{}
-	copy(testData[:], []byte("test message")) // Pad to 32 bytes
-	testWeb3Sig, err := executorSigner.SignMessage(testData[:])
+	testData := []byte("test message")
+	testWeb3Sig, err := executorSigner.SignMessage(testData)
 	if err != nil {
 		t.Fatalf("Failed to sign test message with Web3Signer: %v", err)
 	}
-	testInMemSig, err := inMemExecutorSigner.SignMessage(testData[:])
+	testInMemSig, err := inMemExecutorSigner.SignMessage(testData)
 	if err != nil {
 		t.Fatalf("Failed to sign test message with InMemorySigner: %v", err)
 	}
 	t.Logf("Test data signatures - Web3Signer: %s, InMemory: %s",
 		hexutil.Encode(testWeb3Sig), hexutil.Encode(testInMemSig))
 
-	sig, err := executorSigner.SignMessageForSolidity(ecdsaDigest)
+	sig, err := executorSigner.SignMessageForSolidity(ecdsaDigestBytes)
 	if err != nil {
 		t.Fatalf("Failed to sign message for Solidity: %v", err)
 	}
@@ -389,7 +389,7 @@ func Test_CertificateVerifier(t *testing.T) {
 			hexutil.Encode(sig[0:32]), hexutil.Encode(sig[32:64]), sig[64])
 	}
 
-	inMemSig, err := inMemExecutorSigner.SignMessageForSolidity(ecdsaDigest)
+	inMemSig, err := inMemExecutorSigner.SignMessageForSolidity(ecdsaDigestBytes)
 	if err != nil {
 		t.Fatalf("Failed to sign message for Solidity with in-memory signer: %v", err)
 	}
@@ -413,6 +413,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	executorAddr := execKeysECDSA.Address
 	web3Valid, err := web3Sig.VerifyWithAddress(ecdsaDigest[:], executorAddr)
 	if err != nil {
+		assert.Nil(t, err, "Web3Signer signature verification should not fail")
 		t.Logf("Error verifying Web3Signer signature: %v", err)
 	} else {
 		t.Logf("Web3Signer signature verification result: %v", web3Valid)
@@ -420,6 +421,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	inMemValid, err := inMemSignature.VerifyWithAddress(ecdsaDigest[:], executorAddr)
 	if err != nil {
+		assert.Nil(t, err, "InMemory signature verification should not fail")
 		t.Logf("Error verifying InMemory signature: %v", err)
 	} else {
 		t.Logf("InMemory signature verification result: %v", inMemValid)

@@ -15,7 +15,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/taskSession"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
@@ -291,9 +290,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	// TODO(seanmcgary): this should probably live in the taskSession package
 	// it also needs to be aware of the curve for the aggregator
 
-	// hash the payload and sign it
-	payloadHash := util.GetKeccak256Digest(task.Payload)
-	sig, err := em.signer.SignMessage(payloadHash[:])
+	sig, err := em.signer.SignMessage(task.Payload)
 	if err != nil {
 		return fmt.Errorf("failed to sign task payload: %w", err)
 	}

@@ -434,7 +434,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			taskOutputHash := util.GetKeccak256Digest(outputResult)
 
 			// for ecdsa only
-			ecdsaDigest, err := avsCc.CalculateECDSACertificateDigest(
+			ecdsaDigest, err := avsCc.CalculateECDSACertificateDigestBytes(
 				ctx,
 				operatorPeersWeight.RootReferenceTimestamp,
 				taskOutputHash,

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -195,7 +194,7 @@ func TestWeb3Signer_SignMessageForSolidity(t *testing.T) {
 	require.NoError(t, err)
 
 	fromAddress := common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678")
-	testData := [32]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20}
+	testData := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20}
 	expectedSignature := "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab"
 
 	t.Run("successful signing for solidity", func(t *testing.T) {
@@ -552,12 +551,8 @@ func TestWeb3Signer_Integration(t *testing.T) {
 		signer, err := NewWeb3Signer(client, fromAddress, publicKey, config.CurveTypeECDSA, l)
 		require.NoError(t, err)
 
-		// Test data as [32]byte
-		var testData [32]byte
-		copy(testData[:], []byte("Solidity test data"))
-
 		// Perform signing for Solidity
-		signature, err := signer.SignMessageForSolidity(testData)
+		signature, err := signer.SignMessageForSolidity([]byte("Solidity test data"))
 
 		if err != nil {
 			t.Logf("Web3Signer SignMessageForSolidity failed with error: %v", err)
@@ -617,20 +612,16 @@ func Test_CompareWeb3SignerToInMemorySigner(t *testing.T) {
 	require.NoError(t, err)
 
 	payload := []byte("Hello from Web3Signer REST API test!")
-	hashedPayload := util.GetKeccak256Digest(payload)
 
-	//imsSignedNoHash, err := ims.SignMessage(payload)
-	//require.NoError(t, err)
-	imsSignedHashed, err := ims.SignMessage(hashedPayload[:])
+	imsSignedHashed, err := ims.SignMessage(payload)
 	require.NoError(t, err)
 
 	w3SignedNoHash, err := web3Signer.SignMessage(payload)
-	require.NoError(t, err)
-	w3SignedHashed, err := web3Signer.SignMessage(hashedPayload[:])
 	require.NoError(t, err)
 
 	//t.Logf("InMemorySigner signed payload:        %x", imsSignedNoHash)
 	t.Logf("InMemorySigner signed hashed payload: %x", imsSignedHashed)
 	t.Logf("Web3Signer signed payload:            %x", w3SignedNoHash)
-	t.Logf("Web3Signer signed hashed payload:     %x", w3SignedHashed)
+
+	assert.Equal(t, hex.EncodeToString(imsSignedHashed), hex.EncodeToString(w3SignedNoHash), "Web3Signer and InMemorySigner should produce the same signature for the same payload")
 }
