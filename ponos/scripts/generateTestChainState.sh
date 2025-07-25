@@ -17,7 +17,7 @@ set -e
 L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
 
 anvilL1ChainId=31337
-anvilL1StartBlock=8825090
+anvilL1StartBlock=8836180
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -28,7 +28,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=28753690
+anvilL2StartBlock=28820370
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -138,22 +138,6 @@ cd ../contracts
 
 export L1_RPC_URL="http://localhost:${anvilL1RpcPort}"
 export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
-
-# -----------------------------------------------------------------------------
-# Deploy mailbox contract
-# -----------------------------------------------------------------------------
-# Cert Verifier addresses are the same address across all chains
-bn254CertVerifierAddress="0xff58A373c18268F483C1F5cA03Cf885c0C43373a"
-ecdsaCertVerifierAddress="0xb3Cd1A457dEa9A9A6F6406c6419B1c326670A96F"
-echo "Deploying mailbox contract to L1..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address, address)" $bn254CertVerifierAddress $ecdsaCertVerifierAddress
-mailboxContractAddressL1=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
-echo "Mailbox contract address: $mailboxContractAddressL1"
-
-echo "Deploying mailbox contract to L2..."
-forge script script/local/DeployTaskMailbox.s.sol --slow --rpc-url $L2_RPC_URL --broadcast --sig "run(address, address)" $bn254CertVerifierAddress $ecdsaCertVerifierAddress
-mailboxContractAddressL2=$(cat ./broadcast/DeployTaskMailbox.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[2].contractAddress')
-echo "Mailbox contract address: $mailboxContractAddressL2"
 
 # -----------------------------------------------------------------------------
 # Deploy L1 avs contract
@@ -277,8 +261,6 @@ cat <<EOF > internal/testData/chain-config.json
       "execStakerAccountAddress": "$execStakerAccountAddress",
       "execStakerAccountPk": "$execStakerAccountPk",
       "execStakerAccountPublicKey": "$execStakerAccountPublicKey",
-      "mailboxContractAddressL1": "$mailboxContractAddressL1",
-      "mailboxContractAddressL2": "$mailboxContractAddressL2",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
       "avsTaskHookAddressL1": "$taskHookAddressL1",
       "avsTaskHookAddressL2": "$taskHookAddressL2",

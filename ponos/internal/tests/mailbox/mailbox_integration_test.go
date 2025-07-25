@@ -80,10 +80,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
 
-	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
-		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
-	}
-
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -359,7 +355,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			t.Logf("Found created task log: %+v", logWithBlock.Log)
 			assert.Equal(t, "TaskCreated", logWithBlock.Log.EventName)
 
-			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, chainConfig.MailboxContractAddressL1)
+			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, eigenlayerContractAddrs.TaskMailbox)
 			assert.Nil(t, err)
 
 			assert.Equal(t, common.HexToAddress(chainConfig.AVSAccountAddress), common.HexToAddress(task.AVSAddress))
