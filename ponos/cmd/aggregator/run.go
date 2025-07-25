@@ -86,7 +86,6 @@ var runCmd = &cobra.Command{
 				RpcURL:  l1Chain.RpcURL,
 			},
 			Config.Operator.OperatorPrivateKey,
-			imContractStore,
 			Config.Avss[0].AVSRegistrarAddress,
 			l,
 		)

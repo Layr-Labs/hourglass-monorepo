@@ -34,8 +34,6 @@ import (
 
 type ContractCallerConfig struct {
 	AVSRegistrarAddress string
-	TaskMailboxAddress  string
-	KeyRegistrarAddress string
 }
 
 type ContractCaller struct {
@@ -75,16 +73,10 @@ func NewContractCaller(
 ) (*ContractCaller, error) {
 	logger.Sugar().Debugw("Creating contract caller",
 		zap.String("AVSRegistrarAddress", cfg.AVSRegistrarAddress),
-		zap.String("TaskMailboxAddress", cfg.TaskMailboxAddress),
 	)
 	avsRegistrarCaller, err := TaskAVSRegistrarBase.NewTaskAVSRegistrarBaseCaller(common.HexToAddress(cfg.AVSRegistrarAddress), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
-	}
-
-	taskMailbox, err := ITaskMailbox.NewITaskMailbox(common.HexToAddress(cfg.TaskMailboxAddress), ethclient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TaskMailbox: %w", err)
 	}
 
 	chainId, err := ethclient.ChainID(context.Background())
@@ -120,6 +112,11 @@ func NewContractCaller(
 	ecdsaCertVerifier, err := IECDSACertificateVerifier.NewIECDSACertificateVerifier(common.HexToAddress(coreContracts.ECDSACertificateVerifier), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ECDSACertificateVerifier: %w", err)
+	}
+
+	taskMailbox, err := ITaskMailbox.NewITaskMailbox(common.HexToAddress(coreContracts.TaskMailbox), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TaskMailbox: %w", err)
 	}
 
 	return &ContractCaller{
@@ -184,7 +181,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	copy(taskId[:], aggCert.TaskId)
 	cc.logger.Sugar().Infow("submitting task result",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
-		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.String("mailboxAddress", cc.coreContracts.TaskMailbox),
 		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
 	)
 
@@ -291,7 +288,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 
 	cc.logger.Sugar().Infow("submitting task result",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
-		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.String("mailboxAddress", cc.coreContracts.TaskMailbox),
 		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
 		zap.String("finalSig", hexutil.Encode(finalSig[:])),
 	)
@@ -1082,7 +1079,7 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 
 	cc.logger.Sugar().Infow("verifying ECDSA certificate",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
-		zap.String("mailboxAddress", cc.config.TaskMailboxAddress),
+		zap.String("mailboxAddress", cc.coreContracts.TaskMailbox),
 		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
 		zap.String("finalSig", hexutil.Encode(finalSig[:])),
 	)

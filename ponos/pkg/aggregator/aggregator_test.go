@@ -274,6 +274,11 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
 	}
 
+	l2EigenlayerContractAddrs, err := config.GetCoreContractsForChainId(config.ChainId(l2ChainId.Uint64()))
+	if err != nil {
+		t.Fatalf("Failed to get core contracts for chain ID: %v", err)
+	}
+
 	l1AggPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.OperatorAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L1 aggregator private key bn254Signer: %v", err)
@@ -281,7 +286,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1AggPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
@@ -294,7 +298,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1ExecPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
@@ -399,7 +402,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, avsCcL1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
@@ -423,7 +425,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, avsCcL2PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
@@ -470,10 +471,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 	}
 
 	imContractStore := inMemoryContractStore.NewInMemoryContractStore(eigenlayerContracts, l)
-
-	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
-		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
-	}
 
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(l1AggCc, l)
@@ -531,7 +528,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	eventsChan := make(chan types.Log)
 	sub, err := wsEthClient.SubscribeFilterLogs(ctx, goEthereum.FilterQuery{
-		Addresses: []common.Address{common.HexToAddress(chainConfig.MailboxContractAddressL2)},
+		Addresses: []common.Address{common.HexToAddress(l2EigenlayerContractAddrs.TaskMailbox)},
 	}, eventsChan)
 	if err != nil {
 		t.Fatalf("Failed to subscribe to events: %v", err)
@@ -587,7 +584,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)

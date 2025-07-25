@@ -201,7 +201,6 @@ func (a *Aggregator) initializePollers() error {
 func InitializeContractCaller(
 	chain *aggregatorConfig.Chain,
 	privateKeyConfig *config.ECDSAKeyConfig,
-	contractStore contractStore.IContractStore,
 	avsRegistrarAddress string,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
@@ -209,17 +208,6 @@ func InitializeContractCaller(
 		BaseUrl:   chain.RpcURL,
 		BlockType: ethereum.BlockType_Latest,
 	}, logger)
-
-	mailboxContract := util.Find(contractStore.ListContracts(), func(c *contracts.Contract) bool {
-		return c.ChainId == chain.ChainId && c.Name == config.ContractName_TaskMailbox
-	})
-	if mailboxContract == nil {
-		logger.Sugar().Errorw("Mailbox contract not found",
-			zap.Uint64("chainId", uint64(chain.ChainId)),
-		)
-		return nil, fmt.Errorf("mailbox contract not found for chain %s", chain.Name)
-	}
-	mailboxContractAddress := mailboxContract.Address
 
 	ethereumContractCaller, err := ec.GetEthereumContractCaller()
 	if err != nil {
@@ -235,7 +223,6 @@ func InitializeContractCaller(
 
 	callerConfig := &caller.ContractCallerConfig{
 		AVSRegistrarAddress: avsRegistrarAddress,
-		TaskMailboxAddress:  mailboxContractAddress,
 	}
 
 	return caller.NewContractCaller(callerConfig, ethereumContractCaller, txSigner, logger)
@@ -249,7 +236,6 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 		cc, err := InitializeContractCaller(
 			chain,
 			a.config.PrivateKeyConfig,
-			a.contractStore,
 			a.config.AVSs[0].AVSRegistrarAddress,
 			a.logger,
 		)

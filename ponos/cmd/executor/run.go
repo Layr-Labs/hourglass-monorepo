@@ -104,7 +104,6 @@ var runCmd = &cobra.Command{
 
 		cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
 			AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
-			TaskMailboxAddress:  mailboxContract.Address,
 		}, ethereumClient, privateKeySigner, l)
 		if err != nil {
 			return fmt.Errorf("failed to initialize contract caller: %w", err)

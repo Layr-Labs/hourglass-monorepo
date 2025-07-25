@@ -7,9 +7,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"math/big"
 	"net/http"
@@ -66,8 +63,6 @@ type ChainConfig struct {
 	ExecOperatorAccountPk        string `json:"execOperatorAccountPk"`
 	ExecOperatorAccountAddress   string `json:"execOperatorAccountAddress"`
 	ExecOperatorAccountPublicKey string `json:"execOperatorAccountPublicKey"`
-	MailboxContractAddressL1     string `json:"mailboxContractAddressL1"`
-	MailboxContractAddressL2     string `json:"mailboxContractAddressL2"`
 	AVSTaskRegistrarAddress      string `json:"avsTaskRegistrarAddress"`
 	AVSTaskHookAddressL1         string `json:"avsTaskHookAddressL1"`
 	AVSTaskHookAddressL2         string `json:"avsTaskHookAddressL2"`
@@ -152,7 +147,7 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "8825090"
+	forkBlockNumber := "8836180"
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -182,7 +177,7 @@ func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	forkUrl := "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "28753690"
+	forkBlockNumber := "28820370"
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
@@ -268,59 +263,6 @@ func KillAnvil(cmd *exec.Cmd) error {
 	_ = cmd.Wait()
 
 	fmt.Println("Anvil process killed successfully")
-	return nil
-}
-
-func ReadMailboxAbiJson(projectRoot string) ([]byte, error) {
-	// read the mailbox ABI json file
-	path, err := filepath.Abs(fmt.Sprintf("%s/../contracts/out/ITaskMailbox.sol/ITaskMailbox.json", projectRoot))
-	if err != nil {
-		return nil, err
-	}
-
-	abiJson, err := os.ReadFile(path)
-	if err != nil {
-		panic(fmt.Errorf("failed to read mailbox ABI json: %w", err))
-	}
-
-	type abiFile struct {
-		Abi json.RawMessage `json:"abi"`
-	}
-	var abiFileData abiFile
-	if err := json.Unmarshal(abiJson, &abiFileData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal mailbox ABI json: %w", err)
-	}
-
-	return abiFileData.Abi, nil
-}
-
-func ReplaceMailboxAddressWithTestAddress(cs contractStore.IContractStore, chainConfig *ChainConfig) error {
-	allContracts := cs.ListContracts()
-	existingL1MailboxContract := util.Find(allContracts, func(c *contracts.Contract) bool {
-		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_EthereumAnvil
-	})
-	if existingL1MailboxContract == nil {
-		return fmt.Errorf("existing mailbox contract not found for chain ID %d", config.ChainId_EthereumAnvil)
-	}
-	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_EthereumAnvil}, &contracts.Contract{
-		Address:     chainConfig.MailboxContractAddressL1,
-		AbiVersions: existingL1MailboxContract.AbiVersions,
-	}); err != nil {
-		return fmt.Errorf("failed to override mailbox contract: %w", err)
-	}
-
-	existingL2MailboxContract := util.Find(allContracts, func(c *contracts.Contract) bool {
-		return c.Name == config.ContractName_TaskMailbox && c.ChainId == config.ChainId_BaseSepoliaAnvil
-	})
-	if existingL2MailboxContract == nil {
-		return fmt.Errorf("existing mailbox contract not found for chain ID %d", config.ChainId_EthereumAnvil)
-	}
-	if err := cs.OverrideContract(config.ContractName_TaskMailbox, []config.ChainId{config.ChainId_BaseSepoliaAnvil}, &contracts.Contract{
-		Address:     chainConfig.MailboxContractAddressL2,
-		AbiVersions: existingL2MailboxContract.AbiVersions,
-	}); err != nil {
-		return fmt.Errorf("failed to override mailbox contract: %w", err)
-	}
 	return nil
 }
 

@@ -20,12 +20,10 @@
       "execStakerAccountAddress": "0x71982626daee31433b6eb22b4cfef1df0f4d00ca",
       "execStakerAccountPk": "0x6e671498f55737fb1f4c6be0233d8fa8a399987f5861fb0f54380a4e100f978c",
       "execStakerAccountPublicKey": "0xfe6c81b4b0daf97514afbbc76abef64a184def96ef694c9fa29d294d2ab37a01f5fea57e00e3b32277e58274350af7165b8a44e85adc3c24343f25fa139d671e",
-      "mailboxContractAddressL1": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
-      "mailboxContractAddressL2": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
-      "avsTaskRegistrarAddress": "0x26d0d229b0190125c3d598dc997b65fa604105da",
-      "avsTaskHookAddressL1": "0x23604a42cb4e42b715e512c537dd38b156a2b1a3",
-      "avsTaskHookAddressL2": "0x6a4b284dd827f1012fa546581420632af53b7d55",
+      "avsTaskRegistrarAddress": "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+      "avsTaskHookAddressL1": "0x6a4b284dd827f1012fa546581420632af53b7d55",
+      "avsTaskHookAddressL2": "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
       "destinationEnv": "anvil",
-      "forkL1Block": 8825090,
-      "forkL2Block": 28753690
+      "forkL1Block": 8836180,
+      "forkL2Block": 28820370
 }

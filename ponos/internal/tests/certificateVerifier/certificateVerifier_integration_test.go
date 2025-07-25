@@ -10,8 +10,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
@@ -58,17 +56,6 @@ func Test_CertificateVerifier(t *testing.T) {
 	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys for ECDSA curve type: %v", err)
-	}
-
-	coreContracts, err := eigenlayer.LoadContracts()
-	if err != nil {
-		t.Fatalf("Failed to load core contracts: %v", err)
-	}
-
-	imContractStore := inMemoryContractStore.NewInMemoryContractStore(coreContracts, l)
-
-	if err = testUtils.ReplaceMailboxAddressWithTestAddress(imContractStore, chainConfig); err != nil {
-		t.Fatalf("Failed to replace mailbox address with test address: %v", err)
 	}
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -127,7 +114,6 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
