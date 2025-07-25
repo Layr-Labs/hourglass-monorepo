@@ -1,0 +1,30 @@
+apiVersion: eigenruntime.io/v1
+kind: Runtime
+name: example-avs
+version: 1.0.0
+spec:
+  aggregator:
+    registry: ghcr.io/example/avs
+    digest: sha256:abc123def456
+    env:
+      - name: LOG_LEVEL
+        value: debug
+      - name: RPC_URL
+        value: http://localhost:8545
+    ports:
+      - 8080
+      - 9090
+    command:
+      - /app/aggregator
+      - --config
+      - /etc/aggregator/config.yaml
+  performer:
+    registry: ghcr.io/example/avs
+    digest: sha256:789012ghi345
+    env:
+      - name: LOG_LEVEL
+        value: info
+      - name: METRICS_PORT
+        value: "9091"
+    ports:
+      - 9091
