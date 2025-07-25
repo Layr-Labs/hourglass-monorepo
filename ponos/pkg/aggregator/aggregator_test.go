@@ -281,7 +281,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1AggPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
@@ -294,7 +293,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1ExecPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
@@ -399,7 +397,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, avsCcL1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
@@ -423,7 +420,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, avsCcL2PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
@@ -587,7 +583,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)

@@ -99,14 +99,14 @@ var (
 	ethereumSepoliaCoreContracts = &CoreContractAddresses{
 		AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
 		DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
-		TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+		TaskMailbox:              "0xb99cc53e8db7018f557606c2a5b066527bf96b26",
 		KeyRegistrar:             "0xa4db30d08d8bbca00d40600bee9f029984db162a",
 		CrossChainRegistry:       "0x287381b1570d9048c4b4c7ec94d21ddb8aa1352a",
 		ECDSACertificateVerifier: "0xb3cd1a457dea9a9a6f6406c6419b1c326670a96f",
 		BN254CertificateVerifier: "0xff58a373c18268f483c1f5ca03cf885c0c43373a",
 	}
 	baseSepoliaCoreContracts = &CoreContractAddresses{
-		TaskMailbox:              "0x203ca0e6b9bce319937ab44660f3854c41f3331f",
+		TaskMailbox:              "0xb99cc53e8db7018f557606c2a5b066527bf96b26",
 		ECDSACertificateVerifier: "0xb3cd1a457dea9a9a6f6406c6419b1c326670a96f",
 		BN254CertificateVerifier: "0xff58a373c18268f483c1f5ca03cf885c0c43373a",
 	}
@@ -115,17 +115,14 @@ var (
 		ChainId_EthereumMainnet: {
 			AllocationManager: "0x42583067658071247ec8CE0A516A58f682002d07",
 			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			TaskMailbox:       "0x7306a649b451ae08781108445425bd4e8acf1e00",
 		},
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
 			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
-			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumHoodi: {
 			AllocationManager: "",
 			DelegationManager: "",
-			TaskMailbox:       "0xtaskMailbox",
 		},
 		ChainId_EthereumSepolia:  ethereumSepoliaCoreContracts,
 		ChainId_BaseSepolia:      baseSepoliaCoreContracts,

@@ -45,7 +45,6 @@ func main() {
 
 	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357",
-		TaskMailboxAddress:  "0xf481bf37a8e87898b03c5eccee79da7f20a0f58e",
 	}, ethCaller, privateKeySigner, l)
 	if err != nil {
 		panic(err)

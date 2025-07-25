@@ -40,7 +40,6 @@ func SetupOperatorPeering(
 
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, ethClient, avsPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
@@ -53,7 +52,6 @@ func SetupOperatorPeering(
 
 	aggregatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, ethClient, aggregatorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator contract caller: %v", err)
@@ -94,7 +92,6 @@ func SetupOperatorPeering(
 
 	executorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, ethClient, executorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor contract caller: %v", err)

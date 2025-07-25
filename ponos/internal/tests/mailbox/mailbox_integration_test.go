@@ -183,7 +183,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
@@ -198,7 +197,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 		l2CC, err = caller.NewContractCaller(&caller.ContractCallerConfig{
 			AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-			TaskMailboxAddress:  chainConfig.MailboxContractAddressL2,
 		}, l2EthClient, l2PrivateKeySigner, l)
 		if err != nil {
 			t.Fatalf("Failed to create L2 contract caller: %v", err)
@@ -297,11 +295,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
 
 	mailboxEthClient := l1EthClient
-	mailboxContractAddress := chainConfig.MailboxContractAddressL1
 	avsTaskHookAddress := chainConfig.AVSTaskHookAddressL1
 	if networkTarget == NetworkTarget_L2 {
 		mailboxEthClient = l2EthClient
-		mailboxContractAddress = chainConfig.MailboxContractAddressL2
 		avsTaskHookAddress = chainConfig.AVSTaskHookAddressL2
 	}
 
@@ -312,7 +308,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-		TaskMailboxAddress:  mailboxContractAddress,
 	}, mailboxEthClient, avsPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)

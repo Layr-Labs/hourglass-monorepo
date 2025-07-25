@@ -127,7 +127,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 			}, ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
@@ -140,7 +139,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 			}, ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
@@ -341,7 +339,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 			}, ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
@@ -354,7 +351,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-				TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 			}, ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)

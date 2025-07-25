@@ -127,7 +127,6 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
 		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-		TaskMailboxAddress:  chainConfig.MailboxContractAddressL1,
 	}, l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
