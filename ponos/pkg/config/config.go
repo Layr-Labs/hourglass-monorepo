@@ -88,6 +88,7 @@ func IsL1Chain(chainId ChainId) bool {
 type CoreContractAddresses struct {
 	AllocationManager        string
 	DelegationManager        string
+	ReleaseManager           string
 	TaskMailbox              string
 	KeyRegistrar             string
 	CrossChainRegistry       string
@@ -99,6 +100,7 @@ var (
 	ethereumSepoliaCoreContracts = &CoreContractAddresses{
 		AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
 		DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+		ReleaseManager:           "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		TaskMailbox:              "0xb99cc53e8db7018f557606c2a5b066527bf96b26",
 		KeyRegistrar:             "0xa4db30d08d8bbca00d40600bee9f029984db162a",
 		CrossChainRegistry:       "0x287381b1570d9048c4b4c7ec94d21ddb8aa1352a",
@@ -148,11 +150,6 @@ var (
 		ChainId_BaseSepoliaAnvil,
 	}
 )
-
-type ContractAddresses struct {
-	AllocationManager string
-	TaskMailbox       string
-}
 
 func GetContractsMapForChain(chainId ChainId) *CoreContractAddresses {
 	contracts, ok := CoreContracts[chainId]
