@@ -64,20 +64,20 @@ This document outlines the implementation plan for adding data persistence to th
 ### Milestone 2: In-Memory Implementation (2.1 - 2.4)
 
 #### 2.1 Implement In-Memory Aggregator Store
-- [ ] Create `pkg/aggregator/storage/memory/memory.go`
-- [ ] Implement `InMemoryAggregatorStore` struct with:
-  - [ ] RWMutex for thread safety
-  - [ ] Maps for each data type (blocks, tasks, configs)
-- [ ] Implement all `AggregatorStore` interface methods:
-  - [ ] GetLastProcessedBlock with proper error handling
-  - [ ] SetLastProcessedBlock with atomic updates
-  - [ ] SaveTask with duplicate checking
-  - [ ] GetTask with not found errors
-  - [ ] ListPendingTasks with status filtering
-  - [ ] UpdateTaskStatus with validation
-  - [ ] DeleteTask with existence checking
-  - [ ] Config methods with proper key generation
-  - [ ] Close method to clear maps
+- [x] Create `pkg/aggregator/storage/memory/memory.go`
+- [x] Implement `InMemoryAggregatorStore` struct with:
+  - [x] RWMutex for thread safety
+  - [x] Maps for each data type (blocks, tasks, configs)
+- [x] Implement all `AggregatorStore` interface methods:
+  - [x] GetLastProcessedBlock with proper error handling
+  - [x] SetLastProcessedBlock with atomic updates
+  - [x] SaveTask with duplicate checking
+  - [x] GetTask with not found errors
+  - [x] ListPendingTasks with status filtering
+  - [x] UpdateTaskStatus with validation
+  - [x] DeleteTask with existence checking
+  - [x] Config methods with proper key generation
+  - [x] Close method to clear maps
 
 #### 2.2 Implement In-Memory Executor Store
 - [ ] Create `pkg/executor/storage/memory/memory.go`

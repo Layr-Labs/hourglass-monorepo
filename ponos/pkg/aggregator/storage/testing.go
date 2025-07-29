@@ -1,24 +1,23 @@
-package storage_test
+package storage
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// StorageTestSuite defines a test suite that all storage implementations must pass
-type StorageTestSuite struct {
-	NewStore func() (storage.AggregatorStore, error)
+// TestSuite defines a test suite that all storage implementations must pass
+type TestSuite struct {
+	NewStore func() (AggregatorStore, error)
 }
 
-// TestAggregatorStore runs all storage interface compliance tests
-func (s *StorageTestSuite) TestAggregatorStore(t *testing.T) {
+// Run executes all storage interface compliance tests
+func (s *TestSuite) Run(t *testing.T) {
 	t.Run("ChainPollingState", s.testChainPollingState)
 	t.Run("TaskManagement", s.testTaskManagement)
 	t.Run("ConfigCaching", s.testConfigCaching)
@@ -26,7 +25,7 @@ func (s *StorageTestSuite) TestAggregatorStore(t *testing.T) {
 	t.Run("ConcurrentAccess", s.testConcurrentAccess)
 }
 
-func (s *StorageTestSuite) testChainPollingState(t *testing.T) {
+func (s *TestSuite) testChainPollingState(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
@@ -36,7 +35,7 @@ func (s *StorageTestSuite) testChainPollingState(t *testing.T) {
 
 	// Test getting non-existent block
 	_, err = store.GetLastProcessedBlock(ctx, chainId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test setting and getting block
 	blockNum := uint64(12345)
@@ -72,7 +71,7 @@ func (s *StorageTestSuite) testChainPollingState(t *testing.T) {
 	assert.Equal(t, newBlockNum, retrieved)
 }
 
-func (s *StorageTestSuite) testTaskManagement(t *testing.T) {
+func (s *TestSuite) testTaskManagement(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
@@ -96,7 +95,7 @@ func (s *StorageTestSuite) testTaskManagement(t *testing.T) {
 
 	// Test getting non-existent task
 	_, err = store.GetTask(ctx, task.TaskId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting task
 	err = store.SaveTask(ctx, task)
@@ -115,7 +114,7 @@ func (s *StorageTestSuite) testTaskManagement(t *testing.T) {
 	assert.Equal(t, task.TaskId, pendingTasks[0].TaskId)
 
 	// Test updating task status
-	err = store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing)
+	err = store.UpdateTaskStatus(ctx, task.TaskId, TaskStatusProcessing)
 	require.NoError(t, err)
 
 	// Pending tasks should now be empty
@@ -124,7 +123,7 @@ func (s *StorageTestSuite) testTaskManagement(t *testing.T) {
 	assert.Len(t, pendingTasks, 0)
 
 	// Test updating to completed
-	err = store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted)
+	err = store.UpdateTaskStatus(ctx, task.TaskId, TaskStatusCompleted)
 	require.NoError(t, err)
 
 	// Test deleting task
@@ -132,14 +131,14 @@ func (s *StorageTestSuite) testTaskManagement(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = store.GetTask(ctx, task.TaskId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test deleting non-existent task
 	err = store.DeleteTask(ctx, "non-existent")
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func (s *StorageTestSuite) testConfigCaching(t *testing.T) {
+func (s *TestSuite) testConfigCaching(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
@@ -149,19 +148,19 @@ func (s *StorageTestSuite) testConfigCaching(t *testing.T) {
 	// Test OperatorSetConfig
 	avsAddress := "0xavs123"
 	operatorSetId := uint32(1)
-	opsetConfig := &storage.OperatorSetTaskConfig{
+	opsetConfig := &OperatorSetTaskConfig{
 		TaskSLA:      3600,
 		CurveType:    config.CurveTypeBN254,
 		TaskMetadata: []byte("metadata"),
-		Consensus: storage.OperatorSetTaskConsensus{
-			ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
+		Consensus: OperatorSetTaskConsensus{
+			ConsensusType: ConsensusTypeStakeProportionThreshold,
 			Threshold:     6666,
 		},
 	}
 
 	// Test getting non-existent config
 	_, err = store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting config
 	err = store.SaveOperatorSetConfig(ctx, avsAddress, operatorSetId, opsetConfig)
@@ -176,7 +175,7 @@ func (s *StorageTestSuite) testConfigCaching(t *testing.T) {
 	assert.Equal(t, opsetConfig.Consensus.Threshold, retrieved.Consensus.Threshold)
 
 	// Test AVSConfig
-	avsConfig := &storage.AvsConfig{
+	avsConfig := &AvsConfig{
 		AggregatorOperatorSetId: 1,
 		ExecutorOperatorSetIds:  []uint32{2, 3, 4},
 		CurveType:               config.CurveTypeECDSA,
@@ -184,7 +183,7 @@ func (s *StorageTestSuite) testConfigCaching(t *testing.T) {
 
 	// Test getting non-existent AVS config
 	_, err = store.GetAVSConfig(ctx, avsAddress)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting AVS config
 	err = store.SaveAVSConfig(ctx, avsAddress, avsConfig)
@@ -197,7 +196,7 @@ func (s *StorageTestSuite) testConfigCaching(t *testing.T) {
 	assert.Equal(t, avsConfig.CurveType, retrievedAVS.CurveType)
 }
 
-func (s *StorageTestSuite) testLifecycle(t *testing.T) {
+func (s *TestSuite) testLifecycle(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 
@@ -213,13 +212,13 @@ func (s *StorageTestSuite) testLifecycle(t *testing.T) {
 
 	// Operations after close should fail
 	err = store.SetLastProcessedBlock(ctx, config.ChainId(1), 12346)
-	assert.ErrorIs(t, err, storage.ErrStoreClosed)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 
 	_, err = store.GetLastProcessedBlock(ctx, config.ChainId(1))
-	assert.ErrorIs(t, err, storage.ErrStoreClosed)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 }
 
-func (s *StorageTestSuite) testConcurrentAccess(t *testing.T) {
+func (s *TestSuite) testConcurrentAccess(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
@@ -247,7 +246,7 @@ func (s *StorageTestSuite) testConcurrentAccess(t *testing.T) {
 		go func(chainId config.ChainId) {
 			for j := 0; j < 10; j++ {
 				_, err := store.GetLastProcessedBlock(ctx, chainId)
-				if err != nil && err != storage.ErrNotFound {
+				if err != nil && err != ErrNotFound {
 					errors <- err
 					return
 				}
