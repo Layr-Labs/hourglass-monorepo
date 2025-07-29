@@ -1,0 +1,21 @@
+debug: {{envDefault "DEBUG" "false"}}
+
+grpcPort: {{envDefault "EXECUTOR_PORT" "9090"}}
+performerNetworkName: "{{envDefault "PERFORMER_NETWORK_NAME" "hgctl-performer-network"}}"
+
+operator:
+  address: "{{env "OPERATOR_ADDRESS"}}"
+  operatorPrivateKey:
+    privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
+  signingKeys:
+    # Keystore configuration is determined by KEYSTORE_NAME environment variable
+    # The keystore type (bn254/bls or ecdsa) will determine which section is configured
+    bls:
+      keystoreFile: "/keystores/operator.keystore.json"
+      password: "{{env "KEYSTORE_PASSWORD"}}"
+
+l1Chain:
+  chainId: "{{env "L1_CHAIN_ID"}}"
+  rpcUrl: "{{env "L1_RPC_URL"}}"
+
+avsPerformers:
