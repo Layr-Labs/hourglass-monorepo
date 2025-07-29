@@ -46,18 +46,14 @@ func (c *Chain) IsAnvilRpc() bool {
 }
 
 type AggregatorAvs struct {
-	Address             string `json:"address" yaml:"address"`
-	ChainIds            []uint `json:"chainIds" yaml:"chainIds"`
-	AVSRegistrarAddress string `json:"avsRegistrarAddress" yaml:"avsRegistrarAddress"`
+	Address  string `json:"address" yaml:"address"`
+	ChainIds []uint `json:"chainIds" yaml:"chainIds"`
 }
 
 func (aa *AggregatorAvs) Validate() error {
 	var allErrors field.ErrorList
 	if aa.Address == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("address"), "address is required"))
-	}
-	if aa.AVSRegistrarAddress == "" {
-		allErrors = append(allErrors, field.Required(field.NewPath("avsRegistrarAddress"), "avsRegistrarAddress is required"))
 	}
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()

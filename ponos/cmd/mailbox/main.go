@@ -43,9 +43,7 @@ func main() {
 		panic(err)
 	}
 
-	cc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357",
-	}, ethCaller, privateKeySigner, l)
+	cc, err := caller.NewContractCaller(ethCaller, privateKeySigner, l)
 	if err != nil {
 		panic(err)
 	}
