@@ -77,20 +77,68 @@ hgctl describe release 0x1234... 0 --operator-set-id 1 -v
 hgctl describe release 0x1234... 0 --operator-set-id 1 -o json
 ```
 
-### Deploy Artifacts
+### Deploy Components
 
-Deploy AVS artifacts using EigenRuntime specifications:
+Deploy AVS components using EigenRuntime specifications:
 
 ```bash
-# Deploy latest release
+# Deploy performer (legacy)
 hgctl deploy artifact 0x1234... --operator-set-id 1
 
+# Deploy executor component
+hgctl deploy executor 0x1234... --operator-set-id 1
+
+# Deploy aggregator component
+hgctl deploy aggregator 0x1234... --operator-set-id 1
+
 # Deploy specific version
-hgctl deploy artifact 0x1234... --operator-set-id 1 --version 0
+hgctl deploy executor 0x1234... --operator-set-id 1 --version 0
 
 # Legacy mode (direct digest)
 hgctl deploy artifact 0x1234... --legacy-digest sha256:abc123 --registry-url ghcr.io/example/avs
 ```
+
+The executor and aggregator deployment commands will:
+1. Fetch the runtime spec from the OCI registry
+2. Extract the component configuration
+3. Substitute environment variables with operator configuration
+4. Run the container with the populated configuration
+
+#### Environment Variable Handling
+
+Environment variables are substituted from multiple sources in priority order:
+1. Command-line flags (`--env`)
+2. Environment file (`--env-file`)
+3. OS environment variables
+4. Context configuration
+5. Default values in the runtime spec
+
+```bash
+# Deploy with environment variables from OS
+export OPERATOR_PRIVATE_KEY=0x...
+export OPERATOR_ADDRESS=0x...
+hgctl deploy aggregator 0x1234... --operator-set-id 0
+
+# Deploy with explicit environment variables
+hgctl deploy aggregator 0x1234... --operator-set-id 0 \
+  --env OPERATOR_ADDRESS=0x... \
+  --env L1_RPC_URL=https://mainnet.infura.io/v3/...
+
+# Deploy with environment file (for secrets)
+cat > ~/.hourglass/secrets.env <<EOF
+OPERATOR_PRIVATE_KEY=0x...
+BLS_KEYSTORE_PASSWORD=...
+EOF
+hgctl deploy aggregator 0x1234... --operator-set-id 0 --env-file ~/.hourglass/secrets.env
+
+# Combine all approaches
+hgctl deploy aggregator 0x1234... --operator-set-id 0 \
+  --env-file ~/.hourglass/secrets.env \
+  --env L1_CHAIN_ID=1 \
+  --env L2_CHAIN_ID=10
+```
+
+**Security Note**: Secret variables (containing PRIVATE_KEY, PASSWORD, SECRET, etc.) will NOT be saved to the context configuration. Always provide secrets at runtime.
 
 ### Translate Runtime Specs
 
@@ -114,7 +162,13 @@ hgctl context list
 hgctl context use production
 
 # Set context values
-hgctl context set rpcUrl http://mainnet.infura.io
+hgctl context set --rpc-url http://mainnet.infura.io
+hgctl context set --release-manager 0x5678...
+hgctl context set --executor-address localhost:9090
+
+# Set environment variables (non-secret values only)
+hgctl context set --env L1_CHAIN_ID=1 --env L2_CHAIN_ID=10
+hgctl context set --env AGGREGATOR_PORT=9000
 ```
 
 ### Output Formats

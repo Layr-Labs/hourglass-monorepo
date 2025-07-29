@@ -10,6 +10,20 @@ import (
     "gopkg.in/yaml.v3"
 )
 
+type KeystoreReference struct {
+    Name string `yaml:"name"`
+    Path string `yaml:"path"`
+    Type string `yaml:"type"` // "bn254" or "ecdsa"
+}
+
+type Web3SignerReference struct {
+    Name       string `yaml:"name"`
+    ConfigPath string `yaml:"configPath,omitempty"`
+    CACertPath string `yaml:"caCertPath,omitempty"`
+    ClientCertPath string `yaml:"clientCertPath,omitempty"`
+    ClientKeyPath  string `yaml:"clientKeyPath,omitempty"`
+}
+
 type Context struct {
     Name                  string `yaml:"-"`
     ExecutorAddress       string `yaml:"executorAddress"`
@@ -18,6 +32,14 @@ type Context struct {
     NetworkID            uint64 `yaml:"networkId,omitempty"`
     RPCUrl               string `yaml:"rpcUrl,omitempty"`
     ReleaseManagerAddress string `yaml:"releaseManagerAddress,omitempty"`
+    
+    // Environment variables for deployments (non-secret values only)
+    // Secrets should be provided at runtime via flags or environment variables
+    EnvironmentVars map[string]string `yaml:"environmentVars,omitempty"`
+    
+    // Keystore and Web3 Signer references
+    Keystores    []KeystoreReference    `yaml:"keystores,omitempty"`
+    Web3Signers  []Web3SignerReference  `yaml:"web3signers,omitempty"`
 }
 
 type Config struct {
@@ -132,9 +154,13 @@ func (c *Context) ApplyOverrides(executorAddr, rpcURL, releaseManagerAddr string
     }
 }
 
-func getConfigPath() string {
+func GetConfigDir() string {
     home, _ := os.UserHomeDir()
-    return filepath.Join(home, ".hgctl", "config.yaml")
+    return filepath.Join(home, ".hgctl")
+}
+
+func getConfigPath() string {
+    return filepath.Join(GetConfigDir(), "config.yaml")
 }
 
 func defaultConfig() *Config {

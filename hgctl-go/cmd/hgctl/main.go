@@ -117,6 +117,8 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			commands.TranslateCommand(),
 			commands.RemoveCommand(),
 			commands.ContextCommand(),
+			commands.KeystoreCommand(),
+			commands.Web3SignerCommand(),
 		},
 	}
 
