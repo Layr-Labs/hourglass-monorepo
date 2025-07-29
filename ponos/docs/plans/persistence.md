@@ -80,47 +80,54 @@ This document outlines the implementation plan for adding data persistence to th
   - [x] Close method to clear maps
 
 #### 2.2 Implement In-Memory Executor Store
-- [ ] Create `pkg/executor/storage/memory/memory.go`
-- [ ] Implement `InMemoryExecutorStore` struct with:
-  - [ ] RWMutex for thread safety
-  - [ ] Maps for performers, tasks, deployments
-- [ ] Implement all `ExecutorStore` interface methods:
-  - [ ] Performer state methods with validation
-  - [ ] Inflight task tracking methods
-  - [ ] Deployment tracking methods
-  - [ ] Close method to clear maps
+- [x] Create `pkg/executor/storage/memory/memory.go`
+- [x] Implement `InMemoryExecutorStore` struct with:
+  - [x] RWMutex for thread safety
+  - [x] Maps for performers, tasks, deployments
+- [x] Implement all `ExecutorStore` interface methods:
+  - [x] Performer state methods with validation
+  - [x] Inflight task tracking methods
+  - [x] Deployment tracking methods
+  - [x] Close method to clear maps
 
 #### 2.3 Create In-Memory Store Tests
-- [ ] Create `pkg/aggregator/storage/memory/memory_test.go`:
-  - [ ] Test concurrent access scenarios
-  - [ ] Test all CRUD operations
-  - [ ] Test error conditions
-  - [ ] Benchmark performance
-- [ ] Create `pkg/executor/storage/memory/memory_test.go`:
-  - [ ] Test concurrent access scenarios
-  - [ ] Test all CRUD operations
-  - [ ] Test error conditions
-  - [ ] Benchmark performance
+- [x] Create `pkg/aggregator/storage/memory/memory_test.go`:
+  - [x] Test concurrent access scenarios
+  - [x] Test all CRUD operations
+  - [x] Test error conditions
+  - [x] Benchmark performance
+- [x] Create `pkg/executor/storage/memory/memory_test.go`:
+  - [x] Test concurrent access scenarios
+  - [x] Test all CRUD operations
+  - [x] Test error conditions
+  - [x] Benchmark performance
 
-#### 2.4 Create Storage Factory Functions
-- [ ] Create `pkg/aggregator/storage/factory.go`:
-  - [ ] `NewAggregatorStore(config StorageConfig) (AggregatorStore, error)`
-  - [ ] Support "memory" type initially
-- [ ] Create `pkg/executor/storage/factory.go`:
-  - [ ] `NewExecutorStore(config StorageConfig) (ExecutorStore, error)`
-  - [ ] Support "memory" type initially
+#### 2.4 Create Storage Factory Functions [SKIPPED]
+- [x] SKIPPED - Callers will directly instantiate the specific store type they need
+- [x] No factory pattern - use `memory.NewInMemoryAggregatorStore()` or `memory.NewInMemoryExecutorStore()` directly
 
 ### Milestone 3: Aggregator Refactoring (3.1 - 3.5)
 
-#### 3.1 Refactor EVMChainPoller
-- [ ] Add `storage.AggregatorStore` field to `EVMChainPoller` struct
-- [ ] Update `NewEVMChainPoller` to accept storage parameter
-- [ ] Replace `lastObservedBlock` field usage:
-  - [ ] Load last block on initialization
-  - [ ] Save block after successful processing
-  - [ ] Handle storage errors appropriately
-- [ ] Update `Start()` method to recover from last processed block
-- [ ] Add logging for storage operations
+#### 3.4 Update Aggregator Configuration
+- [ ] Add storage configuration to `aggregatorConfig`:
+  ```go
+  type StorageConfig struct {
+      Type string `json:"type" yaml:"type"` // "memory" or "badger"
+      BadgerConfig *BadgerConfig `json:"badger,omitempty" yaml:"badger,omitempty"`
+  }
+  ```
+- [ ] Update config validation
+- [ ] Update example configurations
+
+#### 3.3 Update Aggregator Initialization
+- [ ] Modify `aggregator.Initialize()`:
+  - [ ] Create storage instance based on config
+  - [ ] Pass storage to EVMChainPoller instances
+  - [ ] Pass storage to AvsExecutionManager instances
+- [ ] Add recovery logic:
+  - [ ] Load pending tasks from storage
+  - [ ] Re-queue tasks to taskQueue
+  - [ ] Log recovery statistics
 
 #### 3.2 Refactor AvsExecutionManager
 - [ ] Add `storage.AggregatorStore` field to `AvsExecutionManager` struct
@@ -136,26 +143,15 @@ This document outlines the implementation plan for adding data persistence to th
   - [ ] Update task status in `handleTask`
   - [ ] Mark task complete after submission
 
-#### 3.3 Update Aggregator Initialization
-- [ ] Modify `aggregator.Initialize()`:
-  - [ ] Create storage instance based on config
-  - [ ] Pass storage to EVMChainPoller instances
-  - [ ] Pass storage to AvsExecutionManager instances
-- [ ] Add recovery logic:
-  - [ ] Load pending tasks from storage
-  - [ ] Re-queue tasks to taskQueue
-  - [ ] Log recovery statistics
-
-#### 3.4 Update Aggregator Configuration
-- [ ] Add storage configuration to `aggregatorConfig`:
-  ```go
-  type StorageConfig struct {
-      Type string `json:"type" yaml:"type"` // "memory" or "badger"
-      BadgerConfig *BadgerConfig `json:"badger,omitempty" yaml:"badger,omitempty"`
-  }
-  ```
-- [ ] Update config validation
-- [ ] Update example configurations
+#### 3.1 Refactor EVMChainPoller
+- [ ] Add `storage.AggregatorStore` field to `EVMChainPoller` struct
+- [ ] Update `NewEVMChainPoller` to accept storage parameter
+- [ ] Replace `lastObservedBlock` field usage:
+  - [ ] Load last block on initialization
+  - [ ] Save block after successful processing
+  - [ ] Handle storage errors appropriately
+- [ ] Update `Start()` method to recover from last processed block
+- [ ] Add logging for storage operations
 
 #### 3.5 Update Aggregator Tests
 - [ ] Update all existing aggregator tests to use in-memory storage
@@ -261,10 +257,9 @@ This document outlines the implementation plan for adding data persistence to th
   - [ ] Test large data sets
   - [ ] Test compaction
 
-#### 6.5 Update Factory Functions
-- [ ] Update aggregator factory to support "badger" type
-- [ ] Update executor factory to support "badger" type
-- [ ] Add BadgerDB configuration parsing
+#### 6.5 Update Factory Functions [SKIPPED]
+- [x] SKIPPED - No factory pattern, callers will use `badger.NewBadgerAggregatorStore()` or `badger.NewBadgerExecutorStore()` directly
+- [ ] BadgerDB constructors will accept configuration directly
 
 #### 6.6 Performance Optimization
 - [ ] Profile BadgerDB performance

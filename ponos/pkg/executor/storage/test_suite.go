@@ -1,22 +1,22 @@
-package storage_test
+package storage
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// StorageTestSuite defines a test suite that all storage implementations must pass
-type StorageTestSuite struct {
-	NewStore func() (storage.ExecutorStore, error)
+// TestSuite defines a test suite that all storage implementations must pass
+type TestSuite struct {
+	NewStore func() (ExecutorStore, error)
 }
 
-// TestExecutorStore runs all storage interface compliance tests
-func (s *StorageTestSuite) TestExecutorStore(t *testing.T) {
+// Run executes all storage interface compliance tests
+func (s *TestSuite) Run(t *testing.T) {
 	t.Run("PerformerState", s.testPerformerState)
 	t.Run("TaskTracking", s.testTaskTracking)
 	t.Run("DeploymentTracking", s.testDeploymentTracking)
@@ -24,14 +24,14 @@ func (s *StorageTestSuite) TestExecutorStore(t *testing.T) {
 	t.Run("ConcurrentAccess", s.testConcurrentAccess)
 }
 
-func (s *StorageTestSuite) testPerformerState(t *testing.T) {
+func (s *TestSuite) testPerformerState(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
 
 	ctx := context.Background()
 
-	performerState := &storage.PerformerState{
+	performerState := &PerformerState{
 		PerformerId:        "performer-123",
 		AvsAddress:         "0xavs123",
 		ContainerId:        "container-abc",
@@ -48,7 +48,7 @@ func (s *StorageTestSuite) testPerformerState(t *testing.T) {
 
 	// Test getting non-existent performer
 	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting performer state
 	err = store.SavePerformerState(ctx, performerState.PerformerId, performerState)
@@ -83,21 +83,21 @@ func (s *StorageTestSuite) testPerformerState(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test deleting non-existent performer
 	err = store.DeletePerformerState(ctx, "non-existent")
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func (s *StorageTestSuite) testTaskTracking(t *testing.T) {
+func (s *TestSuite) testTaskTracking(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
 
 	ctx := context.Background()
 
-	taskInfo := &storage.TaskInfo{
+	taskInfo := &TaskInfo{
 		TaskId:            "task-123",
 		AvsAddress:        "0xavs123",
 		OperatorAddress:   "0xoperator123",
@@ -109,7 +109,7 @@ func (s *StorageTestSuite) testTaskTracking(t *testing.T) {
 
 	// Test getting non-existent task
 	_, err = store.GetInflightTask(ctx, taskInfo.TaskId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting inflight task
 	err = store.SaveInflightTask(ctx, taskInfo.TaskId, taskInfo)
@@ -141,26 +141,26 @@ func (s *StorageTestSuite) testTaskTracking(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = store.GetInflightTask(ctx, taskInfo.TaskId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test deleting non-existent task
 	err = store.DeleteInflightTask(ctx, "non-existent")
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func (s *StorageTestSuite) testDeploymentTracking(t *testing.T) {
+func (s *TestSuite) testDeploymentTracking(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
 
 	ctx := context.Background()
 
-	deploymentInfo := &storage.DeploymentInfo{
+	deploymentInfo := &DeploymentInfo{
 		DeploymentId:     "deploy-123",
 		AvsAddress:       "0xavs123",
 		ArtifactRegistry: "registry.io/avs",
 		ArtifactDigest:   "sha256:abcdef",
-		Status:           storage.DeploymentStatusPending,
+		Status:           DeploymentStatusPending,
 		StartedAt:        time.Now(),
 		CompletedAt:      nil,
 		Error:            "",
@@ -168,7 +168,7 @@ func (s *StorageTestSuite) testDeploymentTracking(t *testing.T) {
 
 	// Test getting non-existent deployment
 	_, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting deployment
 	err = store.SaveDeployment(ctx, deploymentInfo.DeploymentId, deploymentInfo)
@@ -181,37 +181,39 @@ func (s *StorageTestSuite) testDeploymentTracking(t *testing.T) {
 	assert.Equal(t, deploymentInfo.Status, retrieved.Status)
 
 	// Test updating deployment status
-	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, storage.DeploymentStatusDeploying)
+	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, DeploymentStatusDeploying)
 	require.NoError(t, err)
 
 	retrieved, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
 	require.NoError(t, err)
-	assert.Equal(t, storage.DeploymentStatusDeploying, retrieved.Status)
+	assert.Equal(t, DeploymentStatusDeploying, retrieved.Status)
 
 	// Test updating to completed
-	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, storage.DeploymentStatusRunning)
+	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, DeploymentStatusRunning)
 	require.NoError(t, err)
 
 	retrieved, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
 	require.NoError(t, err)
-	assert.Equal(t, storage.DeploymentStatusRunning, retrieved.Status)
+	assert.Equal(t, DeploymentStatusRunning, retrieved.Status)
+	assert.NotNil(t, retrieved.CompletedAt)
 
 	// Test updating non-existent deployment
-	err = store.UpdateDeploymentStatus(ctx, "non-existent", storage.DeploymentStatusFailed)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
+	err = store.UpdateDeploymentStatus(ctx, "non-existent", DeploymentStatusFailed)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func (s *StorageTestSuite) testLifecycle(t *testing.T) {
+func (s *TestSuite) testLifecycle(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 
 	ctx := context.Background()
 
 	// Add some data
-	performerState := &storage.PerformerState{
+	performerState := &PerformerState{
 		PerformerId: "test-performer",
 		AvsAddress:  "0xavs123",
 		Status:      "running",
+		CreatedAt:   time.Now(),
 	}
 	err = store.SavePerformerState(ctx, performerState.PerformerId, performerState)
 	require.NoError(t, err)
@@ -222,13 +224,13 @@ func (s *StorageTestSuite) testLifecycle(t *testing.T) {
 
 	// Operations after close should fail
 	err = store.SavePerformerState(ctx, "new-performer", performerState)
-	assert.ErrorIs(t, err, storage.ErrStoreClosed)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 
 	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
-	assert.ErrorIs(t, err, storage.ErrStoreClosed)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 }
 
-func (s *StorageTestSuite) testConcurrentAccess(t *testing.T) {
+func (s *TestSuite) testConcurrentAccess(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
 	defer store.Close()
@@ -240,13 +242,14 @@ func (s *StorageTestSuite) testConcurrentAccess(t *testing.T) {
 	// Concurrent writes to different performers
 	for i := 0; i < 5; i++ {
 		go func(id int) {
-			performerState := &storage.PerformerState{
-				PerformerId: t.Name() + "-performer-" + string(rune(id)),
-				AvsAddress:  "0xavs" + string(rune(id)),
+			performerState := &PerformerState{
+				PerformerId: fmt.Sprintf("performer-%d", id),
+				AvsAddress:  fmt.Sprintf("0xavs%d", id),
 				Status:      "running",
+				CreatedAt:   time.Now(),
 			}
 			for j := 0; j < 10; j++ {
-				performerState.Status = "status-" + string(rune(j))
+				performerState.Status = fmt.Sprintf("status-%d", j)
 				err := store.SavePerformerState(ctx, performerState.PerformerId, performerState)
 				if err != nil {
 					errors <- err
@@ -260,10 +263,10 @@ func (s *StorageTestSuite) testConcurrentAccess(t *testing.T) {
 	// Concurrent reads
 	for i := 0; i < 5; i++ {
 		go func(id int) {
-			performerId := t.Name() + "-performer-" + string(rune(id))
+			performerId := fmt.Sprintf("performer-%d", id)
 			for j := 0; j < 10; j++ {
 				_, err := store.GetPerformerState(ctx, performerId)
-				if err != nil && err != storage.ErrNotFound {
+				if err != nil && err != ErrNotFound {
 					errors <- err
 					return
 				}
