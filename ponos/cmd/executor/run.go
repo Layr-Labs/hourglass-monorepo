@@ -102,9 +102,7 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to create private key signer: %w", err)
 		}
 
-		cc, err := caller.NewContractCallerFromEthereumClient(&caller.ContractCallerConfig{
-			AVSRegistrarAddress: Config.AvsPerformers[0].AVSRegistrarAddress,
-		}, ethereumClient, privateKeySigner, l)
+		cc, err := caller.NewContractCallerFromEthereumClient(ethereumClient, privateKeySigner, l)
 		if err != nil {
 			return fmt.Errorf("failed to initialize contract caller: %w", err)
 		}

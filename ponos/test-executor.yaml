@@ -47,6 +47,4 @@ avsPerformers:
 - image:
     repository: "hello-performer"
     tag: "latest"
-  processType: "server"
   avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
-  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"

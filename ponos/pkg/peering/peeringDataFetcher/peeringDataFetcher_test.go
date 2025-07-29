@@ -125,9 +125,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
 
-			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-			}, ethClient, avsPrivateKeySigner, l)
+			avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
@@ -137,9 +135,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}
 
-			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-			}, ethClient, operatorPrivateKeySigner, l)
+			operatorCc, err := caller.NewContractCaller(ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}
@@ -337,9 +333,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to create AVS private key signer: %v", err)
 			}
 
-			avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-			}, ethClient, avsPrivateKeySigner, l)
+			avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("failed to create contract caller: %v", err)
 			}
@@ -349,9 +343,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				t.Fatalf("Failed to create operator private key signer: %v", err)
 			}
 
-			operatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-				AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-			}, ethClient, operatorPrivateKeySigner, l)
+			operatorCc, err := caller.NewContractCaller(ethClient, operatorPrivateKeySigner, l)
 			if err != nil {
 				t.Fatalf("Failed to create contract caller: %v", err)
 			}

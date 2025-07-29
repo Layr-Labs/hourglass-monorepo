@@ -84,7 +84,6 @@ func testWithKeyType(
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
 	simAggConfig.Operator.Address = chainConfig.OperatorAccountAddress
-	simAggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	simAggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 
 	aggBn254PrivateSigningKey, _, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(simAggConfig.Operator, config.CurveTypeBN254)
@@ -139,9 +138,7 @@ func testWithKeyType(
 		t.Fatalf("Failed to create L1 private key ecdsaSigner: %v", err)
 	}
 
-	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-	}, l1EthClient, l1PrivateKeySigner, l)
+	l1CC, err := caller.NewContractCaller(l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}

@@ -47,9 +47,7 @@ func main() {
 		return
 	}
 
-	aggregatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357",
-	}, ethClient, privateKeySigner, l)
+	aggregatorCc, err := caller.NewContractCaller(ethClient, privateKeySigner, l)
 	if err != nil {
 		l.Sugar().Fatalf("failed to create aggregator contract caller: %v", err)
 		return

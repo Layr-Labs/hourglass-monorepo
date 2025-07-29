@@ -183,7 +183,6 @@ func runAggregatorTest(t *testing.T, mode string) {
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
-	aggConfig.Avss[0].AVSRegistrarAddress = chainConfig.AVSTaskRegistrarAddress
 	aggConfig.Avss[0].ChainIds = []uint{
 		uint(config.ChainId_BaseSepoliaAnvil),
 	}
@@ -284,9 +283,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to create L1 aggregator private key bn254Signer: %v", err)
 	}
 
-	l1AggCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, l1EthClient, l1AggPrivateKeySigner, l)
+	l1AggCc, err := caller.NewContractCaller(l1EthClient, l1AggPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
@@ -296,9 +293,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to create L1 executor private key bn254Signer: %v", err)
 	}
 
-	l1ExecCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, l1EthClient, l1ExecPrivateKeySigner, l)
+	l1ExecCc, err := caller.NewContractCaller(l1EthClient, l1ExecPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}
@@ -400,9 +395,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to create AVS L1 private key bn254Signer: %v", err)
 	}
 
-	avsCcL1, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, l1EthClient, avsCcL1PrivateKeySigner, l)
+	avsCcL1, err := caller.NewContractCaller(l1EthClient, avsCcL1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -423,9 +416,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to create AVS L2 private key bn254Signer: %v", err)
 	}
 
-	avsCcL2, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, l2EthClient, avsCcL2PrivateKeySigner, l)
+	avsCcL2, err := caller.NewContractCaller(l2EthClient, avsCcL2PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS contract caller: %v", err)
 	}
@@ -582,9 +573,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		t.Fatalf("Failed to create L2 app private key bn254Signer: %v", err)
 	}
 
-	l2AppCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, l2EthClient, l2AppPrivateKeySigner, l)
+	l2AppCc, err := caller.NewContractCaller(l2EthClient, l2AppPrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create contract caller: %v", err)
 	}

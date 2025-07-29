@@ -112,9 +112,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to create L1 private key signer: %v", err)
 	}
 
-	l1CC, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress, // technically not used...
-	}, l1EthClient, l1PrivateKeySigner, l)
+	l1CC, err := caller.NewContractCaller(l1EthClient, l1PrivateKeySigner, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
