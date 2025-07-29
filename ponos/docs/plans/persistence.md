@@ -58,8 +58,8 @@ This document outlines the implementation plan for adding data persistence to th
 - [x] Define executor errors in `pkg/executor/storage/errors.go`
 
 #### 1.4 Create Storage Tests Interfaces
-- [ ] Create `pkg/aggregator/storage/storage_test.go` with interface compliance tests
-- [ ] Create `pkg/executor/storage/storage_test.go` with interface compliance tests
+- [x] Create `pkg/aggregator/storage/storage_test.go` with interface compliance tests
+- [x] Create `pkg/executor/storage/storage_test.go` with interface compliance tests
 
 ### Milestone 2: In-Memory Implementation (2.1 - 2.4)
 
