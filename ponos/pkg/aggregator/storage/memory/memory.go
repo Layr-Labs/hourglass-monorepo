@@ -243,7 +243,7 @@ func (s *InMemoryAggregatorStore) Close() error {
 	}
 
 	s.closed = true
-	
+
 	// Clear all maps
 	s.lastProcessedBlocks = nil
 	s.tasks = nil

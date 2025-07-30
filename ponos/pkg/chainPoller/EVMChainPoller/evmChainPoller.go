@@ -62,7 +62,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 		zap.Any("chainId", ecp.config.ChainId),
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
-	
+
 	// Load last processed block from storage if available
 	if ecp.store != nil {
 		lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
@@ -82,7 +82,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 			}
 		}
 	}
-	
+
 	go ecp.pollForBlocks(ctx)
 	return nil
 }
@@ -258,7 +258,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		zap.Uint64("blockNumber", block.Number.Value()),
 	)
 	ecp.lastObservedBlock = block
-	
+
 	// Save last processed block to storage if available
 	if ecp.store != nil {
 		if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.ChainId, block.Number.Value()); err != nil {
@@ -274,7 +274,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 			)
 		}
 	}
-	
+
 	return block, logs, nil
 }
 

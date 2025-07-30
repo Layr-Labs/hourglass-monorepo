@@ -94,7 +94,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 			)
 		}
 	}
-	
+
 	// Deploy using the performer's Deploy method
 	image := avsPerformer.PerformerImage{
 		Repository: req.GetRegistryUrl(),
@@ -107,7 +107,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 			}
 		}),
 	}
-	
+
 	// Update deployment status to deploying
 	if e.store != nil && deploymentId != "" {
 		if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusDeploying); err != nil {
@@ -129,7 +129,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 				)
 			}
 		}
-		
+
 		// Check for specific error types to return appropriate gRPC status codes
 		if strings.Contains(err.Error(), "deployment already in progress") {
 			return &executorV1.DeployArtifactResponse{
@@ -165,7 +165,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		zap.String("performerId", result.PerformerID),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
-	
+
 	// Update deployment status to running and save performer state
 	if e.store != nil {
 		if deploymentId != "" {
@@ -176,7 +176,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 				)
 			}
 		}
-		
+
 		// Save performer state
 		performerState := &storage.PerformerState{
 			PerformerId:        result.PerformerID,
@@ -268,7 +268,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		return nil, fmt.Errorf("failed to validate task signature: %w", err)
 	}
 	e.inflightTasks.Store(task.TaskId, task)
-	
+
 	// Save inflight task to storage if available
 	if e.store != nil {
 		taskInfo := &storage.TaskInfo{
@@ -316,7 +316,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	)
 
 	e.inflightTasks.Delete(task.TaskId)
-	
+
 	// Remove inflight task from storage if available
 	if e.store != nil {
 		if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
@@ -326,7 +326,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 			)
 		}
 	}
-	
+
 	return &executorV1.TaskResult{
 		TaskId:          response.TaskID,
 		OperatorAddress: e.config.Operator.Address,
@@ -423,7 +423,7 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 			allPerformers = append(allPerformers, e.performerInfoToProto(info))
 		}
 	}
-	
+
 	// Also include persisted performer states from storage if available
 	if e.store != nil {
 		persistedStates, err := e.store.ListPerformerStates(ctx)
@@ -438,7 +438,7 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 				if filterAddress != "" && !strings.EqualFold(filterAddress, state.AvsAddress) {
 					continue
 				}
-				
+
 				// Check if this performer is already in the list
 				found := false
 				for _, perf := range allPerformers {
@@ -447,7 +447,7 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 						break
 					}
 				}
-				
+
 				if !found {
 					// Convert persisted state to proto format
 					allPerformers = append(allPerformers, &executorV1.Performer{
@@ -520,7 +520,7 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 		zap.String("performerId", req.GetPerformerId()),
 		zap.String("avsAddress", avsAddress),
 	)
-	
+
 	// Remove performer state from storage if available
 	if e.store != nil {
 		if err := e.store.DeletePerformerState(ctx, req.GetPerformerId()); err != nil {

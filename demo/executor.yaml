@@ -26,3 +26,8 @@ storage:
   type: "memory"  # Options: "memory" or "badger"
   # badger:        # Uncomment for BadgerDB storage
   #   dir: "/var/lib/ponos/executor/badger"
+  #   inMemory: false
+  #   valueLogFileSize: 1073741824  # 1GB
+  #   numVersionsToKeep: 1
+  #   numLevelZeroTables: 5
+  #   numLevelZeroTablesStall: 10

@@ -7,6 +7,7 @@ require (
 	github.com/Layr-Labs/eigenlayer-contracts v1.7.0-rc.3.0.20250722182636-3f6860786541
 	github.com/Layr-Labs/multichain-go v0.0.8-0.20250707132349-002c85d663d4
 	github.com/Layr-Labs/protocol-apis v1.14.0
+	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/docker/docker v28.0.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.15.11
@@ -33,6 +34,8 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/aws/aws-sdk-go v1.55.7 // indirect
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
+	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/consensys/bavard v0.1.29 // indirect
 	github.com/consensys/gnark-crypto v0.17.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -41,8 +44,10 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
+	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
@@ -58,7 +63,11 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/glog v1.2.3 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
+	github.com/google/flatbuffers v1.12.1 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -69,6 +78,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/klauspost/compress v1.16.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
@@ -93,6 +103,7 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/wealdtech/go-merkletree/v2 v2.6.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
 	go.opentelemetry.io/otel v1.35.0 // indirect

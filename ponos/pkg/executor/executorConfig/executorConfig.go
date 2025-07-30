@@ -152,27 +152,38 @@ type Chain struct {
 
 // StorageConfig contains configuration for the storage layer
 type StorageConfig struct {
-	Type string `json:"type" yaml:"type"` // "memory" or "badger"
+	Type         string        `json:"type" yaml:"type"` // "memory" or "badger"
 	BadgerConfig *BadgerConfig `json:"badger,omitempty" yaml:"badger,omitempty"`
 }
 
 // BadgerConfig contains configuration for BadgerDB storage
 type BadgerConfig struct {
-	Dir string `json:"dir" yaml:"dir"` // Directory for BadgerDB data
+	// Directory where BadgerDB will store its data
+	Dir string `json:"dir" yaml:"dir"`
+	// InMemory runs BadgerDB in memory-only mode (for testing)
+	InMemory bool `json:"inMemory,omitempty" yaml:"inMemory,omitempty"`
+	// ValueLogFileSize sets the maximum size of a single value log file
+	ValueLogFileSize int64 `json:"valueLogFileSize,omitempty" yaml:"valueLogFileSize,omitempty"`
+	// NumVersionsToKeep sets how many versions to keep for each key
+	NumVersionsToKeep int `json:"numVersionsToKeep,omitempty" yaml:"numVersionsToKeep,omitempty"`
+	// NumLevelZeroTables sets the maximum number of level zero tables before stalling
+	NumLevelZeroTables int `json:"numLevelZeroTables,omitempty" yaml:"numLevelZeroTables,omitempty"`
+	// NumLevelZeroTablesStall sets the number of level zero tables that will trigger a stall
+	NumLevelZeroTablesStall int `json:"numLevelZeroTablesStall,omitempty" yaml:"numLevelZeroTablesStall,omitempty"`
 }
 
 // Validate validates the StorageConfig
 func (sc *StorageConfig) Validate() error {
 	var allErrors field.ErrorList
-	
+
 	if sc.Type == "" {
 		sc.Type = "memory" // Default to memory if not specified
 	}
-	
+
 	if sc.Type != "memory" && sc.Type != "badger" {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("type"), sc.Type, "type must be 'memory' or 'badger'"))
 	}
-	
+
 	if sc.Type == "badger" {
 		if sc.BadgerConfig == nil {
 			allErrors = append(allErrors, field.Required(field.NewPath("badger"), "badger configuration is required when type is 'badger'"))
@@ -180,7 +191,7 @@ func (sc *StorageConfig) Validate() error {
 			allErrors = append(allErrors, field.Required(field.NewPath("badger.dir"), "badger directory is required"))
 		}
 	}
-	
+
 	if len(allErrors) > 0 {
 		return allErrors.ToAggregate()
 	}
@@ -247,7 +258,7 @@ func (ec *ExecutorConfig) Validate() error {
 			allErrors = append(allErrors, field.Required(field.NewPath("chain.rpcUrl"), "rpcUrl is required"))
 		}
 	}
-	
+
 	// Validate storage configuration if present
 	if ec.Storage != nil {
 		if err := ec.Storage.Validate(); err != nil {

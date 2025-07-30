@@ -69,10 +69,17 @@ type ServerConfig struct {
 type BadgerConfig struct {
 	// Directory where BadgerDB will store its data
 	Dir string `json:"dir" yaml:"dir"`
+	// InMemory runs BadgerDB in memory-only mode (for testing)
+	InMemory bool `json:"inMemory,omitempty" yaml:"inMemory,omitempty"`
 	// ValueLogFileSize sets the maximum size of a single value log file
 	ValueLogFileSize int64 `json:"valueLogFileSize,omitempty" yaml:"valueLogFileSize,omitempty"`
-	// ValueLogMaxEntries sets the maximum number of entries per value log file
-	ValueLogMaxEntries uint32 `json:"valueLogMaxEntries,omitempty" yaml:"valueLogMaxEntries,omitempty"`
+	// NumVersionsToKeep sets how many versions to keep for each key
+	NumVersionsToKeep int `json:"numVersionsToKeep,omitempty" yaml:"numVersionsToKeep,omitempty"`
+	// NumLevelZeroTables sets the maximum number of level zero tables before stalling
+	NumLevelZeroTables int `json:"numLevelZeroTables,omitempty" yaml:"numLevelZeroTables,omitempty"`
+	// NumLevelZeroTablesStall sets the number of level zero tables that will trigger a stall
+	NumLevelZeroTablesStall int    `json:"numLevelZeroTablesStall,omitempty" yaml:"numLevelZeroTablesStall,omitempty"`
+	ValueLogMaxEntries      uint32 `json:"valueLogMaxEntries,omitempty" yaml:"valueLogMaxEntries,omitempty"`
 }
 
 type StorageConfig struct {
@@ -89,7 +96,7 @@ func (sc *StorageConfig) Validate() field.ErrorList {
 	} else if sc.Type != "memory" && sc.Type != "badger" {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("type"), sc.Type, "storage type must be 'memory' or 'badger'"))
 	}
-	
+
 	if sc.Type == "badger" && sc.BadgerConfig == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("badger"), "badger config is required when type is 'badger'"))
 	} else if sc.Type == "badger" && sc.BadgerConfig != nil {
@@ -97,7 +104,7 @@ func (sc *StorageConfig) Validate() field.ErrorList {
 			allErrors = append(allErrors, field.Required(field.NewPath("badger", "dir"), "badger directory is required"))
 		}
 	}
-	
+
 	return allErrors
 }
 
@@ -164,14 +171,14 @@ func (arc *AggregatorConfig) Validate() error {
 			}
 		}
 	}
-	
+
 	// Validate storage config if provided
 	if arc.Storage != nil {
 		if storageErrors := arc.Storage.Validate(); len(storageErrors) > 0 {
 			allErrors = append(allErrors, storageErrors...)
 		}
 	}
-	
+
 	return allErrors.ToAggregate()
 }
 

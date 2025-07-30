@@ -205,7 +205,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
-	
+
 	// Try to load from storage first if available
 	if em.store != nil {
 		storageConfig, err := em.store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
@@ -234,7 +234,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 			)
 		}
 	}
-	
+
 	// Fall back to sync.Map cache for backward compatibility
 	if val, ok := em.operatorSetTaskConfigs.Load(opset); ok {
 		if val != nil {
@@ -280,7 +280,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 			Threshold:     consensusValue,
 		},
 	}
-	
+
 	// Save to storage if available
 	if em.store != nil {
 		storageConfig := &storage.OperatorSetTaskConfig{
@@ -300,7 +300,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 			)
 		}
 	}
-	
+
 	// Also store in memory cache for backward compatibility
 	em.operatorSetTaskConfigs.Store(opset, taskConfig)
 	return taskConfig, nil
@@ -394,13 +394,13 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context)
 		},
 		curveType: curveType,
 	}
-	
+
 	// Save to storage if available
 	if em.store != nil {
 		storageConfig := &storage.AvsConfig{
 			AggregatorOperatorSetId: em.avsConfig.AggregatorOperatorSetId,
 			ExecutorOperatorSetIds:  em.avsConfig.ExecutorOperatorSetIds,
-			CurveType:              em.avsConfig.curveType,
+			CurveType:               em.avsConfig.curveType,
 		}
 		if err := em.store.SaveAVSConfig(ctx, em.config.AvsAddress, storageConfig); err != nil {
 			em.logger.Sugar().Warnw("Failed to save AVS config to storage",
@@ -409,7 +409,7 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context)
 			)
 		}
 	}
-	
+
 	return em.avsConfig, nil
 }
 
@@ -420,7 +420,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	if _, ok := em.inflightTasks.Load(task.TaskId); ok {
 		return fmt.Errorf("task %s is already being processed", task.TaskId)
 	}
-	
+
 	// Update task status to processing
 	if em.store != nil {
 		if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
