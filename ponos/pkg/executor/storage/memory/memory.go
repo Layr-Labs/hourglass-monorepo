@@ -251,7 +251,7 @@ func (s *InMemoryExecutorStore) UpdateDeploymentStatus(ctx context.Context, depl
 	}
 
 	deployment.Status = status
-	
+
 	// Set completed time for terminal states
 	if status == storage.DeploymentStatusRunning || status == storage.DeploymentStatusFailed {
 		now := time.Now()
@@ -287,7 +287,7 @@ func validateDeploymentStatusTransition(from, to storage.DeploymentStatus) error
 		storage.DeploymentStatusPending:   {storage.DeploymentStatusDeploying, storage.DeploymentStatusFailed},
 		storage.DeploymentStatusDeploying: {storage.DeploymentStatusRunning, storage.DeploymentStatusFailed},
 		storage.DeploymentStatusRunning:   {storage.DeploymentStatusFailed}, // Can fail after running
-		storage.DeploymentStatusFailed:    {},                              // Terminal state
+		storage.DeploymentStatusFailed:    {},                               // Terminal state
 	}
 
 	allowedTransitions, exists := validTransitions[from]

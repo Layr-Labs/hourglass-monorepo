@@ -128,7 +128,7 @@ func TestAggregatorTaskFlowWithPersistence(t *testing.T) {
 
 	// Update status through lifecycle
 	require.NoError(t, store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing))
-	
+
 	retrievedTask, err := store.GetTask(ctx, task.TaskId)
 	require.NoError(t, err)
 	assert.Equal(t, task.TaskId, retrievedTask.TaskId)
@@ -278,7 +278,7 @@ func TestOperatorSetConfigPersistence(t *testing.T) {
 		Consensus: storage.OperatorSetTaskConsensus{
 			ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
 			Threshold:     7500,
-			},
+		},
 	}
 	require.NoError(t, store.SaveOperatorSetConfig(ctx, avsAddress, 0, updatedConfig))
 

@@ -146,7 +146,7 @@ func (a *Aggregator) Initialize() error {
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}
-	
+
 	// Perform recovery if storage is available
 	if a.store != nil {
 		if err := a.recoverFromStorage(); err != nil {
@@ -154,7 +154,7 @@ func (a *Aggregator) Initialize() error {
 			// Continue anyway - this is not a fatal error
 		}
 	}
-	
+
 	return nil
 }
 
@@ -165,11 +165,11 @@ func (a *Aggregator) recoverFromStorage() error {
 	if err != nil {
 		return fmt.Errorf("failed to list pending tasks: %w", err)
 	}
-	
+
 	if len(pendingTasks) > 0 {
-		a.logger.Sugar().Infow("Recovering pending tasks from storage", 
+		a.logger.Sugar().Infow("Recovering pending tasks from storage",
 			"count", len(pendingTasks))
-		
+
 		// Re-queue tasks to their respective AVS execution managers
 		for _, task := range pendingTasks {
 			aem, ok := a.avsExecutionManagers[task.AVSAddress]
@@ -179,7 +179,7 @@ func (a *Aggregator) recoverFromStorage() error {
 					"taskId", task.TaskId)
 				continue
 			}
-			
+
 			// Submit the task to the AVS execution manager
 			// This will be handled properly in milestone 3.2 when we refactor AvsExecutionManager
 			_ = aem
@@ -188,7 +188,7 @@ func (a *Aggregator) recoverFromStorage() error {
 				"avsAddress", task.AVSAddress)
 		}
 	}
-	
+
 	return nil
 }
 

@@ -10,9 +10,9 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	executorStorage "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 )
 
 // Baseline sync.Map implementation for comparison
@@ -238,7 +238,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	b.Run("InMemoryStore/LargeDataset", func(b *testing.B) {
 		store := memory.NewInMemoryAggregatorStore()
 		b.ResetTimer()
-		
+
 		// Populate with large dataset
 		for i := 0; i < 10000; i++ {
 			task := createTask(fmt.Sprintf("task-%d", i))
@@ -246,7 +246,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			task.OperatorSetId = uint32(i % 10)
 			task.Payload = []byte(fmt.Sprintf("payload-data-%d", i))
 			_ = store.SaveTask(ctx, task)
-			
+
 			if i%100 == 0 {
 				config := &storage.OperatorSetTaskConfig{
 					TaskSLA:      3600,
@@ -260,7 +260,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 				_ = store.SaveOperatorSetConfig(ctx, fmt.Sprintf("0xavs%d", i%100), uint32(i%10), config)
 			}
 		}
-		
+
 		// Perform operations on large dataset
 		for i := 0; i < b.N; i++ {
 			_, _ = store.ListPendingTasks(ctx)

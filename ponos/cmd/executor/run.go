@@ -15,6 +15,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -110,7 +111,7 @@ var runCmd = &cobra.Command{
 		}
 
 		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
-		
+
 		// Create storage based on configuration
 		var store storage.ExecutorStore
 		if Config.Storage != nil {
@@ -119,7 +120,12 @@ var runCmd = &cobra.Command{
 				l.Sugar().Infow("Using in-memory storage")
 				store = memory.NewInMemoryExecutorStore()
 			case "badger":
-				return fmt.Errorf("badger storage not yet implemented")
+				l.Sugar().Infow("Using BadgerDB storage")
+				badgerStore, err := badger.NewBadgerExecutorStore(Config.Storage.BadgerConfig)
+				if err != nil {
+					return fmt.Errorf("failed to create badger store: %w", err)
+				}
+				store = badgerStore
 			default:
 				return fmt.Errorf("unknown storage type: %s", Config.Storage.Type)
 			}

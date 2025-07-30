@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
@@ -104,7 +105,12 @@ var runCmd = &cobra.Command{
 				sugar.Infow("Using in-memory storage")
 				store = memory.NewInMemoryAggregatorStore()
 			case "badger":
-				return fmt.Errorf("badger storage not yet implemented")
+				sugar.Infow("Using BadgerDB storage")
+				badgerStore, err := badger.NewBadgerAggregatorStore(Config.Storage.BadgerConfig)
+				if err != nil {
+					return fmt.Errorf("failed to create badger store: %w", err)
+				}
+				store = badgerStore
 			default:
 				return fmt.Errorf("unsupported storage type: %s", Config.Storage.Type)
 			}
