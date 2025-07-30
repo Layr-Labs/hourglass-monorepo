@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
@@ -449,7 +450,9 @@ func runAggregatorTest(t *testing.T, mode string) {
 	signers := signer.Signers{
 		ECDSASigner: execSigner,
 	}
-	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc)
+	// Use in-memory storage for the executor
+	execStore := executorMemory.NewInMemoryExecutorStore()
+	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc, execStore)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
