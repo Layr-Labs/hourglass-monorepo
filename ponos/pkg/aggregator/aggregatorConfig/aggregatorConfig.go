@@ -66,6 +66,41 @@ type ServerConfig struct {
 	AggregatorUrl string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
 }
 
+type BadgerConfig struct {
+	// Directory where BadgerDB will store its data
+	Dir string `json:"dir" yaml:"dir"`
+	// ValueLogFileSize sets the maximum size of a single value log file
+	ValueLogFileSize int64 `json:"valueLogFileSize,omitempty" yaml:"valueLogFileSize,omitempty"`
+	// ValueLogMaxEntries sets the maximum number of entries per value log file
+	ValueLogMaxEntries uint32 `json:"valueLogMaxEntries,omitempty" yaml:"valueLogMaxEntries,omitempty"`
+}
+
+type StorageConfig struct {
+	// Type of storage backend: "memory" or "badger"
+	Type string `json:"type" yaml:"type"`
+	// BadgerConfig contains BadgerDB-specific configuration (only used when Type is "badger")
+	BadgerConfig *BadgerConfig `json:"badger,omitempty" yaml:"badger,omitempty"`
+}
+
+func (sc *StorageConfig) Validate() field.ErrorList {
+	var allErrors field.ErrorList
+	if sc.Type == "" {
+		allErrors = append(allErrors, field.Required(field.NewPath("type"), "storage type is required"))
+	} else if sc.Type != "memory" && sc.Type != "badger" {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("type"), sc.Type, "storage type must be 'memory' or 'badger'"))
+	}
+	
+	if sc.Type == "badger" && sc.BadgerConfig == nil {
+		allErrors = append(allErrors, field.Required(field.NewPath("badger"), "badger config is required when type is 'badger'"))
+	} else if sc.Type == "badger" && sc.BadgerConfig != nil {
+		if sc.BadgerConfig.Dir == "" {
+			allErrors = append(allErrors, field.Required(field.NewPath("badger", "dir"), "badger directory is required"))
+		}
+	}
+	
+	return allErrors
+}
+
 type AggregatorConfig struct {
 	Debug bool `json:"debug" yaml:"debug"`
 
@@ -84,6 +119,9 @@ type AggregatorConfig struct {
 	Contracts json.RawMessage `json:"contracts" yaml:"contracts"`
 
 	OverrideContracts *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
+
+	// Storage configuration for persistence
+	Storage *StorageConfig `json:"storage,omitempty" yaml:"storage,omitempty"`
 }
 
 func (arc *AggregatorConfig) Validate() error {
@@ -126,6 +164,14 @@ func (arc *AggregatorConfig) Validate() error {
 			}
 		}
 	}
+	
+	// Validate storage config if provided
+	if arc.Storage != nil {
+		if storageErrors := arc.Storage.Validate(); len(storageErrors) > 0 {
+			allErrors = append(allErrors, storageErrors...)
+		}
+	}
+	
 	return allErrors.ToAggregate()
 }
 

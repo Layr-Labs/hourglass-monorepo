@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -59,6 +60,9 @@ type Aggregator struct {
 	// chainEventsChan is a channel for receiving events from the chain pollers and
 	// sequentially processing them
 	chainEventsChan chan *chainPoller.LogWithBlock
+
+	// store is the persistence layer for the aggregator
+	store storage.AggregatorStore
 }
 
 func NewAggregator(
@@ -67,6 +71,7 @@ func NewAggregator(
 	tlp *transactionLogParser.TransactionLogParser,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signers signer.Signers,
+	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) (*Aggregator, error) {
 	if cfg.L1ChainId == 0 {
@@ -79,6 +84,7 @@ func NewAggregator(
 		logger:               logger,
 		signers:              signers,
 		peeringDataFetcher:   peeringDataFetcher,
+		store:                store,
 		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
@@ -131,6 +137,7 @@ func (a *Aggregator) Initialize() error {
 			a.signers,
 			a.contractStore,
 			om,
+			a.store,
 			a.logger,
 		)
 		if err != nil {
@@ -139,6 +146,49 @@ func (a *Aggregator) Initialize() error {
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}
+	
+	// Perform recovery if storage is available
+	if a.store != nil {
+		if err := a.recoverFromStorage(); err != nil {
+			a.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
+			// Continue anyway - this is not a fatal error
+		}
+	}
+	
+	return nil
+}
+
+// recoverFromStorage loads pending tasks from storage and re-queues them
+func (a *Aggregator) recoverFromStorage() error {
+	ctx := context.Background()
+	pendingTasks, err := a.store.ListPendingTasks(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list pending tasks: %w", err)
+	}
+	
+	if len(pendingTasks) > 0 {
+		a.logger.Sugar().Infow("Recovering pending tasks from storage", 
+			"count", len(pendingTasks))
+		
+		// Re-queue tasks to their respective AVS execution managers
+		for _, task := range pendingTasks {
+			aem, ok := a.avsExecutionManagers[task.AVSAddress]
+			if !ok {
+				a.logger.Sugar().Warnw("No AVS execution manager found for recovered task",
+					"avsAddress", task.AVSAddress,
+					"taskId", task.TaskId)
+				continue
+			}
+			
+			// Submit the task to the AVS execution manager
+			// This will be handled properly in milestone 3.2 when we refactor AvsExecutionManager
+			_ = aem
+			a.logger.Sugar().Infow("Task recovery will be fully implemented in milestone 3.2",
+				"taskId", task.TaskId,
+				"avsAddress", task.AVSAddress)
+		}
+	}
+	
 	return nil
 }
 
@@ -193,7 +243,7 @@ func (a *Aggregator) initializePollers() error {
 			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 		}
 
-		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
+		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.store, a.logger)
 	}
 	return nil
 }

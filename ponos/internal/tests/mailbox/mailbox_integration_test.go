@@ -111,7 +111,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		pollerEthClient = l2EthereumClient
 	}
 
-	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, logsChan, tlp, pollerConfig, l)
+	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, logsChan, tlp, pollerConfig, nil, l)
 
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {

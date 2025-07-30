@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
@@ -466,6 +467,9 @@ func runAggregatorTest(t *testing.T, mode string) {
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(l1AggCc, l)
 
+	// Create in-memory storage for testing
+	aggStore := memory.NewInMemoryAggregatorStore()
+
 	agg, err := NewAggregator(
 		&AggregatorConfig{
 			AVSs:             aggConfig.Avss,
@@ -480,6 +484,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		signer.Signers{
 			BLSSigner: aggSigner,
 		},
+		aggStore,
 		l,
 	)
 	if err != nil {
