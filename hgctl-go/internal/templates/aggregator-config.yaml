@@ -7,11 +7,9 @@ serverConfig:
 
 operator:
   address: "{{env "OPERATOR_ADDRESS"}}"
-  {{if env "OPERATOR_PRIVATE_KEY"}}
-  operatorPrivateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
-  {{end}}
+  operatorPrivateKey:
+    privateKey: "{{envDefault "OPERATOR_PRIVATE_KEY" "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"}}"
   signingKeys:
-    {{if not (isTrue "USE_WEB3_SIGNER_BLS")}}
     bls:
       {{if env "BLS_KEYSTORE_CONTENT"}}
       keystore: |
@@ -21,35 +19,7 @@ operator:
       {{else}}
       keystoreFile: "/keystores/operator.bls.keystore.json"
       {{end}}
-      {{if env "BLS_KEYSTORE_PASSWORD"}}
-      password: "{{env "BLS_KEYSTORE_PASSWORD"}}"
-      {{end}}
-    {{else}}
-    bls:
-      remoteSigner: true
-      remoteSignerConfig:
-        url: "{{env "WEB3_SIGNER_BLS_URL"}}"
-        fromAddress: "{{env "WEB3_SIGNER_BLS_FROM_ADDRESS"}}"
-        publicKey: "{{env "WEB3_SIGNER_BLS_PUBLIC_KEY"}}"
-        {{if env "WEB3_SIGNER_BLS_CA_CERT_CONTENT"}}
-        caCert: |
-{{env "WEB3_SIGNER_BLS_CA_CERT_CONTENT" | indent 10}}
-        {{else if env "WEB3_SIGNER_BLS_CA_CERT"}}
-        caCert: "{{env "WEB3_SIGNER_BLS_CA_CERT"}}"
-        {{end}}
-        {{if env "WEB3_SIGNER_BLS_CLIENT_CERT_CONTENT"}}
-        cert: |
-{{env "WEB3_SIGNER_BLS_CLIENT_CERT_CONTENT" | indent 10}}
-        {{else if env "WEB3_SIGNER_BLS_CLIENT_CERT"}}
-        cert: "{{env "WEB3_SIGNER_BLS_CLIENT_CERT"}}"
-        {{end}}
-        {{if env "WEB3_SIGNER_BLS_CLIENT_KEY_CONTENT"}}
-        key: |
-{{env "WEB3_SIGNER_BLS_CLIENT_KEY_CONTENT" | indent 10}}
-        {{else if env "WEB3_SIGNER_BLS_CLIENT_KEY"}}
-        key: "{{env "WEB3_SIGNER_BLS_CLIENT_KEY"}}"
-        {{end}}
-    {{end}}
+      password: "{{envDefault "BLS_KEYSTORE_PASSWORD" "test"}}"
 
 l1ChainId: {{env "L1_CHAIN_ID"}}
 
@@ -75,22 +45,3 @@ avss:
       {{if env "L2_CHAIN_ID"}}
       - {{env "L2_CHAIN_ID"}}
       {{end}}
-    {{if env "AVS_REGISTRAR_ADDRESS"}}
-    avsRegistrarAddress: "{{env "AVS_REGISTRAR_ADDRESS"}}"
-    {{end}}
-
-{{if env "TASK_MAILBOX_L1_ADDRESS"}}
-overrideContracts:
-  taskMailbox:
-    chainIds:
-      - {{env "L1_CHAIN_ID"}}
-      {{if env "L2_CHAIN_ID"}}
-      - {{env "L2_CHAIN_ID"}}
-      {{end}}
-    contract: |
-      {
-        "name": "TaskMailbox",
-        "address": "{{env "TASK_MAILBOX_L1_ADDRESS"}}",
-        "chainId": {{env "L1_CHAIN_ID"}}
-      }
-{{end}}

@@ -118,11 +118,13 @@ func (c *ContractClient) GetNextReleaseId(ctx context.Context, releaseManagerAdd
 	return totalReleases, nil
 }
 
-// GetReleases fetches multiple releases
+// GetReleases fetches multiple releases organized by operator set
 func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr common.Address, avsAddress common.Address, operatorSetIds []uint32, limit uint64) ([]*Release, error) {
 	var releases []*Release
 
+	// Get releases for each operator set separately
 	for _, opSetId := range operatorSetIds {
+		// Get the next release ID (total count) for this operator set
 		nextId, err := c.GetNextReleaseId(ctx, releaseManagerAddr, avsAddress, opSetId)
 		if err != nil {
 			c.logger.Warn("Failed to get next release ID",
@@ -131,14 +133,21 @@ func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr com
 			continue
 		}
 
-		// Iterate through releases
-		for i := int64(0); i < nextId.Int64() && uint64(len(releases)) < limit; i++ {
+		totalReleases := nextId.Int64()
+		if totalReleases == 0 {
+			continue
+		}
+
+		// Calculate starting point for fetching last N releases
+		startIdx := totalReleases - int64(limit)
+		if startIdx < 0 {
+			startIdx = 0
+		}
+
+		// Fetch releases in descending order (newest first)
+		for i := totalReleases - 1; i >= startIdx; i-- {
 			release, err := c.GetRelease(ctx, releaseManagerAddr, avsAddress, opSetId, big.NewInt(i))
 			if err != nil {
-				c.logger.Warn("Failed to get release",
-					zap.Uint32("operatorSetId", opSetId),
-					zap.Int64("releaseId", i),
-					zap.Error(err))
 				continue
 			}
 
@@ -146,7 +155,7 @@ func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr com
 				continue
 			}
 
-			// Convert to internal release type
+			// Create release entry for this operator set
 			internalRelease := &Release{
 				ID: fmt.Sprintf("%d", i),
 				OperatorSetReleases: map[string]OperatorSetRelease{
@@ -157,7 +166,6 @@ func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr com
 				},
 				UpgradeByTime: release.UpgradeByTime,
 			}
-
 			releases = append(releases, internalRelease)
 		}
 	}

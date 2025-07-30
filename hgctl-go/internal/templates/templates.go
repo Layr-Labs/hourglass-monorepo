@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
@@ -84,6 +85,13 @@ func (g *ConfigGenerator) generateConfig(name, templateContent, outputPath strin
 		"isTrue": func(key string) bool {
 			val := g.getEnvValue(key)
 			return val == "true" || val == "1" || val == "yes"
+		},
+		"indent": func(spaces int, v string) string {
+			pad := ""
+			for i := 0; i < spaces; i++ {
+				pad += " "
+			}
+			return pad + strings.ReplaceAll(v, "\n", "\n"+pad)
 		},
 	}
 

@@ -21,8 +21,8 @@ func releaseCommand() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "limit",
-				Usage: "Limit the number of releases to retrieve",
-				Value: 10,
+				Usage: "Limit the number of releases to retrieve per operator set",
+				Value: 5,
 			},
 			&cli.StringFlag{
 				Name:  "output",
@@ -58,9 +58,12 @@ func getReleaseAction(c *cli.Context) error {
 		return fmt.Errorf("release manager address not configured")
 	}
 
+	// Get all releases for all operator sets
+	operatorSets := []uint32{0, 1} // TODO: Get actual operator sets from contract
+
 	log.Info("Listing releases for AVS",
 		zap.String("avs", avsAddress),
-		zap.Uint32("operatorSetID", currentCtx.OperatorSetID),
+		zap.Any("operatorSets", operatorSets),
 		zap.Uint64("limit", limit))
 
 	// Create contract client
@@ -69,9 +72,6 @@ func getReleaseAction(c *cli.Context) error {
 		return fmt.Errorf("failed to create contract client: %w", err)
 	}
 	defer contractClient.Close()
-
-	// Get all releases for all operator sets
-	operatorSets := []uint32{0, 1} // TODO: Get actual operator sets from contract
 
 	releases, err := contractClient.GetReleases(
 		c.Context,

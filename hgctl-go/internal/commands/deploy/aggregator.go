@@ -32,8 +32,16 @@ func aggregatorCommand() *cli.Command {
 				Value: 0,
 			},
 			&cli.StringFlag{
-				Name:  "version",
-				Usage: "Release version (defaults to latest)",
+				Name:  "release-id",
+				Usage: "Release ID to deploy (defaults to latest)",
+			},
+			&cli.StringFlag{
+				Name:  "registry",
+				Usage: "OCI registry URL (use with --digest to bypass release lookup)",
+			},
+			&cli.StringFlag{
+				Name:  "digest",
+				Usage: "Artifact digest (use with --registry to bypass release lookup)",
 			},
 			&cli.StringSliceFlag{
 				Name:  "env",
@@ -42,6 +50,11 @@ func aggregatorCommand() *cli.Command {
 			&cli.StringFlag{
 				Name:  "env-file",
 				Usage: "Load environment variables from file",
+			},
+			&cli.StringFlag{
+				Name:  "network",
+				Usage: "Docker network mode (e.g., host, bridge)",
+				Value: "bridge",
 			},
 		},
 		Action: deployAggregatorAction,
@@ -55,7 +68,9 @@ func deployAggregatorAction(c *cli.Context) error {
 
 	avsAddress := c.Args().Get(0)
 	operatorSetID := uint32(c.Uint64("operator-set-id"))
-	version := c.String("version")
+	releaseID := c.String("release-id")
+	registry := c.String("registry")
+	digest := c.String("digest")
 
 	// Get context
 	currentCtx := c.Context.Value("currentContext").(*config.Context)
@@ -65,93 +80,125 @@ func deployAggregatorAction(c *cli.Context) error {
 		return fmt.Errorf("no context configured")
 	}
 
-	if currentCtx.RPCUrl == "" {
-		return fmt.Errorf("RPC URL not configured")
+	// Validate flag combinations
+	if (registry != "" && digest == "") || (registry == "" && digest != "") {
+		return fmt.Errorf("--registry and --digest must be used together")
 	}
 
-	if currentCtx.ReleaseManagerAddress == "" {
-		return fmt.Errorf("release manager address not configured")
-	}
+	var spec *runtime.Spec
+	var artifactRegistry, artifactDigest string
 
-	log.Info("Fetching release from ReleaseManager",
-		zap.String("avs", avsAddress),
-		zap.Uint32("operatorSetID", operatorSetID))
+	if registry != "" && digest != "" {
+		// Direct registry/digest mode
+		log.Info("Using direct registry and digest",
+			zap.String("registry", registry),
+			zap.String("digest", digest))
 
-	// Create contract client
-	contractClient, err := client.NewContractClient(currentCtx.RPCUrl, log)
-	if err != nil {
-		return fmt.Errorf("failed to create contract client: %w", err)
-	}
-	defer contractClient.Close()
+		artifactRegistry = registry
+		artifactDigest = digest
 
-	var release *client.ReleaseManagerRelease
+		// Create OCI client
+		ociClient := client.NewOCIClient(log)
 
-	if version == "" {
-		// Get latest release
-		nextReleaseId, err := contractClient.GetNextReleaseId(
-			c.Context,
-			common.HexToAddress(currentCtx.ReleaseManagerAddress),
-			common.HexToAddress(avsAddress),
-			operatorSetID,
-		)
+		// Pull runtime spec directly
+		log.Info("Pulling runtime spec from OCI registry...")
+		var err error
+		spec, err = ociClient.PullRuntimeSpec(c.Context, artifactRegistry, artifactDigest)
 		if err != nil {
-			return fmt.Errorf("failed to get next release ID: %w", err)
+			return fmt.Errorf("failed to pull runtime spec: %w", err)
 		}
-
-		if nextReleaseId.Uint64() == 0 {
-			return fmt.Errorf("no releases found for operator set %d", operatorSetID)
-		}
-
-		latestId := new(big.Int).Sub(nextReleaseId, big.NewInt(1))
-		release, err = contractClient.GetRelease(
-			c.Context,
-			common.HexToAddress(currentCtx.ReleaseManagerAddress),
-			common.HexToAddress(avsAddress),
-			operatorSetID,
-			latestId,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to get latest release: %w", err)
-		}
-
-		log.Info("Using latest release", zap.String("releaseID", latestId.String()))
 	} else {
-		// Get specific version
-		versionBig := new(big.Int)
-		versionBig.SetString(version, 10)
-
-		release, err = contractClient.GetRelease(
-			c.Context,
-			common.HexToAddress(currentCtx.ReleaseManagerAddress),
-			common.HexToAddress(avsAddress),
-			operatorSetID,
-			versionBig,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to get release %s: %w", version, err)
+		// Release-based mode
+		if currentCtx.RPCUrl == "" {
+			return fmt.Errorf("RPC URL not configured")
 		}
 
-		log.Info("Using release", zap.String("releaseID", version))
-	}
+		if currentCtx.ReleaseManagerAddress == "" {
+			return fmt.Errorf("release manager address not configured")
+		}
 
-	if len(release.Artifacts) == 0 {
-		return fmt.Errorf("no artifacts found in release")
-	}
+		log.Info("Fetching release from ReleaseManager",
+			zap.String("avs", avsAddress),
+			zap.Uint32("operatorSetID", operatorSetID))
 
-	artifact := release.Artifacts[0]
+		// Create contract client
+		contractClient, err := client.NewContractClient(currentCtx.RPCUrl, log)
+		if err != nil {
+			return fmt.Errorf("failed to create contract client: %w", err)
+		}
+		defer contractClient.Close()
 
-	log.Info("Found release artifact",
-		zap.String("digest", fmt.Sprintf("0x%x", artifact.Digest)),
-		zap.String("registry", artifact.RegistryName))
+		var release *client.ReleaseManagerRelease
 
-	// Create OCI client
-	ociClient := client.NewOCIClient(log)
+		if releaseID == "" {
+			// Get latest release
+			nextReleaseId, err := contractClient.GetNextReleaseId(
+				c.Context,
+				common.HexToAddress(currentCtx.ReleaseManagerAddress),
+				common.HexToAddress(avsAddress),
+				operatorSetID,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to get next release ID: %w", err)
+			}
 
-	// Pull runtime spec
-	log.Info("Pulling runtime spec from OCI registry...")
-	spec, err := ociClient.PullRuntimeSpec(c.Context, artifact.RegistryName, fmt.Sprintf("0x%x", artifact.Digest))
-	if err != nil {
-		return fmt.Errorf("failed to pull runtime spec: %w", err)
+			if nextReleaseId.Uint64() == 0 {
+				return fmt.Errorf("no releases found for operator set %d", operatorSetID)
+			}
+
+			latestId := new(big.Int).Sub(nextReleaseId, big.NewInt(1))
+			release, err = contractClient.GetRelease(
+				c.Context,
+				common.HexToAddress(currentCtx.ReleaseManagerAddress),
+				common.HexToAddress(avsAddress),
+				operatorSetID,
+				latestId,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to get latest release: %w", err)
+			}
+
+			log.Info("Using latest release", zap.String("releaseID", latestId.String()))
+		} else {
+			// Get specific release
+			releaseIDBig := new(big.Int)
+			releaseIDBig.SetString(releaseID, 10)
+
+			release, err = contractClient.GetRelease(
+				c.Context,
+				common.HexToAddress(currentCtx.ReleaseManagerAddress),
+				common.HexToAddress(avsAddress),
+				operatorSetID,
+				releaseIDBig,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to get release %s: %w", releaseID, err)
+			}
+
+			log.Info("Using release", zap.String("releaseID", releaseID))
+		}
+
+		if len(release.Artifacts) == 0 {
+			return fmt.Errorf("no artifacts found in release")
+		}
+
+		artifact := release.Artifacts[0]
+		artifactRegistry = artifact.RegistryName
+		artifactDigest = fmt.Sprintf("0x%x", artifact.Digest)
+
+		log.Info("Found release artifact",
+			zap.String("digest", artifactDigest),
+			zap.String("registry", artifactRegistry))
+
+		// Create OCI client
+		ociClient := client.NewOCIClient(log)
+
+		// Pull runtime spec
+		log.Info("Pulling runtime spec from OCI registry...")
+		spec, err = ociClient.PullRuntimeSpec(c.Context, artifactRegistry, artifactDigest)
+		if err != nil {
+			return fmt.Errorf("failed to pull runtime spec: %w", err)
+		}
 	}
 
 	// Find aggregator component in spec
@@ -297,9 +344,33 @@ func deployAggregatorAction(c *cli.Context) error {
 	dockerArgs := []string{"run", "-d"}
 	dockerArgs = append(dockerArgs, "--name", containerName)
 	dockerArgs = append(dockerArgs, "--restart", "unless-stopped")
+	
+	// Add network mode if specified
+	networkMode := c.String("network")
+	if networkMode != "" {
+		dockerArgs = append(dockerArgs, "--network", networkMode)
+	}
 
-	// Add volume mount for config only
+	// Add volume mount for config
 	dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/config:ro", configDir))
+	
+	// Mount registered keystores directly from their original locations
+	if currentCtx.Keystores != nil {
+		for _, ks := range currentCtx.Keystores {
+			if ks.Type == "bn254" || ks.Type == "bls" {
+				// Mount BLS keystore directly at the expected location
+				dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/keystores/operator.bls.keystore.json:ro", ks.Path))
+				log.Info("Mounting registered BLS keystore",
+					zap.String("name", ks.Name),
+					zap.String("source", ks.Path),
+					zap.String("container_path", "/keystores/operator.bls.keystore.json"))
+				break // Only mount the first BLS keystore
+			}
+		}
+	} else {
+		// Fall back to mounting the keystores directory if no registered keystores
+		dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/keystores:ro", keystoreDir))
+	}
 
 	// Add environment variables
 	for _, env := range aggregatorComponent.Env {

@@ -125,31 +125,60 @@ func (f *Formatter) printReleaseTable(data *ReleaseWithSpec) error {
 
 func (f *Formatter) printReleasesTable(releases []*client.Release) error {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"RELEASE ID", "UPGRADE BY", "OPERATOR SETS", "ARTIFACTS"})
-
+	table.SetHeader([]string{"OPERATOR SET", "RELEASE ID", "UPGRADE BY", "ARTIFACTS"})
+	
+	// Configure table for better formatting
+	table.SetAutoWrapText(false)
+	table.SetAutoFormatHeaders(true)
+	table.SetCenterSeparator("|")
+	table.SetColumnSeparator("|")
+	table.SetRowSeparator("-")
+	table.SetHeaderLine(true)
+	table.SetBorder(true)
+	table.SetTablePadding(" ")
+	table.SetNoWhiteSpace(false)
+	
+	// Group releases by operator set
+	opSetReleases := make(map[string][]*client.Release)
 	for _, release := range releases {
-		upgradeBy := time.Unix(int64(release.UpgradeByTime), 0).Format("01/02/2006, 3:04:05 PM")
-
-		var opSets string
-		var artifacts string
-
-		for opSet, rel := range release.OperatorSetReleases {
-			if opSets != "" {
-				opSets += ", "
-			}
-			opSets += fmt.Sprintf("Set %s", opSet)
-
-			digest := rel.Digest
-			if len(digest) > 12 {
-				digest = digest[:12] + "..."
-			}
-			if artifacts != "" {
-				artifacts += "\n"
-			}
-			artifacts += fmt.Sprintf("%s @ %s", digest, rel.Registry)
+		for opSet := range release.OperatorSetReleases {
+			opSetReleases[opSet] = append(opSetReleases[opSet], release)
 		}
-
-		table.Append([]string{release.ID, upgradeBy, opSets, artifacts})
+	}
+	
+	// Sort operator sets for consistent display
+	var sortedOpSets []string
+	for opSet := range opSetReleases {
+		sortedOpSets = append(sortedOpSets, opSet)
+	}
+	// Sort operator sets numerically
+	for i := 0; i < len(sortedOpSets); i++ {
+		for j := i + 1; j < len(sortedOpSets); j++ {
+			if sortedOpSets[i] > sortedOpSets[j] {
+				sortedOpSets[i], sortedOpSets[j] = sortedOpSets[j], sortedOpSets[i]
+			}
+		}
+	}
+	
+	// Display releases grouped by operator set
+	for _, opSet := range sortedOpSets {
+		releases := opSetReleases[opSet]
+		
+		// Show operator set header only on first release
+		firstRow := true
+		for _, release := range releases {
+			opSetStr := ""
+			if firstRow {
+				opSetStr = fmt.Sprintf("Set %s", opSet)
+				firstRow = false
+			}
+			
+			upgradeBy := time.Unix(int64(release.UpgradeByTime), 0).Format("01/02/2006, 3:04:05 PM")
+			rel := release.OperatorSetReleases[opSet]
+			artifactStr := fmt.Sprintf("%s @ %s", rel.Digest, rel.Registry)
+			
+			table.Append([]string{opSetStr, release.ID, upgradeBy, artifactStr})
+		}
 	}
 
 	table.Render()
