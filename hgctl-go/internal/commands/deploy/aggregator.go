@@ -305,6 +305,9 @@ func deployAggregatorAction(c *cli.Context) error {
 	for _, env := range aggregatorComponent.Env {
 		dockerArgs = append(dockerArgs, "-e", fmt.Sprintf("%s=%s", env.Name, env.Value))
 	}
+	
+	// Inject keystore and certificate contents as environment variables
+	dockerArgs = injectFileContentsAsEnvVars(dockerArgs, contextDir, log)
 
 	// Add ports
 	for _, port := range aggregatorComponent.Ports {
@@ -345,3 +348,4 @@ func deployAggregatorAction(c *cli.Context) error {
 
 	return nil
 }
+

@@ -13,8 +13,17 @@ operator:
   signingKeys:
     {{if not (isTrue "USE_WEB3_SIGNER_BLS")}}
     bls:
+      {{if env "BLS_KEYSTORE_CONTENT"}}
+      keystore: |
+{{env "BLS_KEYSTORE_CONTENT" | indent 8}}
+      {{else if env "BLS_KEYSTORE_FILE"}}
+      keystoreFile: "{{env "BLS_KEYSTORE_FILE"}}"
+      {{else}}
       keystoreFile: "/keystores/operator.bls.keystore.json"
+      {{end}}
+      {{if env "BLS_KEYSTORE_PASSWORD"}}
       password: "{{env "BLS_KEYSTORE_PASSWORD"}}"
+      {{end}}
     {{else}}
     bls:
       remoteSigner: true
@@ -22,12 +31,23 @@ operator:
         url: "{{env "WEB3_SIGNER_BLS_URL"}}"
         fromAddress: "{{env "WEB3_SIGNER_BLS_FROM_ADDRESS"}}"
         publicKey: "{{env "WEB3_SIGNER_BLS_PUBLIC_KEY"}}"
-        {{if env "WEB3_SIGNER_BLS_CA_CERT"}}
-        caCert: "/keystores/web3signer-bls-ca.crt"
+        {{if env "WEB3_SIGNER_BLS_CA_CERT_CONTENT"}}
+        caCert: |
+{{env "WEB3_SIGNER_BLS_CA_CERT_CONTENT" | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CA_CERT"}}
+        caCert: "{{env "WEB3_SIGNER_BLS_CA_CERT"}}"
         {{end}}
-        {{if env "WEB3_SIGNER_BLS_CLIENT_CERT"}}
-        cert: "/keystores/web3signer-bls-client.crt"
-        key: "/keystores/web3signer-bls-client.key"
+        {{if env "WEB3_SIGNER_BLS_CLIENT_CERT_CONTENT"}}
+        cert: |
+{{env "WEB3_SIGNER_BLS_CLIENT_CERT_CONTENT" | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CLIENT_CERT"}}
+        cert: "{{env "WEB3_SIGNER_BLS_CLIENT_CERT"}}"
+        {{end}}
+        {{if env "WEB3_SIGNER_BLS_CLIENT_KEY_CONTENT"}}
+        key: |
+{{env "WEB3_SIGNER_BLS_CLIENT_KEY_CONTENT" | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CLIENT_KEY"}}
+        key: "{{env "WEB3_SIGNER_BLS_CLIENT_KEY"}}"
         {{end}}
     {{end}}
 

@@ -155,17 +155,43 @@ func deployExecutorAction(c *cli.Context) error {
 		return fmt.Errorf("failed to build executor config: %w", err)
 	}
 
-	// Create temporary directory for config
+	// Create temporary directory for config and keystores
 	tempDir, err := os.MkdirTemp("", "hgctl-executor-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
 	// Note: Not using defer to remove tempDir - let user clean up after inspection
 
+	// Create subdirectories
+	configDir := filepath.Join(tempDir, "config")
+	keystoreDir := filepath.Join(tempDir, "keystores")
+	
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := os.MkdirAll(keystoreDir, 0755); err != nil {
+		return fmt.Errorf("failed to create keystore directory: %w", err)
+	}
+
 	// Write executor config
-	configPath := filepath.Join(tempDir, "executor.yaml")
+	configPath := filepath.Join(configDir, "executor.yaml")
 	if err := os.WriteFile(configPath, executorConfig, 0600); err != nil {
 		return fmt.Errorf("failed to write executor config: %w", err)
+	}
+	
+	// Copy keystore files
+	contextName := currentCtx.Name
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	contextDir := filepath.Join(homeDir, ".hgctl", contextName)
+	
+	// Use the existing template package to copy keystore files
+	configGen := templates.NewConfigGenerator(contextDir, envVars)
+	if err := configGen.CopyKeystoreFiles(keystoreDir); err != nil {
+		log.Warn("Failed to copy keystore files", zap.Error(err))
+		// Don't fail the deployment if keystores aren't found
 	}
 
 	log.Info("Configuration written to", zap.String("path", configPath))
@@ -176,13 +202,16 @@ func deployExecutorAction(c *cli.Context) error {
 	// Build docker run command
 	dockerArgs := []string{"run", "-d", "--name", containerName}
 
-	// Add volume mount for config
-	dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/config:ro", tempDir))
+	// Add volume mount for config only
+	dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/config:ro", configDir))
 
 	// Add environment variables
 	for _, env := range executorComponent.Env {
 		dockerArgs = append(dockerArgs, "-e", fmt.Sprintf("%s=%s", env.Name, env.Value))
 	}
+	
+	// Inject keystore and certificate contents as environment variables
+	dockerArgs = injectFileContentsAsEnvVars(dockerArgs, contextDir, log)
 
 	// Override config path
 	dockerArgs = append(dockerArgs, "-e", "EXECUTOR_CONFIG_PATH=/config/executor.yaml")
@@ -214,7 +243,9 @@ func deployExecutorAction(c *cli.Context) error {
 
 	log.Info("✅ Executor deployed successfully",
 		zap.String("container", containerName),
-		zap.String("config", tempDir))
+		zap.String("config", configDir),
+		zap.String("keystores", keystoreDir),
+		zap.String("tempDir", tempDir))
 
 	return nil
 }
@@ -263,3 +294,4 @@ func loadEnvironmentVariables(c *cli.Context, ctx *config.Context) map[string]st
 
 	return envVars
 }
+

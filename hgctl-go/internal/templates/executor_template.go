@@ -19,21 +19,33 @@ operator:
         url: "{{.Web3SignerURL}}"
         publicKey: "{{.Web3SignerPublicKey}}"
         {{if .Web3SignerCA}}
-        caCertContent: |
+        caCert: |
 {{.Web3SignerCA | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CA_CERT"}}
+        caCert: "{{env "WEB3_SIGNER_BLS_CA_CERT"}}"
         {{end}}
         {{if .Web3SignerCert}}
-        certContent: |
+        cert: |
 {{.Web3SignerCert | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CLIENT_CERT"}}
+        cert: "{{env "WEB3_SIGNER_BLS_CLIENT_CERT"}}"
         {{end}}
         {{if .Web3SignerKey}}
-        keyContent: |
+        key: |
 {{.Web3SignerKey | indent 10}}
+        {{else if env "WEB3_SIGNER_BLS_CLIENT_KEY"}}
+        key: "{{env "WEB3_SIGNER_BLS_CLIENT_KEY"}}"
         {{end}}
       {{else if eq .Type "keystore"}}
-      keystoreContent: |
+      {{if .KeystoreContent}}
+      keystore: |
 {{.KeystoreContent | indent 8}}
-      password: "{{.KeystorePassword}}"
+      {{else if env "BLS_KEYSTORE_FILE"}}
+      keystoreFile: "{{env "BLS_KEYSTORE_FILE"}}"
+      {{else}}
+      keystoreFile: "/keystores/operator.bls.keystore.json"
+      {{end}}
+      password: "{{or .KeystorePassword (env "BLS_KEYSTORE_PASSWORD") ""}}"
       {{else if eq .Type "privatekey"}}
       privateKey: "{{.PrivateKey}}"
       {{end}}
@@ -48,21 +60,33 @@ operator:
         url: "{{.Web3SignerURL}}"
         publicKey: "{{.Web3SignerPublicKey}}"
         {{if .Web3SignerCA}}
-        caCertContent: |
+        caCert: |
 {{.Web3SignerCA | indent 10}}
+        {{else if env "WEB3_SIGNER_ECDSA_CA_CERT"}}
+        caCert: "{{env "WEB3_SIGNER_ECDSA_CA_CERT"}}"
         {{end}}
         {{if .Web3SignerCert}}
-        certContent: |
+        cert: |
 {{.Web3SignerCert | indent 10}}
+        {{else if env "WEB3_SIGNER_ECDSA_CLIENT_CERT"}}
+        cert: "{{env "WEB3_SIGNER_ECDSA_CLIENT_CERT"}}"
         {{end}}
         {{if .Web3SignerKey}}
-        keyContent: |
+        key: |
 {{.Web3SignerKey | indent 10}}
+        {{else if env "WEB3_SIGNER_ECDSA_CLIENT_KEY"}}
+        key: "{{env "WEB3_SIGNER_ECDSA_CLIENT_KEY"}}"
         {{end}}
       {{else if eq .Type "keystore"}}
-      keystoreContent: |
+      {{if .KeystoreContent}}
+      keystore: |
 {{.KeystoreContent | indent 8}}
-      password: "{{.KeystorePassword}}"
+      {{else if env "ECDSA_KEYSTORE_FILE"}}
+      keystoreFile: "{{env "ECDSA_KEYSTORE_FILE"}}"
+      {{else}}
+      keystoreFile: "/keystores/operator.ecdsa.keystore.json"
+      {{end}}
+      password: "{{or .KeystorePassword (env "ECDSA_KEYSTORE_PASSWORD") ""}}"
       {{else if eq .Type "privatekey"}}
       privateKey: "{{.PrivateKey}}"
       {{end}}
