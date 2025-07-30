@@ -32,10 +32,6 @@ import (
 	"time"
 )
 
-type ContractCallerConfig struct {
-	// No longer need AVS registrar address at construction time
-}
-
 type ContractCaller struct {
 	taskMailbox        *ITaskMailbox.ITaskMailbox
 	allocationManager  *IAllocationManager.IAllocationManager
