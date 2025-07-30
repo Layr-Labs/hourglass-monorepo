@@ -37,18 +37,16 @@ type ContractCallerConfig struct {
 }
 
 type ContractCaller struct {
-	// AVS registrar callers are now created per-call as needed
-	avsRegistrarCallers map[string]*TaskAVSRegistrarBase.TaskAVSRegistrarBaseCaller
-	taskMailbox         *ITaskMailbox.ITaskMailbox
-	allocationManager   *IAllocationManager.IAllocationManager
-	delegationManager   *IDelegationManager.IDelegationManager
-	crossChainRegistry  *ICrossChainRegistry.ICrossChainRegistry
-	keyRegistrar        *IKeyRegistrar.IKeyRegistrar
-	ecdsaCertVerifier   *IECDSACertificateVerifier.IECDSACertificateVerifier
-	ethclient           *ethclient.Client
-	logger              *zap.Logger
-	coreContracts       *config.CoreContractAddresses
-	signer              transactionSigner.ITransactionSigner
+	taskMailbox        *ITaskMailbox.ITaskMailbox
+	allocationManager  *IAllocationManager.IAllocationManager
+	delegationManager  *IDelegationManager.IDelegationManager
+	crossChainRegistry *ICrossChainRegistry.ICrossChainRegistry
+	keyRegistrar       *IKeyRegistrar.IKeyRegistrar
+	ecdsaCertVerifier  *IECDSACertificateVerifier.IECDSACertificateVerifier
+	ethclient          *ethclient.Client
+	logger             *zap.Logger
+	coreContracts      *config.CoreContractAddresses
+	signer             transactionSigner.ITransactionSigner
 }
 
 func NewContractCallerFromEthereumClient(
@@ -112,43 +110,17 @@ func NewContractCaller(
 	}
 
 	return &ContractCaller{
-		avsRegistrarCallers: make(map[string]*TaskAVSRegistrarBase.TaskAVSRegistrarBaseCaller),
-		taskMailbox:         taskMailbox,
-		allocationManager:   allocationManager,
-		keyRegistrar:        keyRegistrar,
-		delegationManager:   delegationManager,
-		crossChainRegistry:  crossChainRegistry,
-		ecdsaCertVerifier:   ecdsaCertVerifier,
-		ethclient:           ethclient,
-		coreContracts:       coreContracts,
-		logger:              logger,
-		signer:              signer,
+		taskMailbox:        taskMailbox,
+		allocationManager:  allocationManager,
+		keyRegistrar:       keyRegistrar,
+		delegationManager:  delegationManager,
+		crossChainRegistry: crossChainRegistry,
+		ecdsaCertVerifier:  ecdsaCertVerifier,
+		ethclient:          ethclient,
+		coreContracts:      coreContracts,
+		logger:             logger,
+		signer:             signer,
 	}, nil
-}
-
-// getAVSRegistrarCaller gets or creates an AVS registrar caller for the given AVS address
-func (cc *ContractCaller) getAVSRegistrarCaller(avsAddress string) (*TaskAVSRegistrarBase.TaskAVSRegistrarBaseCaller, error) {
-	// Check cache first
-	if caller, ok := cc.avsRegistrarCallers[avsAddress]; ok {
-		return caller, nil
-	}
-
-	// Get the AVS registrar address from the allocation manager
-	avsAddr := common.HexToAddress(avsAddress)
-	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, avsAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
-	}
-
-	// Create new caller
-	caller, err := TaskAVSRegistrarBase.NewTaskAVSRegistrarBaseCaller(avsRegistrarAddress, cc.ethclient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
-	}
-
-	// Cache it
-	cc.avsRegistrarCallers[avsAddress] = caller
-	return caller, nil
 }
 
 func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
@@ -385,11 +357,20 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
-	avsRegistrarCaller, err := cc.getAVSRegistrarCaller(avsAddress)
+
+	// Get the AVS registrar address from the allocation manager
+	avsAddr := common.HexToAddress(avsAddress)
+	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, avsAddr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AVSRegistrar caller: %w", err)
+		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
 	}
-	socket, err := avsRegistrarCaller.GetOperatorSocket(&bind.CallOpts{}, operatorAddress)
+
+	// Create new registrar caller
+	caller, err := TaskAVSRegistrarBase.NewTaskAVSRegistrarBaseCaller(avsRegistrarAddress, cc.ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
+	}
+	socket, err := caller.GetOperatorSocket(&bind.CallOpts{}, operatorAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
