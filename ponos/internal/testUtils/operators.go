@@ -38,9 +38,7 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to create AVS private key signer: %v", err)
 	}
 
-	avsCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, ethClient, avsPrivateKeySigner, l)
+	avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create AVS contract caller: %v", err)
 	}
@@ -50,9 +48,7 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to create aggregator private key signer: %v", err)
 	}
 
-	aggregatorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, ethClient, aggregatorPrivateKeySigner, l)
+	aggregatorCc, err := caller.NewContractCaller(ethClient, aggregatorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create aggregator contract caller: %v", err)
 	}
@@ -90,9 +86,7 @@ func SetupOperatorPeering(
 		return fmt.Errorf("failed to create executor private key signer: %v", err)
 	}
 
-	executorCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{
-		AVSRegistrarAddress: chainConfig.AVSTaskRegistrarAddress,
-	}, ethClient, executorPrivateKeySigner, l)
+	executorCc, err := caller.NewContractCaller(ethClient, executorPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create executor contract caller: %v", err)
 	}
@@ -211,7 +205,7 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to create staker private key signer: %v", err)
 	}
 
-	stakerCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{}, ethclient, stakerPrivateKeySigner, l)
+	stakerCc, err := caller.NewContractCaller(ethclient, stakerPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker contract caller: %v", err)
 	}
@@ -229,7 +223,7 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to create operator private key signer: %v", err)
 	}
 
-	opCc, err := caller.NewContractCaller(&caller.ContractCallerConfig{}, ethclient, opPrivateKeySigner, l)
+	opCc, err := caller.NewContractCaller(ethclient, opPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator contract caller: %v", err)
 	}

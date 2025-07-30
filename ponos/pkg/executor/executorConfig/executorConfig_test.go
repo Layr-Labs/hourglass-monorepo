@@ -59,9 +59,8 @@ func Test_ExecutorConfig(t *testing.T) {
 func TestDeploymentMode(t *testing.T) {
 	t.Run("Should default to docker mode when not specified", func(t *testing.T) {
 		config := &AvsPerformerConfig{
-			AvsAddress:          "0x123",
-			ProcessType:         "server",
-			AVSRegistrarAddress: "0x456",
+			AvsAddress:  "0x123",
+			ProcessType: "server",
 			Image: &PerformerImage{
 				Repository: "test/image",
 				Tag:        "v1.0.0",
@@ -75,10 +74,9 @@ func TestDeploymentMode(t *testing.T) {
 
 	t.Run("Should accept kubernetes mode", func(t *testing.T) {
 		config := &AvsPerformerConfig{
-			AvsAddress:          "0x123",
-			ProcessType:         "server",
-			AVSRegistrarAddress: "0x456",
-			DeploymentMode:      DeploymentModeKubernetes,
+			AvsAddress:     "0x123",
+			ProcessType:    "server",
+			DeploymentMode: DeploymentModeKubernetes,
 			Image: &PerformerImage{
 				Repository: "test/image",
 				Tag:        "v1.0.0",
@@ -92,10 +90,9 @@ func TestDeploymentMode(t *testing.T) {
 
 	t.Run("Should reject invalid deployment mode", func(t *testing.T) {
 		config := &AvsPerformerConfig{
-			AvsAddress:          "0x123",
-			ProcessType:         "server",
-			AVSRegistrarAddress: "0x456",
-			DeploymentMode:      "invalid",
+			AvsAddress:     "0x123",
+			ProcessType:    "server",
+			DeploymentMode: "invalid",
 			Image: &PerformerImage{
 				Repository: "test/image",
 				Tag:        "v1.0.0",
@@ -182,10 +179,9 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeKubernetes,
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes,
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
@@ -219,10 +215,9 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeKubernetes,
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes,
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
@@ -256,20 +251,18 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeDocker,
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeDocker,
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
 					},
 				},
 				{
-					AvsAddress:          "0xabc",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0xdef",
-					DeploymentMode:      DeploymentModeKubernetes,
+					AvsAddress:     "0xabc",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes,
 					Image: &PerformerImage{
 						Repository: "test/image2",
 						Tag:        "v1.0.0",
@@ -482,20 +475,18 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeDocker, // Docker mode
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeDocker, // Docker mode
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
 					},
 				},
 				{
-					AvsAddress:          "0xabc",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0xdef",
-					DeploymentMode:      DeploymentModeKubernetes, // Kubernetes mode
+					AvsAddress:     "0xabc",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes, // Kubernetes mode
 					Image: &PerformerImage{
 						Repository: "test/image2",
 						Tag:        "v1.0.0",
@@ -529,20 +520,18 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeDocker,
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeDocker,
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
 					},
 				},
 				{
-					AvsAddress:          "0xabc",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0xdef",
-					DeploymentMode:      DeploymentModeDocker,
+					AvsAddress:     "0xabc",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeDocker,
 					Image: &PerformerImage{
 						Repository: "test/image2",
 						Tag:        "v1.0.0",
@@ -575,20 +564,18 @@ func TestMixedDeploymentModeValidation(t *testing.T) {
 			},
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:          "0x456",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0x789",
-					DeploymentMode:      DeploymentModeKubernetes,
+					AvsAddress:     "0x456",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes,
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
 					},
 				},
 				{
-					AvsAddress:          "0xabc",
-					ProcessType:         "server",
-					AVSRegistrarAddress: "0xdef",
-					DeploymentMode:      DeploymentModeKubernetes,
+					AvsAddress:     "0xabc",
+					ProcessType:    "server",
+					DeploymentMode: DeploymentModeKubernetes,
 					Image: &PerformerImage{
 						Repository: "test/image2",
 						Tag:        "v1.0.0",

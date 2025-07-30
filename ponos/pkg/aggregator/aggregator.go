@@ -201,7 +201,6 @@ func (a *Aggregator) initializePollers() error {
 func InitializeContractCaller(
 	chain *aggregatorConfig.Chain,
 	privateKeyConfig *config.ECDSAKeyConfig,
-	avsRegistrarAddress string,
 	logger *zap.Logger,
 ) (contractCaller.IContractCaller, error) {
 	ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -221,11 +220,7 @@ func InitializeContractCaller(
 		return nil, fmt.Errorf("failed to create transactionSigner: %w", err)
 	}
 
-	callerConfig := &caller.ContractCallerConfig{
-		AVSRegistrarAddress: avsRegistrarAddress,
-	}
-
-	return caller.NewContractCaller(callerConfig, ethereumContractCaller, txSigner, logger)
+	return caller.NewContractCaller(ethereumContractCaller, txSigner, logger)
 }
 
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
@@ -233,12 +228,7 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 	contractCallers := make(map[config.ChainId]contractCaller.IContractCaller)
 	for _, chain := range a.config.Chains {
 
-		cc, err := InitializeContractCaller(
-			chain,
-			a.config.PrivateKeyConfig,
-			a.config.AVSs[0].AVSRegistrarAddress,
-			a.logger,
-		)
+		cc, err := InitializeContractCaller(chain, a.config.PrivateKeyConfig, a.logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize contract caller for chain %s: %w", chain.Name, err)
 		}
