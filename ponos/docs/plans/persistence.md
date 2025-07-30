@@ -197,24 +197,24 @@ This document outlines the implementation plan for adding data persistence to th
 - [x] Add storage-specific test cases (via reusable test suites)
 - [x] Ensure all tests pass
 
-### Milestone 5: Integration Testing (5.1 - 5.3)
+### Milestone 5: Integration Testing (5.1 - 5.3) [COMPLETED]
 
 #### 5.1 Create Integration Test Suite
-- [ ] Create `internal/tests/persistence/` directory
-- [ ] Write end-to-end tests:
-  - [ ] Aggregator crash and recovery
-  - [ ] Executor crash and recovery
-  - [ ] Task flow with persistence
+- [x] Create `internal/tests/persistence/` directory
+- [x] Write end-to-end tests:
+  - [x] Aggregator crash and recovery
+  - [x] Executor crash and recovery
+  - [x] Task flow with persistence
 
 #### 5.2 Add Benchmarks
-- [ ] Benchmark in-memory store performance
-- [ ] Compare with sync.Map baseline
-- [ ] Document performance characteristics
+- [x] Benchmark in-memory store performance
+- [x] Compare with sync.Map baseline
+- [x] Document performance characteristics
 
 #### 5.3 Update Demo
-- [ ] Update demo configurations
-- [ ] Add persistence directory setup
-- [ ] Test full demo with persistence
+- [x] Update demo configurations
+- [x] Add persistence directory setup
+- [x] Test full demo with persistence
 
 ### Milestone 6: BadgerDB Implementation (6.1 - 6.6)
 
