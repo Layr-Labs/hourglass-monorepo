@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -94,6 +96,24 @@ var runCmd = &cobra.Command{
 
 		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 
+		// Create storage based on configuration
+		var store storage.AggregatorStore
+		if Config.Storage != nil {
+			switch Config.Storage.Type {
+			case "memory":
+				sugar.Infow("Using in-memory storage")
+				store = memory.NewInMemoryAggregatorStore()
+			case "badger":
+				return fmt.Errorf("badger storage not yet implemented")
+			default:
+				return fmt.Errorf("unsupported storage type: %s", Config.Storage.Type)
+			}
+		} else {
+			// Default to in-memory storage if not configured
+			sugar.Infow("No storage configured, using in-memory storage by default")
+			store = memory.NewInMemoryAggregatorStore()
+		}
+
 		agg, err := aggregator.NewAggregator(
 			&aggregator.AggregatorConfig{
 				AVSs:             Config.Avss,
@@ -106,6 +126,7 @@ var runCmd = &cobra.Command{
 			tlp,
 			pdf,
 			signers,
+			store,
 			l,
 		)
 		if err != nil {
@@ -129,6 +150,11 @@ var runCmd = &cobra.Command{
 		shutdown.ListenForShutdown(gracefulShutdownNotifier, done, func() {
 			l.Sugar().Info("Shutting down...")
 			cancel()
+			if store != nil {
+				if err := store.Close(); err != nil {
+					l.Sugar().Errorw("Failed to close storage", "error", err)
+				}
+			}
 		}, time.Second*5, l)
 
 		return nil

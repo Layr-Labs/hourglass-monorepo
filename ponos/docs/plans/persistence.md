@@ -106,60 +106,60 @@ This document outlines the implementation plan for adding data persistence to th
 - [x] SKIPPED - Callers will directly instantiate the specific store type they need
 - [x] No factory pattern - use `memory.NewInMemoryAggregatorStore()` or `memory.NewInMemoryExecutorStore()` directly
 
-### Milestone 3: Aggregator Refactoring (3.1 - 3.5)
+### Milestone 3: Aggregator Refactoring (3.1 - 3.5) [COMPLETED]
 
 #### 3.4 Update Aggregator Configuration
-- [ ] Add storage configuration to `aggregatorConfig`:
+- [x] Add storage configuration to `aggregatorConfig`:
   ```go
   type StorageConfig struct {
       Type string `json:"type" yaml:"type"` // "memory" or "badger"
       BadgerConfig *BadgerConfig `json:"badger,omitempty" yaml:"badger,omitempty"`
   }
   ```
-- [ ] Update config validation
-- [ ] Update example configurations
+- [x] Update config validation
+- [x] Update example configurations
 
 #### 3.3 Update Aggregator Initialization
-- [ ] Modify `aggregator.Initialize()`:
-  - [ ] Create storage instance based on config
-  - [ ] Pass storage to EVMChainPoller instances
-  - [ ] Pass storage to AvsExecutionManager instances
-- [ ] Add recovery logic:
-  - [ ] Load pending tasks from storage
-  - [ ] Re-queue tasks to taskQueue
-  - [ ] Log recovery statistics
+- [x] Modify `aggregator.Initialize()`:
+  - [x] Create storage instance based on config
+  - [x] Pass storage to EVMChainPoller instances
+  - [x] Pass storage to AvsExecutionManager instances
+- [x] Add recovery logic:
+  - [x] Load pending tasks from storage
+  - [x] Re-queue tasks to taskQueue
+  - [x] Log recovery statistics
 
 #### 3.2 Refactor AvsExecutionManager
-- [ ] Add `storage.AggregatorStore` field to `AvsExecutionManager` struct
-- [ ] Update constructor to accept storage parameter
-- [ ] Replace `operatorSetTaskConfigs` sync.Map:
-  - [ ] Use storage for get/set operations
-  - [ ] Update `getOrSetOperatorSetTaskConfig` method
-- [ ] Replace `avsConfig` caching:
-  - [ ] Remove mutex and in-memory field
-  - [ ] Update `getOrSetAggregatorTaskConfig` method
-- [ ] Update task handling:
-  - [ ] Save task to storage in `processTask`
-  - [ ] Update task status in `handleTask`
-  - [ ] Mark task complete after submission
+- [x] Add `storage.AggregatorStore` field to `AvsExecutionManager` struct
+- [x] Update constructor to accept storage parameter
+- [x] Replace `operatorSetTaskConfigs` sync.Map:
+  - [x] Use storage for get/set operations
+  - [x] Update `getOrSetOperatorSetTaskConfig` method
+- [x] Replace `avsConfig` caching:
+  - [x] Remove mutex and in-memory field
+  - [x] Update `getOrSetAggregatorTaskConfig` method
+- [x] Update task handling:
+  - [x] Save task to storage in `processTask`
+  - [x] Update task status in `handleTask`
+  - [x] Mark task complete after submission
 
 #### 3.1 Refactor EVMChainPoller
-- [ ] Add `storage.AggregatorStore` field to `EVMChainPoller` struct
-- [ ] Update `NewEVMChainPoller` to accept storage parameter
-- [ ] Replace `lastObservedBlock` field usage:
-  - [ ] Load last block on initialization
-  - [ ] Save block after successful processing
-  - [ ] Handle storage errors appropriately
-- [ ] Update `Start()` method to recover from last processed block
-- [ ] Add logging for storage operations
+- [x] Add `storage.AggregatorStore` field to `EVMChainPoller` struct
+- [x] Update `NewEVMChainPoller` to accept storage parameter
+- [x] Replace `lastObservedBlock` field usage:
+  - [x] Load last block on initialization
+  - [x] Save block after successful processing
+  - [x] Handle storage errors appropriately
+- [x] Update `Start()` method to recover from last processed block
+- [x] Add logging for storage operations
 
 #### 3.5 Update Aggregator Tests
-- [ ] Update all existing aggregator tests to use in-memory storage
-- [ ] Add storage-specific test cases:
-  - [ ] Test crash recovery scenarios
-  - [ ] Test task persistence
-  - [ ] Test config caching
-- [ ] Ensure all tests pass
+- [x] Update all existing aggregator tests to use in-memory storage
+- [x] Add storage-specific test cases:
+  - [x] Test crash recovery scenarios
+  - [x] Test task persistence
+  - [x] Test config caching
+- [x] Ensure all tests pass
 
 ### Milestone 4: Executor Refactoring (4.1 - 4.5)
 

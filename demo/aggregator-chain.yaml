@@ -31,3 +31,9 @@ avss:
     - 31337
     # - 31338
     avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
+
+# Storage configuration for persistence
+storage:
+  type: "memory"  # Options: "memory" or "badger"
+  # badger:        # Uncomment for BadgerDB storage
+  #   dir: "/var/lib/ponos/aggregator/badger"
