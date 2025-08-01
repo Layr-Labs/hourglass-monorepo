@@ -77,6 +77,9 @@ func NewAggregator(
 	if cfg.L1ChainId == 0 {
 		return nil, fmt.Errorf("L1ChainId must be set in AggregatorConfig")
 	}
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
 	agg := &Aggregator{
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
@@ -147,12 +150,10 @@ func (a *Aggregator) Initialize() error {
 		a.avsExecutionManagers[avs.Address] = aem
 	}
 
-	// Perform recovery if storage is available
-	if a.store != nil {
-		if err := a.recoverFromStorage(); err != nil {
-			a.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
-			// Continue anyway - this is not a fatal error
-		}
+	// Perform recovery from storage
+	if err := a.recoverFromStorage(); err != nil {
+		a.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
+		// Continue anyway - this is not a fatal error
 	}
 
 	return nil

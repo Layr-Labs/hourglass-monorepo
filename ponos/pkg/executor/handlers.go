@@ -73,26 +73,23 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, status.Error(codes.Internal, err.Error())
 	}
 
-	// Create deployment record in storage if available
-	var deploymentId string
-	if e.store != nil {
-		deploymentId = fmt.Sprintf("deployment-%s-%d", avsAddress, time.Now().UnixNano())
-		deploymentInfo := &storage.DeploymentInfo{
-			DeploymentId:     deploymentId,
-			AvsAddress:       avsAddress,
-			ArtifactRegistry: req.GetRegistryUrl(),
-			ArtifactDigest:   req.GetDigest(),
-			Status:           storage.DeploymentStatusPending,
-			StartedAt:        time.Now(),
-			CompletedAt:      nil,
-			Error:            "",
-		}
-		if err := e.store.SaveDeployment(ctx, deploymentId, deploymentInfo); err != nil {
-			e.logger.Sugar().Warnw("Failed to save deployment to storage",
-				"error", err,
-				"deploymentId", deploymentId,
-			)
-		}
+	// Create deployment record in storage
+	deploymentId := fmt.Sprintf("deployment-%s-%d", avsAddress, time.Now().UnixNano())
+	deploymentInfo := &storage.DeploymentInfo{
+		DeploymentId:     deploymentId,
+		AvsAddress:       avsAddress,
+		ArtifactRegistry: req.GetRegistryUrl(),
+		ArtifactDigest:   req.GetDigest(),
+		Status:           storage.DeploymentStatusPending,
+		StartedAt:        time.Now(),
+		CompletedAt:      nil,
+		Error:            "",
+	}
+	if err := e.store.SaveDeployment(ctx, deploymentId, deploymentInfo); err != nil {
+		e.logger.Sugar().Warnw("Failed to save deployment to storage",
+			"error", err,
+			"deploymentId", deploymentId,
+		)
 	}
 
 	// Deploy using the performer's Deploy method
@@ -109,25 +106,21 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	}
 
 	// Update deployment status to deploying
-	if e.store != nil && deploymentId != "" {
-		if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusDeploying); err != nil {
-			e.logger.Sugar().Warnw("Failed to update deployment status",
-				"error", err,
-				"deploymentId", deploymentId,
-			)
-		}
+	if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusDeploying); err != nil {
+		e.logger.Sugar().Warnw("Failed to update deployment status",
+			"error", err,
+			"deploymentId", deploymentId,
+		)
 	}
 
 	result, err := performer.Deploy(ctx, image)
 	if err != nil {
 		// Update deployment status to failed
-		if e.store != nil && deploymentId != "" {
-			if updateErr := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusFailed); updateErr != nil {
-				e.logger.Sugar().Warnw("Failed to update deployment status to failed",
-					"error", updateErr,
-					"deploymentId", deploymentId,
-				)
-			}
+		if updateErr := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusFailed); updateErr != nil {
+			e.logger.Sugar().Warnw("Failed to update deployment status to failed",
+				"error", updateErr,
+				"deploymentId", deploymentId,
+			)
 		}
 
 		// Check for specific error types to return appropriate gRPC status codes
@@ -167,37 +160,33 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	)
 
 	// Update deployment status to running and save performer state
-	if e.store != nil {
-		if deploymentId != "" {
-			if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusRunning); err != nil {
-				e.logger.Sugar().Warnw("Failed to update deployment status to running",
-					"error", err,
-					"deploymentId", deploymentId,
-				)
-			}
-		}
+	if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusRunning); err != nil {
+		e.logger.Sugar().Warnw("Failed to update deployment status to running",
+			"error", err,
+			"deploymentId", deploymentId,
+		)
+	}
 
-		// Save performer state
-		performerState := &storage.PerformerState{
-			PerformerId:        result.PerformerID,
-			AvsAddress:         avsAddress,
-			ContainerId:        result.ID,
-			Status:             "running",
-			ArtifactRegistry:   req.GetRegistryUrl(),
-			ArtifactTag:        "", // Not available from request
-			ArtifactDigest:     req.GetDigest(),
-			DeploymentMode:     "docker", // Default for now
-			CreatedAt:          result.StartTime,
-			LastHealthCheck:    result.EndTime,
-			ContainerHealthy:   true,
-			ApplicationHealthy: true,
-		}
-		if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
-			e.logger.Sugar().Warnw("Failed to save performer state to storage",
-				"error", err,
-				"performerId", result.PerformerID,
-			)
-		}
+	// Save performer state
+	performerState := &storage.PerformerState{
+		PerformerId:        result.PerformerID,
+		AvsAddress:         avsAddress,
+		ContainerId:        result.ID,
+		Status:             "running",
+		ArtifactRegistry:   req.GetRegistryUrl(),
+		ArtifactTag:        "", // Not available from request
+		ArtifactDigest:     req.GetDigest(),
+		DeploymentMode:     "docker", // Default for now
+		CreatedAt:          result.StartTime,
+		LastHealthCheck:    result.EndTime,
+		ContainerHealthy:   true,
+		ApplicationHealthy: true,
+	}
+	if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+		e.logger.Sugar().Warnw("Failed to save performer state to storage",
+			"error", err,
+			"performerId", result.PerformerID,
+		)
 	}
 
 	return &executorV1.DeployArtifactResponse{
@@ -269,23 +258,21 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	}
 	e.inflightTasks.Store(task.TaskId, task)
 
-	// Save inflight task to storage if available
-	if e.store != nil {
-		taskInfo := &storage.TaskInfo{
-			TaskId:            task.TaskId,
-			AvsAddress:        task.AvsAddress,
-			OperatorAddress:   e.config.Operator.Address,
-			ReceivedAt:        time.Now(),
-			Status:            "processing",
-			AggregatorAddress: task.GetAggregatorAddress(),
-			OperatorSetId:     task.OperatorSetId,
-		}
-		if err := e.store.SaveInflightTask(context.Background(), task.TaskId, taskInfo); err != nil {
-			e.logger.Sugar().Warnw("Failed to save inflight task to storage",
-				"error", err,
-				"taskId", task.TaskId,
-			)
-		}
+	// Save inflight task to storage
+	taskInfo := &storage.TaskInfo{
+		TaskId:            task.TaskId,
+		AvsAddress:        task.AvsAddress,
+		OperatorAddress:   e.config.Operator.Address,
+		ReceivedAt:        time.Now(),
+		Status:            "processing",
+		AggregatorAddress: task.GetAggregatorAddress(),
+		OperatorSetId:     task.OperatorSetId,
+	}
+	if err := e.store.SaveInflightTask(context.Background(), task.TaskId, taskInfo); err != nil {
+		e.logger.Sugar().Warnw("Failed to save inflight task to storage",
+			"error", err,
+			"taskId", task.TaskId,
+		)
 	}
 
 	response, err := avsPerf.RunTask(context.Background(), pt)
@@ -317,14 +304,12 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 
 	e.inflightTasks.Delete(task.TaskId)
 
-	// Remove inflight task from storage if available
-	if e.store != nil {
-		if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
-			e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
-				"error", err,
-				"taskId", task.TaskId,
-			)
-		}
+	// Remove inflight task from storage
+	if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
+		e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
+			"error", err,
+			"taskId", task.TaskId,
+		)
 	}
 
 	return &executorV1.TaskResult{
@@ -424,45 +409,43 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 		}
 	}
 
-	// Also include persisted performer states from storage if available
-	if e.store != nil {
-		persistedStates, err := e.store.ListPerformerStates(ctx)
-		if err != nil {
-			e.logger.Sugar().Warnw("Failed to list performer states from storage",
-				"error", err,
-			)
-		} else {
-			// Add persisted states that are not already in the live list
-			for _, state := range persistedStates {
-				// Apply filter if provided
-				if filterAddress != "" && !strings.EqualFold(filterAddress, state.AvsAddress) {
-					continue
-				}
+	// Also include persisted performer states from storage
+	persistedStates, err := e.store.ListPerformerStates(ctx)
+	if err != nil {
+		e.logger.Sugar().Warnw("Failed to list performer states from storage",
+			"error", err,
+		)
+	} else {
+		// Add persisted states that are not already in the live list
+		for _, state := range persistedStates {
+			// Apply filter if provided
+			if filterAddress != "" && !strings.EqualFold(filterAddress, state.AvsAddress) {
+				continue
+			}
 
-				// Check if this performer is already in the list
-				found := false
-				for _, perf := range allPerformers {
-					if perf.PerformerId == state.PerformerId {
-						found = true
-						break
-					}
+			// Check if this performer is already in the list
+			found := false
+			for _, perf := range allPerformers {
+				if perf.PerformerId == state.PerformerId {
+					found = true
+					break
 				}
+			}
 
-				if !found {
-					// Convert persisted state to proto format
-					allPerformers = append(allPerformers, &executorV1.Performer{
-						PerformerId:        state.PerformerId,
-						AvsAddress:         state.AvsAddress,
-						Status:             state.Status,
-						ArtifactRegistry:   state.ArtifactRegistry,
-						ArtifactTag:        state.ArtifactTag,
-						ArtifactDigest:     state.ArtifactDigest,
-						ResourceHealthy:    state.ContainerHealthy,
-						ApplicationHealthy: state.ApplicationHealthy,
-						LastHealthCheck:    state.LastHealthCheck.Format(time.RFC3339),
-						ContainerId:        state.ContainerId,
-					})
-				}
+			if !found {
+				// Convert persisted state to proto format
+				allPerformers = append(allPerformers, &executorV1.Performer{
+					PerformerId:        state.PerformerId,
+					AvsAddress:         state.AvsAddress,
+					Status:             state.Status,
+					ArtifactRegistry:   state.ArtifactRegistry,
+					ArtifactTag:        state.ArtifactTag,
+					ArtifactDigest:     state.ArtifactDigest,
+					ResourceHealthy:    state.ContainerHealthy,
+					ApplicationHealthy: state.ApplicationHealthy,
+					LastHealthCheck:    state.LastHealthCheck.Format(time.RFC3339),
+					ContainerId:        state.ContainerId,
+				})
 			}
 		}
 	}
@@ -521,14 +504,12 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 		zap.String("avsAddress", avsAddress),
 	)
 
-	// Remove performer state from storage if available
-	if e.store != nil {
-		if err := e.store.DeletePerformerState(ctx, req.GetPerformerId()); err != nil {
-			e.logger.Sugar().Warnw("Failed to delete performer state from storage",
-				"error", err,
-				"performerId", req.GetPerformerId(),
-			)
-		}
+	// Remove performer state from storage
+	if err := e.store.DeletePerformerState(ctx, req.GetPerformerId()); err != nil {
+		e.logger.Sugar().Warnw("Failed to delete performer state from storage",
+			"error", err,
+			"performerId", req.GetPerformerId(),
+		)
 	}
 
 	return &executorV1.RemovePerformerResponse{

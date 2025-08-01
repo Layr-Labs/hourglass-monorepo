@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
-	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
-	aggregatorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
-	executorStorage "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
-	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
-	executorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/badger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	aggregatorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
+	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	executorStorage "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
+	executorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/badger"
+	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 )
 
@@ -88,16 +88,16 @@ func BenchmarkAggregatorOperations(b *testing.B) {
 
 func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		task := &types.Task{
-			TaskId:      fmt.Sprintf("bench-task-%d", i),
+			TaskId:        fmt.Sprintf("bench-task-%d", i),
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
-			BlockNumber: uint64(i / 100),
-			ChainId:     config.ChainId(1),
-			Payload:     make([]byte, 256), // 256 bytes payload
+			BlockNumber:   uint64(i / 100),
+			ChainId:       config.ChainId(1),
+			Payload:       make([]byte, 256), // 256 bytes payload
 		}
 		if err := store.SaveTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -107,7 +107,7 @@ func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 
 func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
-	
+
 	// Prepare data
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
@@ -121,7 +121,7 @@ func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 			b.Fatal(err)
 		}
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		taskId := fmt.Sprintf("get-task-%d", i%numTasks)
@@ -133,7 +133,7 @@ func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 
 func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
-	
+
 	// Prepare data
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
@@ -147,13 +147,13 @@ func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 			b.Fatal(err)
 		}
 	}
-	
+
 	statuses := []storage.TaskStatus{
 		storage.TaskStatusProcessing,
 		storage.TaskStatusCompleted,
 		storage.TaskStatusFailed,
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		taskId := fmt.Sprintf("update-task-%d", i%numTasks)
@@ -166,7 +166,7 @@ func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 
 func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
-	
+
 	// Prepare data with mix of statuses
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
@@ -179,7 +179,7 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 		if err := store.SaveTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Make 30% completed
 		if i%3 == 0 {
 			if err := store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
@@ -187,7 +187,7 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 			}
 		}
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := store.ListPendingTasks(ctx); err != nil {
@@ -199,7 +199,7 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 func benchmarkSetLastProcessedBlock(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
 	chainId := config.ChainId(1)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if err := store.SetLastProcessedBlock(ctx, chainId, uint64(i)); err != nil {
@@ -253,7 +253,7 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 
 func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, concurrency int) {
 	ctx := context.Background()
-	
+
 	// Pre-populate some data
 	for i := 0; i < 1000; i++ {
 		task := &types.Task{
@@ -266,17 +266,17 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 			b.Fatal(err)
 		}
 	}
-	
+
 	b.ResetTimer()
-	
+
 	var wg sync.WaitGroup
 	opsPerGoroutine := b.N / concurrency
-	
+
 	for g := 0; g < concurrency; g++ {
 		wg.Add(1)
 		go func(goroutineId int) {
 			defer wg.Done()
-			
+
 			for i := 0; i < opsPerGoroutine; i++ {
 				// Mix of operations
 				switch i % 4 {
@@ -309,7 +309,7 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 			}
 		}(g)
 	}
-	
+
 	wg.Wait()
 }
 
@@ -345,15 +345,15 @@ func BenchmarkExecutorOperations(b *testing.B) {
 		b.Run(st.name, func(b *testing.B) {
 			store, cleanup := st.storeFactory(b)
 			defer cleanup()
-			
+
 			b.Run("SavePerformerState", func(b *testing.B) {
 				benchmarkSavePerformerState(b, store)
 			})
-			
+
 			b.Run("SaveInflightTask", func(b *testing.B) {
 				benchmarkSaveInflightTask(b, store)
 			})
-			
+
 			b.Run("SaveDeployment", func(b *testing.B) {
 				benchmarkSaveDeployment(b, store)
 			})
@@ -363,7 +363,7 @@ func BenchmarkExecutorOperations(b *testing.B) {
 
 func benchmarkSavePerformerState(b *testing.B, store executorStorage.ExecutorStore) {
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		performerId := fmt.Sprintf("performer-%d", i)
@@ -382,15 +382,15 @@ func benchmarkSavePerformerState(b *testing.B, store executorStorage.ExecutorSto
 
 func benchmarkSaveInflightTask(b *testing.B, store executorStorage.ExecutorStore) {
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		taskId := fmt.Sprintf("inflight-task-%d", i)
 		task := &executorStorage.TaskInfo{
-			TaskId:      taskId,
-			AvsAddress:  "0xavs123",
+			TaskId:          taskId,
+			AvsAddress:      "0xavs123",
 			OperatorAddress: fmt.Sprintf("operator-%d", i%10),
-			ReceivedAt:  time.Now(),
+			ReceivedAt:      time.Now(),
 		}
 		if err := store.SaveInflightTask(ctx, taskId, task); err != nil {
 			b.Fatal(err)
@@ -400,7 +400,7 @@ func benchmarkSaveInflightTask(b *testing.B, store executorStorage.ExecutorStore
 
 func benchmarkSaveDeployment(b *testing.B, store executorStorage.ExecutorStore) {
 	ctx := context.Background()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		deploymentId := fmt.Sprintf("deployment-%d", i)
@@ -460,7 +460,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 func benchmarkMemoryWithTasks(b *testing.B, store storage.AggregatorStore, taskCount int) {
 	ctx := context.Background()
-	
+
 	// Populate store
 	for i := 0; i < taskCount; i++ {
 		task := &types.Task{
@@ -474,9 +474,9 @@ func benchmarkMemoryWithTasks(b *testing.B, store storage.AggregatorStore, taskC
 			b.Fatal(err)
 		}
 	}
-	
+
 	b.ResetTimer()
-	
+
 	// Perform operations to test memory behavior
 	for i := 0; i < b.N; i++ {
 		// Read random task
@@ -484,7 +484,7 @@ func benchmarkMemoryWithTasks(b *testing.B, store storage.AggregatorStore, taskC
 		if _, err := store.GetTask(ctx, taskId); err != nil {
 			b.Fatal(err)
 		}
-		
+
 		// Occasionally list tasks
 		if i%100 == 0 {
 			if _, err := store.ListPendingTasks(ctx); err != nil {
