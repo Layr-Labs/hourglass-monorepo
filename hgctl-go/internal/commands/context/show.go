@@ -35,24 +35,10 @@ func contextShowAction(c *cli.Context) error {
 
 	log.Info("Current context", zap.String("name", cfg.CurrentContext))
 
-	// Output as YAML
-	contextData := map[string]interface{}{
-		"executor-address": ctx.ExecutorAddress,
-		"avs-address":      ctx.AVSAddress,
-		"operator-set-id":  ctx.OperatorSetID,
-		"rpc-url":          ctx.RPCUrl,
-		"release-manager":  ctx.ReleaseManagerAddress,
-		"network-id":       ctx.NetworkID,
-	}
-
-	// Add environment variables if any
-	if len(ctx.EnvironmentVars) > 0 {
-		contextData["environment-vars"] = ctx.EnvironmentVars
-	}
-
+	// Use the ToMap method to get the context data
 	data := map[string]interface{}{
 		"current-context": cfg.CurrentContext,
-		"context":         contextData,
+		"context":         ctx.ToMap(),
 	}
 
 	encoder := yaml.NewEncoder(os.Stdout)

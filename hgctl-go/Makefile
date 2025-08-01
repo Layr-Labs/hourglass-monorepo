@@ -27,8 +27,20 @@ build: ## Build the binary
 test: ## Run tests
 	$(GO) test -v ./... -p 1
 
-test-integration: ## Run integration tests
-	$(GO) test -v ./... -p 1 -tags=integration
+# Integration Testing Commands - Unified Test Harness
+test-integration: ## Run all integration tests with automatic setup
+	@./internal/testutils/scripts/test_harness.sh all
+
+# Test Environment Management
+.PHONY: generate-test-state
+generate-test-state: ## Generate fresh test chain state with AVS setup
+	@echo "Generating test chain state..."
+	@./internal/testutils/scripts/generateTestChainState.sh
+
+.PHONY: clean-test-state
+clean-test-state: ## Clean up test data and keystores
+	@echo "Cleaning test data..."
+	@./internal/testutils/scripts/clean_test_data.sh
 
 fmt: ## Format code
 	@go fmt $(GO_PACKAGES)

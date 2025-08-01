@@ -1,6 +1,7 @@
 package keystore
 
 import (
+	"bufio"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
@@ -8,17 +9,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
+	"golang.org/x/term"
 )
 
 func createCommand() *cli.Command {
@@ -48,7 +51,7 @@ func createCommand() *cli.Command {
 		}),
 		Action: func(c *cli.Context) error {
 			log := logger.FromContext(c.Context)
-			
+
 			contextName := getContextName(c)
 			name := c.String("name")
 			keystoreType := c.String("type")
@@ -58,6 +61,15 @@ func createCommand() *cli.Command {
 			// Validate keystore type
 			if keystoreType != "bn254" && keystoreType != "ecdsa" {
 				return fmt.Errorf("unsupported keystore type: %s (supported: bn254, ecdsa)", keystoreType)
+			}
+
+			// Prompt for password if not provided
+			if password == "" {
+				var err error
+				password, err = promptForPasswordWithConfirmation("Enter password for keystore: ")
+				if err != nil {
+					return err
+				}
 			}
 
 			// Create keystore directory
@@ -127,10 +139,10 @@ func createCommand() *cli.Command {
 
 func createBLSKeystore(log logger.Logger, privateKey, path, password string) error {
 	scheme := bn254.NewScheme()
-	
+
 	var privKey signing.PrivateKey
 	var err error
-	
+
 	if privateKey == "" {
 		// Generate new key
 		log.Info("Generating new BLS private key")
@@ -180,7 +192,7 @@ func createBLSKeystore(log logger.Logger, privateKey, path, password string) err
 func createECDSAKeystore(log logger.Logger, privateKeyHex, path, password string) error {
 	var privateKey *ecdsa.PrivateKey
 	var err error
-	
+
 	if privateKeyHex == "" {
 		// Generate new key
 		log.Info("Generating new ECDSA private key")
@@ -234,4 +246,60 @@ func createECDSAKeystore(log logger.Logger, privateKeyHex, path, password string
 		zap.String("address", address.Hex()))
 
 	return nil
+}
+
+// promptForPasswordWithConfirmation prompts the user for a password twice and ensures they match
+func promptForPasswordWithConfirmation(prompt string) (string, error) {
+	// Check if stdin is a terminal
+	if !term.IsTerminal(syscall.Stdin) {
+		// Non-terminal mode (e.g., piped input)
+		scanner := bufio.NewScanner(os.Stdin)
+
+		fmt.Print(prompt)
+		if !scanner.Scan() {
+			return "", fmt.Errorf("failed to read password")
+		}
+		password1 := scanner.Text()
+
+		fmt.Print("Confirm password: ")
+		if !scanner.Scan() {
+			return "", fmt.Errorf("failed to read password confirmation")
+		}
+		password2 := scanner.Text()
+
+		if password1 != password2 {
+			return "", fmt.Errorf("passwords do not match")
+		}
+
+		if password1 == "" {
+			return "", fmt.Errorf("password cannot be empty")
+		}
+
+		return password1, nil
+	}
+
+	// Terminal mode - use secure password reading
+	fmt.Print(prompt)
+	password1, err := term.ReadPassword(syscall.Stdin)
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("failed to read password: %w", err)
+	}
+
+	fmt.Print("Confirm password: ")
+	password2, err := term.ReadPassword(syscall.Stdin)
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("failed to read password confirmation: %w", err)
+	}
+
+	if string(password1) != string(password2) {
+		return "", fmt.Errorf("passwords do not match")
+	}
+
+	if len(password1) == 0 {
+		return "", fmt.Errorf("password cannot be empty")
+	}
+
+	return string(password1), nil
 }

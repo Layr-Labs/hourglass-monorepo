@@ -1,10 +1,8 @@
-package executor
+package client
 
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -18,15 +16,10 @@ type Client struct {
 	logger logger.Logger
 }
 
-func NewClient(address string, log logger.Logger) (*Client, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock())
+func NewExecutorClient(address string, log logger.Logger) (*Client, error) {
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to executor: %w", err)
+		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	return &Client{

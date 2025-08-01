@@ -2,17 +2,24 @@ package client
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
 	"math/big"
+	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 
-	releasemanager "github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ReleaseManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IStrategyManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
 )
 
 // Release types
@@ -39,14 +46,56 @@ type ReleaseManagerRelease struct {
 	Artifacts     []ReleaseArtifact
 }
 
-type ContractClient struct {
-	ethClient *ethclient.Client
-	logger    logger.Logger
+// AVSConfig represents the configuration for an AVS
+type AVSConfig struct {
+	AggregatorOperatorSetID uint32
+	ExecutorOperatorSetIDs  []uint32
 }
 
-func NewContractClient(rpcURL string, log logger.Logger) (*ContractClient, error) {
+// ContractConfig contains all configuration needed to instantiate contracts
+type ContractConfig struct {
+	// Required addresses
+	AVSAddress      string
+	OperatorAddress string
+
+	// Optional contract addresses (will use defaults if not provided)
+	DelegationManager string
+	AllocationManager string
+	StrategyManager   string
+	KeyRegistrar      string
+	ReleaseManager    string
+}
+
+type ContractClient struct {
+	ethClient         *ethclient.Client
+	logger            logger.Logger
+	privateKey        *ecdsa.PrivateKey
+	chainID           *big.Int
+	avsAddress        common.Address
+	operatorAddress   common.Address
+	allocationManager *IAllocationManager.IAllocationManager
+	delegationManager *IDelegationManager.IDelegationManager
+	strategyManager   *IStrategyManager.IStrategyManager
+	keyRegistrar      *IKeyRegistrar.IKeyRegistrar
+	releaseManager    *IReleaseManager.IReleaseManager
+}
+
+// NewContractClient creates a new contract client with the given configuration
+func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *ContractConfig) (*ContractClient, error) {
 	if rpcURL == "" {
 		return nil, fmt.Errorf("RPC URL is required")
+	}
+
+	if config == nil {
+		return nil, fmt.Errorf("contract config is required")
+	}
+
+	if config.AVSAddress == "" {
+		return nil, fmt.Errorf("AVS address is required")
+	}
+
+	if config.OperatorAddress == "" {
+		return nil, fmt.Errorf("operator address is required")
 	}
 
 	client, err := ethclient.Dial(rpcURL)
@@ -54,28 +103,158 @@ func NewContractClient(rpcURL string, log logger.Logger) (*ContractClient, error
 		return nil, fmt.Errorf("failed to connect to Ethereum node: %w", err)
 	}
 
-	return &ContractClient{
-		ethClient: client,
-		logger:    log,
-	}, nil
+	// Parse private key
+	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %w", err)
+	}
+
+	// Get chain ID
+	chainID, err := client.ChainID(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
+
+	contractClient := &ContractClient{
+		ethClient:       client,
+		logger:          log,
+		privateKey:      privateKey,
+		chainID:         chainID,
+		avsAddress:      common.HexToAddress(config.AVSAddress),
+		operatorAddress: common.HexToAddress(config.OperatorAddress),
+	}
+
+	// Get default addresses for this chain if not provided in config
+	defaultAddresses := getDefaultContractAddresses(chainID.Uint64())
+
+	// Initialize EigenLayer contracts with config addresses or defaults
+
+	// Delegation Manager
+	delegationAddr := config.DelegationManager
+	if delegationAddr == "" && defaultAddresses != nil {
+		delegationAddr = defaultAddresses.DelegationManager
+	}
+	if delegationAddr != "" {
+		contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
+			common.HexToAddress(delegationAddr),
+			client,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create delegation manager at %s: %w", delegationAddr, err)
+		}
+		log.Info("Initialized delegation manager", zap.String("address", delegationAddr))
+	}
+
+	// Allocation Manager
+	allocationAddr := config.AllocationManager
+	if allocationAddr == "" && defaultAddresses != nil {
+		allocationAddr = defaultAddresses.AllocationManager
+	}
+	if allocationAddr != "" {
+		contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
+			common.HexToAddress(allocationAddr),
+			client,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create allocation manager at %s: %w", allocationAddr, err)
+		}
+		log.Info("Initialized allocation manager", zap.String("address", allocationAddr))
+	}
+
+	// Strategy Manager
+	strategyAddr := config.StrategyManager
+	if strategyAddr == "" && defaultAddresses != nil {
+		strategyAddr = defaultAddresses.StrategyManager
+	}
+	if strategyAddr != "" {
+		contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
+			common.HexToAddress(strategyAddr),
+			client,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create strategy manager at %s: %w", strategyAddr, err)
+		}
+		log.Info("Initialized strategy manager", zap.String("address", strategyAddr))
+	}
+
+	// Key Registrar
+	keyRegistrarAddr := config.KeyRegistrar
+	if keyRegistrarAddr == "" && defaultAddresses != nil {
+		keyRegistrarAddr = defaultAddresses.KeyRegistrar
+	}
+	if keyRegistrarAddr != "" {
+		contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
+			common.HexToAddress(keyRegistrarAddr),
+			client,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key registrar at %s: %w", keyRegistrarAddr, err)
+		}
+		log.Info("Initialized key registrar", zap.String("address", keyRegistrarAddr))
+	}
+
+	// Release Manager
+	releaseManagerAddr := config.ReleaseManager
+	if releaseManagerAddr == "" && defaultAddresses != nil {
+		releaseManagerAddr = defaultAddresses.ReleaseManager
+	}
+	if releaseManagerAddr != "" {
+		contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
+			common.HexToAddress(releaseManagerAddr),
+			client,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create release manager at %s: %w", releaseManagerAddr, err)
+		}
+		log.Info("Initialized release manager", zap.String("address", releaseManagerAddr))
+	}
+
+	return contractClient, nil
+}
+
+// DefaultContractAddresses contains the default contract addresses for a chain
+type DefaultContractAddresses struct {
+	DelegationManager string
+	AllocationManager string
+	StrategyManager   string
+	KeyRegistrar      string
+	ReleaseManager    string
+}
+
+// getDefaultContractAddresses returns the default contract addresses for a given chain ID
+func getDefaultContractAddresses(chainID uint64) *DefaultContractAddresses {
+	switch chainID {
+	case 1: // Ethereum Mainnet
+		return &DefaultContractAddresses{
+			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+			AllocationManager: "0xAbC987D773361aAD2cd9349fD608fe9cF1edb813",
+			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+			// Add other mainnet addresses
+		}
+	case 17000: // Holesky Testnet
+		return &DefaultContractAddresses{
+			DelegationManager: "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
+			AllocationManager: "0x742707a524551C382C8901a87357048e8945daC1",
+			StrategyManager:   "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+			// Add other testnet addresses
+		}
+	// Add other chains as needed
+	default:
+		return nil
+	}
 }
 
 // GetRelease fetches a release from the ReleaseManager contract
-func (c *ContractClient) GetRelease(ctx context.Context, releaseManagerAddr common.Address, avsAddress common.Address, operatorSetId uint32, releaseId *big.Int) (*ReleaseManagerRelease, error) {
-	// Create release manager instance
-	rm, err := releasemanager.NewReleaseManager(releaseManagerAddr, c.ethClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create release manager instance: %w", err)
-	}
-
+func (c *ContractClient) GetRelease(
+	ctx context.Context,
+	operatorSetId uint32,
+	releaseId *big.Int,
+) (*ReleaseManagerRelease, error) {
 	// Create operator set
-	operatorSet := releasemanager.OperatorSet{
-		Avs: avsAddress,
-		Id:  operatorSetId,
-	}
+	operatorSet := IReleaseManager.OperatorSet{Avs: c.avsAddress, Id: operatorSetId}
 
 	// Get release from contract
-	release, err := rm.GetRelease(&bind.CallOpts{Context: ctx}, operatorSet, releaseId)
+	release, err := c.releaseManager.GetRelease(&bind.CallOpts{Context: ctx}, operatorSet, releaseId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release: %w", err)
 	}
@@ -96,21 +275,12 @@ func (c *ContractClient) GetRelease(ctx context.Context, releaseManagerAddr comm
 }
 
 // GetNextReleaseId gets the next release ID for an operator set
-func (c *ContractClient) GetNextReleaseId(ctx context.Context, releaseManagerAddr common.Address, avsAddress common.Address, operatorSetId uint32) (*big.Int, error) {
-	// Create release manager instance
-	rm, err := releasemanager.NewReleaseManager(releaseManagerAddr, c.ethClient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create release manager instance: %w", err)
-	}
-
+func (c *ContractClient) GetNextReleaseId(ctx context.Context, operatorSetId uint32) (*big.Int, error) {
 	// Create operator set
-	operatorSet := releasemanager.OperatorSet{
-		Avs: avsAddress,
-		Id:  operatorSetId,
-	}
+	operatorSet := IReleaseManager.OperatorSet{Avs: c.avsAddress, Id: operatorSetId}
 
 	// Get total releases
-	totalReleases, err := rm.GetTotalReleases(&bind.CallOpts{Context: ctx}, operatorSet)
+	totalReleases, err := c.releaseManager.GetTotalReleases(&bind.CallOpts{Context: ctx}, operatorSet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total releases: %w", err)
 	}
@@ -119,13 +289,12 @@ func (c *ContractClient) GetNextReleaseId(ctx context.Context, releaseManagerAdd
 }
 
 // GetReleases fetches multiple releases organized by operator set
-func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr common.Address, avsAddress common.Address, operatorSetIds []uint32, limit uint64) ([]*Release, error) {
+func (c *ContractClient) GetReleases(ctx context.Context, operatorSetIds []uint32, limit uint64) ([]*Release, error) {
 	var releases []*Release
 
 	// Get releases for each operator set separately
 	for _, opSetId := range operatorSetIds {
-		// Get the next release ID (total count) for this operator set
-		nextId, err := c.GetNextReleaseId(ctx, releaseManagerAddr, avsAddress, opSetId)
+		nextId, err := c.GetNextReleaseId(ctx, opSetId)
 		if err != nil {
 			c.logger.Warn("Failed to get next release ID",
 				zap.Uint32("operatorSetId", opSetId),
@@ -138,20 +307,10 @@ func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr com
 			continue
 		}
 
-		// Calculate starting point for fetching last N releases
-		startIdx := totalReleases - int64(limit)
-		if startIdx < 0 {
-			startIdx = 0
-		}
-
 		// Fetch releases in descending order (newest first)
-		for i := totalReleases - 1; i >= startIdx; i-- {
-			release, err := c.GetRelease(ctx, releaseManagerAddr, avsAddress, opSetId, big.NewInt(i))
+		for i := totalReleases - 1; i >= totalReleases-int64(limit) && i >= 0; i-- {
+			release, err := c.GetRelease(ctx, opSetId, big.NewInt(i))
 			if err != nil {
-				continue
-			}
-
-			if len(release.Artifacts) == 0 {
 				continue
 			}
 
@@ -173,11 +332,541 @@ func (c *ContractClient) GetReleases(ctx context.Context, releaseManagerAddr com
 	return releases, nil
 }
 
-func (c *ContractClient) Close() {
-	c.ethClient.Close()
+// buildTxOpts creates transaction options for signing
+func (c *ContractClient) buildTxOpts(ctx context.Context) (*bind.TransactOpts, error) {
+	if c.privateKey == nil {
+		return nil, fmt.Errorf("private key not set - use NewContractClientWithSigner")
+	}
+
+	opts, err := bind.NewKeyedTransactorWithChainID(c.privateKey, c.chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transactor: %w", err)
+	}
+	opts.Context = ctx
+	return opts, nil
 }
 
-// Helper to create a bound contract instance
-func (c *ContractClient) bindContract(address common.Address, abi abi.ABI) *bind.BoundContract {
-	return bind.NewBoundContract(address, abi, c.ethClient, c.ethClient, c.ethClient)
+// Operator Management Methods
+
+// RegisterAsOperator registers an address as an operator with EigenLayer
+func (c *ContractClient) RegisterAsOperator(ctx context.Context, allocationDelay uint32, metadataURI string) error {
+	if c.delegationManager == nil {
+		return fmt.Errorf("delegation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Register operator with zero address as delegation approver (for self-delegation)
+	// The operator performing the registration will automatically be registered and self-delegated
+	tx, err := c.delegationManager.RegisterAsOperator(opts, common.Address{}, allocationDelay, metadataURI)
+	if err != nil {
+		return fmt.Errorf("failed to register operator: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully registered operator",
+		zap.String("address", c.operatorAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// RegisterOperatorToAVS registers an operator to an AVS
+func (c *ContractClient) RegisterOperatorToAVS(ctx context.Context, operatorSetIDs []uint32, data []byte) error {
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create registration parameters with the provided data
+	registerParams := IAllocationManager.IAllocationManagerTypesRegisterParams{
+		Avs:            c.avsAddress,
+		OperatorSetIds: operatorSetIDs,
+		Data:           data,
+	}
+
+	// Register for operator sets
+	tx, err := c.allocationManager.RegisterForOperatorSets(opts, c.operatorAddress, registerParams)
+	if err != nil {
+		return fmt.Errorf("failed to register operator to AVS: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully registered operator to AVS",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// DepositIntoStrategy deposits tokens into a strategy
+func (c *ContractClient) DepositIntoStrategy(ctx context.Context, strategyAddress string, amount *big.Int) error {
+	if c.strategyManager == nil {
+		return fmt.Errorf("strategy manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Convert strategy address
+	stratAddr := common.HexToAddress(strategyAddress)
+
+	// TODO: This needs to handle token approval first for non-ETH strategies
+	// For now, assuming ETH strategy
+
+	// Deposit into strategy
+	tx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, common.Address{}, amount)
+	if err != nil {
+		return fmt.Errorf("failed to deposit into strategy: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully deposited into strategy",
+		zap.String("strategy", strategyAddress),
+		zap.String("amount", amount.String()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// DelegateTo delegates stake to an operator
+func (c *ContractClient) DelegateTo(ctx context.Context, operatorAddress string) error {
+	if c.delegationManager == nil {
+		return fmt.Errorf("delegation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Convert operator address
+	opAddr := common.HexToAddress(operatorAddress)
+
+	// Delegate to operator
+	tx, err := c.delegationManager.DelegateTo(opts, opAddr,
+		IDelegationManager.ISignatureUtilsMixinTypesSignatureWithExpiry{
+			Signature: []byte{},
+			// TODO: parameterize this.
+			Expiry: big.NewInt(0),
+		},
+		[32]byte{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to delegate to operator: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully delegated to operator",
+		zap.String("operator", operatorAddress),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// GetOperatorECDSAKeyRegistrationMessageHash gets the message hash for ECDSA key registration
+func (c *ContractClient) GetOperatorECDSAKeyRegistrationMessageHash(
+	ctx context.Context,
+	operatorSetID uint32,
+	keyAddress common.Address,
+) ([32]byte, error) {
+	if c.keyRegistrar == nil {
+		return [32]byte{}, fmt.Errorf("key registrar not initialized")
+	}
+
+	operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+	return c.keyRegistrar.GetECDSAKeyRegistrationMessageHash(
+		&bind.CallOpts{Context: ctx},
+		c.operatorAddress,
+		operatorSet,
+		keyAddress,
+	)
+}
+
+// GetOperatorBN254KeyRegistrationMessageHash gets the message hash for BN254 key registration
+func (c *ContractClient) GetOperatorBN254KeyRegistrationMessageHash(
+	ctx context.Context,
+	operatorSetID uint32,
+	keyData []byte,
+) ([32]byte, error) {
+	if c.keyRegistrar == nil {
+		return [32]byte{}, fmt.Errorf("key registrar not initialized")
+	}
+
+	operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+	return c.keyRegistrar.GetBN254KeyRegistrationMessageHash(
+		&bind.CallOpts{Context: ctx},
+		c.operatorAddress,
+		operatorSet,
+		keyData,
+	)
+}
+
+// RegisterECDSAKey registers an operator's ECDSA signing key with an AVS
+func (c *ContractClient) RegisterECDSAKey(
+	ctx context.Context,
+	operatorSetID uint32,
+	keyAddress common.Address,
+	signature []byte,
+) error {
+	if c.keyRegistrar == nil {
+		return fmt.Errorf("key registrar not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	// For ECDSA, keyData is just the address bytes
+	keyData := keyAddress.Bytes()
+	operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+
+	tx, err := c.keyRegistrar.RegisterKey(opts, c.operatorAddress, operatorSet, keyData, signature)
+	if err != nil {
+		return fmt.Errorf("failed to register ECDSA key: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully registered ECDSA key",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.Uint32("operatorSetId", operatorSetID),
+		zap.String("keyAddress", keyAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// RegisterKey registers an operator's signing key with an AVS (generic method for both ECDSA and BN254)
+func (c *ContractClient) RegisterKey(
+	ctx context.Context,
+	operatorSetID uint32,
+	keyType string,
+	keyData []byte,
+	signature []byte,
+) error {
+	switch keyType {
+	case "ecdsa":
+		// For ECDSA, keyData should be 20 bytes (address)
+		if len(keyData) != 20 {
+			return fmt.Errorf("invalid ECDSA key data length: expected 20 bytes, got %d", len(keyData))
+		}
+		keyAddress := common.BytesToAddress(keyData)
+		return c.RegisterECDSAKey(ctx, operatorSetID, keyAddress, signature)
+
+	case "bn254":
+		// For BN254, register directly with the raw key data
+		opts, err := c.buildTxOpts(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to build transaction options: %w", err)
+		}
+
+		operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+		tx, err := c.keyRegistrar.RegisterKey(opts, c.operatorAddress, operatorSet, keyData, signature)
+		if err != nil {
+			return fmt.Errorf("failed to register BN254 key: %w", err)
+		}
+
+		receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+		if err != nil {
+			return fmt.Errorf("failed to wait for transaction: %w", err)
+		}
+
+		if receipt.Status == 0 {
+			return fmt.Errorf("transaction reverted")
+		}
+
+		c.logger.Info("Successfully registered BN254 key",
+			zap.String("operator", c.operatorAddress.Hex()),
+			zap.String("avs", c.avsAddress.Hex()),
+			zap.Uint32("operatorSetId", operatorSetID),
+			zap.String("txHash", receipt.TxHash.Hex()),
+		)
+		return nil
+
+	default:
+		return fmt.Errorf("unsupported key type: %s", keyType)
+	}
+}
+
+// RegisterBN254Key registers an operator's BN254 signing key with an AVS
+func (c *ContractClient) RegisterBN254Key(
+	ctx context.Context,
+	operatorSetID uint32,
+	keyData []byte,
+	signature []byte,
+) error {
+	if c.keyRegistrar == nil {
+		return fmt.Errorf("key registrar not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+
+	tx, err := c.keyRegistrar.RegisterKey(opts, c.operatorAddress, operatorSet, keyData, signature)
+	if err != nil {
+		return fmt.Errorf("failed to register BN254 key: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully registered BN254 key",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.Uint32("operatorSetId", operatorSetID),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// SetAllocationDelay sets the allocation delay for an operator
+func (c *ContractClient) SetAllocationDelay(ctx context.Context, delay uint32) error {
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Set allocation delay
+	tx, err := c.allocationManager.SetAllocationDelay(opts, c.operatorAddress, delay)
+	if err != nil {
+		return fmt.Errorf("failed to set allocation delay: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully set allocation delay",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.Uint32("delay", delay),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// ModifyAllocations modifies operator allocations to an AVS operator set
+func (c *ContractClient) ModifyAllocations(ctx context.Context, operatorSetID uint32, strategyAddress string, magnitude uint64) error {
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	strategy := common.HexToAddress(strategyAddress)
+
+	// Get allocation delay first
+	allocationDelay, err := c.allocationManager.GetAllocationDelay(&bind.CallOpts{Context: ctx}, c.operatorAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get allocation delay: %w", err)
+	}
+
+	c.logger.Info("Retrieved allocation delay",
+		zap.Any("allocationDelay", allocationDelay),
+	)
+
+	// Create allocation parameters
+	allocateParams := []IAllocationManager.IAllocationManagerTypesAllocateParams{
+		{
+			OperatorSet: IAllocationManager.OperatorSet{
+				Avs: c.avsAddress,
+				Id:  operatorSetID,
+			},
+			Strategies:    []common.Address{strategy},
+			NewMagnitudes: []uint64{magnitude},
+		},
+	}
+
+	// Modify allocations
+	tx, err := c.allocationManager.ModifyAllocations(opts, c.operatorAddress, allocateParams)
+	if err != nil {
+		return fmt.Errorf("failed to modify allocations: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully modified allocations",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.Uint32("operatorSetId", operatorSetID),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// GetAVSConfig fetches the operator set configuration from the AVS registrar contract
+func (c *ContractClient) GetAVSConfig() (*AVSConfig, error) {
+	avsRegistrarAddress, err := c.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, c.avsAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
+	}
+
+	registrarCaller, err := ITaskAVSRegistrarBase.NewITaskAVSRegistrarBaseCaller(avsRegistrarAddress, c.ethClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
+	}
+
+	avsConfig, err := registrarCaller.GetAvsConfig(&bind.CallOpts{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &AVSConfig{
+		AggregatorOperatorSetID: avsConfig.AggregatorOperatorSetId,
+		ExecutorOperatorSetIDs:  avsConfig.ExecutorOperatorSetIds,
+	}, nil
+}
+
+// CreateOperatorSets creates operator sets for an AVS
+func (c *ContractClient) CreateOperatorSets(
+	ctx context.Context,
+	avsAddress string,
+	operatorSetParams []IAllocationManager.IAllocationManagerTypesCreateSetParams,
+) error {
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	auth, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	avsAddr := common.HexToAddress(avsAddress)
+	tx, err := c.allocationManager.CreateOperatorSets(auth, avsAddr, operatorSetParams)
+	if err != nil {
+		return fmt.Errorf("failed to create operator sets: %w", err)
+	}
+
+	c.logger.Info("Create operator sets transaction sent",
+		zap.String("tx", tx.Hash().Hex()),
+		zap.String("avs", avsAddress),
+		zap.Int("numSets", len(operatorSetParams)),
+	)
+
+	return nil
+}
+
+// GetAVSAddress returns the AVS address configured for this client
+func (c *ContractClient) GetAVSAddress() common.Address {
+	return c.avsAddress
+}
+
+// GetOperatorSetMetadataURI gets the metadata URI for an operator set
+func (c *ContractClient) GetOperatorSetMetadataURI(ctx context.Context, operatorSetID uint32) (string, error) {
+	if c.releaseManager == nil {
+		return "", fmt.Errorf("release manager not initialized")
+	}
+
+	operatorSet := IReleaseManager.OperatorSet{
+		Avs: c.avsAddress,
+		Id:  operatorSetID,
+	}
+
+	metadataURI, err := c.releaseManager.GetMetadataURI(&bind.CallOpts{Context: ctx}, operatorSet)
+	if err != nil {
+		return "", fmt.Errorf("failed to get metadata URI: %w", err)
+	}
+
+	return metadataURI, nil
+}
+
+func (c *ContractClient) Close() {
+	c.ethClient.Close()
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/output"
 )
@@ -51,7 +51,7 @@ func getPerformerAction(c *cli.Context) error {
 		zap.String("avs", avsAddress))
 
 	// Create executor client
-	executorClient, err := executor.NewClient(currentCtx.ExecutorAddress, log)
+	executorClient, err := client.NewExecutorClient(currentCtx.ExecutorAddress, log)
 	if err != nil {
 		return fmt.Errorf("failed to create executor client: %w", err)
 	}

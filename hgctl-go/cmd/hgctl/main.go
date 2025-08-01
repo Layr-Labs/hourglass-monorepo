@@ -8,11 +8,11 @@ import (
 	"syscall"
 
 	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/operatorset"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
 )
@@ -52,63 +52,39 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 				Usage:   "Output format (table|json|yaml)",
 				Value:   "table",
 			},
-			&cli.StringFlag{
-				Name:  "executor-address",
-				Usage: "Override executor address",
-			},
-			&cli.StringFlag{
-				Name:  "rpc-url",
-				Usage: "Override RPC URL",
-			},
-			&cli.StringFlag{
-				Name:  "release-manager",
-				Usage: "Override release manager address",
-			},
-			&cli.Uint64Flag{
-				Name:  "operator-set-id",
-				Usage: "Override operator set ID",
-				Value: 0,
-			},
 		},
-		Before: func(c *cli.Context) error {
-			// Initialize logger
-			verbose := c.Bool("verbose")
-			logger.InitGlobalLogger(verbose)
-
-			// Load config
-			cfg, err := config.LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			// Get current context
-			currentCtx, err := config.GetCurrentContext()
-			if err != nil && !isConfigCommand(c) {
-				logger.GetLogger().Warn("No context configured, using defaults")
-			}
-
-			// Apply command-line overrides
-			if currentCtx != nil {
-				if addr := c.String("executor-address"); addr != "" {
-					currentCtx.ExecutorAddress = addr
+		Before: middleware.ChainBeforeFuncs(
+			// First load config and context
+			func(c *cli.Context) error {
+				// Load config
+				cfg, err := config.LoadConfig()
+				if err != nil {
+					return fmt.Errorf("failed to load config: %w", err)
 				}
-				if url := c.String("rpc-url"); url != "" {
-					currentCtx.RPCUrl = url
-				}
-				if addr := c.String("release-manager"); addr != "" {
-					currentCtx.ReleaseManagerAddress = addr
-				}
-				if id := c.Uint64("operator-set-id"); id > 0 {
-					currentCtx.OperatorSetID = uint32(id)
-				}
-			}
 
-			// Store in context
-			c.Context = context.WithValue(c.Context, "config", cfg)
-			c.Context = context.WithValue(c.Context, "currentContext", currentCtx)
-			c.Context = logger.WithLogger(c.Context, logger.GetLogger())
+				// Get current context
+				currentCtx, err := config.GetCurrentContext()
+				if err != nil {
+					// Allow config commands to run without a context
+					if isConfigCommand(c) {
+						currentCtx = &config.Context{}
+					} else {
+						return fmt.Errorf("no context configured: %w", err)
+					}
+				}
 
-			return nil
+				// Store in context
+				c.Context = context.WithValue(c.Context, "config", cfg)
+				c.Context = context.WithValue(c.Context, "currentContext", currentCtx)
+
+				return nil
+			},
+			// Then run the middleware
+			middleware.MiddlewareBeforeFunc,
+		),
+		After: func(c *cli.Context) error {
+			// Cleanup contract client
+			return middleware.CleanupContractClient(c)
 		},
 		Commands: []*cli.Command{
 			commands.GetCommand(),
@@ -119,11 +95,20 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			commands.ContextCommand(),
 			commands.KeystoreCommand(),
 			commands.Web3SignerCommand(),
+			// Operator management commands
+			commands.RegisterCommand(),
+			commands.RegisterAVSCommand(),
+			commands.RegisterKeyCommand(),
+			commands.DepositCommand(),
+			commands.DelegateCommand(),
+			commands.AllocateCommand(),
+			commands.SetAllocationDelayCommand(),
+			operatorset.Command(),
 		},
 	}
 
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.GetLogger().Error("Command failed", zap.Error(err))
+		// Error already logged by middleware
 		os.Exit(1)
 	}
 }

@@ -9,13 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/templates"
 )
@@ -24,7 +23,10 @@ func aggregatorCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "aggregator",
 		Usage:     "Deploy the aggregator component",
-		ArgsUsage: "<avs-address>",
+		ArgsUsage: "",
+		Description: `Deploy the aggregator component from a release.
+
+The AVS address must be configured in the context before running this command.`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
 				Name:  "operator-set-id",
@@ -62,20 +64,18 @@ func aggregatorCommand() *cli.Command {
 }
 
 func deployAggregatorAction(c *cli.Context) error {
-	if c.NArg() != 1 {
+	if c.NArg() != 0 {
 		return cli.ShowSubcommandHelp(c)
 	}
 
-	avsAddress := c.Args().Get(0)
 	operatorSetID := uint32(c.Uint64("operator-set-id"))
 	releaseID := c.String("release-id")
 	registry := c.String("registry")
 	digest := c.String("digest")
 
-	// Get context
+	// Get logger and context from middleware
+	log := middleware.GetLogger(c)
 	currentCtx := c.Context.Value("currentContext").(*config.Context)
-	log := logger.FromContext(c.Context)
-
 	if currentCtx == nil {
 		return fmt.Errorf("no context configured")
 	}
@@ -109,35 +109,24 @@ func deployAggregatorAction(c *cli.Context) error {
 		}
 	} else {
 		// Release-based mode
-		if currentCtx.RPCUrl == "" {
-			return fmt.Errorf("RPC URL not configured")
+		// Get contract client from middleware
+		contractClient, err := middleware.GetContractClient(c)
+		if err != nil {
+			return fmt.Errorf("failed to get contract client: %w", err)
 		}
 
-		if currentCtx.ReleaseManagerAddress == "" {
-			return fmt.Errorf("release manager address not configured")
-		}
+		// Get AVS address from contract client
+		avsAddress := contractClient.GetAVSAddress()
 
 		log.Info("Fetching release from ReleaseManager",
-			zap.String("avs", avsAddress),
+			zap.String("avs", avsAddress.Hex()),
 			zap.Uint32("operatorSetID", operatorSetID))
-
-		// Create contract client
-		contractClient, err := client.NewContractClient(currentCtx.RPCUrl, log)
-		if err != nil {
-			return fmt.Errorf("failed to create contract client: %w", err)
-		}
-		defer contractClient.Close()
 
 		var release *client.ReleaseManagerRelease
 
 		if releaseID == "" {
 			// Get latest release
-			nextReleaseId, err := contractClient.GetNextReleaseId(
-				c.Context,
-				common.HexToAddress(currentCtx.ReleaseManagerAddress),
-				common.HexToAddress(avsAddress),
-				operatorSetID,
-			)
+			nextReleaseId, err := contractClient.GetNextReleaseId(c.Context, operatorSetID)
 			if err != nil {
 				return fmt.Errorf("failed to get next release ID: %w", err)
 			}
@@ -147,13 +136,7 @@ func deployAggregatorAction(c *cli.Context) error {
 			}
 
 			latestId := new(big.Int).Sub(nextReleaseId, big.NewInt(1))
-			release, err = contractClient.GetRelease(
-				c.Context,
-				common.HexToAddress(currentCtx.ReleaseManagerAddress),
-				common.HexToAddress(avsAddress),
-				operatorSetID,
-				latestId,
-			)
+			release, err = contractClient.GetRelease(c.Context, operatorSetID, latestId)
 			if err != nil {
 				return fmt.Errorf("failed to get latest release: %w", err)
 			}
@@ -164,13 +147,7 @@ func deployAggregatorAction(c *cli.Context) error {
 			releaseIDBig := new(big.Int)
 			releaseIDBig.SetString(releaseID, 10)
 
-			release, err = contractClient.GetRelease(
-				c.Context,
-				common.HexToAddress(currentCtx.ReleaseManagerAddress),
-				common.HexToAddress(avsAddress),
-				operatorSetID,
-				releaseIDBig,
-			)
+			release, err = contractClient.GetRelease(c.Context, operatorSetID, releaseIDBig)
 			if err != nil {
 				return fmt.Errorf("failed to get release %s: %w", releaseID, err)
 			}
@@ -222,7 +199,19 @@ func deployAggregatorAction(c *cli.Context) error {
 	}
 
 	// Add AVS address
-	envMap["AVS_ADDRESS"] = avsAddress
+	var avsAddressStr string
+	if registry != "" && digest != "" {
+		// In direct mode, get AVS address from context or fail
+		if currentCtx.AVSAddress == "" {
+			return fmt.Errorf("AVS address not configured in context for direct deployment mode")
+		}
+		avsAddressStr = currentCtx.AVSAddress
+	} else {
+		// In release mode, we already have it from contractClient
+		contractClient, _ := middleware.GetContractClient(c)
+		avsAddressStr = contractClient.GetAVSAddress().Hex()
+	}
+	envMap["AVS_ADDRESS"] = avsAddressStr
 
 	// Load from env file if specified
 	if envFile := c.String("env-file"); envFile != "" {
@@ -309,7 +298,7 @@ func deployAggregatorAction(c *cli.Context) error {
 	}
 
 	// Container name
-	containerName := fmt.Sprintf("hgctl-aggregator-%s", avsAddress)
+	containerName := fmt.Sprintf("hgctl-aggregator-%s", avsAddressStr)
 
 	// Construct image reference
 	imageRef := fmt.Sprintf("%s@%s", aggregatorComponent.Registry, aggregatorComponent.Digest)
@@ -344,7 +333,7 @@ func deployAggregatorAction(c *cli.Context) error {
 	dockerArgs := []string{"run", "-d"}
 	dockerArgs = append(dockerArgs, "--name", containerName)
 	dockerArgs = append(dockerArgs, "--restart", "unless-stopped")
-	
+
 	// Add network mode if specified
 	networkMode := c.String("network")
 	if networkMode != "" {
@@ -353,7 +342,7 @@ func deployAggregatorAction(c *cli.Context) error {
 
 	// Add volume mount for config
 	dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:/config:ro", configDir))
-	
+
 	// Mount registered keystores directly from their original locations
 	if currentCtx.Keystores != nil {
 		for _, ks := range currentCtx.Keystores {
@@ -376,7 +365,7 @@ func deployAggregatorAction(c *cli.Context) error {
 	for _, env := range aggregatorComponent.Env {
 		dockerArgs = append(dockerArgs, "-e", fmt.Sprintf("%s=%s", env.Name, env.Value))
 	}
-	
+
 	// Inject keystore and certificate contents as environment variables
 	dockerArgs = injectFileContentsAsEnvVars(dockerArgs, contextDir, log)
 
@@ -419,4 +408,3 @@ func deployAggregatorAction(c *cli.Context) error {
 
 	return nil
 }
-

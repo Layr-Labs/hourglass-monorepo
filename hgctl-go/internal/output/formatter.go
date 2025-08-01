@@ -75,6 +75,91 @@ func (f *Formatter) PrintYAML(data interface{}) error {
 	return f.printYAML(data)
 }
 
+// Print formats and prints generic data based on the configured format
+func (f *Formatter) Print(data interface{}) error {
+	switch f.format {
+	case "json":
+		return f.printJSON(data)
+	case "yaml":
+		return f.printYAML(data)
+	case "table":
+		// For table format, we need to handle different data types
+		// For now, we'll use a simple key-value table for structs
+		return f.printGenericTable(data)
+	default:
+		return fmt.Errorf("unsupported output format: %s", f.format)
+	}
+}
+
+// printGenericTable prints generic data in table format
+func (f *Formatter) printGenericTable(data interface{}) error {
+	// Marshal to JSON first to get a generic representation
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	// Check if it's an array
+	var arr []interface{}
+	if err := json.Unmarshal(jsonData, &arr); err == nil {
+		// It's an array, print as table
+		if len(arr) == 0 {
+			fmt.Println("No data found")
+			return nil
+		}
+
+		// Get headers from first element
+		firstElem, _ := json.Marshal(arr[0])
+		var firstMap map[string]interface{}
+		if err := json.Unmarshal(firstElem, &firstMap); err != nil {
+			return fmt.Errorf("failed to parse data: %w", err)
+		}
+
+		// Create table
+		table := tablewriter.NewWriter(os.Stdout)
+		
+		// Set headers
+		var headers []string
+		for key := range firstMap {
+			headers = append(headers, key)
+		}
+		table.SetHeader(headers)
+
+		// Add rows
+		for _, item := range arr {
+			itemData, _ := json.Marshal(item)
+			var itemMap map[string]interface{}
+			json.Unmarshal(itemData, &itemMap)
+			
+			var row []string
+			for _, header := range headers {
+				val := fmt.Sprintf("%v", itemMap[header])
+				row = append(row, val)
+			}
+			table.Append(row)
+		}
+		
+		table.Render()
+		return nil
+	}
+
+	// It's a single object, print as key-value pairs
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonData, &obj); err != nil {
+		return fmt.Errorf("failed to parse data: %w", err)
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Field", "Value"})
+	
+	for key, value := range obj {
+		table.Append([]string{key, fmt.Sprintf("%v", value)})
+	}
+	
+	table.Render()
+	return nil
+}
+
 func (f *Formatter) printReleaseTable(data *ReleaseWithSpec) error {
 	// Print release information
 	fmt.Println("\n=== RELEASE INFORMATION ===")

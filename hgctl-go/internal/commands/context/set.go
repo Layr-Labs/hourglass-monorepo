@@ -24,6 +24,10 @@ func setCommand() *cli.Command {
 				Name:  "avs-address",
 				Usage: "Set the AVS contract address",
 			},
+			&cli.StringFlag{
+				Name:  "operator-address",
+				Usage: "Set the operator address",
+			},
 			&cli.Uint64Flag{
 				Name:  "operator-set-id",
 				Usage: "Set the operator set ID",
@@ -37,8 +41,24 @@ func setCommand() *cli.Command {
 				Usage: "Set the release manager contract address",
 			},
 			&cli.StringSliceFlag{
-				Name:  "env",
+				Name:  config.EnvKey,
 				Usage: "Set environment variables (KEY=VALUE)",
+			},
+			&cli.StringFlag{
+				Name:  "delegation-manager",
+				Usage: "Set the delegation manager contract address",
+			},
+			&cli.StringFlag{
+				Name:  "allocation-manager",
+				Usage: "Set the allocation manager contract address",
+			},
+			&cli.StringFlag{
+				Name:  "strategy-manager",
+				Usage: "Set the strategy manager contract address",
+			},
+			&cli.StringFlag{
+				Name:  "key-registrar",
+				Usage: "Set the key registrar contract address",
 			},
 		},
 		Action: contextSetAction,
@@ -72,6 +92,12 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated AVS address", zap.String("address", addr))
 	}
 
+	if addr := c.String("operator-address"); addr != "" {
+		ctx.OperatorAddress = addr
+		updated = true
+		log.Info("Updated operator address", zap.String("address", addr))
+	}
+
 	if id := c.Uint64("operator-set-id"); c.IsSet("operator-set-id") {
 		ctx.OperatorSetID = uint32(id)
 		updated = true
@@ -84,14 +110,9 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated RPC URL", zap.String("url", url))
 	}
 
-	if addr := c.String("release-manager"); addr != "" {
-		ctx.ReleaseManagerAddress = addr
-		updated = true
-		log.Info("Updated release manager address", zap.String("address", addr))
-	}
 
 	// Handle environment variables
-	envFlags := c.StringSlice("env")
+	envFlags := c.StringSlice(config.EnvKey)
 	if len(envFlags) > 0 {
 		if ctx.EnvironmentVars == nil {
 			ctx.EnvironmentVars = make(map[string]string)
@@ -117,6 +138,58 @@ func contextSetAction(c *cli.Context) error {
 			log.Info("Set environment variable", zap.String("key", key))
 			updated = true
 		}
+	}
+
+	// Handle contract addresses
+	contractsUpdated := false
+	
+	if addr := c.String("delegation-manager"); addr != "" {
+		if ctx.ContractOverrides == nil {
+			ctx.ContractOverrides = &config.ContractOverrides{}
+		}
+		ctx.ContractOverrides.DelegationManager = addr
+		contractsUpdated = true
+		log.Info("Updated delegation manager address", zap.String("address", addr))
+	}
+	
+	if addr := c.String("allocation-manager"); addr != "" {
+		if ctx.ContractOverrides == nil {
+			ctx.ContractOverrides = &config.ContractOverrides{}
+		}
+		ctx.ContractOverrides.AllocationManager = addr
+		contractsUpdated = true
+		log.Info("Updated allocation manager address", zap.String("address", addr))
+	}
+	
+	if addr := c.String("strategy-manager"); addr != "" {
+		if ctx.ContractOverrides == nil {
+			ctx.ContractOverrides = &config.ContractOverrides{}
+		}
+		ctx.ContractOverrides.StrategyManager = addr
+		contractsUpdated = true
+		log.Info("Updated strategy manager address", zap.String("address", addr))
+	}
+	
+	if addr := c.String("key-registrar"); addr != "" {
+		if ctx.ContractOverrides == nil {
+			ctx.ContractOverrides = &config.ContractOverrides{}
+		}
+		ctx.ContractOverrides.KeyRegistrar = addr
+		contractsUpdated = true
+		log.Info("Updated key registrar override address", zap.String("address", addr))
+	}
+	
+	if addr := c.String("release-manager"); addr != "" {
+		if ctx.ContractOverrides == nil {
+			ctx.ContractOverrides = &config.ContractOverrides{}
+		}
+		ctx.ContractOverrides.ReleaseManager = addr
+		contractsUpdated = true
+		log.Info("Updated release manager address", zap.String("address", addr))
+	}
+	
+	if contractsUpdated {
+		updated = true
 	}
 
 	if !updated {
