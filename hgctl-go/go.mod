@@ -65,5 +65,6 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
+	k8s.io/apimachinery v0.32.0-alpha.3 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
