@@ -115,6 +115,9 @@ func NewAvsExecutionManager(
 	if _, ok := chainContractCallers[config.L1ChainId]; !ok {
 		return nil, fmt.Errorf("chainContractCallers must contain L1ChainId: %d", config.L1ChainId)
 	}
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
 
 	manager := &AvsExecutionManager{
 		config:               config,
@@ -206,33 +209,31 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 		Id:  operatorSetId,
 	}
 
-	// Try to load from storage first if available
-	if em.store != nil {
-		storageConfig, err := em.store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
-		if err == nil && storageConfig != nil {
-			em.logger.Sugar().Infow("Found existing operator set task config in storage",
-				zap.String("avsAddress", avsAddress),
-				zap.Uint32("operatorSetId", operatorSetId),
-			)
-			// Convert from storage type to internal type
-			return &OperatorSetTaskConfig{
-				TaskSLA:      big.NewInt(storageConfig.TaskSLA),
-				CurveType:    storageConfig.CurveType,
-				TaskMetadata: storageConfig.TaskMetadata,
-				Consensus: OperatorSetTaskConsensus{
-					ConsensusType: ConsensusType(storageConfig.Consensus.ConsensusType),
-					Threshold:     storageConfig.Consensus.Threshold,
-				},
-			}, nil
-		}
-		// If error is not ErrNotFound, log it but continue
-		if err != nil && err != storage.ErrNotFound {
-			em.logger.Sugar().Warnw("Failed to get operator set config from storage",
-				"error", err,
-				"avsAddress", avsAddress,
-				"operatorSetId", operatorSetId,
-			)
-		}
+	// Try to load from storage first
+	storageConfig, err := em.store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
+	if err == nil && storageConfig != nil {
+		em.logger.Sugar().Infow("Found existing operator set task config in storage",
+			zap.String("avsAddress", avsAddress),
+			zap.Uint32("operatorSetId", operatorSetId),
+		)
+		// Convert from storage type to internal type
+		return &OperatorSetTaskConfig{
+			TaskSLA:      big.NewInt(storageConfig.TaskSLA),
+			CurveType:    storageConfig.CurveType,
+			TaskMetadata: storageConfig.TaskMetadata,
+			Consensus: OperatorSetTaskConsensus{
+				ConsensusType: ConsensusType(storageConfig.Consensus.ConsensusType),
+				Threshold:     storageConfig.Consensus.Threshold,
+			},
+		}, nil
+	}
+	// If error is not ErrNotFound, log it but continue
+	if err != nil && err != storage.ErrNotFound {
+		em.logger.Sugar().Warnw("Failed to get operator set config from storage",
+			"error", err,
+			"avsAddress", avsAddress,
+			"operatorSetId", operatorSetId,
+		)
 	}
 
 	// Fall back to sync.Map cache for backward compatibility
@@ -281,24 +282,22 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 		},
 	}
 
-	// Save to storage if available
-	if em.store != nil {
-		storageConfig := &storage.OperatorSetTaskConfig{
-			TaskSLA:      taskConfig.TaskSLA.Int64(),
-			CurveType:    taskConfig.CurveType,
-			TaskMetadata: taskConfig.TaskMetadata,
-			Consensus: storage.OperatorSetTaskConsensus{
-				ConsensusType: storage.ConsensusType(taskConfig.Consensus.ConsensusType),
-				Threshold:     taskConfig.Consensus.Threshold,
-			},
-		}
-		if err := em.store.SaveOperatorSetConfig(ctx, avsAddress, operatorSetId, storageConfig); err != nil {
-			em.logger.Sugar().Warnw("Failed to save operator set config to storage",
-				"error", err,
-				"avsAddress", avsAddress,
-				"operatorSetId", operatorSetId,
-			)
-		}
+	// Save to storage
+	saveConfig := &storage.OperatorSetTaskConfig{
+		TaskSLA:      taskConfig.TaskSLA.Int64(),
+		CurveType:    taskConfig.CurveType,
+		TaskMetadata: taskConfig.TaskMetadata,
+		Consensus: storage.OperatorSetTaskConsensus{
+			ConsensusType: storage.ConsensusType(taskConfig.Consensus.ConsensusType),
+			Threshold:     taskConfig.Consensus.Threshold,
+		},
+	}
+	if err := em.store.SaveOperatorSetConfig(ctx, avsAddress, operatorSetId, saveConfig); err != nil {
+		em.logger.Sugar().Warnw("Failed to save operator set config to storage",
+			"error", err,
+			"avsAddress", avsAddress,
+			"operatorSetId", operatorSetId,
+		)
 	}
 
 	// Also store in memory cache for backward compatibility
@@ -344,30 +343,28 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context)
 	em.avsConfigMutex.Lock()
 	defer em.avsConfigMutex.Unlock()
 
-	// Try to load from storage first if available
-	if em.store != nil {
-		storageConfig, err := em.store.GetAVSConfig(ctx, em.config.AvsAddress)
-		if err == nil && storageConfig != nil {
-			em.logger.Sugar().Infow("Found existing AVS config in storage",
-				zap.String("avsAddress", em.config.AvsAddress),
-			)
-			// Convert from storage type to internal type
-			em.avsConfig = &AvsConfig{
-				AVSConfig: contractCaller.AVSConfig{
-					AggregatorOperatorSetId: storageConfig.AggregatorOperatorSetId,
-					ExecutorOperatorSetIds:  storageConfig.ExecutorOperatorSetIds,
-				},
-				curveType: storageConfig.CurveType,
-			}
-			return em.avsConfig, nil
+	// Try to load from storage first
+	storageConfig, err := em.store.GetAVSConfig(ctx, em.config.AvsAddress)
+	if err == nil && storageConfig != nil {
+		em.logger.Sugar().Infow("Found existing AVS config in storage",
+			zap.String("avsAddress", em.config.AvsAddress),
+		)
+		// Convert from storage type to internal type
+		em.avsConfig = &AvsConfig{
+			AVSConfig: contractCaller.AVSConfig{
+				AggregatorOperatorSetId: storageConfig.AggregatorOperatorSetId,
+				ExecutorOperatorSetIds:  storageConfig.ExecutorOperatorSetIds,
+			},
+			curveType: storageConfig.CurveType,
 		}
-		// If error is not ErrNotFound, log it but continue
-		if err != nil && err != storage.ErrNotFound {
-			em.logger.Sugar().Warnw("Failed to get AVS config from storage",
-				"error", err,
-				"avsAddress", em.config.AvsAddress,
-			)
-		}
+		return em.avsConfig, nil
+	}
+	// If error is not ErrNotFound, log it but continue
+	if err != nil && err != storage.ErrNotFound {
+		em.logger.Sugar().Warnw("Failed to get AVS config from storage",
+			"error", err,
+			"avsAddress", em.config.AvsAddress,
+		)
 	}
 
 	if em.avsConfig != nil {
@@ -395,19 +392,17 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context)
 		curveType: curveType,
 	}
 
-	// Save to storage if available
-	if em.store != nil {
-		storageConfig := &storage.AvsConfig{
-			AggregatorOperatorSetId: em.avsConfig.AggregatorOperatorSetId,
-			ExecutorOperatorSetIds:  em.avsConfig.ExecutorOperatorSetIds,
-			CurveType:               em.avsConfig.curveType,
-		}
-		if err := em.store.SaveAVSConfig(ctx, em.config.AvsAddress, storageConfig); err != nil {
-			em.logger.Sugar().Warnw("Failed to save AVS config to storage",
-				"error", err,
-				"avsAddress", em.config.AvsAddress,
-			)
-		}
+	// Save to storage
+	avsStorageConfig := &storage.AvsConfig{
+		AggregatorOperatorSetId: em.avsConfig.AggregatorOperatorSetId,
+		ExecutorOperatorSetIds:  em.avsConfig.ExecutorOperatorSetIds,
+		CurveType:               em.avsConfig.curveType,
+	}
+	if err := em.store.SaveAVSConfig(ctx, em.config.AvsAddress, avsStorageConfig); err != nil {
+		em.logger.Sugar().Warnw("Failed to save AVS config to storage",
+			"error", err,
+			"avsAddress", em.config.AvsAddress,
+		)
 	}
 
 	return em.avsConfig, nil
@@ -422,13 +417,11 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	}
 
 	// Update task status to processing
-	if em.store != nil {
-		if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
-			em.logger.Sugar().Warnw("Failed to update task status to processing",
-				"error", err,
-				"taskId", task.TaskId,
-			)
-		}
+	if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
+		em.logger.Sugar().Warnw("Failed to update task status to processing",
+			"error", err,
+			"taskId", task.TaskId,
+		)
 	}
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
@@ -616,13 +609,11 @@ func (em *AvsExecutionManager) processBN254Task(
 			zap.String("taskId", task.TaskId),
 		)
 		// Update task status to completed
-		if em.store != nil {
-			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
-				em.logger.Sugar().Warnw("Failed to update task status to completed",
-					"error", err,
-					"taskId", task.TaskId,
-				)
-			}
+		if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
+			em.logger.Sugar().Warnw("Failed to update task status to completed",
+				"error", err,
+				"taskId", task.TaskId,
+			)
 		}
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
@@ -630,13 +621,11 @@ func (em *AvsExecutionManager) processBN254Task(
 	case err := <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		// Update task status to failed
-		if em.store != nil {
-			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
-				em.logger.Sugar().Warnw("Failed to update task status to failed",
-					"error", updateErr,
-					"taskId", task.TaskId,
-				)
-			}
+		if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+			em.logger.Sugar().Warnw("Failed to update task status to failed",
+				"error", updateErr,
+				"taskId", task.TaskId,
+			)
 		}
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
@@ -730,13 +719,11 @@ func (em *AvsExecutionManager) processECDSATask(
 			zap.String("taskId", task.TaskId),
 		)
 		// Update task status to completed
-		if em.store != nil {
-			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
-				em.logger.Sugar().Warnw("Failed to update task status to completed",
-					"error", err,
-					"taskId", task.TaskId,
-				)
-			}
+		if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
+			em.logger.Sugar().Warnw("Failed to update task status to completed",
+				"error", err,
+				"taskId", task.TaskId,
+			)
 		}
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
@@ -744,13 +731,11 @@ func (em *AvsExecutionManager) processECDSATask(
 	case err := <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		// Update task status to failed
-		if em.store != nil {
-			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
-				em.logger.Sugar().Warnw("Failed to update task status to failed",
-					"error", updateErr,
-					"taskId", task.TaskId,
-				)
-			}
+		if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+			em.logger.Sugar().Warnw("Failed to update task status to failed",
+				"error", updateErr,
+				"taskId", task.TaskId,
+			)
 		}
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
@@ -802,20 +787,18 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 		return nil
 	}
 
-	// Save task to storage if available
-	if em.store != nil {
-		ctx := context.Background()
-		if err := em.store.SaveTask(ctx, task); err != nil {
-			em.logger.Sugar().Errorw("Failed to save task to storage",
-				"error", err,
-				"taskId", task.TaskId,
-			)
-			// Continue processing even if storage fails
-		} else {
-			em.logger.Sugar().Infow("Saved task to storage",
-				"taskId", task.TaskId,
-			)
-		}
+	// Save task to storage
+	ctx := context.Background()
+	if err := em.store.SaveTask(ctx, task); err != nil {
+		em.logger.Sugar().Errorw("Failed to save task to storage",
+			"error", err,
+			"taskId", task.TaskId,
+		)
+		// Continue processing even if storage fails
+	} else {
+		em.logger.Sugar().Infow("Saved task to storage",
+			"taskId", task.TaskId,
+		)
 	}
 
 	em.taskQueue <- task

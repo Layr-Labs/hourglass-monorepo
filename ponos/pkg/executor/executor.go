@@ -66,6 +66,9 @@ func NewExecutor(
 	l1ContractCaller contractCaller.IContractCaller,
 	store storage.ExecutorStore,
 ) *Executor {
+	if store == nil {
+		panic("store is required")
+	}
 	return &Executor{
 		logger:           logger,
 		config:           config,
@@ -83,12 +86,10 @@ func NewExecutor(
 func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
-	// Perform recovery if storage is available
-	if e.store != nil {
-		if err := e.recoverFromStorage(ctx); err != nil {
-			e.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
-			// Continue anyway - this is not a fatal error
-		}
+	// Perform recovery from storage
+	if err := e.recoverFromStorage(ctx); err != nil {
+		e.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
+		// Continue anyway - this is not a fatal error
 	}
 
 	for _, avs := range e.config.AvsPerformers {
@@ -138,28 +139,26 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 			e.avsPerformers[avsAddress] = performer
 
-			// Save performer state to storage if available
-			if e.store != nil {
-				performerState := &storage.PerformerState{
-					PerformerId:        result.PerformerID,
-					AvsAddress:         avsAddress,
-					ContainerId:        result.ID,
-					Status:             "running",
-					ArtifactRegistry:   avs.Image.Repository,
-					ArtifactTag:        avs.Image.Tag,
-					ArtifactDigest:     "", // Not available during initialization
-					DeploymentMode:     string(avs.DeploymentMode),
-					CreatedAt:          result.StartTime,
-					LastHealthCheck:    result.EndTime,
-					ContainerHealthy:   true,
-					ApplicationHealthy: true,
-				}
-				if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
-					e.logger.Sugar().Warnw("Failed to save performer state to storage",
-						"error", err,
-						"performerId", result.PerformerID,
-					)
-				}
+			// Save performer state to storage
+			performerState := &storage.PerformerState{
+				PerformerId:        result.PerformerID,
+				AvsAddress:         avsAddress,
+				ContainerId:        result.ID,
+				Status:             "running",
+				ArtifactRegistry:   avs.Image.Repository,
+				ArtifactTag:        avs.Image.Tag,
+				ArtifactDigest:     "", // Not available during initialization
+				DeploymentMode:     string(avs.DeploymentMode),
+				CreatedAt:          result.StartTime,
+				LastHealthCheck:    result.EndTime,
+				ContainerHealthy:   true,
+				ApplicationHealthy: true,
+			}
+			if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+				e.logger.Sugar().Warnw("Failed to save performer state to storage",
+					"error", err,
+					"performerId", result.PerformerID,
+				)
 			}
 
 		default:

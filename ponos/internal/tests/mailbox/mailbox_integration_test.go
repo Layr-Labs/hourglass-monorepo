@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -111,7 +112,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		pollerEthClient = l2EthereumClient
 	}
 
-	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, logsChan, tlp, pollerConfig, nil, l)
+	// Create an in-memory store for the poller
+	aggStore := aggregatorMemory.NewInMemoryAggregatorStore()
+	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, logsChan, tlp, pollerConfig, aggStore, l)
 
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {

@@ -40,6 +40,9 @@ func NewEVMChainPoller(
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) *EVMChainPoller {
+	if store == nil {
+		panic("store is required")
+	}
 	for i, contract := range config.InterestingContracts {
 		logger.Sugar().Infof("InterestingContracts %d: %s\n", i, contract)
 	}
@@ -63,23 +66,21 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
 
-	// Load last processed block from storage if available
-	if ecp.store != nil {
-		lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
-		if err != nil && err != storage.ErrNotFound {
-			sugar.Warnw("Failed to get last processed block from storage",
-				"error", err,
-				"chainId", ecp.config.ChainId,
-			)
-		} else if err == nil && lastBlock > 0 {
-			sugar.Infow("Recovered last processed block from storage",
-				"blockNumber", lastBlock,
-				"chainId", ecp.config.ChainId,
-			)
-			// Set lastObservedBlock to recover from this point
-			ecp.lastObservedBlock = &ethereum.EthereumBlock{
-				Number: ethereum.EthereumQuantity(lastBlock),
-			}
+	// Load last processed block from storage
+	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
+	if err != nil && err != storage.ErrNotFound {
+		sugar.Warnw("Failed to get last processed block from storage",
+			"error", err,
+			"chainId", ecp.config.ChainId,
+		)
+	} else if err == nil && lastBlock > 0 {
+		sugar.Infow("Recovered last processed block from storage",
+			"blockNumber", lastBlock,
+			"chainId", ecp.config.ChainId,
+		)
+		// Set lastObservedBlock to recover from this point
+		ecp.lastObservedBlock = &ethereum.EthereumBlock{
+			Number: ethereum.EthereumQuantity(lastBlock),
 		}
 	}
 
@@ -259,20 +260,18 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 	)
 	ecp.lastObservedBlock = block
 
-	// Save last processed block to storage if available
-	if ecp.store != nil {
-		if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.ChainId, block.Number.Value()); err != nil {
-			ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
-				"error", err,
-				"chainId", ecp.config.ChainId,
-				"blockNumber", block.Number.Value(),
-			)
-		} else {
-			ecp.logger.Sugar().Debugw("Saved last processed block to storage",
-				"chainId", ecp.config.ChainId,
-				"blockNumber", block.Number.Value(),
-			)
-		}
+	// Save last processed block to storage
+	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.ChainId, block.Number.Value()); err != nil {
+		ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
+			"error", err,
+			"chainId", ecp.config.ChainId,
+			"blockNumber", block.Number.Value(),
+		)
+	} else {
+		ecp.logger.Sugar().Debugw("Saved last processed block to storage",
+			"chainId", ecp.config.ChainId,
+			"blockNumber", block.Number.Value(),
+		)
 	}
 
 	return block, logs, nil

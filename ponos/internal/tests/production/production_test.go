@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	aggregatorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/require"
 )
@@ -27,10 +27,10 @@ func TestProductionConfiguration(t *testing.T) {
 		{
 			name: "ValidProduction",
 			config: &aggregatorConfig.BadgerConfig{
-				Dir:                    "/var/lib/ponos/aggregator/badger",
-				ValueLogFileSize:       2 << 30, // 2GB
-				NumVersionsToKeep:      1,
-				NumLevelZeroTables:     10,
+				Dir:                     "/var/lib/ponos/aggregator/badger",
+				ValueLogFileSize:        2 << 30, // 2GB
+				NumVersionsToKeep:       1,
+				NumLevelZeroTables:      10,
 				NumLevelZeroTablesStall: 20,
 			},
 			valid: true,
@@ -71,13 +71,13 @@ func validateProductionConfig(t *testing.T, config *aggregatorConfig.BadgerConfi
 	// Check value log size
 	minValueLogSize := int64(1 << 30) // 1GB minimum
 	if config.ValueLogFileSize > 0 && config.ValueLogFileSize < minValueLogSize {
-		t.Errorf("ValueLogFileSize %d is too small for production (min: %d)", 
+		t.Errorf("ValueLogFileSize %d is too small for production (min: %d)",
 			config.ValueLogFileSize, minValueLogSize)
 	}
 
 	// Check versions to keep
 	if config.NumVersionsToKeep > 3 {
-		t.Errorf("NumVersionsToKeep %d is too high, recommended: 1-3", 
+		t.Errorf("NumVersionsToKeep %d is too high, recommended: 1-3",
 			config.NumVersionsToKeep)
 	}
 
@@ -90,14 +90,14 @@ func TestProductionDiskRequirements(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	
+
 	// Test disk space
 	_, err := os.Stat(dir)
 	require.NoError(t, err)
-	
+
 	// Check available space (would need platform-specific implementation)
 	t.Logf("Test directory: %s", dir)
-	
+
 	// Test disk performance
 	testDiskPerformance(t, dir)
 }
@@ -105,7 +105,7 @@ func TestProductionDiskRequirements(t *testing.T) {
 func testDiskPerformance(t *testing.T, dir string) {
 	testFile := filepath.Join(dir, "performance_test")
 	data := make([]byte, 1<<20) // 1MB
-	
+
 	// Write test
 	start := time.Now()
 	for i := 0; i < 100; i++ {
@@ -119,9 +119,9 @@ func testDiskPerformance(t *testing.T, dir string) {
 	}
 	writeTime := time.Since(start)
 	writeMBps := float64(100) / writeTime.Seconds()
-	
+
 	t.Logf("Write performance: %.2f MB/s", writeMBps)
-	
+
 	// Read test
 	start = time.Now()
 	for i := 0; i < 100; i++ {
@@ -131,24 +131,24 @@ func testDiskPerformance(t *testing.T, dir string) {
 	}
 	readTime := time.Since(start)
 	readMBps := float64(100) / readTime.Seconds()
-	
+
 	t.Logf("Read performance: %.2f MB/s", readMBps)
-	
+
 	// Cleanup
 	for i := 0; i < 100; i++ {
 		os.Remove(fmt.Sprintf("%s_%d", testFile, i))
 	}
-	
+
 	// Production requirements
 	minWriteMBps := 50.0
 	minReadMBps := 100.0
-	
+
 	if writeMBps < minWriteMBps {
-		t.Errorf("Write performance %.2f MB/s below minimum %.2f MB/s", 
+		t.Errorf("Write performance %.2f MB/s below minimum %.2f MB/s",
 			writeMBps, minWriteMBps)
 	}
 	if readMBps < minReadMBps {
-		t.Errorf("Read performance %.2f MB/s below minimum %.2f MB/s", 
+		t.Errorf("Read performance %.2f MB/s below minimum %.2f MB/s",
 			readMBps, minReadMBps)
 	}
 }
@@ -157,39 +157,39 @@ func testDiskPerformance(t *testing.T, dir string) {
 func TestProductionRecovery(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	
+
 	// Create store with production config
 	cfg := &aggregatorConfig.BadgerConfig{
-		Dir:                    dir,
-		ValueLogFileSize:       256 << 20, // 256MB for test
-		NumVersionsToKeep:      1,
-		NumLevelZeroTables:     5,
+		Dir:                     dir,
+		ValueLogFileSize:        256 << 20, // 256MB for test
+		NumVersionsToKeep:       1,
+		NumLevelZeroTables:      5,
 		NumLevelZeroTablesStall: 10,
 	}
-	
+
 	store, err := aggregatorBadger.NewBadgerAggregatorStore(cfg)
 	require.NoError(t, err)
-	
+
 	// Simulate production workload
 	chainId := config.ChainId(1)
 	numTasks := 10000
-	
+
 	// Write initial data
 	for i := 0; i < numTasks; i++ {
 		if i%100 == 0 {
 			require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, uint64(i)))
 		}
-		
+
 		task := &types.Task{
-			TaskId:      fmt.Sprintf("prod-task-%d", i),
+			TaskId:        fmt.Sprintf("prod-task-%d", i),
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
-			BlockNumber: uint64(i / 10),
-			ChainId:     1,
-			Payload:     make([]byte, 1024), // 1KB payload
+			BlockNumber:   uint64(i / 10),
+			ChainId:       1,
+			Payload:       make([]byte, 1024), // 1KB payload
 		}
 		require.NoError(t, store.SaveTask(ctx, task))
-		
+
 		// Update some tasks
 		if i > 0 && i%3 == 0 {
 			taskId := fmt.Sprintf("prod-task-%d", i-1)
@@ -199,35 +199,35 @@ func TestProductionRecovery(t *testing.T) {
 			require.NoError(t, store.UpdateTaskStatus(ctx, taskId, storage.TaskStatusCompleted))
 		}
 	}
-	
+
 	// Get state before close
 	lastBlock, err := store.GetLastProcessedBlock(ctx, chainId)
 	require.NoError(t, err)
-	
+
 	pendingTasks, err := store.ListPendingTasks(ctx)
 	require.NoError(t, err)
 	pendingCount := len(pendingTasks)
-	
+
 	// Close store
 	store.Close()
-	
+
 	// Simulate crash by reopening
 	store2, err := aggregatorBadger.NewBadgerAggregatorStore(cfg)
 	require.NoError(t, err)
 	defer store2.Close()
-	
+
 	// Verify recovery
 	recoveredBlock, err := store2.GetLastProcessedBlock(ctx, chainId)
 	require.NoError(t, err)
 	require.Equal(t, lastBlock, recoveredBlock)
-	
+
 	recoveredPending, err := store2.ListPendingTasks(ctx)
 	require.NoError(t, err)
 	require.Equal(t, pendingCount, len(recoveredPending))
-	
+
 	// Verify can continue operations
 	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock+1000))
-	
+
 	newTask := &types.Task{
 		TaskId:        "post-recovery-task",
 		AVSAddress:    "0x123",
@@ -242,16 +242,16 @@ func TestProductionRecovery(t *testing.T) {
 func TestProductionMetrics(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	
+
 	store, err := aggregatorBadger.NewBadgerAggregatorStore(&aggregatorConfig.BadgerConfig{
 		Dir: dir,
 	})
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	// Track operation times
 	timings := make(map[string][]time.Duration)
-	
+
 	// Perform operations and measure
 	for i := 0; i < 1000; i++ {
 		task := &types.Task{
@@ -260,25 +260,25 @@ func TestProductionMetrics(t *testing.T) {
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
 		}
-		
+
 		// SaveTask
 		start := time.Now()
 		err := store.SaveTask(ctx, task)
 		timings["SaveTask"] = append(timings["SaveTask"], time.Since(start))
 		require.NoError(t, err)
-		
+
 		// GetTask
 		start = time.Now()
 		_, err = store.GetTask(ctx, task.TaskId)
 		timings["GetTask"] = append(timings["GetTask"], time.Since(start))
 		require.NoError(t, err)
-		
+
 		// UpdateTaskStatus
 		start = time.Now()
 		err = store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing)
 		timings["UpdateTaskStatus"] = append(timings["UpdateTaskStatus"], time.Since(start))
 		require.NoError(t, err)
-		
+
 		// ListPendingTasks (every 10 iterations)
 		if i%10 == 0 {
 			start = time.Now()
@@ -287,7 +287,7 @@ func TestProductionMetrics(t *testing.T) {
 			require.NoError(t, err)
 		}
 	}
-	
+
 	// Analyze metrics
 	for op, durations := range timings {
 		var total time.Duration
@@ -299,9 +299,9 @@ func TestProductionMetrics(t *testing.T) {
 			}
 		}
 		avg := total / time.Duration(len(durations))
-		
+
 		t.Logf("%s - Avg: %v, Max: %v, Count: %d", op, avg, max, len(durations))
-		
+
 		// Production SLAs
 		var maxAllowed time.Duration
 		switch op {
@@ -310,7 +310,7 @@ func TestProductionMetrics(t *testing.T) {
 		case "ListPendingTasks":
 			maxAllowed = 100 * time.Millisecond
 		}
-		
+
 		if avg > maxAllowed {
 			t.Errorf("%s average time %v exceeds SLA %v", op, avg, maxAllowed)
 		}
@@ -322,50 +322,50 @@ func TestProductionScale(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping production scale test in short mode")
 	}
-	
+
 	ctx := context.Background()
 	dir := t.TempDir()
-	
+
 	store, err := aggregatorBadger.NewBadgerAggregatorStore(&aggregatorConfig.BadgerConfig{
 		Dir:              dir,
 		ValueLogFileSize: 512 << 20, // 512MB
 	})
 	require.NoError(t, err)
 	defer store.Close()
-	
+
 	// Production scale parameters
 	numChains := 3
 	numTasksPerChain := 100000
 	numOperatorSets := 10
-	
+
 	t.Logf("Testing with %d chains, %d tasks per chain", numChains, numTasksPerChain)
-	
+
 	// Populate chains
 	for c := 1; c <= numChains; c++ {
 		chainId := config.ChainId(c)
-		
+
 		// Set block heights
 		for block := uint64(0); block < uint64(numTasksPerChain/100); block += 100 {
 			require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, block))
 		}
-		
+
 		// Create tasks
 		for i := 0; i < numTasksPerChain; i++ {
 			if i%10000 == 0 {
 				t.Logf("Chain %d: Created %d tasks", c, i)
 			}
-			
+
 			task := &types.Task{
-				TaskId:      fmt.Sprintf("chain%d-task-%d", c, i),
-				AVSAddress:  fmt.Sprintf("0xavs%d", c),
+				TaskId:        fmt.Sprintf("chain%d-task-%d", c, i),
+				AVSAddress:    fmt.Sprintf("0xavs%d", c),
 				OperatorSetId: uint32(i),
-				BlockNumber: uint64(i / 100),
-				ChainId:     config.ChainId(c),
+				BlockNumber:   uint64(i / 100),
+				ChainId:       config.ChainId(c),
 			}
 			require.NoError(t, store.SaveTask(ctx, task))
 		}
 	}
-	
+
 	// Create operator configs
 	for i := 0; i < numOperatorSets; i++ {
 		opSetConfig := &storage.OperatorSetTaskConfig{
@@ -378,15 +378,15 @@ func TestProductionScale(t *testing.T) {
 		}
 		require.NoError(t, store.SaveOperatorSetConfig(ctx, "0xavs1", uint32(i), opSetConfig))
 	}
-	
+
 	// Test query performance at scale
 	start := time.Now()
 	pending, err := store.ListPendingTasks(ctx)
 	require.NoError(t, err)
 	queryTime := time.Since(start)
-	
+
 	t.Logf("Listed %d pending tasks in %v", len(pending), queryTime)
-	
+
 	// Should complete within reasonable time even at scale
 	maxQueryTime := 5 * time.Second
 	if queryTime > maxQueryTime {
