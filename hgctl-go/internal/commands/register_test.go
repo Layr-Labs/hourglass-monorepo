@@ -18,7 +18,6 @@ func TestRegisterCommand(t *testing.T) {
 	
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"address":          false,
 			"allocation-delay": false,
 		}
 		
@@ -35,22 +34,49 @@ func TestRegisterCommand(t *testing.T) {
 			}
 		}
 		
-		assert.True(t, requiredFlags["address"], "address flag should be required")
 		assert.False(t, requiredFlags["allocation-delay"], "allocation-delay flag is optional with default")
-	})
-	
-	t.Run("Environment Variable Support", func(t *testing.T) {
-		// Check that the command supports env vars (based on our implementation)
-		var privateKeyFlag *cli.StringFlag
+		
+		// Verify metadata-uri exists
+		var metadataFlag *cli.StringFlag
 		for _, flag := range cmd.Flags {
-			if sf, ok := flag.(*cli.StringFlag); ok && sf.Name == "private-key" {
-				privateKeyFlag = sf
+			if sf, ok := flag.(*cli.StringFlag); ok && sf.Name == "metadata-uri" {
+				metadataFlag = sf
 				break
 			}
 		}
+		assert.NotNil(t, metadataFlag, "metadata-uri flag should exist")
+	})
+	
+	t.Run("Flag Validation", func(t *testing.T) {
+		// After middleware refactoring, private-key flag no longer exists
+		// Context configuration provides the necessary values
+		expectedFlags := []string{"metadata-uri", "allocation-delay"}
+		foundFlags := make(map[string]bool)
 		
-		assert.NotNil(t, privateKeyFlag)
-		assert.Contains(t, privateKeyFlag.Usage, "PRIVATE_KEY env var")
+		for _, flag := range cmd.Flags {
+			if sf, ok := flag.(*cli.StringFlag); ok {
+				foundFlags[sf.Name] = true
+			} else if uf, ok := flag.(*cli.Uint64Flag); ok {
+				foundFlags[uf.Name] = true
+			}
+		}
+		
+		// Check that expected flags exist
+		for _, expected := range expectedFlags {
+			assert.True(t, foundFlags[expected], "Expected flag not found: %s", expected)
+		}
+		
+		// Check that no unexpected flags exist
+		for flagName := range foundFlags {
+			found := false
+			for _, expected := range expectedFlags {
+				if flagName == expected {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Unexpected flag found: %s", flagName)
+		}
 	})
 	
 	t.Run("Default Metadata URI", func(t *testing.T) {

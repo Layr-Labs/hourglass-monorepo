@@ -19,7 +19,6 @@ func TestAllocateCommand(t *testing.T) {
 	
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"avs":             false,
 			"operator-set-id": false,
 			"strategy":        false,
 		}
@@ -37,7 +36,6 @@ func TestAllocateCommand(t *testing.T) {
 			}
 		}
 		
-		assert.True(t, requiredFlags["avs"], "avs flag should be required")
 		assert.True(t, requiredFlags["operator-set-id"], "operator-set-id flag should be required")
 		assert.True(t, requiredFlags["strategy"], "strategy flag should be required")
 	})

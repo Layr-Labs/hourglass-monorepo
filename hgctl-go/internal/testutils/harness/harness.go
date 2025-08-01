@@ -181,10 +181,19 @@ func (h *TestHarness) Setup() error {
 	// 4. Initialize contract client
 	// Create a proper logger that implements the logger.Logger interface
 	testLogger := logger.NewLogger(true) // verbose mode for tests
-	contractClient, err := client.NewContractClientWithSigner(
+
+	// For tests, we need to provide a config with dummy addresses
+	// since the contract client now requires them
+	contractConfig := &client.ContractConfig{
+		AVSAddress:      "0xe01103d844fa4fac8855b86f0b0903436b67295a",
+		OperatorAddress: "0x2e988A386a799F506693793c6A5AF6B54dfAaBfB",
+	}
+
+	contractClient, err := client.NewContractClient(
 		h.ChainConfig.L1RPC,
 		h.ChainConfig.AVSAccountPrivateKey,
 		testLogger,
+		contractConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create contract client: %w", err)
@@ -406,7 +415,7 @@ func (h *TestHarness) setContractAddresses() error {
 
 	// Set delegation manager if available
 	if h.ChainConfig.DelegationManagerAddress != "" {
-		result, err := h.ExecuteCLI("context", "set", 
+		result, err := h.ExecuteCLI("context", "set",
 			"--delegation-manager", h.ChainConfig.DelegationManagerAddress)
 		if err != nil {
 			return fmt.Errorf("failed to set delegation manager: %w", err)
@@ -414,13 +423,13 @@ func (h *TestHarness) setContractAddresses() error {
 		if result.ExitCode != 0 {
 			return fmt.Errorf("context set failed: %s", result.Stderr)
 		}
-		h.logger.Info("Set delegation manager address", 
+		h.logger.Info("Set delegation manager address",
 			zap.String("address", h.ChainConfig.DelegationManagerAddress))
 	}
 
 	// Set allocation manager if available
 	if h.ChainConfig.AllocationManagerAddress != "" {
-		result, err := h.ExecuteCLI("context", "set", 
+		result, err := h.ExecuteCLI("context", "set",
 			"--allocation-manager", h.ChainConfig.AllocationManagerAddress)
 		if err != nil {
 			return fmt.Errorf("failed to set allocation manager: %w", err)
@@ -428,13 +437,13 @@ func (h *TestHarness) setContractAddresses() error {
 		if result.ExitCode != 0 {
 			return fmt.Errorf("context set failed: %s", result.Stderr)
 		}
-		h.logger.Info("Set allocation manager address", 
+		h.logger.Info("Set allocation manager address",
 			zap.String("address", h.ChainConfig.AllocationManagerAddress))
 	}
 
 	// Set strategy manager if available
 	if h.ChainConfig.StrategyManagerAddress != "" {
-		result, err := h.ExecuteCLI("context", "set", 
+		result, err := h.ExecuteCLI("context", "set",
 			"--strategy-manager", h.ChainConfig.StrategyManagerAddress)
 		if err != nil {
 			return fmt.Errorf("failed to set strategy manager: %w", err)
@@ -442,13 +451,13 @@ func (h *TestHarness) setContractAddresses() error {
 		if result.ExitCode != 0 {
 			return fmt.Errorf("context set failed: %s", result.Stderr)
 		}
-		h.logger.Info("Set strategy manager address", 
+		h.logger.Info("Set strategy manager address",
 			zap.String("address", h.ChainConfig.StrategyManagerAddress))
 	}
 
 	// Set release manager if available
 	if h.ChainConfig.ReleaseManagerAddress != "" {
-		result, err := h.ExecuteCLI("context", "set", 
+		result, err := h.ExecuteCLI("context", "set",
 			"--release-manager", h.ChainConfig.ReleaseManagerAddress)
 		if err != nil {
 			return fmt.Errorf("failed to set release manager: %w", err)
@@ -456,7 +465,7 @@ func (h *TestHarness) setContractAddresses() error {
 		if result.ExitCode != 0 {
 			return fmt.Errorf("context set failed: %s", result.Stderr)
 		}
-		h.logger.Info("Set release manager address", 
+		h.logger.Info("Set release manager address",
 			zap.String("address", h.ChainConfig.ReleaseManagerAddress))
 	}
 

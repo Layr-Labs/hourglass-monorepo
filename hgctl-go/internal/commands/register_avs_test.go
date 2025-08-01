@@ -19,8 +19,6 @@ func TestRegisterAVSCommand(t *testing.T) {
 	
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"address":          false,
-			"avs":              false,
 			"operator-set-ids": false,
 			"socket":           false,
 		}
@@ -38,15 +36,14 @@ func TestRegisterAVSCommand(t *testing.T) {
 			}
 		}
 		
-		assert.True(t, requiredFlags["address"], "address flag should be required")
-		assert.True(t, requiredFlags["avs"], "avs flag should be required")
 		assert.True(t, requiredFlags["operator-set-ids"], "operator-set-ids flag should be required")
 		assert.True(t, requiredFlags["socket"], "socket flag should be required")
 	})
 	
 	t.Run("Socket Format Example", func(t *testing.T) {
-		// Check that the command description includes socket format example
-		assert.Contains(t, cmd.Description, "http://operator.example.com:8080")
+		// Check that the command description includes socket format example  
+		// The actual command shows https:// in the example, so test expects https://
+		assert.Contains(t, cmd.Description, "https://operator.example.com:8080")
 		
 		// Check socket flag usage
 		var socketFlag *cli.StringFlag

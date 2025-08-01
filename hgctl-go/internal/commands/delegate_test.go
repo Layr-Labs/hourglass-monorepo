@@ -27,19 +27,6 @@ func TestDelegateCommand(t *testing.T) {
 		}
 	})
 	
-	t.Run("Environment Variable Support", func(t *testing.T) {
-		var privateKeyFlag *cli.StringFlag
-		for _, flag := range cmd.Flags {
-			if sf, ok := flag.(*cli.StringFlag); ok && sf.Name == "private-key" {
-				privateKeyFlag = sf
-				break
-			}
-		}
-		
-		assert.NotNil(t, privateKeyFlag)
-		assert.Contains(t, privateKeyFlag.Usage, "PRIVATE_KEY env var")
-	})
-	
 	t.Run("Operator Flag", func(t *testing.T) {
 		var operatorFlag *cli.StringFlag
 		for _, flag := range cmd.Flags {
@@ -50,7 +37,7 @@ func TestDelegateCommand(t *testing.T) {
 		}
 		
 		assert.NotNil(t, operatorFlag)
-		assert.Contains(t, operatorFlag.Usage, "defaults to signer address")
+		assert.Contains(t, operatorFlag.Usage, "defaults to configured operator address")
 		assert.Contains(t, operatorFlag.Usage, "self-delegation")
 	})
 }

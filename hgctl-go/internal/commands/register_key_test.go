@@ -20,7 +20,6 @@ func TestRegisterKeyCommand(t *testing.T) {
 	
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"avs":             false,
 			"operator-set-id": false,
 			"key-type":        false,
 		}
@@ -38,7 +37,6 @@ func TestRegisterKeyCommand(t *testing.T) {
 			}
 		}
 		
-		assert.True(t, requiredFlags["avs"], "avs flag should be required")
 		assert.True(t, requiredFlags["operator-set-id"], "operator-set-id flag should be required") 
 		assert.True(t, requiredFlags["key-type"], "key-type flag should be required")
 	})

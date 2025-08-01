@@ -46,23 +46,32 @@ func TestDepositCommand(t *testing.T) {
 		assert.True(t, requiredFlags["amount"], "amount flag should be required")
 	})
 	
-	t.Run("Optional Flags", func(t *testing.T) {
-		optionalFlags := []string{"staker", "private-key"}
+	t.Run("No Additional Flags", func(t *testing.T) {
+		// After middleware refactoring, only strategy and amount flags should exist
+		expectedFlags := []string{"strategy", "amount"}
 		foundFlags := make(map[string]bool)
 		
 		for _, flag := range cmd.Flags {
 			if sf, ok := flag.(*cli.StringFlag); ok {
-				for _, name := range optionalFlags {
-					if sf.Name == name {
-						foundFlags[name] = true
-						assert.False(t, sf.Required, "%s flag should be optional", name)
-					}
-				}
+				foundFlags[sf.Name] = true
 			}
 		}
 		
-		for _, name := range optionalFlags {
-			assert.True(t, foundFlags[name], "%s flag should exist", name)
+		// Check that only expected flags exist
+		for flagName := range foundFlags {
+			found := false
+			for _, expected := range expectedFlags {
+				if flagName == expected {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Unexpected flag found: %s", flagName)
+		}
+		
+		// Check that all expected flags exist
+		for _, expected := range expectedFlags {
+			assert.True(t, foundFlags[expected], "Expected flag not found: %s", expected)
 		}
 	})
 }
