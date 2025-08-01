@@ -15,6 +15,7 @@ import (
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"

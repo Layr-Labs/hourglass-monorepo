@@ -1,4 +1,4 @@
-package commands
+package allocate
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 )
 
-// AllocateCommand returns the command for modifying operator allocations
-func AllocateCommand() *cli.Command {
+// Command returns the command for modifying operator allocations
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "allocate",
 		Usage: "Modify operator allocations to AVS operator sets",

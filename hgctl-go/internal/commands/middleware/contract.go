@@ -37,13 +37,13 @@ func ContractBeforeFunc(c *cli.Context) error {
 	if avsAddress == "" {
 		avsAddress = os.Getenv("AVS_ADDRESS")
 	}
-	
+
 	// Get operator address from context or environment
 	operatorAddress := currentCtx.OperatorAddress
 	if operatorAddress == "" {
 		operatorAddress = os.Getenv("OPERATOR_ADDRESS")
 	}
-	
+
 	// For some commands, we might not need both addresses
 	if !validateAddresses(c, avsAddress, operatorAddress) {
 		log.Debug("Required addresses not configured for command, skipping contract client initialization")
@@ -115,9 +115,9 @@ func needsContractClient(c *cli.Context) bool {
 		"allocate":             true,
 		"set-allocation-delay": true,
 		"operatorset":          true,
-		"get":                  true,  // for releases
-		"describe":             true,  // for releases
-		"deploy":               true,  // for fetching runtime specs
+		"get":                  true,
+		"describe":             true,
+		"deploy":               true,
 	}
 
 	// Check if the current command needs a contract client
@@ -132,7 +132,7 @@ func needsContractClient(c *cli.Context) bool {
 // validateAddresses checks if the required addresses are available for the command
 func validateAddresses(c *cli.Context, avsAddress, operatorAddress string) bool {
 	command := c.Args().Get(0)
-	
+
 	// Commands that only need operator address
 	operatorOnlyCommands := map[string]bool{
 		"register":             true,
@@ -140,26 +140,26 @@ func validateAddresses(c *cli.Context, avsAddress, operatorAddress string) bool 
 		"deposit":              true,
 		"set-allocation-delay": true,
 	}
-	
+
 	// Commands that need both AVS and operator addresses
 	bothAddressCommands := map[string]bool{
-		"register-avs":  true,
-		"register-key":  true,
-		"allocate":      true,
-		"operatorset":   true,
-		"get":           true,
-		"describe":      true,
-		"deploy":        true,
+		"register-avs": true,
+		"register-key": true,
+		"allocate":     true,
+		"operatorset":  true,
+		"get":          true,
+		"describe":     true,
+		"deploy":       true,
 	}
-	
+
 	if operatorOnlyCommands[command] {
 		return operatorAddress != ""
 	}
-	
+
 	if bothAddressCommands[command] {
 		return avsAddress != "" && operatorAddress != ""
 	}
-	
+
 	return false
 }
 

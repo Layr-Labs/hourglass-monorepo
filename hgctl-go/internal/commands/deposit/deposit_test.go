@@ -1,4 +1,4 @@
-package commands
+package deposit
 
 import (
 	"math/big"
@@ -19,21 +19,21 @@ func mustParseBigInt(s string) *big.Int {
 }
 
 func TestDepositCommand(t *testing.T) {
-	cmd := DepositCommand()
-	
+	cmd := Command()
+
 	t.Run("Command Structure", func(t *testing.T) {
 		assert.Equal(t, "deposit", cmd.Name)
 		assert.Equal(t, "Deposit tokens into a strategy", cmd.Usage)
 		assert.NotNil(t, cmd.Action)
 		assert.Contains(t, cmd.Description, "EigenLayer strategy")
 	})
-	
+
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
 			"strategy": false,
 			"amount":   false,
 		}
-		
+
 		for _, flag := range cmd.Flags {
 			if sf, ok := flag.(*cli.StringFlag); ok {
 				if _, exists := requiredFlags[sf.Name]; exists {
@@ -41,22 +41,22 @@ func TestDepositCommand(t *testing.T) {
 				}
 			}
 		}
-		
+
 		assert.True(t, requiredFlags["strategy"], "strategy flag should be required")
 		assert.True(t, requiredFlags["amount"], "amount flag should be required")
 	})
-	
+
 	t.Run("No Additional Flags", func(t *testing.T) {
 		// After middleware refactoring, only strategy and amount flags should exist
 		expectedFlags := []string{"strategy", "amount"}
 		foundFlags := make(map[string]bool)
-		
+
 		for _, flag := range cmd.Flags {
 			if sf, ok := flag.(*cli.StringFlag); ok {
 				foundFlags[sf.Name] = true
 			}
 		}
-		
+
 		// Check that only expected flags exist
 		for flagName := range foundFlags {
 			found := false
@@ -68,7 +68,7 @@ func TestDepositCommand(t *testing.T) {
 			}
 			assert.True(t, found, "Unexpected flag found: %s", flagName)
 		}
-		
+
 		// Check that all expected flags exist
 		for _, expected := range expectedFlags {
 			assert.True(t, foundFlags[expected], "Expected flag not found: %s", expected)
@@ -138,19 +138,19 @@ func TestParseAmount(t *testing.T) {
 			hasError: false,
 		},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := parseAmount(tc.input)
-			
+
 			if tc.hasError {
 				assert.Error(t, err, "Expected error for input: %s", tc.input)
 				assert.Nil(t, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result)
-				assert.Equal(t, 0, tc.expected.Cmp(result), 
-					"Expected %s but got %s for input: %s", 
+				assert.Equal(t, 0, tc.expected.Cmp(result),
+					"Expected %s but got %s for input: %s",
 					tc.expected.String(), result.String(), tc.input)
 			}
 		})

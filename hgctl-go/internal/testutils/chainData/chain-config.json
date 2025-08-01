@@ -24,7 +24,13 @@
       "keyRegistrarAddress": "0xa4db30d08d8bbca00d40600bee9f029984db162a",
       "releaseManagerAddress": "0x59c8d715dca616e032b744a753c017c9f3e16bf4",
       "delegationManagerAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+      "allocationManagerAddress": "0x742707a524551C382C8901a87357048e8945daC1",
+      "strategyManagerAddress": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
       "destinationEnv": "anvil",
       "forkL1Block": 8887000,
-      "forkL2Block": 28820370
+      "forkL2Block": 28820370,
+      "l1ChainId": 31337,
+      "l2ChainId": 31338,
+      "l1RPC": "http://localhost:8545",
+      "l2RPC": "http://localhost:9545"
 }

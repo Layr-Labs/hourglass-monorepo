@@ -59,7 +59,99 @@ KEYS_DIR="$HGCTL_ROOT/internal/testutils/keys"
 # Create keys directory
 mkdir -p "$KEYS_DIR"
 
-# Generate test keystores with hgctl
+# ethereum holesky
+L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
+
+anvilL1ChainId=31337
+anvilL1StartBlock=8887000
+anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
+anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
+anvilL1RpcPort=8545
+anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
+
+# base mainnet
+L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
+
+anvilL2ChainId=31338
+anvilL2StartBlock=28820370
+anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
+anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
+anvilL2RpcPort=9545
+anvilL2RpcUrl="http://localhost:${anvilL2RpcPort}"
+
+# Create testdata directory if it doesn't exist
+mkdir -p $HGCTL_ROOT/internal/testdata
+
+# Make any existing anvil files writable before starting
+echo "Making existing anvil files writable..."
+chmod 644 "$anvilL1DumpStatePath" 2>/dev/null || true
+chmod 644 "$anvilL1ConfigPath" 2>/dev/null || true
+chmod 644 "$anvilL2DumpStatePath" 2>/dev/null || true
+chmod 644 "$anvilL2ConfigPath" 2>/dev/null || true
+
+# Load seed accounts from ponos config
+seedAccounts=$(cat $PROJECT_ROOT/ponos/anvilConfig/accounts.json)
+
+# -----------------------------------------------------------------------------
+# Start Ethereum L1 (without dumping state yet)
+# -----------------------------------------------------------------------------
+echo "Starting L1 Anvil on port $anvilL1RpcPort..."
+anvil \
+    --fork-url $L1_FORK_RPC_URL \
+    --dump-state $anvilL1DumpStatePath \
+    --chain-id $anvilL1ChainId \
+    --port $anvilL1RpcPort \
+    --block-time 2 \
+    --fork-block-number $anvilL1StartBlock &
+
+anvilL1Pid=$!
+echo "L1 Anvil PID: $anvilL1Pid"
+
+# Wait for L1 to be ready
+echo "Waiting for L1 Anvil to be ready..."
+for i in {1..30}; do
+    if cast block-number --rpc-url "$anvilL1RpcUrl" >/dev/null 2>&1; then
+        echo "L1 Anvil is ready!"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "ERROR: L1 Anvil failed to start after 30 seconds"
+        exit 1
+    fi
+    sleep 1
+done
+
+# -----------------------------------------------------------------------------
+# Start Base L2 (without dumping state yet)
+# -----------------------------------------------------------------------------
+echo "Starting L2 Anvil on port $anvilL2RpcPort..."
+anvil \
+    --fork-url $L2_FORK_RPC_URL \
+    --dump-state $anvilL2DumpStatePath \
+    --chain-id $anvilL2ChainId \
+    --port $anvilL2RpcPort \
+    --fork-block-number $anvilL2StartBlock &
+
+anvilL2Pid=$!
+echo "L2 Anvil PID: $anvilL2Pid"
+
+# Wait for L2 to be ready
+echo "Waiting for L2 Anvil to be ready..."
+for i in {1..30}; do
+    if cast block-number --rpc-url "$anvilL2RpcUrl" >/dev/null 2>&1; then
+        echo "L2 Anvil is ready!"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "ERROR: L2 Anvil failed to start after 30 seconds"
+        exit 1
+    fi
+    sleep 1
+done
+
+# -----------------------------------------------------------------------------
+# Generate test keystores AFTER chains are running
+# -----------------------------------------------------------------------------
 echo "Generating test operator keystores..."
 
 # For testing, we'll use deterministic BN254 keys
@@ -152,98 +244,9 @@ echo "  Keys directory: $KEYS_DIR"
 echo "  Aggregator keystore: $KEYS_DIR/aggregator-keystore.json"
 echo "  Executor keystore: $KEYS_DIR/executor-keystore.json"
 
-# ethereum holesky
-L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
-
-anvilL1ChainId=31337
-anvilL1StartBlock=8887000
-anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
-anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
-anvilL1RpcPort=8545
-anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
-
-# base mainnet
-L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
-
-anvilL2ChainId=31338
-anvilL2StartBlock=28820370
-anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
-anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
-anvilL2RpcPort=9545
-anvilL2RpcUrl="http://localhost:${anvilL2RpcPort}"
-
-# Create testdata directory if it doesn't exist
-mkdir -p $HGCTL_ROOT/internal/testdata
-
-# Make any existing anvil files writable before starting
-echo "Making existing anvil files writable..."
-chmod 644 "$anvilL1DumpStatePath" 2>/dev/null || true
-chmod 644 "$anvilL1ConfigPath" 2>/dev/null || true
-chmod 644 "$anvilL2DumpStatePath" 2>/dev/null || true
-chmod 644 "$anvilL2ConfigPath" 2>/dev/null || true
-
-# Load seed accounts from ponos config
-seedAccounts=$(cat $PROJECT_ROOT/ponos/anvilConfig/accounts.json)
-
 # -----------------------------------------------------------------------------
-# Start Ethereum L1
+# Fund ALL accounts NOW before contract deployment
 # -----------------------------------------------------------------------------
-echo "Starting L1 Anvil on port $anvilL1RpcPort..."
-anvil \
-    --fork-url $L1_FORK_RPC_URL \
-    --dump-state $anvilL1DumpStatePath \
-    --config-out $anvilL1ConfigPath \
-    --chain-id $anvilL1ChainId \
-    --port $anvilL1RpcPort \
-    --block-time 2 \
-    --fork-block-number $anvilL1StartBlock &
-
-anvilL1Pid=$!
-echo "L1 Anvil PID: $anvilL1Pid"
-
-# Wait for L1 to be ready
-echo "Waiting for L1 Anvil to be ready..."
-for i in {1..30}; do
-    if cast block-number --rpc-url "$anvilL1RpcUrl" >/dev/null 2>&1; then
-        echo "L1 Anvil is ready!"
-        break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "ERROR: L1 Anvil failed to start after 30 seconds"
-        exit 1
-    fi
-    sleep 1
-done
-
-# -----------------------------------------------------------------------------
-# Start Base L2
-# -----------------------------------------------------------------------------
-echo "Starting L2 Anvil on port $anvilL2RpcPort..."
-anvil \
-    --fork-url $L2_FORK_RPC_URL \
-    --dump-state $anvilL2DumpStatePath \
-    --config-out $anvilL2ConfigPath \
-    --chain-id $anvilL2ChainId \
-    --port $anvilL2RpcPort \
-    --fork-block-number $anvilL2StartBlock &
-
-anvilL2Pid=$!
-echo "L2 Anvil PID: $anvilL2Pid"
-
-# Wait for L2 to be ready
-echo "Waiting for L2 Anvil to be ready..."
-for i in {1..30}; do
-    if cast block-number --rpc-url "$anvilL2RpcUrl" >/dev/null 2>&1; then
-        echo "L2 Anvil is ready!"
-        break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "ERROR: L2 Anvil failed to start after 30 seconds"
-        exit 1
-    fi
-    sleep 1
-done
-
 function fundAccount() {
     address=$1
     echo "Funding address $address on L1"
@@ -301,6 +304,9 @@ execOperatorAccountPk=$EXECUTOR_ECDSA_PK
 export PRIVATE_KEY_EXEC_OPERATOR=$execOperatorAccountPk
 echo "Exec Operator account: $execOperatorAccountAddress"
 
+# -----------------------------------------------------------------------------
+# Deploy contracts and setup everything
+# -----------------------------------------------------------------------------
 cd $PROJECT_ROOT/contracts
 
 export L1_RPC_URL="http://localhost:${anvilL1RpcPort}"
@@ -352,17 +358,15 @@ echo "Mining initial blocks..."
 cast rpc --rpc-url $L1_RPC_URL anvil_mine 10
 cast rpc --rpc-url $L2_RPC_URL anvil_mine 10
 
-echo "Ended at block number: "
+echo "Current block number: "
 cast block-number --rpc-url $L1_RPC_URL
 
+# Kill anvil processes
 kill $anvilL1Pid
 kill $anvilL2Pid
 sleep 3
 
 cd $HGCTL_ROOT
-
-# Create testdata directory if it doesn't exist
-mkdir -p ./internal/testdata
 
 # Make the files read-only to prevent accidental overwrites
 chmod 444 internal/testdata/anvil*
@@ -409,9 +413,15 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "keyRegistrarAddress": "0xa4db30d08d8bbca00d40600bee9f029984db162a",
       "releaseManagerAddress": "0x59c8d715dca616e032b744a753c017c9f3e16bf4",
       "delegationManagerAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
+      "allocationManagerAddress": "0x742707a524551C382C8901a87357048e8945daC1",
+      "strategyManagerAddress": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
       "destinationEnv": "anvil",
       "forkL1Block": $anvilL1StartBlock,
-      "forkL2Block": $anvilL2StartBlock
+      "forkL2Block": $anvilL2StartBlock,
+      "l1ChainId": $anvilL1ChainId,
+      "l2ChainId": $anvilL2ChainId,
+      "l1RPC": "$L1_RPC_URL",
+      "l2RPC": "$L2_RPC_URL"
 }
 EOF
 
@@ -422,3 +432,9 @@ echo ""
 echo "Generated operator keystores:"
 echo "  Aggregator: $KEYS_DIR/aggregator-keystore.json"
 echo "  Executor: $KEYS_DIR/executor-keystore.json"
+echo ""
+echo "The saved state includes:"
+echo "  - All accounts funded with 10,000 ETH"
+echo "  - Deployed AVS contracts"
+echo "  - Configured operator sets"
+echo "  - All multichain setup complete"

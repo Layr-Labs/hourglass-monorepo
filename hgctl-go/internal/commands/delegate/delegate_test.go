@@ -1,4 +1,4 @@
-package commands
+package delegate
 
 import (
 	"testing"
@@ -8,15 +8,15 @@ import (
 )
 
 func TestDelegateCommand(t *testing.T) {
-	cmd := DelegateCommand()
-	
+	cmd := Command()
+
 	t.Run("Command Structure", func(t *testing.T) {
 		assert.Equal(t, "delegate", cmd.Name)
 		assert.Equal(t, "Self-delegate as an operator", cmd.Usage)
 		assert.NotNil(t, cmd.Action)
 		assert.Contains(t, cmd.Description, "Self-delegate")
 	})
-	
+
 	t.Run("Optional Flags", func(t *testing.T) {
 		// All flags should be optional for delegate
 		for _, flag := range cmd.Flags {
@@ -26,7 +26,7 @@ func TestDelegateCommand(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("Operator Flag", func(t *testing.T) {
 		var operatorFlag *cli.StringFlag
 		for _, flag := range cmd.Flags {
@@ -35,7 +35,7 @@ func TestDelegateCommand(t *testing.T) {
 				break
 			}
 		}
-		
+
 		assert.NotNil(t, operatorFlag)
 		assert.Contains(t, operatorFlag.Usage, "defaults to configured operator address")
 		assert.Contains(t, operatorFlag.Usage, "self-delegation")

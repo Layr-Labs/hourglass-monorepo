@@ -1,4 +1,4 @@
-package commands
+package delegate
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 )
 
-// DelegateCommand returns the command for delegating to an operator
-func DelegateCommand() *cli.Command {
+// Command returns the command for delegating to an operator
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "delegate",
 		Usage: "Self-delegate as an operator",
@@ -62,7 +62,7 @@ func delegateAction(c *cli.Context) error {
 				)
 			}
 		}
-		
+
 		if operatorAddress == "" {
 			return fmt.Errorf("operator address is required (use --operator flag or provide PRIVATE_KEY env var)")
 		}

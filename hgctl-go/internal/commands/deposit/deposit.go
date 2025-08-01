@@ -1,4 +1,4 @@
-package commands
+package deposit
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 )
 
-// DepositCommand returns the command for depositing into strategies
-func DepositCommand() *cli.Command {
+// Command returns the command for depositing into strategies
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "deposit",
 		Usage: "Deposit tokens into a strategy",

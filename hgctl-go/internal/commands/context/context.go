@@ -10,6 +10,7 @@ func Command() *cli.Command {
 		Name:  "context",
 		Usage: "Manage contexts",
 		Subcommands: []*cli.Command{
+			createCommand(),
 			listCommand(),
 			useCommand(),
 			setCommand(),

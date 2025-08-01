@@ -1,9 +1,12 @@
 package harness
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/config"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -117,11 +120,9 @@ func (c *ChainManager) runSetupScript() error {
 	return nil
 }
 
-// startAnvilL1 starts the L1 Anvil chain with saved state
 func (c *ChainManager) startAnvilL1() (*exec.Cmd, error) {
 	statePath := filepath.Join(c.projectRoot, "hgctl-go", "internal", "testdata", "anvil-l1-state.json")
 
-	// Check if state file exists
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("L1 state file not found at %s", statePath)
 	}
@@ -131,18 +132,37 @@ func (c *ChainManager) startAnvilL1() (*exec.Cmd, error) {
 		"--chain-id", "31337",
 		"--port", "8545",
 		"--block-time", "2",
-		"--silent")
+		"--silent",
+	)
 
-	c.logger.Info("Starting L1 Anvil", zap.String("state", statePath))
+	// Capture output for debugging
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start L1 anvil: %w", err)
 	}
 
-	// Give it time to start
-	time.Sleep(2 * time.Second)
+	go logPipe("anvil-l1 stdout", stdoutPipe, c.logger)
+	go logPipe("anvil-l1 stderr", stderrPipe, c.logger)
 
 	return cmd, nil
+}
+
+func logPipe(name string, pipe io.ReadCloser, logger *zap.Logger) {
+	scanner := bufio.NewScanner(pipe)
+	for scanner.Scan() {
+		logger.Info(name, zap.String("line", scanner.Text()))
+	}
+	if err := scanner.Err(); err != nil {
+		logger.Warn("error reading from pipe", zap.String("pipe", name), zap.Error(err))
+	}
 }
 
 // startAnvilL2 starts the L2 Anvil chain with saved state
@@ -217,7 +237,7 @@ func (c *ChainManager) stopProcess(cmd *exec.Cmd) error {
 }
 
 // LoadChainConfig loads the generated chain configuration
-func (c *ChainManager) LoadChainConfig() (*ChainConfig, error) {
+func (c *ChainManager) LoadChainConfig() (*config.ChainConfig, error) {
 	configPath := filepath.Join(c.projectRoot, "hgctl-go", "internal", "testutils", "chainData", "chain-config.json")
 
 	c.logger.Info("Loading chain config", zap.String("path", configPath))
@@ -227,12 +247,12 @@ func (c *ChainManager) LoadChainConfig() (*ChainConfig, error) {
 		return nil, fmt.Errorf("failed to read chain config: %w", err)
 	}
 
-	var config ChainConfig
-	if err := json.Unmarshal(data, &config); err != nil {
+	var cc config.ChainConfig
+	if err := json.Unmarshal(data, &cc); err != nil {
 		return nil, fmt.Errorf("failed to parse chain config: %w", err)
 	}
 
-	return &config, nil
+	return &cc, nil
 }
 
 // WaitForAnvil waits for an Anvil instance to be ready

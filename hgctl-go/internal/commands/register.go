@@ -64,5 +64,6 @@ func registerAction(c *cli.Context) error {
 	}
 
 	log.Info("Successfully registered operator with EigenLayer")
+	fmt.Println("✅ Operator successfully registered")
 	return nil
 }
