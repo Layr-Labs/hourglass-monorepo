@@ -65,8 +65,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: install dependencies
         run: |
-          apt-get update
-          apt-get install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             jq \
             curl \
             make \
