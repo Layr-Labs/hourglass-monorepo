@@ -20,14 +20,15 @@ os=$(uname -s | tr '[:upper:]' '[:lower:]')
 
 if [[ $os == "linux" ]]; then
     if [[ $arch == "x86_64" ]]; then
-        curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+        sudo curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+        sudo chmod +x /usr/local/bin/kind
     elif [[ $arch == "aarch64" ]] || [[ $arch == "arm64" ]]; then
-        curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-arm64
+        sudo curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-arm64
+        sudo chmod +x /usr/local/bin/kind
     else
         echo "Unsupported architecture: $arch"
         exit 1
     fi
-    sudo chmod +x /usr/local/bin/kind
 elif [[ $os == "darwin" ]]; then
     brew install kind
 else
