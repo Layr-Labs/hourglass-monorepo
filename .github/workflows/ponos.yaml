@@ -42,7 +42,7 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           make lint
   ponos-test:
-    runs-on: ubuntu-24.04
+    runs-on: protocol-gha-runners-hourglass
     steps:
       - name: Checkout
         uses: actions/checkout@v4
