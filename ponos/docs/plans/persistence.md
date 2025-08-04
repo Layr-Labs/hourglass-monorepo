@@ -142,6 +142,11 @@ This document outlines the implementation plan for adding data persistence to th
   - [x] Save task to storage in `processTask`
   - [x] Update task status in `handleTask`
   - [x] Mark task complete after submission
+- [x] Implement task recovery:
+  - [x] Add `ListPendingTasksForAVS` method to storage interface
+  - [x] Add `recoverPendingTasks` method to `AvsExecutionManager`
+  - [x] Call recovery in `Init()` method
+  - [x] Handle expired tasks during recovery
 
 #### 3.1 Refactor EVMChainPoller
 - [x] Add `storage.AggregatorStore` field to `EVMChainPoller` struct

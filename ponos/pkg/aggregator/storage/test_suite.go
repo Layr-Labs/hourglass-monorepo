@@ -113,14 +113,70 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 	assert.Len(t, pendingTasks, 1)
 	assert.Equal(t, task.TaskId, pendingTasks[0].TaskId)
 
+	// Test listing pending tasks for specific AVS
+	avsPendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xavs123")
+	require.NoError(t, err)
+	assert.Len(t, avsPendingTasks, 1)
+	assert.Equal(t, task.TaskId, avsPendingTasks[0].TaskId)
+
+	// Create another task for a different AVS
+	task2 := &types.Task{
+		TaskId:              "task-456",
+		AVSAddress:          "0xavs456",
+		Payload:             []byte("test payload 2"),
+		ChainId:             config.ChainId(1),
+		BlockNumber:         12346,
+		OperatorSetId:       1,
+		CallbackAddr:        "0xcallback456",
+		ThresholdBips:       5000,
+		DeadlineUnixSeconds: &deadline,
+		BlockHash:           "0xblockhash456",
+	}
+	err = store.SaveTask(ctx, task2)
+	require.NoError(t, err)
+
+	// Test listing all pending tasks (should have 2)
+	allPendingTasks, err := store.ListPendingTasks(ctx)
+	require.NoError(t, err)
+	assert.Len(t, allPendingTasks, 2)
+
+	// Test listing pending tasks for first AVS (should have 1)
+	avs1Tasks, err := store.ListPendingTasksForAVS(ctx, "0xavs123")
+	require.NoError(t, err)
+	assert.Len(t, avs1Tasks, 1)
+	assert.Equal(t, task.TaskId, avs1Tasks[0].TaskId)
+
+	// Test listing pending tasks for second AVS (should have 1)
+	avs2Tasks, err := store.ListPendingTasksForAVS(ctx, "0xavs456")
+	require.NoError(t, err)
+	assert.Len(t, avs2Tasks, 1)
+	assert.Equal(t, task2.TaskId, avs2Tasks[0].TaskId)
+
+	// Test listing pending tasks for non-existent AVS (should be empty)
+	noAvsTasks, err := store.ListPendingTasksForAVS(ctx, "0xnonexistent")
+	require.NoError(t, err)
+	assert.Len(t, noAvsTasks, 0)
+
+	// Test case insensitive AVS address matching
+	avsUpperTasks, err := store.ListPendingTasksForAVS(ctx, "0xAVS123")
+	require.NoError(t, err)
+	assert.Len(t, avsUpperTasks, 1)
+	assert.Equal(t, task.TaskId, avsUpperTasks[0].TaskId)
+
 	// Test updating task status
 	err = store.UpdateTaskStatus(ctx, task.TaskId, TaskStatusProcessing)
 	require.NoError(t, err)
 
-	// Pending tasks should now be empty
+	// Pending tasks should now have only task2
 	pendingTasks, err = store.ListPendingTasks(ctx)
 	require.NoError(t, err)
-	assert.Len(t, pendingTasks, 0)
+	assert.Len(t, pendingTasks, 1)
+	assert.Equal(t, task2.TaskId, pendingTasks[0].TaskId)
+
+	// AVS-specific pending tasks should reflect the status change
+	avs1PendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xavs123")
+	require.NoError(t, err)
+	assert.Len(t, avs1PendingTasks, 0)
 
 	// Test updating to completed
 	err = store.UpdateTaskStatus(ctx, task.TaskId, TaskStatusCompleted)

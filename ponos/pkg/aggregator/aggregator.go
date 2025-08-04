@@ -150,48 +150,9 @@ func (a *Aggregator) Initialize() error {
 		a.avsExecutionManagers[avs.Address] = aem
 	}
 
-	// Perform recovery from storage
-	if err := a.recoverFromStorage(); err != nil {
-		a.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
-		// Continue anyway - this is not a fatal error
-	}
-
 	return nil
 }
 
-// recoverFromStorage loads pending tasks from storage and re-queues them
-func (a *Aggregator) recoverFromStorage() error {
-	ctx := context.Background()
-	pendingTasks, err := a.store.ListPendingTasks(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list pending tasks: %w", err)
-	}
-
-	if len(pendingTasks) > 0 {
-		a.logger.Sugar().Infow("Recovering pending tasks from storage",
-			"count", len(pendingTasks))
-
-		// Re-queue tasks to their respective AVS execution managers
-		for _, task := range pendingTasks {
-			aem, ok := a.avsExecutionManagers[task.AVSAddress]
-			if !ok {
-				a.logger.Sugar().Warnw("No AVS execution manager found for recovered task",
-					"avsAddress", task.AVSAddress,
-					"taskId", task.TaskId)
-				continue
-			}
-
-			// Submit the task to the AVS execution manager
-			// This will be handled properly in milestone 3.2 when we refactor AvsExecutionManager
-			_ = aem
-			a.logger.Sugar().Infow("Task recovery will be fully implemented in milestone 3.2",
-				"taskId", task.TaskId,
-				"avsAddress", task.AVSAddress)
-		}
-	}
-
-	return nil
-}
 
 func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config.ChainId]string {
 	return util.Reduce(allContracts, func(acc map[config.ChainId]string, c *contracts.Contract) map[config.ChainId]string {

@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 )
 
 type AvsExecutionManagerConfig struct {
@@ -169,6 +170,78 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get or set aggregator task config: %w", err)
 	}
+
+	// Recover pending tasks from storage
+	if err := em.recoverPendingTasks(ctx); err != nil {
+		em.logger.Sugar().Warnw("Failed to recover pending tasks",
+			"error", err,
+			"avsAddress", em.config.AvsAddress)
+		// Continue anyway - this is not a fatal error
+	}
+
+	return nil
+}
+
+// recoverPendingTasks loads pending tasks from storage and re-queues them
+func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
+	pendingTasks, err := em.store.ListPendingTasksForAVS(ctx, em.config.AvsAddress)
+	if err != nil {
+		return fmt.Errorf("failed to list pending tasks: %w", err)
+	}
+
+	if len(pendingTasks) == 0 {
+		return nil
+	}
+
+	em.logger.Sugar().Infow("Recovering pending tasks from storage",
+		"count", len(pendingTasks),
+		"avsAddress", em.config.AvsAddress)
+
+	recovered := 0
+	for _, task := range pendingTasks {
+		// Check if task has already expired
+		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
+			em.logger.Sugar().Warnw("Skipping expired task during recovery",
+				"taskId", task.TaskId,
+				"deadline", task.DeadlineUnixSeconds.Unix(),
+				"currentTime", time.Now().Unix())
+			
+			// Mark expired tasks as failed
+			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); err != nil {
+				em.logger.Sugar().Warnw("Failed to mark expired task as failed",
+					"error", err,
+					"taskId", task.TaskId)
+			}
+			continue
+		}
+
+		// Check if task is already in flight
+		if _, exists := em.inflightTasks.Load(task.TaskId); exists {
+			em.logger.Sugar().Warnw("Task already in flight, skipping recovery",
+				"taskId", task.TaskId)
+			continue
+		}
+
+		// Re-queue the task
+		select {
+		case em.taskQueue <- task:
+			recovered++
+			em.logger.Sugar().Infow("Re-queued recovered task",
+				"taskId", task.TaskId,
+				"avsAddress", task.AVSAddress)
+		default:
+			em.logger.Sugar().Warnw("Task queue full, cannot recover task",
+				"taskId", task.TaskId)
+			// If we can't queue it now, it will be picked up on next restart
+			break
+		}
+	}
+
+	em.logger.Sugar().Infow("Task recovery completed",
+		"totalPending", len(pendingTasks),
+		"recovered", recovered,
+		"avsAddress", em.config.AvsAddress)
+
 	return nil
 }
 

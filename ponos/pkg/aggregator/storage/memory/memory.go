@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -115,6 +116,26 @@ func (s *InMemoryAggregatorStore) ListPendingTasks(ctx context.Context) ([]*type
 	var pendingTasks []*types.Task
 	for _, record := range s.tasks {
 		if record.Status == storage.TaskStatusPending {
+			pendingTasks = append(pendingTasks, record.Task)
+		}
+	}
+
+	return pendingTasks, nil
+}
+
+// ListPendingTasksForAVS returns all pending tasks for a specific AVS address
+func (s *InMemoryAggregatorStore) ListPendingTasksForAVS(ctx context.Context, avsAddress string) ([]*types.Task, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, storage.ErrStoreClosed
+	}
+
+	var pendingTasks []*types.Task
+	for _, record := range s.tasks {
+		if record.Status == storage.TaskStatusPending && 
+			strings.EqualFold(record.Task.AVSAddress, avsAddress) {
 			pendingTasks = append(pendingTasks, record.Task)
 		}
 	}

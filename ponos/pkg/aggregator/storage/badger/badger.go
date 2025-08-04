@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -292,6 +293,60 @@ func (s *BadgerAggregatorStore) ListPendingTasks(ctx context.Context) ([]*types.
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pending tasks: %w", err)
+	}
+
+	return tasks, nil
+}
+
+// ListPendingTasksForAVS returns all pending tasks for a specific AVS address
+func (s *BadgerAggregatorStore) ListPendingTasksForAVS(ctx context.Context, avsAddress string) ([]*types.Task, error) {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return nil, storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	var tasks []*types.Task
+	prefix := fmt.Sprintf(prefixTaskByStatus, storage.TaskStatusPending, "")
+
+	err := s.db.View(func(txn *badgerv3.Txn) error {
+		opts := badgerv3.DefaultIteratorOptions
+		opts.Prefix = []byte(prefix)
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			// Extract task ID from key
+			key := string(it.Item().Key())
+			taskId := key[len(prefix):]
+
+			// Get the actual task
+			taskKey := fmt.Sprintf(prefixTask, taskId)
+			item, err := txn.Get([]byte(taskKey))
+			if err != nil {
+				continue // Skip if task not found
+			}
+
+			var record storage.TaskRecord
+			err = item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &record)
+			})
+			if err != nil {
+				continue
+			}
+
+			// Filter by AVS address
+			if strings.EqualFold(record.Task.AVSAddress, avsAddress) {
+				tasks = append(tasks, record.Task)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pending tasks for AVS: %w", err)
 	}
 
 	return tasks, nil

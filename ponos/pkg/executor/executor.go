@@ -261,20 +261,19 @@ func (e *Executor) recoverFromStorage(ctx context.Context) error {
 		return fmt.Errorf("failed to list performer states: %w", err)
 	}
 
-	if len(performerStates) > 0 {
-		e.logger.Sugar().Infow("Recovering performer states from storage",
-			"count", len(performerStates))
+	e.logger.Sugar().Infow("Recovering performer states from storage",
+		"count", len(performerStates),
+	)
 
-		// TODO: In a future milestone, we will verify if containers/pods still exist
-		// and re-create missing performers. For now, just log the recovery.
-		for _, state := range performerStates {
-			e.logger.Sugar().Infow("Found performer state in storage",
-				"performerId", state.PerformerId,
-				"avsAddress", state.AvsAddress,
-				"status", state.Status,
-				"containerId", state.ContainerId,
-			)
-		}
+	// TODO: In a future milestone, we will verify if containers/pods still exist
+	// and re-create missing performers. For now, just log the recovery.
+	for _, state := range performerStates {
+		e.logger.Sugar().Infow("Found performer state in storage",
+			"performerId", state.PerformerId,
+			"avsAddress", state.AvsAddress,
+			"status", state.Status,
+			"containerId", state.ContainerId,
+		)
 	}
 
 	// Load inflight tasks
@@ -283,17 +282,16 @@ func (e *Executor) recoverFromStorage(ctx context.Context) error {
 		return fmt.Errorf("failed to list inflight tasks: %w", err)
 	}
 
-	if len(inflightTasks) > 0 {
-		e.logger.Sugar().Infow("Recovering inflight tasks from storage",
-			"count", len(inflightTasks))
+	e.logger.Sugar().Infow("Recovering inflight tasks from storage",
+		"count", len(inflightTasks),
+	)
 
-		for _, task := range inflightTasks {
-			e.inflightTasks.Store(task.TaskId, task)
-			e.logger.Sugar().Infow("Recovered inflight task",
-				"taskId", task.TaskId,
-				"avsAddress", task.AvsAddress,
-			)
-		}
+	for _, task := range inflightTasks {
+		e.inflightTasks.Store(task.TaskId, task)
+		e.logger.Sugar().Infow("Recovered inflight task",
+			"taskId", task.TaskId,
+			"avsAddress", task.AvsAddress,
+		)
 	}
 
 	return nil

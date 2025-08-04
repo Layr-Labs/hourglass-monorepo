@@ -18,6 +18,7 @@ type AggregatorStore interface {
 	SaveTask(ctx context.Context, task *types.Task) error
 	GetTask(ctx context.Context, taskId string) (*types.Task, error)
 	ListPendingTasks(ctx context.Context) ([]*types.Task, error)
+	ListPendingTasksForAVS(ctx context.Context, avsAddress string) ([]*types.Task, error)
 	UpdateTaskStatus(ctx context.Context, taskId string, status TaskStatus) error
 	DeleteTask(ctx context.Context, taskId string) error
 
