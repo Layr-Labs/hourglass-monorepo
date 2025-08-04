@@ -42,7 +42,7 @@ jobs:
           export PATH=$PATH:$(go env GOPATH)/bin
           make lint
   ponos-test:
-    runs-on: protocol-gha-runners-hourglass
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,14 +63,6 @@ jobs:
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            jq \
-            curl \
-            make \
-            build-essential
       - name: Run tests
         run: |
           which anvil
