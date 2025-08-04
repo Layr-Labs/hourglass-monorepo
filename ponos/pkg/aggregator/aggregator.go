@@ -153,7 +153,6 @@ func (a *Aggregator) Initialize() error {
 	return nil
 }
 
-
 func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config.ChainId]string {
 	return util.Reduce(allContracts, func(acc map[config.ChainId]string, c *contracts.Contract) map[config.ChainId]string {
 		if c.Name != config.ContractName_TaskMailbox {

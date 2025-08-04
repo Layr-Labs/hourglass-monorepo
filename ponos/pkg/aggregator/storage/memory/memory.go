@@ -134,7 +134,7 @@ func (s *InMemoryAggregatorStore) ListPendingTasksForAVS(ctx context.Context, av
 
 	var pendingTasks []*types.Task
 	for _, record := range s.tasks {
-		if record.Status == storage.TaskStatusPending && 
+		if record.Status == storage.TaskStatusPending &&
 			strings.EqualFold(record.Task.AVSAddress, avsAddress) {
 			pendingTasks = append(pendingTasks, record.Task)
 		}

@@ -205,7 +205,7 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 				"taskId", task.TaskId,
 				"deadline", task.DeadlineUnixSeconds.Unix(),
 				"currentTime", time.Now().Unix())
-			
+
 			// Mark expired tasks as failed
 			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); err != nil {
 				em.logger.Sugar().Warnw("Failed to mark expired task as failed",
