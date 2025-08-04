@@ -18,19 +18,19 @@ chains:
     chainId: 31337
     rpcUrl: "http://host.docker.internal:8545"
     pollIntervalSeconds: 10
-#   - name: "base"
-#     network: "mainnet"
-#     chainId: 31338
-#     rpcUrl: "http://host.docker.internal:9545"
-#     pollIntervalSeconds: 2
+  - name: "base"
+    network: "sepolia"
+    chainId: 31338
+    rpcUrl: "http://host.docker.internal:9545"
+    pollIntervalSeconds: 2
 
 avss:
-  - address: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
+  - address: "0xce2ac75be2e0951f1f7b288c7a6a9bfb6c331dc4"
     responseTimeout: 3000
     chainIds:
-    - 31337
+    - 31338
     # - 31338
-    avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
+    avsRegistrarAddress: "0x203ca0e6b9bce319937ab44660f3854c41f3331f"
 
 # Storage configuration for persistence
 storage:
