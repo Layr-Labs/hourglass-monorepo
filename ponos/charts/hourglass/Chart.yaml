@@ -1,0 +1,9 @@
+apiVersion: v2
+name: hourglass
+description: A Helm chart for Hourglass
+
+type: application
+
+version: 0.1.0-beta.1
+
+appVersion: "v1.0.0-rc.2"

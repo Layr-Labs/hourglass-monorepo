@@ -1,0 +1,50 @@
+---
+{{- if .Values.executor.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "executor.name" . }}
+  labels:
+    {{- include "executor.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.executor.replicas }}
+  selector:
+    matchLabels:
+      {{- include "executor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "executor.metadataLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "executor.serviceAccountName" . }}
+      containers:
+        - name: {{ include "executor.name" . }}
+          image: "{{ .Values.hourglass.image.repository }}:{{ .Values.hourglass.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.hourglass.image.pullPolicy }}
+          command: {{ .Values.executor.command | toJson }}
+          args: {{ .Values.executor.args | toJson}}
+        {{- if .Values.executor.ports }}
+          ports:
+          {{- range $k, $v := .Values.executor.ports }}
+            - name: {{ $v.name }}
+              containerPort: {{ $v.targetPort }}
+              protocol: {{ $v.protocol }}
+          {{- end -}}
+        {{- end }}
+        {{- if .Values.executor.resources }}
+          resources:
+            {{- toYaml .Values.executor.resources | nindent 12 }}
+        {{- end }}
+        {{- if .Values.executor.env }}
+          env:
+            {{- toYaml .Values.executor.env | nindent 12 }}
+        {{- end }}
+          volumeMounts:
+          - name: executor-config
+            mountPath: /etc/config
+            readOnly: true
+      volumes:
+      - name: executor-config
+        secret:
+          secretName: {{ include "executor.configSecretName" .}}
+{{- end}}

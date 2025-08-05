@@ -6,9 +6,9 @@
 operator:
   # Container image configuration
   image:
-    repository: hourglass/operator
-    tag: "v1.2.0"
-    pullPolicy: IfNotPresent
+    repository: public.ecr.aws/z6g0f8n7/eigenlayer/hourglass-operator
+    tag: "latest"
+    pullPolicy: Always
   
   # Number of operator replicas (should be 1 for singleton)
   replicaCount: 1

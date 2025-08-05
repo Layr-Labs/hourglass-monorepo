@@ -1,0 +1,81 @@
+hourglass:
+  image:
+      repository: hourglass
+      tag: "1754406505"
+      pullPolicy: Never
+aggregator:
+  enabled: true
+  config: |
+    debug: false
+
+    operator:
+      address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
+      operatorPrivateKey:
+        privateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
+      signingKeys:
+        bls:
+          keystore: |
+            {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"},"message":""},"checksum":{"function":"sha256","params":{},"message":"2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"},"cipher":{"function":"aes-128-ctr","params":{"iv":"677edd29eff1f8635a51f66f71bc5c83"},"message":"162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"}},"pubkey":"2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169","path":"m/1/0/0","uuid":"3b7d7ab3-4472-417f-8f2f-8b2a7011a463","version":4,"curveType":"bn254"}
+          password: ""
+    
+    l1ChainId: 31337
+    
+    chains:
+      - name: "ethereum"
+        network: "mainnet"
+        chainId: 31337
+        rpcUrl: "http://host.docker.internal:8545"
+        pollIntervalSeconds: 10
+      - name: "base"
+        network: "sepolia"
+        chainId: 31338
+        rpcUrl: "http://host.docker.internal:9545"
+        pollIntervalSeconds: 2
+    
+    avss:
+      - address: "0xce2ac75be2e0951f1f7b288c7a6a9bfb6c331dc4"
+        responseTimeout: 3000
+        chainIds:
+        - 31338
+        avsRegistrarAddress: "0x203ca0e6b9bce319937ab44660f3854c41f3331f"
+    
+    # Storage configuration for persistence
+    storage:
+      type: "memory"  # Options: "memory" or "badger"
+executor:
+  enabled: true
+  config: |
+    grpcPort: 9090
+    operator:
+      address: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
+      operatorPrivateKey:
+        privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+      signingKeys:
+        bls:
+          keystore: |
+            {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"},"message":""},"checksum":{"function":"sha256","params":{},"message":"28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"},"cipher":{"function":"aes-128-ctr","params":{"iv":"cbaff55d36de018603dc9a336ac3bdc7"},"message":"3d261076c91fdc6b1de390d0136b22c2a79b83b2838d55dd646218b7cec58396"}},"pubkey":"11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9","path":"m/1/0/0","uuid":"8df75d34-4383-4ff4-a3c0-c47717c72e86","version":4,"curveType":"bn254"}
+          password: ""
+    l1Chain:
+      rpcUrl: "http://host.docker.internal:8545"
+      chainId: 31337
+    
+    avsPerformers:
+      - image:
+          repository: "hello-performer"
+          tag: "latest"
+        processType: "server"
+        avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
+        avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
+        deploymentMode: "kubernetes"
+    kubernetes:
+      namespace: "default"
+      operatorNamespace: "default"
+      crdGroup: "hourglass.eigenlayer.io"
+      crdVersion: "v1alpha1"
+      connectionTimeout: 30
+      inCluster: true
+      
+    
+    # Storage configuration (optional)
+    storage:
+      type: "memory"  # Options: "memory" or "badger"

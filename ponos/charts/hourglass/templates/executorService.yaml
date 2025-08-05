@@ -1,0 +1,21 @@
+---
+{{- if .Values.executor.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "executor.name" . }}
+  labels:
+    {{- include "executor.labels" . | nindent 4 }}
+spec:
+  ports:
+{{- range .Values.executor.ports }}
+    - name: {{ .name }}
+      protocol: {{ .protocol }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+{{- end }}
+  clusterIP: None
+  selector:
+  {{- include "executor.selectorLabels" . | nindent 6 }}
+
+{{- end }}

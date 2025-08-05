@@ -1,0 +1,71 @@
+hourglass:
+  image:
+    repository: public.ecr.aws/z6g0f8n7/eigenlayer-hourglass
+    tag: "v1.0.0-rc.2"
+    pullPolicy: Always
+aggregator:
+  nameOverride: ""
+  enabled: false
+  config: ""
+  command:
+    - aggregator
+    - run
+    - --config
+    - /etc/config/config.yaml
+  env: []
+  #  - name: SOME_ENV
+  #    value: "some-value"
+  replicas: 1
+  labels: {}
+  selectorLabels: {}
+  additionalLabels: {}
+  metadataLabels: {}
+  serviceAccount:
+    name: "executor"
+  args: []
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: .2
+    limits:
+      memory: 1048Mi
+      cpu: .8
+executor:
+  nameOverride: ""
+  enabled: false
+  config: ""
+  ports:
+    - name: grpc
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+  command:
+    - executor
+    - run
+    - --config
+    - /etc/config/config.yaml
+  env: []
+  #  - name: SOME_ENV
+  #    value: "some-value"
+  replicas: 1
+  labels: {}
+  selectorLabels: {}
+  additionalLabels: {}
+  metadataLabels: {}
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the executor name
+    name: ""
+  rbac:
+    # Specifies whether RBAC resources should be created
+    create: true
+  args: []
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: .2
+    limits:
+      memory: 1048Mi
+      cpu: .8
