@@ -45,7 +45,8 @@ aggregator:
 executor:
   enabled: true
   config: |
-    grpcPort: 9090
+    grpcPort: 9000
+    managementServerGrpcPort: 9001
     operator:
       address: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
       operatorPrivateKey:

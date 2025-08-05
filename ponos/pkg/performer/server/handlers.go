@@ -5,6 +5,7 @@ import (
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,10 +35,14 @@ func (pp *PonosPerformer) ExecuteTask(ctx context.Context, task *performerV1.Tas
 	}, nil
 }
 
-func (pp *PonosPerformer) HealthCheck(ctx context.Context, request *healthV1.HealthCheckRequest) (*healthV1.HealthCheckResponse, error) {
+func (pp *PonosPerformer) Check(ctx context.Context, request *healthV1.HealthCheckRequest) (*healthV1.HealthCheckResponse, error) {
 	return &healthV1.HealthCheckResponse{
 		Status: healthV1.HealthCheckResponse_SERVING,
 	}, nil
+}
+
+func (pp *PonosPerformer) Watch(request *healthV1.HealthCheckRequest, g grpc.ServerStreamingServer[healthV1.HealthCheckResponse]) error {
+	return status.Errorf(codes.Unimplemented, "Watch method is not implemented")
 }
 
 func (pp *PonosPerformer) StartSync(ctx context.Context, request *performerV1.StartSyncRequest) (*performerV1.StartSyncResponse, error) {

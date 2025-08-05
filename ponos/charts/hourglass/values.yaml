@@ -39,6 +39,10 @@ executor:
       port: 9000
       targetPort: 9000
       protocol: TCP
+    - name: management-grpc
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
   command:
     - executor
     - run

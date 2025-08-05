@@ -17,7 +17,6 @@ type PonosPerformerConfig struct {
 }
 
 type PonosPerformer struct {
-	healthV1.HealthServer
 	config     *PonosPerformerConfig
 	rpcServer  *rpcServer.RpcServer
 	taskWorker worker.IWorker
