@@ -142,14 +142,14 @@ func (e *Executor) Initialize(ctx context.Context) error {
 					zap.String("deploymentMode", string(avs.DeploymentMode)),
 					zap.Error(err),
 				)
+			} else {
+				e.logger.Sugar().Infow("AVS performer deployed successfully",
+					zap.String("avsAddress", avsAddress),
+					zap.String("deploymentMode", string(avs.DeploymentMode)),
+					zap.String("deploymentId", result.ID),
+					zap.String("performerId", result.PerformerID),
+				)
 			}
-
-			e.logger.Sugar().Infow("AVS performer deployed successfully",
-				zap.String("avsAddress", avsAddress),
-				zap.String("deploymentMode", string(avs.DeploymentMode)),
-				zap.String("deploymentId", result.ID),
-				zap.String("performerId", result.PerformerID),
-			)
 
 			e.avsPerformers[avsAddress] = performer
 
