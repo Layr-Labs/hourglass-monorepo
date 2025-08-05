@@ -142,7 +142,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 	out.Image = ps.Image
 	out.ImagePullPolicy = ps.ImagePullPolicy
 	out.Version = ps.Version
-	
+
 	// Deep copy Config
 	out.Config = ps.Config
 	if ps.Config.Environment != nil {
@@ -159,17 +159,17 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 		out.Config.Command = make([]string, len(ps.Config.Command))
 		copy(out.Config.Command, ps.Config.Command)
 	}
-	
+
 	// Deep copy Resources
 	ps.Resources.DeepCopyInto(&out.Resources)
-	
+
 	// Deep copy Scheduling
 	if ps.Scheduling != nil {
 		in, out := ps.Scheduling, &out.Scheduling
 		*out = new(SchedulingConfig)
 		(*in).DeepCopyInto(*out)
 	}
-	
+
 	// Deep copy HardwareRequirements
 	if ps.HardwareRequirements != nil {
 		in, out := ps.HardwareRequirements, &out.HardwareRequirements
@@ -185,7 +185,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 			}
 		}
 	}
-	
+
 	// Deep copy ImagePullSecrets
 	if ps.ImagePullSecrets != nil {
 		in, out := &ps.ImagePullSecrets, &out.ImagePullSecrets
