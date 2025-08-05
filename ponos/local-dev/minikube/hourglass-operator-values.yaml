@@ -1,0 +1,5 @@
+operator:
+  image:
+    repository: hourglass-operator
+    tag: "1754419574"
+    pullPolicy: Never

@@ -212,24 +212,30 @@ func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev
 		r.applyHardwareRequirements(&container, performer.Spec.HardwareRequirements)
 	}
 
-	// Configure probes
+	// Configure probes using gRPC health checks to match Docker environment behavior
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt32(grpcPort),
+			GRPC: &corev1.GRPCAction{
+				Port: grpcPort,
+				// Service name is empty to use the default gRPC health check
 			},
 		},
 		InitialDelaySeconds: 30,
 		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    3,
 	}
 	container.ReadinessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
-			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt32(grpcPort),
+			GRPC: &corev1.GRPCAction{
+				Port: grpcPort,
+				// Service name is empty to use the default gRPC health check
 			},
 		},
 		InitialDelaySeconds: 5,
-		PeriodSeconds:       5,
+		PeriodSeconds:       15, // Match Docker environment's defaultApplicationHealthCheckInterval
+		TimeoutSeconds:      1,  // Match Docker environment's health check timeout
+		FailureThreshold:    3,  // Match maxConsecutiveApplicationHealthFailures
 	}
 
 	// Build pod spec
