@@ -165,7 +165,8 @@ anvil/start/l1:
 		--fork-block-number 8836180 \
 		--load-state ./internal/testData/anvil-l1-state.json \
 		--chain-id 31337 \
-		--block-time 2
+		--block-time 2 \
+		--host 0.0.0.0
 
 .PHONY: anvil/start
 anvil/start/l2:
@@ -175,5 +176,6 @@ anvil/start/l2:
 		--load-state ./internal/testData/anvil-l2-state.json \
 		--chain-id 31338 \
 		--port 9545 \
-		--block-time 2
+		--block-time 2 \
+		--host 0.0.0.0
 
