@@ -4,7 +4,7 @@ go 1.23.6
 
 require (
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
-	github.com/Layr-Labs/protocol-apis v1.14.0
+	github.com/Layr-Labs/protocol-apis v1.17.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 )
