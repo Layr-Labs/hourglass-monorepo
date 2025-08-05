@@ -199,16 +199,17 @@ func (sc *StorageConfig) Validate() error {
 }
 
 type ExecutorConfig struct {
-	Debug                bool
-	GrpcPort             int                       `json:"grpcPort" yaml:"grpcPort"`
-	PerformerNetworkName string                    `json:"performerNetworkName" yaml:"performerNetworkName"`
-	Operator             *config.OperatorConfig    `json:"operator" yaml:"operator"`
-	AvsPerformers        []*AvsPerformerConfig     `json:"avsPerformers" yaml:"avsPerformers"`
-	L1Chain              *Chain                    `json:"l1Chain" yaml:"l1Chain"`
-	Contracts            json.RawMessage           `json:"contracts" yaml:"contracts"`
-	OverrideContracts    *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
-	Kubernetes           *KubernetesConfig         `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
-	Storage              *StorageConfig            `json:"storage,omitempty" yaml:"storage,omitempty"`
+	Debug                    bool
+	GrpcPort                 int                       `json:"grpcPort" yaml:"grpcPort"`
+	ManagementServerGrpcPort int                       `json:"managementServerGrpcPort" yaml:"managementServerGrpcPort"`
+	PerformerNetworkName     string                    `json:"performerNetworkName" yaml:"performerNetworkName"`
+	Operator                 *config.OperatorConfig    `json:"operator" yaml:"operator"`
+	AvsPerformers            []*AvsPerformerConfig     `json:"avsPerformers" yaml:"avsPerformers"`
+	L1Chain                  *Chain                    `json:"l1Chain" yaml:"l1Chain"`
+	Contracts                json.RawMessage           `json:"contracts" yaml:"contracts"`
+	OverrideContracts        *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
+	Kubernetes               *KubernetesConfig         `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
+	Storage                  *StorageConfig            `json:"storage,omitempty" yaml:"storage,omitempty"`
 }
 
 func (ec *ExecutorConfig) Validate() error {
@@ -264,6 +265,10 @@ func (ec *ExecutorConfig) Validate() error {
 		if err := ec.Storage.Validate(); err != nil {
 			allErrors = append(allErrors, field.Invalid(field.NewPath("storage"), ec.Storage, err.Error()))
 		}
+	}
+
+	if ec.ManagementServerGrpcPort == 0 {
+		ec.ManagementServerGrpcPort = ec.GrpcPort
 	}
 
 	if len(allErrors) > 0 {
