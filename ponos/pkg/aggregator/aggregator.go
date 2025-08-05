@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -59,6 +60,9 @@ type Aggregator struct {
 	// chainEventsChan is a channel for receiving events from the chain pollers and
 	// sequentially processing them
 	chainEventsChan chan *chainPoller.LogWithBlock
+
+	// store is the persistence layer for the aggregator
+	store storage.AggregatorStore
 }
 
 func NewAggregator(
@@ -67,10 +71,14 @@ func NewAggregator(
 	tlp *transactionLogParser.TransactionLogParser,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signers signer.Signers,
+	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) (*Aggregator, error) {
 	if cfg.L1ChainId == 0 {
 		return nil, fmt.Errorf("L1ChainId must be set in AggregatorConfig")
+	}
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
 	}
 	agg := &Aggregator{
 		contractStore:        contractStore,
@@ -79,6 +87,7 @@ func NewAggregator(
 		logger:               logger,
 		signers:              signers,
 		peeringDataFetcher:   peeringDataFetcher,
+		store:                store,
 		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
@@ -131,6 +140,7 @@ func (a *Aggregator) Initialize() error {
 			a.signers,
 			a.contractStore,
 			om,
+			a.store,
 			a.logger,
 		)
 		if err != nil {
@@ -139,6 +149,7 @@ func (a *Aggregator) Initialize() error {
 
 		a.avsExecutionManagers[avs.Address] = aem
 	}
+
 	return nil
 }
 
@@ -193,7 +204,7 @@ func (a *Aggregator) initializePollers() error {
 			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
 		}
 
-		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.logger)
+		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.store, a.logger)
 	}
 	return nil
 }

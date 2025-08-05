@@ -14,6 +14,9 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/badger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
@@ -109,7 +112,28 @@ var runCmd = &cobra.Command{
 
 		pdf := peeringDataFetcher.NewPeeringDataFetcher(cc, l)
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, execSigners, pdf, cc)
+		// Create storage based on configuration
+		var store storage.ExecutorStore
+		if Config.Storage != nil {
+			switch Config.Storage.Type {
+			case "memory":
+				l.Sugar().Infow("Using in-memory storage")
+				store = memory.NewInMemoryExecutorStore()
+			case "badger":
+				l.Sugar().Infow("Using BadgerDB storage")
+				badgerStore, err := badger.NewBadgerExecutorStore(Config.Storage.BadgerConfig)
+				if err != nil {
+					return fmt.Errorf("failed to create badger store: %w", err)
+				}
+				store = badgerStore
+			default:
+				return fmt.Errorf("unknown storage type: %s", Config.Storage.Type)
+			}
+		} else {
+			l.Sugar().Infow("No storage configured, running without persistence")
+		}
+
+		exec := executor.NewExecutor(Config, baseRpcServer, l, execSigners, pdf, cc, store)
 
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -128,6 +152,12 @@ var runCmd = &cobra.Command{
 		shutdown.ListenForShutdown(gracefulShutdownNotifier, done, func() {
 			l.Sugar().Info("Shutting down...")
 			cancel()
+			// Close storage if available
+			if store != nil {
+				if err := store.Close(); err != nil {
+					l.Sugar().Errorw("Failed to close storage", "error", err)
+				}
+			}
 		}, time.Second*5, l)
 		return nil
 	},

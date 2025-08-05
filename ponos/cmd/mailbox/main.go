@@ -13,11 +13,6 @@ import (
 	"math/big"
 )
 
-const (
-	privateKey             = "5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
-	mailboxContractAddress = "0x4B7099FD879435a087C364aD2f9E7B3f94d20bBe"
-)
-
 func main() {
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	if err != nil {
@@ -29,7 +24,7 @@ func main() {
 	_ = chainConfig
 
 	client := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   "http://localhost:8545",
+		BaseUrl:   "http://localhost:9545",
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
@@ -38,7 +33,7 @@ func main() {
 		panic(err)
 	}
 
-	privateKeySigner, err := transactionSigner.NewPrivateKeySigner("0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214", ethCaller, l)
+	privateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethCaller, l)
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +44,7 @@ func main() {
 	}
 
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
-	receipt, err := cc.PublishMessageToInbox(context.Background(), "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4", 1, payloadJsonBytes)
+	receipt, err := cc.PublishMessageToInbox(context.Background(), chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		panic(err)
 	}

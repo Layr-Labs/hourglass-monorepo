@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -206,7 +207,9 @@ func testWithKeyType(
 	signers := signer.Signers{
 		ECDSASigner: execSigner,
 	}
-	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC)
+	// Create in-memory storage for the executor
+	store := memory.NewInMemoryExecutorStore()
+	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC, store)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}

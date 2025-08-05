@@ -12,6 +12,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsKubernetesPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
@@ -32,6 +33,9 @@ type Executor struct {
 	l1ContractCaller contractCaller.IContractCaller
 
 	peeringFetcher peering.IPeeringDataFetcher
+
+	// store is the persistence layer
+	store storage.ExecutorStore
 }
 
 func NewExecutorWithRpcServer(
@@ -41,6 +45,7 @@ func NewExecutorWithRpcServer(
 	signers signer.Signers,
 	peeringFetcher peering.IPeeringDataFetcher,
 	l1ContractCaller contractCaller.IContractCaller,
+	store storage.ExecutorStore,
 ) (*Executor, error) {
 	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
 		GrpcPort: port,
@@ -49,7 +54,7 @@ func NewExecutorWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signers, peeringFetcher, l1ContractCaller), nil
+	return NewExecutor(config, rpc, logger, signers, peeringFetcher, l1ContractCaller, store), nil
 }
 
 func NewExecutor(
@@ -59,7 +64,11 @@ func NewExecutor(
 	signers signer.Signers,
 	peeringFetcher peering.IPeeringDataFetcher,
 	l1ContractCaller contractCaller.IContractCaller,
+	store storage.ExecutorStore,
 ) *Executor {
+	if store == nil {
+		panic("store is required")
+	}
 	return &Executor{
 		logger:           logger,
 		config:           config,
@@ -70,11 +79,19 @@ func NewExecutor(
 		inflightTasks:    &sync.Map{},
 		peeringFetcher:   peeringFetcher,
 		l1ContractCaller: l1ContractCaller,
+		store:            store,
 	}
 }
 
 func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
+
+	// Perform recovery from storage
+	if err := e.recoverFromStorage(ctx); err != nil {
+		e.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
+		// Continue anyway - this is not a fatal error
+	}
+
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
 		if _, ok := e.avsPerformers[avsAddress]; ok {
@@ -121,6 +138,28 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			)
 
 			e.avsPerformers[avsAddress] = performer
+
+			// Save performer state to storage
+			performerState := &storage.PerformerState{
+				PerformerId:        result.PerformerID,
+				AvsAddress:         avsAddress,
+				ContainerId:        result.ID,
+				Status:             "running",
+				ArtifactRegistry:   avs.Image.Repository,
+				ArtifactTag:        avs.Image.Tag,
+				ArtifactDigest:     "", // Not available during initialization
+				DeploymentMode:     string(avs.DeploymentMode),
+				CreatedAt:          result.StartTime,
+				LastHealthCheck:    result.EndTime,
+				ContainerHealthy:   true,
+				ApplicationHealthy: true,
+			}
+			if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+				e.logger.Sugar().Warnw("Failed to save performer state to storage",
+					"error", err,
+					"performerId", result.PerformerID,
+				)
+			}
 
 		default:
 			e.logger.Sugar().Errorw("Unsupported AVS performer process type",
@@ -213,6 +252,49 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		e.l1ContractCaller,
 		e.logger,
 	)
+}
+
+// recoverFromStorage loads performer states from storage and verifies they're still running
+func (e *Executor) recoverFromStorage(ctx context.Context) error {
+	performerStates, err := e.store.ListPerformerStates(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list performer states: %w", err)
+	}
+
+	e.logger.Sugar().Infow("Recovering performer states from storage",
+		"count", len(performerStates),
+	)
+
+	// TODO: In a future milestone, we will verify if containers/pods still exist
+	// and re-create missing performers. For now, just log the recovery.
+	for _, state := range performerStates {
+		e.logger.Sugar().Infow("Found performer state in storage",
+			"performerId", state.PerformerId,
+			"avsAddress", state.AvsAddress,
+			"status", state.Status,
+			"containerId", state.ContainerId,
+		)
+	}
+
+	// Load inflight tasks
+	inflightTasks, err := e.store.ListInflightTasks(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list inflight tasks: %w", err)
+	}
+
+	e.logger.Sugar().Infow("Recovering inflight tasks from storage",
+		"count", len(inflightTasks),
+	)
+
+	for _, task := range inflightTasks {
+		e.inflightTasks.Store(task.TaskId, task)
+		e.logger.Sugar().Infow("Recovered inflight task",
+			"taskId", task.TaskId,
+			"avsAddress", task.AvsAddress,
+		)
+	}
+
+	return nil
 }
 
 func (e *Executor) Run(ctx context.Context) error {
