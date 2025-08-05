@@ -137,12 +137,40 @@ func (p *PerformerCRD) DeepCopyInto(out *PerformerCRD) {
 // DeepCopyInto for PerformerSpec
 func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 	*out = *ps
+	// Copy all basic fields explicitly
+	out.AVSAddress = ps.AVSAddress
+	out.Image = ps.Image
+	out.ImagePullPolicy = ps.ImagePullPolicy
+	out.Version = ps.Version
+	
+	// Deep copy Config
+	out.Config = ps.Config
+	if ps.Config.Environment != nil {
+		out.Config.Environment = make(map[string]string, len(ps.Config.Environment))
+		for k, v := range ps.Config.Environment {
+			out.Config.Environment[k] = v
+		}
+	}
+	if ps.Config.Args != nil {
+		out.Config.Args = make([]string, len(ps.Config.Args))
+		copy(out.Config.Args, ps.Config.Args)
+	}
+	if ps.Config.Command != nil {
+		out.Config.Command = make([]string, len(ps.Config.Command))
+		copy(out.Config.Command, ps.Config.Command)
+	}
+	
+	// Deep copy Resources
 	ps.Resources.DeepCopyInto(&out.Resources)
+	
+	// Deep copy Scheduling
 	if ps.Scheduling != nil {
 		in, out := ps.Scheduling, &out.Scheduling
 		*out = new(SchedulingConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	
+	// Deep copy HardwareRequirements
 	if ps.HardwareRequirements != nil {
 		in, out := ps.HardwareRequirements, &out.HardwareRequirements
 		*out = new(HardwareRequirementsConfig)
@@ -157,6 +185,8 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 			}
 		}
 	}
+	
+	// Deep copy ImagePullSecrets
 	if ps.ImagePullSecrets != nil {
 		in, out := &ps.ImagePullSecrets, &out.ImagePullSecrets
 		*out = make([]corev1.LocalObjectReference, len(*in))
@@ -297,6 +327,8 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 
 	c.logger.Sugar().Infow("Creating Performer CRD",
 		zap.Any("performer", performer),
+		zap.String("imagePullPolicy", string(performer.Spec.ImagePullPolicy)),
+		zap.String("requestImagePullPolicy", req.ImagePullPolicy),
 	)
 
 	err := c.client.Create(ctx, performer)

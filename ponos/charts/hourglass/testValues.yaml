@@ -1,7 +1,7 @@
 hourglass:
   image:
       repository: hourglass
-      tag: "1754406505"
+      tag: "1754418854"
       pullPolicy: Never
 aggregator:
   enabled: true

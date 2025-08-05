@@ -158,6 +158,7 @@ func (r *PerformerReconciler) shouldRecreatePod(existingPod *corev1.Pod, perform
 
 // buildPodSpec builds the pod specification
 func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev1.Pod {
+	fmt.Printf("Got buildPodSpec request for performer: %+v\n", performer)
 	// Generate labels for pod
 	labels := map[string]string{
 		"app":                               "hourglass-performer",
@@ -247,6 +248,8 @@ func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev
 			podSpec.RuntimeClassName = performer.Spec.Scheduling.RuntimeClass
 		}
 	}
+
+	fmt.Printf("Built performer podspec: %+v\n", podSpec)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
