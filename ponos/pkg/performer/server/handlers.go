@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,9 +34,9 @@ func (pp *PonosPerformer) ExecuteTask(ctx context.Context, task *performerV1.Tas
 	}, nil
 }
 
-func (pp *PonosPerformer) HealthCheck(ctx context.Context, request *performerV1.HealthCheckRequest) (*performerV1.HealthCheckResponse, error) {
-	return &performerV1.HealthCheckResponse{
-		Status: performerV1.PerformerStatus_READY_FOR_TASK,
+func (pp *PonosPerformer) HealthCheck(ctx context.Context, request *healthV1.HealthCheckRequest) (*healthV1.HealthCheckResponse, error) {
+	return &healthV1.HealthCheckResponse{
+		Status: healthV1.HealthCheckResponse_SERVING,
 	}, nil
 }
 

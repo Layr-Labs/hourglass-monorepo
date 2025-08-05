@@ -3,6 +3,7 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"github.com/stretchr/testify/require"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
-	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"go.uber.org/zap"
 )
 
@@ -234,8 +234,8 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 					t.Logf("Failed to create gRPC client: %v", err)
 				} else {
 					// Test health check
-					healthReq := &performerV1.HealthCheckRequest{}
-					healthResp, err := grpcClient.HealthCheck(healthCheckCtx, healthReq)
+					healthReq := &healthV1.HealthCheckRequest{}
+					healthResp, err := grpcClient.HealthClient.Check(healthCheckCtx, healthReq)
 					if err != nil {
 						t.Logf("Health check failed: %v", err)
 					} else {
