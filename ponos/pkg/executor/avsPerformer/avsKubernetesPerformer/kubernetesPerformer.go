@@ -95,7 +95,7 @@ func NewAvsKubernetesPerformer(
 	}
 
 	// Initialize Kubernetes client
-	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig)
+	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}

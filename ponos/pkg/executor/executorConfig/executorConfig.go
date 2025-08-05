@@ -73,6 +73,8 @@ func (kc *KubernetesConfig) Validate() error {
 
 	if kc.ConnectionTimeout == 0 {
 		allErrors = append(allErrors, field.Required(field.NewPath("connectionTimeout"), "connectionTimeout is required"))
+	} else {
+		kc.ConnectionTimeout = time.Second * kc.ConnectionTimeout // Ensure it's in seconds and a valid duration
 	}
 
 	// If not in cluster, kubeconfig path should be specified
