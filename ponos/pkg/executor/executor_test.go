@@ -209,7 +209,7 @@ func testWithKeyType(
 	}
 	// Create in-memory storage for the executor
 	store := memory.NewInMemoryExecutorStore()
-	exec, err := NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC, store)
+	exec, err := NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC, store)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}

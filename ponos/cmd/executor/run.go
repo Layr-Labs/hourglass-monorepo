@@ -18,7 +18,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/shutdown"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -45,13 +44,6 @@ var runCmd = &cobra.Command{
 		execSigners, err := signerUtils.ParseSignersFromOperatorConfig(Config.Operator, l)
 		if err != nil {
 			return fmt.Errorf("failed to parse signers from operator config: %w", err)
-		}
-
-		baseRpcServer, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-			GrpcPort: Config.GrpcPort,
-		}, l)
-		if err != nil {
-			l.Sugar().Fatal("Failed to setup RPC server", zap.Error(err))
 		}
 
 		var coreContracts []*contracts.Contract
@@ -133,7 +125,10 @@ var runCmd = &cobra.Command{
 			l.Sugar().Infow("No storage configured, running without persistence")
 		}
 
-		exec := executor.NewExecutor(Config, baseRpcServer, l, execSigners, pdf, cc, store)
+		exec, err := executor.NewExecutorWithRpcServers(Config.GrpcPort, Config.ManagementServerGrpcPort, Config, l, execSigners, pdf, cc, store)
+		if err != nil {
+			return fmt.Errorf("failed to create executor: %w", err)
+		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 

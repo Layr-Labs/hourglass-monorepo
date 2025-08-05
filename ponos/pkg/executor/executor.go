@@ -18,17 +18,17 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 )
 
 type Executor struct {
-	logger        *zap.Logger
-	config        *executorConfig.ExecutorConfig
-	avsPerformers map[string]avsPerformer.IAvsPerformer
-	rpcServer     *rpcServer.RpcServer
-	ecdsaSigner   signer.ISigner
-	bn254Signer   signer.ISigner
-	inflightTasks *sync.Map
+	logger              *zap.Logger
+	config              *executorConfig.ExecutorConfig
+	avsPerformers       map[string]avsPerformer.IAvsPerformer
+	taskRpcServer       *rpcServer.RpcServer
+	managementRpcServer *rpcServer.RpcServer
+	ecdsaSigner         signer.ISigner
+	bn254Signer         signer.ISigner
+	inflightTasks       *sync.Map
 
 	l1ContractCaller contractCaller.IContractCaller
 
@@ -38,8 +38,9 @@ type Executor struct {
 	store storage.ExecutorStore
 }
 
-func NewExecutorWithRpcServer(
-	port int,
+func NewExecutorWithRpcServers(
+	taskServerPort int,
+	managementServerPort int,
 	config *executorConfig.ExecutorConfig,
 	logger *zap.Logger,
 	signers signer.Signers,
@@ -47,19 +48,32 @@ func NewExecutorWithRpcServer(
 	l1ContractCaller contractCaller.IContractCaller,
 	store storage.ExecutorStore,
 ) (*Executor, error) {
-	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
-		GrpcPort: port,
+	taskRpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: taskServerPort,
 	}, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RPC server: %v", err)
 	}
 
-	return NewExecutor(config, rpc, logger, signers, peeringFetcher, l1ContractCaller, store), nil
+	var managementRpc *rpcServer.RpcServer
+	if managementServerPort == 0 || managementServerPort == taskServerPort {
+		managementRpc = taskRpc
+	} else {
+		managementRpc, err = rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+			GrpcPort: managementServerPort,
+		}, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create management RPC server: %v", err)
+		}
+	}
+
+	return NewExecutor(config, taskRpc, managementRpc, logger, signers, peeringFetcher, l1ContractCaller, store), nil
 }
 
 func NewExecutor(
 	config *executorConfig.ExecutorConfig,
-	rpcServer *rpcServer.RpcServer,
+	taskRpcServer *rpcServer.RpcServer,
+	managementRpcServer *rpcServer.RpcServer,
 	logger *zap.Logger,
 	signers signer.Signers,
 	peeringFetcher peering.IPeeringDataFetcher,
@@ -70,16 +84,17 @@ func NewExecutor(
 		panic("store is required")
 	}
 	return &Executor{
-		logger:           logger,
-		config:           config,
-		avsPerformers:    make(map[string]avsPerformer.IAvsPerformer),
-		rpcServer:        rpcServer,
-		ecdsaSigner:      signers.ECDSASigner,
-		bn254Signer:      signers.BLSSigner,
-		inflightTasks:    &sync.Map{},
-		peeringFetcher:   peeringFetcher,
-		l1ContractCaller: l1ContractCaller,
-		store:            store,
+		logger:              logger,
+		config:              config,
+		avsPerformers:       make(map[string]avsPerformer.IAvsPerformer),
+		taskRpcServer:       taskRpcServer,
+		managementRpcServer: managementRpcServer,
+		ecdsaSigner:         signers.ECDSASigner,
+		bn254Signer:         signers.BLSSigner,
+		inflightTasks:       &sync.Map{},
+		peeringFetcher:      peeringFetcher,
+		l1ContractCaller:    l1ContractCaller,
+		store:               store,
 	}
 }
 
@@ -170,7 +185,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 		}
 	}
 
-	if err := e.registerHandlers(e.rpcServer.GetGrpcServer()); err != nil {
+	if err := e.registerHandlers(); err != nil {
 		e.logger.Sugar().Errorw("Failed to register handlers",
 			zap.Error(err),
 		)
@@ -302,14 +317,15 @@ func (e *Executor) Run(ctx context.Context) error {
 		zap.String("version", "1.0.0"),
 		zap.String("operatorAddress", e.config.Operator.Address),
 	)
-	if err := e.rpcServer.Start(ctx); err != nil {
+	if err := e.taskRpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start RPC server: %v", err)
 	}
 	return nil
 }
 
-func (e *Executor) registerHandlers(grpcServer *grpc.Server) error {
-	executorV1.RegisterExecutorServiceServer(grpcServer, e)
+func (e *Executor) registerHandlers() error {
+	executorV1.RegisterExecutorServiceServer(e.taskRpcServer.GetGrpcServer(), e)
+	executorV1.RegisterExecutorManagementServiceServer(e.managementRpcServer.GetGrpcServer(), e)
 
 	return nil
 }

@@ -452,7 +452,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 	}
 	// Use in-memory storage for the executor
 	execStore := executorMemory.NewInMemoryExecutorStore()
-	realExec, err := executor.NewExecutorWithRpcServer(execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc, execStore)
+	realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc, execStore)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}

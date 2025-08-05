@@ -8,13 +8,15 @@ option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/ei
 service ExecutorService {
   // SubmitTask submits a task to the executor from the aggregator
   rpc SubmitTask(TaskSubmission) returns (TaskResult) {}
-  
+}
+
+service ExecutorManagementService {
   // DeployArtifact deploys a new artifact to an AVS performer
   rpc DeployArtifact(DeployArtifactRequest) returns (DeployArtifactResponse) {}
-  
+
   // ListPerformers returns a list of all performers an d their status
   rpc ListPerformers(ListPerformersRequest) returns (ListPerformersResponse) {}
-  
+
   // RemovePerformer removes a performer from the executor
   rpc RemovePerformer(RemovePerformerRequest) returns (RemovePerformerResponse) {}
 }
