@@ -58,11 +58,11 @@ func TestNewClientWrapper(t *testing.T) {
 }
 
 func TestNewClientWrapper_WithValidConfig(t *testing.T) {
-	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
-
 	// Skip this test if we don't have a valid Kubernetes environment
 	// This test would require either in-cluster config or a valid kubeconfig file
 	t.Skip("Skipping Kubernetes client test - requires valid Kubernetes environment")
+
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 
 	config := NewDefaultConfig()
 	config.Namespace = "test-namespace"

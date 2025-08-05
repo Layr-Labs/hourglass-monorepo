@@ -3,6 +3,7 @@ package kubernetesManager
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
@@ -234,14 +235,16 @@ type CRDOperations struct {
 	client    client.Client
 	namespace string
 	config    *Config
+	logger    *zap.Logger
 }
 
 // NewCRDOperations creates a new CRD operations instance
-func NewCRDOperations(client client.Client, config *Config) *CRDOperations {
+func NewCRDOperations(client client.Client, config *Config, l *zap.Logger) *CRDOperations {
 	return &CRDOperations{
 		client:    client,
 		namespace: config.Namespace,
 		config:    config,
+		logger:    l,
 	}
 }
 
@@ -291,6 +294,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 	if req.HardwareRequirements != nil {
 		performer.Spec.HardwareRequirements = req.HardwareRequirements
 	}
+
+	c.logger.Sugar().Infow("Creating Performer CRD",
+		zap.Any("performer", performer),
+	)
 
 	err := c.client.Create(ctx, performer)
 	if err != nil {

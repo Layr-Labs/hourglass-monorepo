@@ -2,6 +2,7 @@ package kubernetesManager
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
@@ -74,13 +75,14 @@ func TestPerformerCRD_DeepCopy(t *testing.T) {
 }
 
 func TestNewCRDOperations(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	config.Namespace = "test-namespace"
 
 	scheme := createTestScheme()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	assert.NotNil(t, ops)
 	assert.Equal(t, fakeClient, ops.client)
@@ -90,6 +92,7 @@ func TestNewCRDOperations(t *testing.T) {
 
 func TestCRDOperations_CreatePerformer(t *testing.T) {
 	// Register our types with the scheme
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	scheme := createTestScheme()
 
 	tests := []struct {
@@ -159,7 +162,7 @@ func TestCRDOperations_CreatePerformer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := NewDefaultConfig()
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			ops := NewCRDOperations(fakeClient, config)
+			ops := NewCRDOperations(fakeClient, config, l)
 
 			ctx := context.Background()
 			resp, err := ops.CreatePerformer(ctx, tt.request)
@@ -180,10 +183,12 @@ func TestCRDOperations_CreatePerformer(t *testing.T) {
 }
 
 func TestCRDOperations_CreatePerformerWithResources(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	request := &CreatePerformerRequest{
 		Name:       "test-performer",
@@ -215,6 +220,7 @@ func TestCRDOperations_CreatePerformerWithResources(t *testing.T) {
 }
 
 func TestCRDOperations_GetPerformer(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 
@@ -239,7 +245,7 @@ func TestCRDOperations_GetPerformer(t *testing.T) {
 		WithObjects(testPerformer).
 		Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	ctx := context.Background()
 
@@ -259,6 +265,7 @@ func TestCRDOperations_GetPerformer(t *testing.T) {
 }
 
 func TestCRDOperations_UpdatePerformer(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 
@@ -284,7 +291,7 @@ func TestCRDOperations_UpdatePerformer(t *testing.T) {
 		WithObjects(testPerformer).
 		Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	ctx := context.Background()
 
@@ -346,6 +353,7 @@ func TestCRDOperations_UpdatePerformer(t *testing.T) {
 }
 
 func TestCRDOperations_DeletePerformer(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 
@@ -370,7 +378,7 @@ func TestCRDOperations_DeletePerformer(t *testing.T) {
 		WithObjects(testPerformer).
 		Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	ctx := context.Background()
 
@@ -388,6 +396,7 @@ func TestCRDOperations_DeletePerformer(t *testing.T) {
 }
 
 func TestCRDOperations_ListPerformers(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 
@@ -435,7 +444,7 @@ func TestCRDOperations_ListPerformers(t *testing.T) {
 		WithObjects(performer1, performer2).
 		Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	ctx := context.Background()
 
@@ -475,6 +484,7 @@ func TestCRDOperations_ListPerformers(t *testing.T) {
 }
 
 func TestCRDOperations_GetPerformerStatus(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := NewDefaultConfig()
 	scheme := createTestScheme()
 
@@ -504,7 +514,7 @@ func TestCRDOperations_GetPerformerStatus(t *testing.T) {
 		WithObjects(testPerformer).
 		Build()
 
-	ops := NewCRDOperations(fakeClient, config)
+	ops := NewCRDOperations(fakeClient, config, l)
 
 	ctx := context.Background()
 

@@ -109,7 +109,7 @@ func NewAvsKubernetesPerformer(
 	}
 
 	// Create CRD operations manager
-	crdOps := kubernetesManager.NewCRDOperations(clientWrapper.CRDClient, kubernetesConfig)
+	crdOps := kubernetesManager.NewCRDOperations(clientWrapper.CRDClient, kubernetesConfig, logger)
 
 	return &AvsKubernetesPerformer{
 		config:             config,
