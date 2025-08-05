@@ -178,7 +178,7 @@ persistence:
 kubectl create namespace my-avs-staging
 
 # Deploy to staging with modified values
-helm install my-avs-executor-staging ./charts/hourglass-executor \
+helm install my-avs-executor-staging ../../ponos/charts/hourglass \
   --namespace my-avs-staging \
   --values k8s-migration-values.yaml \
   --set executor.name=my-avs-executor-staging
@@ -321,7 +321,7 @@ persistence:
 
 ```bash
 # Deploy to production namespace
-helm install my-avs-executor ./charts/hourglass-executor \
+helm install my-avs-executor ../../ponos/charts/hourglass \
   --namespace my-avs-project \
   --values k8s-production-values.yaml
 
@@ -353,7 +353,7 @@ watch 'echo "=== Docker ===" && docker ps --filter label=hourglass && echo "=== 
 docker update --cpus="0.5" hourglass-executor
 
 # 2. Deploy Kubernetes with low resources
-helm install my-avs-executor ./charts/hourglass-executor \
+helm install my-avs-executor ../../ponos/charts/hourglass \
   --namespace my-avs-project \
   --values k8s-production-values.yaml \
   --set executor.resources.requests.cpu=500m \
