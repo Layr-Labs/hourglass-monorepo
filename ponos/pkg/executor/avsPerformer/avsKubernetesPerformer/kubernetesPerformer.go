@@ -27,7 +27,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -257,15 +256,16 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
-		Name:            performerID,
-		AVSAddress:      akp.config.AvsAddress,
-		Image:           fmt.Sprintf("%s:%s", image.Repository, image.Tag),
-		ImagePullPolicy: "Never", // Use local images only for testing
-		ImageTag:        image.Tag,
-		ImageDigest:     image.Digest,
-		GRPCPort:        defaultGRPCPort,
-		Environment:     envMap,
-		EnvironmentFrom: envVarSources,
+		Name:               performerID,
+		AVSAddress:         akp.config.AvsAddress,
+		Image:              fmt.Sprintf("%s:%s", image.Repository, image.Tag),
+		ImagePullPolicy:    "Never", // Use local images only for testing
+		ImageTag:           image.Tag,
+		ImageDigest:        image.Digest,
+		GRPCPort:           defaultGRPCPort,
+		Environment:        envMap,
+		EnvironmentFrom:    envVarSources,
+		ServiceAccountName: image.ServiceAccountName,
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},
 	}
@@ -304,35 +304,16 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		ConnectionTimeout: 15 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager(createResponse.Endpoint, true, retryConfig)
+	connectionManager := clients.NewConnectionManager(createResponse.Endpoint, true, retryConfig, akp.logger)
 
-	// Get initial connection to test connectivity (skip in test mode)
-	var conn *grpc.ClientConn
-	if akp.config == nil || !akp.config.SkipConnectionTest {
-		var err error
-		conn, err = connectionManager.GetConnection()
-		if err != nil {
-			// Clean up on failure
-			if cleanupErr := akp.kubernetesManager.DeletePerformer(ctx, performerID); cleanupErr != nil {
-				akp.logger.Error("Failed to clean up performer after connection failure",
-					zap.String("performerID", performerID),
-					zap.Error(cleanupErr),
-				)
-			}
-			return nil, fmt.Errorf("failed to establish gRPC connection: %w", err)
-		}
-	} else {
-		akp.logger.Info("Skipping gRPC connection test",
-			zap.String("performerID", performerID),
-			zap.String("endpoint", createResponse.Endpoint),
-		)
-	}
+	// Connection is now lazy - no need to test it here
+	akp.logger.Info("Created connection manager for performer",
+		zap.String("performerID", performerID),
+		zap.String("endpoint", createResponse.Endpoint),
+	)
 
-	// Create gRPC client using the connection (only if connection test was performed)
+	// Client will be created lazily when needed
 	var client performerV1.PerformerServiceClient
-	if conn != nil {
-		client = performerV1.NewPerformerServiceClient(conn)
-	}
 
 	performerResource := &PerformerResource{
 		performerID:       performerID,
@@ -361,6 +342,9 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 
 // waitForPerformerReady waits for the performer to be ready
 func (akp *AvsKubernetesPerformer) waitForPerformerReady(ctx context.Context, performerID string) error {
+	akp.logger.Sugar().Infow("Waiting for performer to be ready",
+		zap.String("performerID", performerID),
+	)
 	timeout := defaultRunningWaitTimeout
 	pollInterval := 5 * time.Second
 
@@ -384,14 +368,14 @@ func (akp *AvsKubernetesPerformer) waitForPerformerReady(ctx context.Context, pe
 				continue
 			}
 
-			akp.logger.Debug("Performer status check",
+			akp.logger.Sugar().Infow("Performer status check",
 				zap.String("performerID", performerID),
 				zap.String("phase", string(status.Phase)),
 				zap.Bool("ready", status.Ready),
 			)
 
 			if status.Ready {
-				akp.logger.Info("Performer is ready",
+				akp.logger.Sugar().Infow("Performer is ready",
 					zap.String("performerID", performerID),
 					zap.String("phase", string(status.Phase)),
 				)
@@ -418,32 +402,6 @@ func (akp *AvsKubernetesPerformer) monitorPerformerHealth(ctx context.Context, p
 
 // performApplicationHealthCheck checks the health of a performer
 func (akp *AvsKubernetesPerformer) performApplicationHealthCheck(ctx context.Context, performer *PerformerResource) {
-	// Skip health check if connection test is disabled (e.g., for testing)
-	if akp.config != nil && akp.config.SkipConnectionTest {
-		akp.logger.Debug("Skipping application health check",
-			zap.String("performerID", performer.performerID),
-			zap.String("reason", "SkipConnectionTest enabled"),
-		)
-		// Assume healthy when connection test is skipped
-		performer.performerHealth.ApplicationIsHealthy = true
-		performer.performerHealth.ConsecutiveApplicationHealthFailures = 0
-		performer.performerHealth.LastHealthCheck = time.Now()
-
-		// Send healthy status event (required for waitForHealthy to complete)
-		if performer.statusChan != nil {
-			select {
-			case performer.statusChan <- avsPerformer.PerformerStatusEvent{
-				Status:      avsPerformer.PerformerHealthy,
-				PerformerID: performer.performerID,
-				Message:     "Performer is healthy (connection test skipped)",
-				Timestamp:   time.Now(),
-			}:
-			default:
-			}
-		}
-		return
-	}
-
 	healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -716,21 +674,6 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	wg := akp.getOrCreateTaskWaitGroup(currentPerformer.performerID)
 	wg.Add(1)
 	defer wg.Done()
-
-	// Skip task execution if connection test is disabled (for testing)
-	if akp.config != nil && akp.config.SkipConnectionTest {
-		akp.logger.Debug("Skipping task execution",
-			zap.String("performerID", currentPerformer.performerID),
-			zap.String("taskID", task.TaskID),
-			zap.String("reason", "SkipConnectionTest enabled"),
-		)
-
-		// Return a mock successful result for testing
-		return &performerTask.PerformerTaskResult{
-			TaskID: task.TaskID,
-			Result: []byte("mock-result-for-testing"),
-		}, nil
-	}
 
 	// Get a healthy connection for task execution
 	conn, err := currentPerformer.connectionManager.GetConnection()

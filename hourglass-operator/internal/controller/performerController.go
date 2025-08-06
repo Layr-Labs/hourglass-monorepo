@@ -264,6 +264,11 @@ func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev
 		RestartPolicy:    corev1.RestartPolicyAlways,
 	}
 
+	// Set service account if specified
+	if performer.Spec.Config.ServiceAccountName != "" {
+		podSpec.ServiceAccountName = performer.Spec.Config.ServiceAccountName
+	}
+
 	// Apply scheduling constraints
 	if performer.Spec.Scheduling != nil {
 		podSpec.NodeSelector = performer.Spec.Scheduling.NodeSelector

@@ -72,7 +72,7 @@ func TestAvsKubernetesPerformer_PerformerResourceConnectionManager(t *testing.T)
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9090", true, retryConfig)
+	connectionManager := clients.NewConnectionManager("localhost:9090", true, retryConfig, logger)
 
 	// Create a test performer resource
 	performer := &PerformerResource{
@@ -122,7 +122,7 @@ func TestAvsKubernetesPerformer_HealthCheckWithRetry(t *testing.T) {
 		ConnectionTimeout: 1 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9999", true, retryConfig)
+	connectionManager := clients.NewConnectionManager("localhost:9999", true, retryConfig, logger)
 
 	performer := &PerformerResource{
 		performerID:       "test-performer-health",
@@ -175,7 +175,7 @@ func TestAvsKubernetesPerformer_TaskExecutionWithRetry(t *testing.T) {
 		ConnectionTimeout: 500 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9998", true, retryConfig)
+	connectionManager := clients.NewConnectionManager("localhost:9998", true, retryConfig, logger)
 
 	performer := &PerformerResource{
 		performerID:       "test-performer-task",
@@ -232,7 +232,7 @@ func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9997", true, retryConfig)
+	connectionManager := clients.NewConnectionManager("localhost:9997", true, retryConfig, logger)
 
 	performer := &PerformerResource{
 		performerID:       "test-performer-circuit",
@@ -304,7 +304,7 @@ func TestAvsKubernetesPerformer_ConnectionCleanup(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9996", true, retryConfig)
+	connectionManager := clients.NewConnectionManager("localhost:9996", true, retryConfig, logger)
 
 	performer := &PerformerResource{
 		performerID:       "test-performer-cleanup",

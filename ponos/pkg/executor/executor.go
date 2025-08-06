@@ -227,10 +227,19 @@ func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAd
 
 // createDockerPerformer creates a Docker-based AVS performer
 func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+	// Prepare the image 
+	image := avsPerformer.PerformerImage{}
+	if avs.Image != nil {
+		image.Repository = avs.Image.Repository
+		image.Tag = avs.Image.Tag
+	}
+	image.Envs = avs.Envs
+
 	return avsContainerPerformer.NewAvsContainerPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
+			Image:                image,
 			PerformerNetworkName: e.config.PerformerNetworkName,
 		},
 		e.peeringFetcher,
@@ -255,10 +264,24 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		KubeconfigPath:    e.config.Kubernetes.KubeConfigPath,
 	}
 
+	// Prepare the image with service account if configured
+	image := avsPerformer.PerformerImage{}
+	if avs.Image != nil {
+		image.Repository = avs.Image.Repository
+		image.Tag = avs.Image.Tag
+	}
+	image.Envs = avs.Envs
+	
+	// Set the service account name if provided in Kubernetes config
+	if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
+		image.ServiceAccountName = avs.Kubernetes.ServiceAccountName
+	}
+
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:         avsAddress,
 			ProcessType:        avsPerformer.AvsProcessType(avs.ProcessType),
+			Image:              image,
 			SkipConnectionTest: avs.SkipConnectionTest,
 		},
 		kubernetesConfig,

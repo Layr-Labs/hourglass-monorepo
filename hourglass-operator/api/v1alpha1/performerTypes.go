@@ -119,6 +119,9 @@ type PerformerConfig struct {
 
 	// Command overrides the default container entrypoint
 	Command []string `json:"command,omitempty"`
+
+	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // PerformerStatus defines the observed state of Performer

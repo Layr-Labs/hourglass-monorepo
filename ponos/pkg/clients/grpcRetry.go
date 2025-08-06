@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"go.uber.org/zap"
 	"math"
 	"strings"
 	"time"
@@ -40,7 +41,8 @@ func DefaultRetryConfig() *RetryConfig {
 	}
 }
 
-// GrpcClientWithRetry creates a gRPC client with retry logic
+// NewGrpcClientWithRetry creates a gRPC client without forcing connection
+// The actual connection will be established lazily on first use
 func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryConfig) (*grpc.ClientConn, error) {
 	if retryConfig == nil {
 		retryConfig = DefaultRetryConfig()
@@ -53,51 +55,60 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: false}))
 	}
 
+	// Add retry interceptor for unary calls
 	opts := []grpc.DialOption{
 		creds,
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(math.MaxInt32)),
+		grpc.WithUnaryInterceptor(retryUnaryInterceptor(retryConfig)),
 	}
 
-	var conn *grpc.ClientConn
-	var err error
+	// Simply create the lazy connection - don't test it
+	conn, err := grpc.NewClient(url, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
+	}
 
-	delay := retryConfig.InitialDelay
-	for attempt := 0; attempt <= retryConfig.MaxRetries; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), retryConfig.ConnectionTimeout)
+	return conn, nil
+}
 
-		conn, err = grpc.NewClient(url, opts...)
-		if err == nil {
-			// Wait for connection to be ready with timeout
-			waitCtx, waitCancel := context.WithTimeout(ctx, retryConfig.ConnectionTimeout)
-			if conn.WaitForStateChange(waitCtx, connectivity.Idle) {
-				if testConnection(conn) {
-					waitCancel()
-					cancel()
-					return conn, nil
-				}
+// retryUnaryInterceptor creates a unary interceptor that retries failed requests
+func retryUnaryInterceptor(config *RetryConfig) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		var err error
+		delay := config.InitialDelay
+		
+		for attempt := 0; attempt <= config.MaxRetries; attempt++ {
+			// Create a context with timeout for this attempt
+			attemptCtx, cancel := context.WithTimeout(ctx, config.ConnectionTimeout)
+			err = invoker(attemptCtx, method, req, reply, cc, opts...)
+			cancel()
+			
+			// If successful or non-retryable error, return immediately
+			if err == nil || !isRetryableError(err) {
+				return err
 			}
-			waitCancel()
-
-			// Connection failed test, close and retry
-			conn.Close()
-			err = fmt.Errorf("connection test failed")
+			
+			// Don't retry if we've hit max attempts
+			if attempt == config.MaxRetries {
+				break
+			}
+			
+			// Don't retry if the parent context is cancelled
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			
+			// Exponential backoff
+			time.Sleep(delay)
+			delay = time.Duration(float64(delay) * config.BackoffMultiplier)
+			if delay > config.MaxDelay {
+				delay = config.MaxDelay
+			}
 		}
-		cancel()
-
-		if attempt == retryConfig.MaxRetries {
-			break
-		}
-
-		// Exponential backoff with jitter
-		time.Sleep(delay)
-		delay = time.Duration(float64(delay) * retryConfig.BackoffMultiplier)
-		if delay > retryConfig.MaxDelay {
-			delay = retryConfig.MaxDelay
-		}
+		
+		return fmt.Errorf("request failed after %d attempts: %w", config.MaxRetries+1, err)
 	}
-
-	return nil, fmt.Errorf("failed to establish gRPC connection after %d attempts: %w", retryConfig.MaxRetries+1, err)
 }
 
 // testConnection tests if the gRPC connection is healthy
@@ -107,7 +118,9 @@ func testConnection(conn *grpc.ClientConn) bool {
 	}
 
 	state := conn.GetState()
-	return state == connectivity.Ready || state == connectivity.Idle
+	// Only consider Ready state as healthy for active connections
+	// Idle means the connection hasn't been established yet
+	return state == connectivity.Ready
 }
 
 // ConnectionManager manages gRPC connections with retry and health monitoring
@@ -118,10 +131,11 @@ type ConnectionManager struct {
 	conn           *grpc.ClientConn
 	lastHealthy    time.Time
 	unhealthyCount int
+	logger         *zap.Logger
 }
 
 // NewConnectionManager creates a new connection manager
-func NewConnectionManager(url string, insecureConn bool, retryConfig *RetryConfig) *ConnectionManager {
+func NewConnectionManager(url string, insecureConn bool, retryConfig *RetryConfig, l *zap.Logger) *ConnectionManager {
 	if retryConfig == nil {
 		retryConfig = DefaultRetryConfig()
 	}
@@ -131,12 +145,17 @@ func NewConnectionManager(url string, insecureConn bool, retryConfig *RetryConfi
 		insecureConn: insecureConn,
 		retryConfig:  retryConfig,
 		lastHealthy:  time.Now(),
+		logger:       l,
 	}
 }
 
 // GetConnection returns a healthy connection, creating or reconnecting if necessary
 func (cm *ConnectionManager) GetConnection() (*grpc.ClientConn, error) {
 	if cm.conn != nil && cm.isConnectionHealthy() {
+		cm.logger.Sugar().Infow("Connection is healthy",
+			zap.String("url", cm.url),
+			zap.String("state", cm.conn.GetState().String()),
+		)
 		return cm.conn, nil
 	}
 
@@ -145,6 +164,10 @@ func (cm *ConnectionManager) GetConnection() (*grpc.ClientConn, error) {
 		cm.conn.Close()
 	}
 
+	cm.logger.Sugar().Infow("Creating new gRPC connection",
+		zap.String("url", cm.url),
+		zap.Bool("insecureConn", cm.insecureConn),
+	)
 	conn, err := NewGrpcClientWithRetry(cm.url, cm.insecureConn, cm.retryConfig)
 	if err != nil {
 		cm.unhealthyCount++
@@ -164,6 +187,8 @@ func (cm *ConnectionManager) isConnectionHealthy() bool {
 	}
 
 	state := cm.conn.GetState()
+	// Consider Ready or Idle as acceptable states
+	// Idle is fine for lazy connections that will connect on first use
 	isHealthy := state == connectivity.Ready || state == connectivity.Idle
 
 	if isHealthy {

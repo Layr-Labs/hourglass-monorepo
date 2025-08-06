@@ -77,6 +77,9 @@ type PerformerConfig struct {
 
 	// Command overrides the default container entrypoint
 	Command []string `json:"command,omitempty"`
+
+	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // PerformerStatusCRD defines the observed state of Performer (from CRD)
@@ -168,6 +171,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 		out.Config.Command = make([]string, len(ps.Config.Command))
 		copy(out.Config.Command, ps.Config.Command)
 	}
+	out.Config.ServiceAccountName = ps.Config.ServiceAccountName
 
 	// Deep copy Resources
 	ps.Resources.DeepCopyInto(&out.Resources)
@@ -339,9 +343,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			ImagePullPolicy: corev1.PullPolicy(req.ImagePullPolicy),
 			Version:         req.ImageTag,
 			Config: PerformerConfig{
-				GRPCPort:        req.GRPCPort,
-				Environment:     req.Environment,
-				EnvironmentFrom: req.EnvironmentFrom,
+				GRPCPort:           req.GRPCPort,
+				Environment:        req.Environment,
+				EnvironmentFrom:    req.EnvironmentFrom,
+				ServiceAccountName: req.ServiceAccountName,
 			},
 		},
 	}
@@ -374,6 +379,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 
 	// Generate the expected service endpoint
 	endpoint := fmt.Sprintf("performer-%s.%s.svc.cluster.local:%d", req.Name, c.namespace, req.GRPCPort)
+	c.logger.Sugar().Infow("Generated expected gRPC endpoint",
+		zap.String("endpoint", endpoint),
+		zap.String("performerName", req.Name),
+	)
 
 	return &CreatePerformerResponse{
 		PerformerID: req.Name,

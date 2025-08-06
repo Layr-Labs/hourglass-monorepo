@@ -2,6 +2,7 @@ package clients
 
 import (
 	"errors"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"testing"
 	"time"
 
@@ -97,6 +98,7 @@ func TestNewGrpcClientWithRetry_NilConfig(t *testing.T) {
 }
 
 func TestConnectionManager_NewConnectionManager(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := &RetryConfig{
 		MaxRetries:        3,
 		InitialDelay:      100 * time.Millisecond,
@@ -105,7 +107,7 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	cm := NewConnectionManager("localhost:8080", true, config)
+	cm := NewConnectionManager("localhost:8080", true, config, l)
 
 	if cm.url != "localhost:8080" {
 		t.Errorf("Expected URL to be 'localhost:8080', got %s", cm.url)
@@ -122,7 +124,8 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 }
 
 func TestConnectionManager_NewConnectionManager_NilConfig(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	if cm.retryConfig == nil {
 		t.Error("Expected retryConfig to be set to default, got nil")
@@ -141,7 +144,8 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	cm := NewConnectionManager("localhost:0", true, config)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:0", true, config, l)
 
 	_, err := cm.GetConnection()
 	if err == nil {
@@ -154,7 +158,8 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 }
 
 func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test with nil connection
 	if cm.isConnectionHealthy() {
@@ -168,7 +173,8 @@ func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
 }
 
 func TestConnectionManager_IsCircuitOpen(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Initially circuit should be closed
 	if cm.IsCircuitOpen() {
@@ -191,7 +197,8 @@ func TestConnectionManager_IsCircuitOpen(t *testing.T) {
 }
 
 func TestConnectionManager_GetConnectionStats(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	stats := cm.GetConnectionStats()
 
@@ -210,7 +217,8 @@ func TestConnectionManager_GetConnectionStats(t *testing.T) {
 }
 
 func TestConnectionManager_Close(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test closing without connection
 	err := cm.Close()
@@ -303,16 +311,18 @@ func containsHelper(str, substr string) bool {
 
 // Benchmark tests
 func BenchmarkNewConnectionManager(b *testing.B) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := DefaultRetryConfig()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = NewConnectionManager("localhost:8080", true, config)
+		_ = NewConnectionManager("localhost:8080", true, config, l)
 	}
 }
 
 func BenchmarkIsCircuitOpen(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	cm.unhealthyCount = 3
 	b.ResetTimer()
 
@@ -322,7 +332,8 @@ func BenchmarkIsCircuitOpen(b *testing.B) {
 }
 
 func BenchmarkGetConnectionStats(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

@@ -139,13 +139,20 @@ type PerformerImage struct {
 	Tag        string
 }
 
+// AvsPerformerKubernetesConfig contains Kubernetes-specific configuration for an AVS performer
+type AvsPerformerKubernetesConfig struct {
+	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+	ServiceAccountName string `json:"serviceAccountName,omitempty" yaml:"serviceAccountName,omitempty"`
+}
+
 type AvsPerformerConfig struct {
 	Image              *PerformerImage
 	ProcessType        string
 	AvsAddress         string
 	Envs               []config.AVSPerformerEnv
-	DeploymentMode     DeploymentMode `json:"deploymentMode" yaml:"deploymentMode"`
-	SkipConnectionTest bool           `json:"skipConnectionTest" yaml:"skipConnectionTest"`
+	DeploymentMode     DeploymentMode                 `json:"deploymentMode" yaml:"deploymentMode"`
+	SkipConnectionTest bool                           `json:"skipConnectionTest" yaml:"skipConnectionTest"` // Deprecated: Connection tests are no longer performed on initialization
+	Kubernetes         *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 }
 
 func (ap *AvsPerformerConfig) Validate() error {
@@ -173,6 +180,12 @@ func (ap *AvsPerformerConfig) Validate() error {
 		ap.DeploymentMode = DeploymentModeDocker
 	} else if !slices.Contains([]DeploymentMode{DeploymentModeDocker, DeploymentModeKubernetes}, ap.DeploymentMode) {
 		allErrors = append(allErrors, field.Invalid(field.NewPath("deploymentMode"), ap.DeploymentMode, "deploymentMode must be one of [docker, kubernetes]"))
+	}
+
+	// Validate Kubernetes config if in Kubernetes mode
+	if ap.DeploymentMode == DeploymentModeKubernetes && ap.Kubernetes != nil {
+		// ServiceAccountName is optional, so no validation needed for now
+		// Add any future Kubernetes-specific validations here
 	}
 
 	if len(allErrors) > 0 {

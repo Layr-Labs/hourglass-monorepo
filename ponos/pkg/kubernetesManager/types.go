@@ -100,6 +100,9 @@ type CreatePerformerRequest struct {
 
 	// HardwareRequirements specifies specialized hardware needs
 	HardwareRequirements *HardwareRequirementsConfig
+
+	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+	ServiceAccountName string
 }
 
 // CreatePerformerResponse contains the result of creating a performer
