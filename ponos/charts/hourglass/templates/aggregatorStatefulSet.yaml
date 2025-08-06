@@ -43,7 +43,7 @@ spec:
         {{- end }}
           volumeMounts:
           - name: aggregator-config
-            mountPath: /etc/config
+            mountPath: /etc/secrets/hourglass
             readOnly: true
       volumes:
       - name: aggregator-config

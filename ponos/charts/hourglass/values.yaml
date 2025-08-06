@@ -11,7 +11,7 @@ aggregator:
     - aggregator
     - run
     - --config
-    - /etc/config/config.yaml
+    - /etc/secrets/hourglass/config.yaml
   env: []
   #  - name: SOME_ENV
   #    value: "some-value"
@@ -47,7 +47,7 @@ executor:
     - executor
     - run
     - --config
-    - /etc/config/config.yaml
+    - /etc/secrets/hourglass/config.yaml
   env: []
   #  - name: SOME_ENV
   #    value: "some-value"

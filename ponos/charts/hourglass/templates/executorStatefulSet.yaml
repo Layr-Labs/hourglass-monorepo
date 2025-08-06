@@ -41,7 +41,7 @@ spec:
         {{- end }}
           volumeMounts:
           - name: executor-config
-            mountPath: /etc/config
+            mountPath: /etc/secrets/hourglass
             readOnly: true
       volumes:
       - name: executor-config
