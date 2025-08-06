@@ -196,6 +196,25 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 	return fmt.Sprintf("performer-%s-%s", containerManager.HashAvsAddress(akp.config.AvsAddress), shortUUID)
 }
 
+// buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
+func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) map[string]string {
+	envMap := make(map[string]string)
+
+	// Add default environment variables
+	envMap["AVS_ADDRESS"] = akp.config.AvsAddress
+	envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+
+	// Process environment variables from image.Envs
+	for _, env := range image.Envs {
+		if len(env.Value) == 0 && len(env.ValueFromEnv) == 0 {
+			continue
+		}
+		envMap[env.Name] = env.Value
+	}
+
+	return envMap
+}
+
 // createPerformerResource creates a new Kubernetes performer resource
 func (akp *AvsKubernetesPerformer) createPerformerResource(
 	ctx context.Context,
@@ -212,10 +231,7 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		ImageTag:        image.Tag,
 		ImageDigest:     image.Digest,
 		GRPCPort:        defaultGRPCPort,
-		Environment: map[string]string{
-			"AVS_ADDRESS": akp.config.AvsAddress,
-			"GRPC_PORT":   fmt.Sprintf("%d", defaultGRPCPort),
-		},
+		Environment:     akp.buildEnvironmentFromImage(image),
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},
 	}
