@@ -73,7 +73,7 @@ executor:
       operatorNamespace: "default"
       crdGroup: "hourglass.eigenlayer.io"
       crdVersion: "v1alpha1"
-      connectionTimeout: 30
+      connectionTimeout: 30s
       inCluster: true
       
     
