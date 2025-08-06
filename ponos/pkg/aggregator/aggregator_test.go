@@ -771,7 +771,7 @@ kubernetes:
   operatorNamespace: "hourglass-system"
   crdGroup: "hourglass.eigenlayer.io"
   crdVersion: "v1alpha1"
-  connectionTimeout: 30000000000
+  connectionTimeout: 30s
   inCluster: false
   kubeConfigPath: "/tmp/kind-kubeconfig"
 avsPerformers:

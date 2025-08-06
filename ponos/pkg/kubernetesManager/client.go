@@ -3,8 +3,10 @@ package kubernetesManager
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"os"
 	"path/filepath"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,10 +32,12 @@ type ClientWrapper struct {
 
 	// Config is the kubernetesManager configuration
 	Config *Config
+
+	logger *zap.Logger
 }
 
 // NewClientWrapper creates a new Kubernetes client wrapper
-func NewClientWrapper(cfg *Config) (*ClientWrapper, error) {
+func NewClientWrapper(cfg *Config, l *zap.Logger) (*ClientWrapper, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
@@ -52,6 +56,10 @@ func NewClientWrapper(cfg *Config) (*ClientWrapper, error) {
 
 	// Set timeout
 	restConfig.Timeout = cfg.ConnectionTimeout
+	if restConfig.Timeout == 0 {
+		l.Sugar().Warn("Connection timeout not set, using default of 30 seconds")
+		restConfig.Timeout = 30 * time.Second // Default to 30 seconds if not set
+	}
 
 	// Create Kubernetes clientset
 	kubernetesClient, err := kubernetes.NewForConfig(restConfig)
@@ -79,6 +87,7 @@ func NewClientWrapper(cfg *Config) (*ClientWrapper, error) {
 		CRDClient:  crdClient,
 		RestConfig: restConfig,
 		Config:     cfg,
+		logger:     l,
 	}, nil
 }
 

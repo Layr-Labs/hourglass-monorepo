@@ -1,0 +1,52 @@
+---
+{{- if .Values.aggregator.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aggregator.name" . }}
+  labels:
+    {{- include "aggregator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.aggregator.replicas }}
+  selector:
+    matchLabels:
+      {{- include "aggregator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aggregator.metadataLabels" . | nindent 8 }}
+    spec:
+    {{- if .Values.aggregator.serviceAccount }}
+      serviceAccountName: {{ .Values.aggregator.serviceAccount.name }}
+    {{- end }}
+      containers:
+        - name: {{ include "aggregator.name" . }}
+          image: "{{ .Values.hourglass.image.repository }}:{{ .Values.hourglass.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.hourglass.image.pullPolicy }}
+          command: {{ .Values.aggregator.command | toJson }}
+          args: {{ .Values.aggregator.args | toJson}}
+        {{- if .Values.aggregator.ports }}
+          ports:
+          {{- range $k, $v := .Values.aggregator.ports }}
+            - name: {{ $v.name }}
+              containerPort: {{ $v.targetPort }}
+              protocol: {{ $v.protocol }}
+          {{- end -}}
+        {{- end }}
+        {{- if .Values.aggregator.resources }}
+          resources:
+            {{- toYaml .Values.aggregator.resources | nindent 12 }}
+        {{- end }}
+        {{ if .Values.aggregator.env }}
+          env:
+            {{- toYaml .Values.aggregator.env | nindent 12 }}
+        {{- end }}
+          volumeMounts:
+          - name: aggregator-config
+            mountPath: /etc/config
+            readOnly: true
+      volumes:
+      - name: aggregator-config
+        secret:
+          secretName: {{ include "aggregator.configSecretName" .}}
+{{- end}}

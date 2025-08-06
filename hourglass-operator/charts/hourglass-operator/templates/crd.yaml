@@ -114,6 +114,15 @@ spec:
               image:
                 description: Image is the AVS performer container image
                 type: string
+              imagePullPolicy:
+                default: IfNotPresent
+                description: ImagePullPolicy defines the pull policy for the container
+                  image
+                enum:
+                - Always
+                - Never
+                - IfNotPresent
+                type: string
               imagePullSecrets:
                 description: ImagePullSecrets for private container registries
                 items:

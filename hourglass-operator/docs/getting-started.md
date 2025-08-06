@@ -183,9 +183,9 @@ persistence:
 ### Using Helm
 
 ```bash
-# Install your executor using the local chart
-cd hourglass-monorepo/hourglass-operator
-helm install my-avs-executor ./charts/hourglass-executor \
+# Install your executor using the official Hourglass chart
+cd hourglass-monorepo
+helm install my-avs-executor ./ponos/charts/hourglass \
   --namespace my-avs-project \
   --values my-avs-values.yaml
 ```
@@ -430,5 +430,5 @@ avs:
 
 For detailed configuration options, see:
 - [API Reference](./operator/api-reference.md)
-- [Helm Chart Values](../charts/hourglass-executor/values.yaml)
+- [Helm Chart Values](../../ponos/charts/hourglass/values.yaml)
 - [Example Configurations](../templates/examples/)

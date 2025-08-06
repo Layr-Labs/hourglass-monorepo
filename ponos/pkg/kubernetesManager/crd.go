@@ -3,6 +3,7 @@ package kubernetesManager
 import (
 	"context"
 	"fmt"
+	"go.uber.org/zap"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
@@ -136,12 +137,40 @@ func (p *PerformerCRD) DeepCopyInto(out *PerformerCRD) {
 // DeepCopyInto for PerformerSpec
 func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 	*out = *ps
+	// Copy all basic fields explicitly
+	out.AVSAddress = ps.AVSAddress
+	out.Image = ps.Image
+	out.ImagePullPolicy = ps.ImagePullPolicy
+	out.Version = ps.Version
+
+	// Deep copy Config
+	out.Config = ps.Config
+	if ps.Config.Environment != nil {
+		out.Config.Environment = make(map[string]string, len(ps.Config.Environment))
+		for k, v := range ps.Config.Environment {
+			out.Config.Environment[k] = v
+		}
+	}
+	if ps.Config.Args != nil {
+		out.Config.Args = make([]string, len(ps.Config.Args))
+		copy(out.Config.Args, ps.Config.Args)
+	}
+	if ps.Config.Command != nil {
+		out.Config.Command = make([]string, len(ps.Config.Command))
+		copy(out.Config.Command, ps.Config.Command)
+	}
+
+	// Deep copy Resources
 	ps.Resources.DeepCopyInto(&out.Resources)
+
+	// Deep copy Scheduling
 	if ps.Scheduling != nil {
 		in, out := ps.Scheduling, &out.Scheduling
 		*out = new(SchedulingConfig)
 		(*in).DeepCopyInto(*out)
 	}
+
+	// Deep copy HardwareRequirements
 	if ps.HardwareRequirements != nil {
 		in, out := ps.HardwareRequirements, &out.HardwareRequirements
 		*out = new(HardwareRequirementsConfig)
@@ -156,6 +185,8 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 			}
 		}
 	}
+
+	// Deep copy ImagePullSecrets
 	if ps.ImagePullSecrets != nil {
 		in, out := &ps.ImagePullSecrets, &out.ImagePullSecrets
 		*out = make([]corev1.LocalObjectReference, len(*in))
@@ -234,14 +265,16 @@ type CRDOperations struct {
 	client    client.Client
 	namespace string
 	config    *Config
+	logger    *zap.Logger
 }
 
 // NewCRDOperations creates a new CRD operations instance
-func NewCRDOperations(client client.Client, config *Config) *CRDOperations {
+func NewCRDOperations(client client.Client, config *Config, l *zap.Logger) *CRDOperations {
 	return &CRDOperations{
 		client:    client,
 		namespace: config.Namespace,
 		config:    config,
+		logger:    l,
 	}
 }
 
@@ -291,6 +324,12 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 	if req.HardwareRequirements != nil {
 		performer.Spec.HardwareRequirements = req.HardwareRequirements
 	}
+
+	c.logger.Sugar().Infow("Creating Performer CRD",
+		zap.Any("performer", performer),
+		zap.String("imagePullPolicy", string(performer.Spec.ImagePullPolicy)),
+		zap.String("requestImagePullPolicy", req.ImagePullPolicy),
+	)
 
 	err := c.client.Create(ctx, performer)
 	if err != nil {

@@ -2,6 +2,7 @@ package kubernetesManager
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,8 @@ import (
 )
 
 func TestNewClientWrapper(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+
 	tests := []struct {
 		name        string
 		config      *Config
@@ -40,7 +43,7 @@ func TestNewClientWrapper(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, err := NewClientWrapper(tt.config)
+			client, err := NewClientWrapper(tt.config, l)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -59,10 +62,12 @@ func TestNewClientWrapper_WithValidConfig(t *testing.T) {
 	// This test would require either in-cluster config or a valid kubeconfig file
 	t.Skip("Skipping Kubernetes client test - requires valid Kubernetes environment")
 
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+
 	config := NewDefaultConfig()
 	config.Namespace = "test-namespace"
 
-	client, err := NewClientWrapper(config)
+	client, err := NewClientWrapper(config, l)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, client)
@@ -148,9 +153,10 @@ func TestGetDefaultKubeconfigPath(t *testing.T) {
 func TestClientWrapper_TestConnection(t *testing.T) {
 	// Skip this test if we don't have a valid Kubernetes environment
 	t.Skip("Skipping Kubernetes connection test - requires valid Kubernetes environment")
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 
 	config := NewDefaultConfig()
-	client, err := NewClientWrapper(config)
+	client, err := NewClientWrapper(config, l)
 	require.NoError(t, err)
 
 	ctx := context.Background()

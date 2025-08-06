@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performer/worker"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"go.uber.org/zap"
 	"time"
 )
@@ -58,6 +59,7 @@ func NewPonosPerformerWithRpcServer(
 
 func (pp *PonosPerformer) registerHandlers() {
 	performerV1.RegisterPerformerServiceServer(pp.rpcServer.GetGrpcServer(), pp)
+	healthV1.RegisterHealthServer(pp.rpcServer.GetGrpcServer(), pp)
 }
 
 func (pp *PonosPerformer) Start(ctx context.Context) error {

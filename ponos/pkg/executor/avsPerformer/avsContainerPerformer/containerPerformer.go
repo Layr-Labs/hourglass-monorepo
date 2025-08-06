@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"github.com/ethereum/go-ethereum/crypto"
 	"os"
 	"strings"
@@ -41,7 +42,7 @@ const (
 type PerformerContainer struct {
 	performerID     string
 	info            *containerManager.ContainerInfo
-	client          performerV1.PerformerServiceClient
+	client          *avsPerformerClient.PerformerClient
 	eventChan       <-chan containerManager.ContainerEvent
 	performerHealth *avsPerformer.PerformerHealth
 	statusChan      chan avsPerformer.PerformerStatusEvent
@@ -591,7 +592,7 @@ func (aps *AvsContainerPerformer) checkApplicationHealth(ctx context.Context, co
 	healthCtx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	res, err := container.client.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
+	res, err := container.client.HealthClient.Check(healthCtx, &healthV1.HealthCheckRequest{})
 	if err != nil {
 		return err
 	}
@@ -917,7 +918,7 @@ func (aps *AvsContainerPerformer) RunTask(ctx context.Context, task *performerTa
 	defer wg.Done()
 
 	// Execute the task
-	res, err := currentContainer.client.ExecuteTask(ctx, &performerV1.TaskRequest{
+	res, err := currentContainer.client.PerformerClient.ExecuteTask(ctx, &performerV1.TaskRequest{
 		TaskId:  []byte(task.TaskID),
 		Payload: task.Payload,
 	})

@@ -44,10 +44,14 @@ help: ## Display this help.
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	@# Remove empty CRD file if it exists
+	@rm -f config/crd/bases/_.yaml
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	@# Clean up any empty generated files
+	@find . -name "zz_generated.*.go" -size 0 -delete 2>/dev/null || true
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.

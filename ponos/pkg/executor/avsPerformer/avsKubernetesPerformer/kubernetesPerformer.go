@@ -3,6 +3,8 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,7 +97,7 @@ func NewAvsKubernetesPerformer(
 	}
 
 	// Initialize Kubernetes client
-	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig)
+	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
@@ -109,7 +111,7 @@ func NewAvsKubernetesPerformer(
 	}
 
 	// Create CRD operations manager
-	crdOps := kubernetesManager.NewCRDOperations(clientWrapper.CRDClient, kubernetesConfig)
+	crdOps := kubernetesManager.NewCRDOperations(clientWrapper.CRDClient, kubernetesConfig, logger)
 
 	return &AvsKubernetesPerformer{
 		config:             config,
@@ -419,9 +421,18 @@ func (akp *AvsKubernetesPerformer) performApplicationHealthCheck(ctx context.Con
 	}
 
 	// Create a new client with the healthy connection
-	client := performerV1.NewPerformerServiceClient(conn)
+	client, err := avsPerformerClient.NewAvsPerformerClientWithConn(conn)
+	if err != nil {
+		akp.logger.Warn("Failed to create performer client for health check",
+			zap.String("performerID", performer.performerID),
+			zap.Error(err),
+		)
+		performer.performerHealth.ApplicationIsHealthy = false
+		performer.performerHealth.ConsecutiveApplicationHealthFailures++
+		return
+	}
 
-	_, err = client.HealthCheck(healthCtx, &performerV1.HealthCheckRequest{})
+	_, err = client.HealthClient.Check(healthCtx, &healthV1.HealthCheckRequest{})
 	performer.lastHealthCheck = time.Now()
 	performer.performerHealth.LastHealthCheck = time.Now()
 
