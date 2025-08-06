@@ -2,6 +2,7 @@ package executorConfig
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"time"
 
@@ -49,6 +50,41 @@ type KubernetesConfig struct {
 
 	// InCluster indicates whether the executor is running inside a Kubernetes cluster
 	InCluster bool `json:"inCluster" yaml:"inCluster"`
+}
+
+func (k *KubernetesConfig) UnmarshalJSON(data []byte) error {
+	// Create an alias to avoid infinite recursion
+	type Alias KubernetesConfig
+
+	// Create a temporary struct with string for the duration field
+	aux := &struct {
+		ConnectionTimeout interface{} `json:"connectionTimeout"`
+		*Alias
+	}{
+		Alias: (*Alias)(k),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Handle the ConnectionTimeout field specially
+	if aux.ConnectionTimeout != nil {
+		switch v := aux.ConnectionTimeout.(type) {
+		case string:
+			duration, err := time.ParseDuration(v)
+			if err != nil {
+				return fmt.Errorf("invalid duration format for connectionTimeout: %w", err)
+			}
+			k.ConnectionTimeout = duration
+		case float64:
+			k.ConnectionTimeout = time.Duration(v)
+		default:
+			return fmt.Errorf("connectionTimeout must be a string (e.g., '30s') or number")
+		}
+	}
+
+	return nil
 }
 
 // Validate validates the KubernetesConfig
