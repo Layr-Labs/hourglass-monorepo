@@ -2,6 +2,7 @@ package avsKubernetesPerformer
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"sync"
 	"testing"
 	"time"
@@ -62,6 +63,7 @@ func TestAvsKubernetesPerformer_ConnectionRetryIntegration(t *testing.T) {
 
 func TestAvsKubernetesPerformer_PerformerResourceConnectionManager(t *testing.T) {
 	// Test that PerformerResource properly integrates with ConnectionManager
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 
 	// Create a mock connection manager
 	retryConfig := &clients.RetryConfig{
@@ -72,7 +74,7 @@ func TestAvsKubernetesPerformer_PerformerResourceConnectionManager(t *testing.T)
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9090", true, retryConfig, logger)
+	connectionManager := clients.NewConnectionManager("localhost:9090", true, retryConfig, l)
 
 	// Create a test performer resource
 	performer := &PerformerResource{
@@ -215,7 +217,10 @@ func TestAvsKubernetesPerformer_TaskExecutionWithRetry(t *testing.T) {
 	}
 
 	// Verify error contains connection information
-	if err != nil && !contains(err.Error(), "failed to get healthy connection") {
+	// The error could be either from ConnectionManager or from the retry interceptor
+	if err != nil && !contains(err.Error(), "failed to get healthy connection") && 
+		!contains(err.Error(), "request failed after") && 
+		!contains(err.Error(), "connection refused") {
 		t.Errorf("Expected connection error, got: %v", err)
 	}
 }
@@ -279,7 +284,10 @@ func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 	}
 
 	// Verify error contains connection failure information
-	if err != nil && !contains(err.Error(), "failed to get healthy connection") {
+	// The error could be either from ConnectionManager or from the retry interceptor
+	if err != nil && !contains(err.Error(), "failed to get healthy connection") && 
+		!contains(err.Error(), "request failed after") && 
+		!contains(err.Error(), "connection refused") {
 		t.Errorf("Expected connection failure error, got: %v", err)
 	}
 
