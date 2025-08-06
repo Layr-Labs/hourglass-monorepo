@@ -197,8 +197,9 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 }
 
 // buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
-func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) map[string]string {
+func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) (map[string]string, []kubernetesManager.EnvVarSource) {
 	envMap := make(map[string]string)
+	var envVarSources []kubernetesManager.EnvVarSource
 
 	// Add default environment variables
 	envMap["AVS_ADDRESS"] = akp.config.AvsAddress
@@ -206,13 +207,42 @@ func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.
 
 	// Process environment variables from image.Envs
 	for _, env := range image.Envs {
-		if len(env.Value) == 0 && len(env.ValueFromEnv) == 0 {
+		// Skip if no value source is specified
+		if env.Value == "" && env.ValueFromEnv == "" && env.KubernetesEnv == nil {
 			continue
 		}
-		envMap[env.Name] = env.Value
+
+		// Handle KubernetesEnv (references to secrets/configmaps)
+		if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
+			envVarSource := kubernetesManager.EnvVarSource{
+				Name: env.Name,
+				ValueFrom: &kubernetesManager.EnvValueFrom{
+					SecretKeyRef: &kubernetesManager.KeySelector{
+						Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
+						Key:  env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
+					},
+				},
+			}
+			envVarSources = append(envVarSources, envVarSource)
+		} else if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
+			envVarSource := kubernetesManager.EnvVarSource{
+				Name: env.Name,
+				ValueFrom: &kubernetesManager.EnvValueFrom{
+					ConfigMapKeyRef: &kubernetesManager.KeySelector{
+						Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
+						Key:  env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
+					},
+				},
+			}
+			envVarSources = append(envVarSources, envVarSource)
+		} else if env.Value != "" {
+			// Handle direct value
+			envMap[env.Name] = env.Value
+		}
+		// Note: Ignoring ValueFromEnv for now as requested
 	}
 
-	return envMap
+	return envMap, envVarSources
 }
 
 // createPerformerResource creates a new Kubernetes performer resource
@@ -221,6 +251,9 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 	image avsPerformer.PerformerImage,
 ) (*PerformerResource, error) {
 	performerID := akp.generatePerformerID()
+
+	// Build environment variables and sources
+	envMap, envVarSources := akp.buildEnvironmentFromImage(image)
 
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
@@ -231,7 +264,8 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		ImageTag:        image.Tag,
 		ImageDigest:     image.Digest,
 		GRPCPort:        defaultGRPCPort,
-		Environment:     akp.buildEnvironmentFromImage(image),
+		Environment:     envMap,
+		EnvironmentFrom: envVarSources,
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},
 	}

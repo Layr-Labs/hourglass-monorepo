@@ -30,6 +30,8 @@ aggregator:
     limits:
       memory: 1048Mi
       cpu: .8
+  additionalVolumes: []
+  additionalVolumeMounts: []
 executor:
   nameOverride: ""
   enabled: false
@@ -73,3 +75,5 @@ executor:
     limits:
       memory: 1048Mi
       cpu: .8
+  additionalVolumes: [ ]
+  additionalVolumeMounts: [ ]

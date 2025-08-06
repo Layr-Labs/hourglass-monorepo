@@ -36,6 +36,33 @@ type Config struct {
 	RetryBackoff time.Duration `json:"retryBackoff" yaml:"retryBackoff"`
 }
 
+// EnvVarSource represents a source for the value of an environment variable
+type EnvVarSource struct {
+	// Name of the environment variable
+	Name string `json:"name"`
+
+	// ValueFrom specifies the source of the environment variable value
+	ValueFrom *EnvValueFrom `json:"valueFrom,omitempty"`
+}
+
+// EnvValueFrom describes a source for the value of an environment variable
+type EnvValueFrom struct {
+	// SecretKeyRef selects a key of a secret in the pod's namespace
+	SecretKeyRef *KeySelector `json:"secretKeyRef,omitempty"`
+
+	// ConfigMapKeyRef selects a key of a config map in the pod's namespace
+	ConfigMapKeyRef *KeySelector `json:"configMapKeyRef,omitempty"`
+}
+
+// KeySelector selects a key from a ConfigMap or Secret
+type KeySelector struct {
+	// Name of the referent
+	Name string `json:"name"`
+
+	// Key in the referent to select from
+	Key string `json:"key"`
+}
+
 // CreatePerformerRequest contains the parameters for creating a new performer
 type CreatePerformerRequest struct {
 	// Name is the unique name for this performer
@@ -61,6 +88,9 @@ type CreatePerformerRequest struct {
 
 	// Environment variables for the performer container
 	Environment map[string]string
+
+	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
+	EnvironmentFrom []EnvVarSource
 
 	// Resources specifies the compute resources for the performer
 	Resources *ResourceRequirements

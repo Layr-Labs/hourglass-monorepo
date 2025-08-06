@@ -204,6 +204,25 @@ func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev
 		}
 	}
 
+	// Set environment variables from references (secrets/configmaps)
+	if performer.Spec.Config.EnvironmentFrom != nil {
+		for _, envSource := range performer.Spec.Config.EnvironmentFrom {
+			envVar := corev1.EnvVar{
+				Name: envSource.Name,
+			}
+			if envSource.ValueFrom != nil {
+				envVar.ValueFrom = &corev1.EnvVarSource{}
+				if envSource.ValueFrom.SecretKeyRef != nil {
+					envVar.ValueFrom.SecretKeyRef = envSource.ValueFrom.SecretKeyRef
+				}
+				if envSource.ValueFrom.ConfigMapKeyRef != nil {
+					envVar.ValueFrom.ConfigMapKeyRef = envSource.ValueFrom.ConfigMapKeyRef
+				}
+			}
+			container.Env = append(container.Env, envVar)
+		}
+	}
+
 	// Set resources
 	container.Resources = performer.Spec.Resources
 

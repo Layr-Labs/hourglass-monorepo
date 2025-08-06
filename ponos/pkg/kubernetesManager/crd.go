@@ -69,6 +69,9 @@ type PerformerConfig struct {
 	// Environment variables for the performer container
 	Environment map[string]string `json:"environment,omitempty"`
 
+	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
+	EnvironmentFrom []EnvVarSource `json:"environmentFrom,omitempty"`
+
 	// Args are additional command line arguments for the performer
 	Args []string `json:"args,omitempty"`
 
@@ -151,6 +154,12 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 			out.Config.Environment[k] = v
 		}
 	}
+	if ps.Config.EnvironmentFrom != nil {
+		out.Config.EnvironmentFrom = make([]EnvVarSource, len(ps.Config.EnvironmentFrom))
+		for i := range ps.Config.EnvironmentFrom {
+			ps.Config.EnvironmentFrom[i].DeepCopyInto(&out.Config.EnvironmentFrom[i])
+		}
+	}
 	if ps.Config.Args != nil {
 		out.Config.Args = make([]string, len(ps.Config.Args))
 		copy(out.Config.Args, ps.Config.Args)
@@ -191,6 +200,32 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 		in, out := &ps.ImagePullSecrets, &out.ImagePullSecrets
 		*out = make([]corev1.LocalObjectReference, len(*in))
 		copy(*out, *in)
+	}
+}
+
+// DeepCopyInto for EnvVarSource
+func (evs *EnvVarSource) DeepCopyInto(out *EnvVarSource) {
+	*out = *evs
+	if evs.ValueFrom != nil {
+		out.ValueFrom = &EnvValueFrom{}
+		evs.ValueFrom.DeepCopyInto(out.ValueFrom)
+	}
+}
+
+// DeepCopyInto for EnvValueFrom
+func (evf *EnvValueFrom) DeepCopyInto(out *EnvValueFrom) {
+	*out = *evf
+	if evf.SecretKeyRef != nil {
+		out.SecretKeyRef = &KeySelector{
+			Name: evf.SecretKeyRef.Name,
+			Key:  evf.SecretKeyRef.Key,
+		}
+	}
+	if evf.ConfigMapKeyRef != nil {
+		out.ConfigMapKeyRef = &KeySelector{
+			Name: evf.ConfigMapKeyRef.Name,
+			Key:  evf.ConfigMapKeyRef.Key,
+		}
 	}
 }
 
@@ -304,8 +339,9 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			ImagePullPolicy: corev1.PullPolicy(req.ImagePullPolicy),
 			Version:         req.ImageTag,
 			Config: PerformerConfig{
-				GRPCPort:    req.GRPCPort,
-				Environment: req.Environment,
+				GRPCPort:        req.GRPCPort,
+				Environment:     req.Environment,
+				EnvironmentFrom: req.EnvironmentFrom,
 			},
 		},
 	}
