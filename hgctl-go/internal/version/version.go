@@ -1,18 +1,18 @@
 package version
 
 var (
-    Version = "dev"
-    Commit  = "unknown"
+	Version = "dev"
+	Commit  = "unknown"
 )
 
 func GetVersion() string {
-    return Version
+	return Version
 }
 
 func GetCommit() string {
-    return Commit
+	return Commit
 }
 
 func GetFullVersion() string {
-    return Version + " (" + Commit + ")"
+	return Version + " (" + Commit + ")"
 }
