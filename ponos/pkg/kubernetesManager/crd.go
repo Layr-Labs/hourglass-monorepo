@@ -69,11 +69,17 @@ type PerformerConfig struct {
 	// Environment variables for the performer container
 	Environment map[string]string `json:"environment,omitempty"`
 
+	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
+	EnvironmentFrom []EnvVarSource `json:"environmentFrom,omitempty"`
+
 	// Args are additional command line arguments for the performer
 	Args []string `json:"args,omitempty"`
 
 	// Command overrides the default container entrypoint
 	Command []string `json:"command,omitempty"`
+
+	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // PerformerStatusCRD defines the observed state of Performer (from CRD)
@@ -151,6 +157,12 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 			out.Config.Environment[k] = v
 		}
 	}
+	if ps.Config.EnvironmentFrom != nil {
+		out.Config.EnvironmentFrom = make([]EnvVarSource, len(ps.Config.EnvironmentFrom))
+		for i := range ps.Config.EnvironmentFrom {
+			ps.Config.EnvironmentFrom[i].DeepCopyInto(&out.Config.EnvironmentFrom[i])
+		}
+	}
 	if ps.Config.Args != nil {
 		out.Config.Args = make([]string, len(ps.Config.Args))
 		copy(out.Config.Args, ps.Config.Args)
@@ -159,6 +171,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 		out.Config.Command = make([]string, len(ps.Config.Command))
 		copy(out.Config.Command, ps.Config.Command)
 	}
+	out.Config.ServiceAccountName = ps.Config.ServiceAccountName
 
 	// Deep copy Resources
 	ps.Resources.DeepCopyInto(&out.Resources)
@@ -191,6 +204,32 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 		in, out := &ps.ImagePullSecrets, &out.ImagePullSecrets
 		*out = make([]corev1.LocalObjectReference, len(*in))
 		copy(*out, *in)
+	}
+}
+
+// DeepCopyInto for EnvVarSource
+func (evs *EnvVarSource) DeepCopyInto(out *EnvVarSource) {
+	*out = *evs
+	if evs.ValueFrom != nil {
+		out.ValueFrom = &EnvValueFrom{}
+		evs.ValueFrom.DeepCopyInto(out.ValueFrom)
+	}
+}
+
+// DeepCopyInto for EnvValueFrom
+func (evf *EnvValueFrom) DeepCopyInto(out *EnvValueFrom) {
+	*out = *evf
+	if evf.SecretKeyRef != nil {
+		out.SecretKeyRef = &KeySelector{
+			Name: evf.SecretKeyRef.Name,
+			Key:  evf.SecretKeyRef.Key,
+		}
+	}
+	if evf.ConfigMapKeyRef != nil {
+		out.ConfigMapKeyRef = &KeySelector{
+			Name: evf.ConfigMapKeyRef.Name,
+			Key:  evf.ConfigMapKeyRef.Key,
+		}
 	}
 }
 
@@ -304,8 +343,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			ImagePullPolicy: corev1.PullPolicy(req.ImagePullPolicy),
 			Version:         req.ImageTag,
 			Config: PerformerConfig{
-				GRPCPort:    req.GRPCPort,
-				Environment: req.Environment,
+				GRPCPort:           req.GRPCPort,
+				Environment:        req.Environment,
+				EnvironmentFrom:    req.EnvironmentFrom,
+				ServiceAccountName: req.ServiceAccountName,
 			},
 		},
 	}
@@ -338,6 +379,10 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 
 	// Generate the expected service endpoint
 	endpoint := fmt.Sprintf("performer-%s.%s.svc.cluster.local:%d", req.Name, c.namespace, req.GRPCPort)
+	c.logger.Sugar().Infow("Generated expected gRPC endpoint",
+		zap.String("endpoint", endpoint),
+		zap.String("performerName", req.Name),
+	)
 
 	return &CreatePerformerResponse{
 		PerformerID: req.Name,

@@ -6,12 +6,15 @@ hourglass:
 aggregator:
   nameOverride: ""
   enabled: false
-  config: ""
+  secret:
+    mountConfigAsVolume: true
+    data:
+      config.yaml: ""
   command:
     - aggregator
     - run
     - --config
-    - /etc/config/config.yaml
+    - /etc/secrets/hourglass/config.yaml
   env: []
   #  - name: SOME_ENV
   #    value: "some-value"
@@ -30,10 +33,15 @@ aggregator:
     limits:
       memory: 1048Mi
       cpu: .8
+  additionalVolumes: []
+  additionalVolumeMounts: []
 executor:
   nameOverride: ""
   enabled: false
-  config: ""
+  secret:
+    mountConfigAsVolume: true
+    data:
+      config.yaml: ""
   ports:
     - name: grpc
       port: 9000
@@ -47,7 +55,7 @@ executor:
     - executor
     - run
     - --config
-    - /etc/config/config.yaml
+    - /etc/secrets/hourglass/config.yaml
   env: []
   #  - name: SOME_ENV
   #    value: "some-value"
@@ -73,3 +81,5 @@ executor:
     limits:
       memory: 1048Mi
       cpu: .8
+  additionalVolumes: [ ]
+  additionalVolumeMounts: [ ]

@@ -84,6 +84,9 @@ spec:
                     maximum: 65535
                     minimum: 1
                     type: integer
+                  serviceAccountName:
+                    description: ServiceAccountName is the name of the ServiceAccount to use for the performer pod
+                    type: string
                 type: object
               hardwareRequirements:
                 description: HardwareRequirements specifies specialized hardware needs
@@ -1212,6 +1215,9 @@ spec:
               podName:
                 description: PodName is the name of the associated pod
                 type: string
+              ready:
+                description: Ready indicates if the performer is ready to accept requests
+                type: boolean
               readyTime:
                 description: ReadyTime indicates when the performer became ready
                 format: date-time

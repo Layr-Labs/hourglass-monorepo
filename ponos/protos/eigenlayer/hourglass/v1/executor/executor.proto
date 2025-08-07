@@ -42,12 +42,18 @@ message TaskResult {
   bytes output_digest = 7;
 }
 
+// KubernetesConfig contains Kubernetes-specific configuration for a performer
+message KubernetesConfig {
+  string service_account_name = 1;
+}
+
 // DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer
 message DeployArtifactRequest {
   string avs_address = 1;
   string digest = 2;
   string registry_url = 3;
   repeated PerformerEnv env = 4;
+  KubernetesConfig kubernetes = 5;
 }
 
 message DeployArtifactResponse {
@@ -66,6 +72,30 @@ message PerformerEnv {
   string name = 1;
   string value = 2;
   string value_from_env = 3;
+  KubernetesEnv kubernetes_env = 4;
+}
+
+// KubernetesEnv represents a Kubernetes environment variable source
+message KubernetesEnv {
+  EnvValueFrom value_from = 1;
+}
+
+// EnvValueFrom represents a source for the value of an environment variable
+message EnvValueFrom {
+  SecretKeyRef secret_key_ref = 1;
+  ConfigMapKeyRef config_map_key_ref = 2;
+}
+
+// SecretKeyRef selects a key of a secret in the pod's namespace
+message SecretKeyRef {
+  string name = 1;
+  string key = 2;
+}
+
+// ConfigMapKeyRef selects a key of a config map in the pod's namespace
+message ConfigMapKeyRef {
+  string name = 1;
+  string key = 2;
 }
 
 // Performer contains information about a single performer

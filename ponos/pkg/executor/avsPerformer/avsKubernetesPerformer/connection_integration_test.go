@@ -2,6 +2,7 @@ package avsKubernetesPerformer
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,60 +11,41 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
+	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	"go.uber.org/zap/zaptest"
+	"google.golang.org/grpc/connectivity"
 )
 
+// TestAvsKubernetesPerformer_ConnectionRetryIntegration tests that the Kubernetes performer correctly integrates with gRPC connections
 func TestAvsKubernetesPerformer_ConnectionRetryIntegration(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	// Create test configuration
 	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:                     "0xtest123",
-		ApplicationHealthCheckInterval: 5 * time.Second,
-		Image: avsPerformer.PerformerImage{
-			Repository: "test-repo",
-			Tag:        "test-tag",
-		},
+		AvsAddress: "0xtest123",
 	}
 
 	kubernetesConfig := &kubernetesManager.Config{
-		Namespace:         "test-namespace",
-		KubeconfigPath:    "", // Will use in-cluster config
+		Namespace:         "default",
 		OperatorNamespace: "hourglass-system",
 		CRDGroup:          "hourglass.eigenlayer.io",
 		CRDVersion:        "v1alpha1",
-		ServiceAccount:    "test-service-account",
+		KubeconfigPath:    "", // Fixed field name
 	}
 
-	// Create performer (this will fail but we can test the retry logic structure)
-	performer, err := NewAvsKubernetesPerformer(
-		config,
-		kubernetesConfig,
-		nil, // peeringFetcher
-		nil, // l1ContractCaller
-		logger,
-	)
-
+	akp, err := NewAvsKubernetesPerformer(config, kubernetesConfig, nil, nil, logger)
 	if err != nil {
+		// Expected error in test environment without k8s
 		t.Logf("Expected error creating performer without valid k8s config: %v", err)
-		// This is expected in test environment
-		return
 	}
 
-	// Test connection manager integration
-	if performer.kubernetesManager == nil {
-		t.Error("Expected kubernetesManager to be set")
-	}
-
-	if performer.clientWrapper == nil {
-		t.Error("Expected clientWrapper to be set")
+	if akp != nil && akp.clientWrapper != nil {
+		t.Error("Expected clientWrapper to be nil in test environment")
 	}
 }
 
 func TestAvsKubernetesPerformer_PerformerResourceConnectionManager(t *testing.T) {
-	// Test that PerformerResource properly integrates with ConnectionManager
-
-	// Create a mock connection manager
+	// Test that PerformerResource properly uses gRPC connections
+	// Create a mock gRPC connection
 	retryConfig := &clients.RetryConfig{
 		MaxRetries:        3,
 		InitialDelay:      100 * time.Millisecond,
@@ -72,136 +54,73 @@ func TestAvsKubernetesPerformer_PerformerResourceConnectionManager(t *testing.T)
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9090", true, retryConfig)
+	grpcConn, err := clients.NewGrpcClientWithRetry("localhost:9090", true, retryConfig)
+	if err != nil {
+		t.Fatalf("Failed to create gRPC connection: %v", err)
+	}
+	defer grpcConn.Close()
+
+	// Create test client
+	client := performerV1.NewPerformerServiceClient(grpcConn)
 
 	// Create a test performer resource
 	performer := &PerformerResource{
-		performerID:       "test-performer-123",
-		avsAddress:        "0xtest123",
-		connectionManager: connectionManager,
-		endpoint:          "localhost:9090",
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
+		performerID: "test-performer-123",
+		avsAddress:  "0xtest123",
+		grpcConn:    grpcConn,
+		client:      client,
+		endpoint:    "localhost:9090",
+		statusChan:  make(chan avsPerformer.PerformerStatusEvent, 10),
+		createdAt:   time.Now(),
 	}
 
-	// Test connection manager integration
-	if performer.connectionManager == nil {
-		t.Error("Expected connectionManager to be set")
+	// Test gRPC connection is set
+	if performer.grpcConn == nil {
+		t.Error("Expected grpcConn to be set")
 	}
 
-	// Test circuit breaker functionality
-	if performer.connectionManager.IsCircuitOpen() {
-		t.Error("Expected circuit breaker to be closed initially")
+	// Test clients are set
+	if performer.client == nil {
+		t.Error("Expected client to be set")
 	}
 
-	// Test connection stats
-	stats := performer.connectionManager.GetConnectionStats()
-	if stats["circuitOpen"] != false {
-		t.Errorf("Expected circuitOpen to be false, got %v", stats["circuitOpen"])
-	}
-
-	if stats["hasConnection"] != false {
-		t.Errorf("Expected hasConnection to be false, got %v", stats["hasConnection"])
-	}
 }
 
-func TestAvsKubernetesPerformer_HealthCheckWithRetry(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-
-	// Create a mock performer with connection manager
-	retryConfig := &clients.RetryConfig{
-		MaxRetries:        2,
-		InitialDelay:      50 * time.Millisecond,
-		MaxDelay:          500 * time.Millisecond,
-		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 1 * time.Second,
-	}
-
-	connectionManager := clients.NewConnectionManager("localhost:9999", true, retryConfig)
-
-	performer := &PerformerResource{
-		performerID:       "test-performer-health",
-		avsAddress:        "0xtest123",
-		connectionManager: connectionManager,
-		endpoint:          "localhost:9999",
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
-	}
-
-	// Create a mock AvsKubernetesPerformer for testing health check
-	akp := &AvsKubernetesPerformer{
-		logger: logger,
-		config: &avsPerformer.AvsPerformerConfig{
-			ApplicationHealthCheckInterval: 1 * time.Second,
-		},
-	}
-
-	// Test health check with unavailable service
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	// This should fail but test the retry logic
-	akp.performApplicationHealthCheck(ctx, performer)
-
-	// Verify health status was updated
-	if performer.performerHealth.ApplicationIsHealthy {
-		t.Error("Expected ApplicationIsHealthy to be false after failed health check")
-	}
-
-	if performer.performerHealth.ConsecutiveApplicationHealthFailures == 0 {
-		t.Error("Expected ConsecutiveApplicationHealthFailures to be incremented")
-	}
-}
-
+// TestAvsKubernetesPerformer_TaskExecutionWithRetry tests task execution with retry logic
 func TestAvsKubernetesPerformer_TaskExecutionWithRetry(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	// Create a mock performer with connection manager
+	// Create retry config with fast retries for testing
 	retryConfig := &clients.RetryConfig{
 		MaxRetries:        1,
 		InitialDelay:      10 * time.Millisecond,
-		MaxDelay:          100 * time.Millisecond,
+		MaxDelay:          50 * time.Millisecond,
 		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 500 * time.Millisecond,
+		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9998", true, retryConfig)
+	// Create a gRPC connection (will fail to connect)
+	grpcConn, _ := clients.NewGrpcClientWithRetry("localhost:9998", true, retryConfig)
+	if grpcConn != nil {
+		defer grpcConn.Close()
+	}
 
 	performer := &PerformerResource{
-		performerID:       "test-performer-task",
-		avsAddress:        "0xtest123",
-		connectionManager: connectionManager,
-		endpoint:          "localhost:9998",
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
+		performerID: "test-performer-task",
+		grpcConn:    grpcConn,
+		client:      performerV1.NewPerformerServiceClient(grpcConn),
 	}
 
-	// Create a mock AvsKubernetesPerformer for testing task execution
+	// Create AvsKubernetesPerformer
 	akp := &AvsKubernetesPerformer{
+		config:         &avsPerformer.AvsPerformerConfig{},
 		logger:         logger,
 		taskWaitGroups: make(map[string]*sync.WaitGroup),
 	}
-
-	// Store the performer as current
 	akp.currentPerformer.Store(performer)
 
-	// Test task execution with unavailable service
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	// Try to execute a task
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	task := &performerTask.PerformerTask{
@@ -215,15 +134,19 @@ func TestAvsKubernetesPerformer_TaskExecutionWithRetry(t *testing.T) {
 	}
 
 	// Verify error contains connection information
-	if err != nil && !contains(err.Error(), "failed to get healthy connection") {
+	// The error could be either from ConnectionManager or from the retry interceptor
+	if err != nil && !contains(err.Error(), "failed to get healthy connection") &&
+		!contains(err.Error(), "request failed after") &&
+		!contains(err.Error(), "connection refused") {
 		t.Errorf("Expected connection error, got: %v", err)
 	}
 }
 
+// TestAvsKubernetesPerformer_CircuitBreakerIntegration tests circuit breaker behavior
 func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	// Create a mock performer with connection manager
+	// Create retry config with fast retries for testing
 	retryConfig := &clients.RetryConfig{
 		MaxRetries:        1,
 		InitialDelay:      10 * time.Millisecond,
@@ -232,39 +155,27 @@ func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9997", true, retryConfig)
+	// Create a gRPC connection (will fail to connect)
+	grpcConn, _ := clients.NewGrpcClientWithRetry("localhost:9997", true, retryConfig)
+	if grpcConn != nil {
+		defer grpcConn.Close()
+	}
 
 	performer := &PerformerResource{
-		performerID:       "test-performer-circuit",
-		avsAddress:        "0xtest123",
-		connectionManager: connectionManager,
-		endpoint:          "localhost:9997",
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
+		performerID: "test-performer-circuit",
+		grpcConn:    grpcConn,
+		client:      performerV1.NewPerformerServiceClient(grpcConn),
 	}
 
-	// Create a mock AvsKubernetesPerformer
+	// Create AvsKubernetesPerformer
 	akp := &AvsKubernetesPerformer{
+		config:         &avsPerformer.AvsPerformerConfig{},
 		logger:         logger,
 		taskWaitGroups: make(map[string]*sync.WaitGroup),
-		config: &avsPerformer.AvsPerformerConfig{
-			ApplicationHealthCheckInterval: 1 * time.Second,
-		},
 	}
-
-	// Store the performer as current
 	akp.currentPerformer.Store(performer)
 
-	// Force circuit breaker to open by simulating failures
-	// In a real scenario, this would happen through actual connection failures
-	// For testing, we can't easily manipulate internal state, so we'll test behavior
-
-	// Test task execution - will fail due to unavailable service
+	// Try to execute task
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
@@ -279,85 +190,49 @@ func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 	}
 
 	// Verify error contains connection failure information
-	if err != nil && !contains(err.Error(), "failed to get healthy connection") {
+	// The error could be either from ConnectionManager or from the retry interceptor
+	if err != nil && !contains(err.Error(), "failed to get healthy connection") &&
+		!contains(err.Error(), "request failed after") &&
+		!contains(err.Error(), "connection refused") {
 		t.Errorf("Expected connection failure error, got: %v", err)
 	}
 
-	// Test health check with unavailable service
-	akp.performApplicationHealthCheck(ctx, performer)
-
-	// Verify health check failed
-	if performer.performerHealth.ApplicationIsHealthy {
-		t.Error("Expected ApplicationIsHealthy to be false when service is unavailable")
-	}
 }
 
 func TestAvsKubernetesPerformer_ConnectionCleanup(t *testing.T) {
-	logger := zaptest.NewLogger(t)
-
-	// Create a mock performer with connection manager
+	// Create retry config
 	retryConfig := &clients.RetryConfig{
 		MaxRetries:        1,
-		InitialDelay:      10 * time.Millisecond,
-		MaxDelay:          100 * time.Millisecond,
+		InitialDelay:      100 * time.Millisecond,
+		MaxDelay:          1 * time.Second,
 		BackoffMultiplier: 2.0,
-		ConnectionTimeout: 100 * time.Millisecond,
+		ConnectionTimeout: 500 * time.Millisecond,
 	}
 
-	connectionManager := clients.NewConnectionManager("localhost:9996", true, retryConfig)
+	grpcConn, _ := clients.NewGrpcClientWithRetry("localhost:9996", true, retryConfig)
+	if grpcConn == nil {
+		t.Skip("Could not create gRPC connection")
+	}
 
 	performer := &PerformerResource{
-		performerID:       "test-performer-cleanup",
-		avsAddress:        "0xtest123",
-		connectionManager: connectionManager,
-		endpoint:          "localhost:9996",
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
+		performerID: "test-performer-cleanup",
+		grpcConn:    grpcConn,
+		statusChan:  make(chan avsPerformer.PerformerStatusEvent, 10),
 	}
 
-	// Create a mock AvsKubernetesPerformer
-	akp := &AvsKubernetesPerformer{
-		logger:             logger,
-		taskWaitGroups:     make(map[string]*sync.WaitGroup),
-		drainingPerformers: make(map[string]struct{}),
+	// Close gRPC connection
+	if err := performer.grpcConn.Close(); err != nil {
+		t.Errorf("Failed to close gRPC connection: %v", err)
 	}
 
-	// Store the performer as current
-	akp.currentPerformer.Store(performer)
-
-	// Test connection manager cleanup directly (without k8s operations)
-	// This simulates the cleanup that would happen in startDrainAndRemove
-	if performer.connectionManager != nil {
-		err := performer.connectionManager.Close()
-		if err != nil {
-			t.Errorf("Expected no error closing connection manager, got: %v", err)
-		}
+	// Connection should be closed
+	state := performer.grpcConn.GetState()
+	if state != connectivity.Shutdown {
+		t.Errorf("Expected connection state to be Shutdown, got %v", state)
 	}
-
-	// Verify cleanup was attempted
-	// Note: This test is limited since we can't actually create k8s resources
-	// but it verifies the connection manager cleanup logic
 }
 
-// Helper function to check if error contains a substring
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) && containsHelper(str, substr)
+// Helper function for string contains
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
-
-func containsHelper(str, substr string) bool {
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
-// Note: In a real implementation, these methods would be internal to ConnectionManager
-// For testing purposes, we simulate the circuit breaker behavior by checking the
-// connection manager's public methods and state

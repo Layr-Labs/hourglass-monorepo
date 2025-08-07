@@ -2,6 +2,7 @@ package clients
 
 import (
 	"errors"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"testing"
 	"time"
 
@@ -51,16 +52,16 @@ func TestNewGrpcClientWithRetry_Success(t *testing.T) {
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	// This will fail because we can't actually connect to bufconn with regular dial
-	// But we can test the retry logic with a mock server
-	_, err := NewGrpcClientWithRetry("localhost:0", true, config)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, NewGrpcClientWithRetry will succeed even with invalid addresses
+	// The connection is only established when actually used
+	conn, err := NewGrpcClientWithRetry("localhost:0", true, config)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	// Test that error contains retry information
-	if err != nil && !contains(err.Error(), "failed to establish gRPC connection after") {
-		t.Errorf("Expected retry error message, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
@@ -73,30 +74,33 @@ func TestNewGrpcClientWithRetry_InvalidAddress(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	_, err := NewGrpcClientWithRetry("invalid-address:99999", true, config)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, even invalid addresses will succeed at creation time
+	conn, err := NewGrpcClientWithRetry("invalid-address:99999", true, config)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	// Should contain retry count
-	if !contains(err.Error(), "failed to establish gRPC connection after 3 attempts") {
-		t.Errorf("Expected retry count in error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
 func TestNewGrpcClientWithRetry_NilConfig(t *testing.T) {
-	_, err := NewGrpcClientWithRetry("localhost:0", true, nil)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, this should succeed even with nil config (uses defaults)
+	conn, err := NewGrpcClientWithRetry("localhost:0", true, nil)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection with nil config, got: %v", err)
 	}
-
-	// Should use default config (5 retries + 1 initial = 6 attempts)
-	if !contains(err.Error(), "failed to establish gRPC connection after 6 attempts") {
-		t.Errorf("Expected default retry count in error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
 func TestConnectionManager_NewConnectionManager(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := &RetryConfig{
 		MaxRetries:        3,
 		InitialDelay:      100 * time.Millisecond,
@@ -105,7 +109,7 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	cm := NewConnectionManager("localhost:8080", true, config)
+	cm := NewConnectionManager("localhost:8080", true, config, l)
 
 	if cm.url != "localhost:8080" {
 		t.Errorf("Expected URL to be 'localhost:8080', got %s", cm.url)
@@ -122,7 +126,8 @@ func TestConnectionManager_NewConnectionManager(t *testing.T) {
 }
 
 func TestConnectionManager_NewConnectionManager_NilConfig(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	if cm.retryConfig == nil {
 		t.Error("Expected retryConfig to be set to default, got nil")
@@ -141,20 +146,23 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	cm := NewConnectionManager("localhost:0", true, config)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:0", true, config, l)
 
-	_, err := cm.GetConnection()
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, GetConnection will succeed even for invalid addresses
+	// The actual connection is only established when used
+	conn, err := cm.GetConnection()
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	if !contains(err.Error(), "failed to create connection") {
-		t.Errorf("Expected connection creation error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
 	}
 }
 
 func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test with nil connection
 	if cm.isConnectionHealthy() {
@@ -168,7 +176,8 @@ func TestConnectionManager_IsConnectionHealthy(t *testing.T) {
 }
 
 func TestConnectionManager_IsCircuitOpen(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Initially circuit should be closed
 	if cm.IsCircuitOpen() {
@@ -191,7 +200,8 @@ func TestConnectionManager_IsCircuitOpen(t *testing.T) {
 }
 
 func TestConnectionManager_GetConnectionStats(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	stats := cm.GetConnectionStats()
 
@@ -210,7 +220,8 @@ func TestConnectionManager_GetConnectionStats(t *testing.T) {
 }
 
 func TestConnectionManager_Close(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test closing without connection
 	err := cm.Close()
@@ -287,32 +298,20 @@ func TestTestConnection(t *testing.T) {
 	// This test mainly ensures the function doesn't panic with nil input
 }
 
-// Helper function to check if string contains substring
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) && (str == substr || containsHelper(str, substr))
-}
-
-func containsHelper(str, substr string) bool {
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // Benchmark tests
 func BenchmarkNewConnectionManager(b *testing.B) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	config := DefaultRetryConfig()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = NewConnectionManager("localhost:8080", true, config)
+		_ = NewConnectionManager("localhost:8080", true, config, l)
 	}
 }
 
 func BenchmarkIsCircuitOpen(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	cm.unhealthyCount = 3
 	b.ResetTimer()
 
@@ -322,7 +321,8 @@ func BenchmarkIsCircuitOpen(b *testing.B) {
 }
 
 func BenchmarkGetConnectionStats(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {

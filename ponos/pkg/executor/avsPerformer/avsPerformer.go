@@ -16,10 +16,11 @@ const (
 )
 
 type PerformerImage struct {
-	Repository string
-	Tag        string
-	Digest     string
-	Envs       []config.AVSPerformerEnv
+	Repository         string
+	Tag                string
+	Digest             string
+	Envs               []config.AVSPerformerEnv
+	ServiceAccountName string // Optional service account name for Kubernetes deployments
 }
 
 // PerformerStatus represents the health status of a performer container
@@ -74,8 +75,9 @@ type AvsPerformerConfig struct {
 	ProcessType                    AvsProcessType
 	Image                          PerformerImage
 	PerformerNetworkName           string
-	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
-	SkipConnectionTest             bool          // Skip gRPC connection test during performer creation (for testing)
+	EndpointOverride               string        // Optional: Override the auto-detected endpoint (for testing when executor is outside cluster)
+	ApplicationHealthCheckInterval time.Duration // Interval for health checks on the application running in the performer container
+	ServiceAccountName             string
 }
 
 // DeploymentStatus represents the current state of a deployment

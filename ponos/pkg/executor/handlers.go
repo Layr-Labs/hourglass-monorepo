@@ -97,12 +97,41 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		Repository: req.GetRegistryUrl(),
 		Digest:     req.GetDigest(),
 		Envs: util.Map(req.GetEnv(), func(env *executorV1.PerformerEnv, i uint64) config.AVSPerformerEnv {
-			return config.AVSPerformerEnv{
+			performerEnv := config.AVSPerformerEnv{
 				Name:         env.GetName(),
 				Value:        env.GetValue(),
 				ValueFromEnv: env.GetValueFromEnv(),
 			}
+			// Map Kubernetes environment variables if present
+			if env.GetKubernetesEnv() != nil && env.GetKubernetesEnv().GetValueFrom() != nil {
+				performerEnv.KubernetesEnv = &config.KubernetesEnv{
+					ValueFrom: struct {
+						SecretKeyRef struct {
+							Name string `json:"name" yaml:"name"`
+							Key  string `json:"key" yaml:"key"`
+						} `json:"secretKeyRef" yaml:"secretKeyRef"`
+						ConfigMapKeyRef struct {
+							Name string `json:"name" yaml:"name"`
+							Key  string `json:"key" yaml:"key"`
+						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
+					}{},
+				}
+				if env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef() != nil {
+					performerEnv.KubernetesEnv.ValueFrom.SecretKeyRef.Name = env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef().GetName()
+					performerEnv.KubernetesEnv.ValueFrom.SecretKeyRef.Key = env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef().GetKey()
+				}
+				if env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef() != nil {
+					performerEnv.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name = env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef().GetName()
+					performerEnv.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key = env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef().GetKey()
+				}
+			}
+			return performerEnv
 		}),
+	}
+
+	// Set Kubernetes service account if provided
+	if req.GetKubernetes() != nil && req.GetKubernetes().GetServiceAccountName() != "" {
+		image.ServiceAccountName = req.GetKubernetes().GetServiceAccountName()
 	}
 
 	// Update deployment status to deploying

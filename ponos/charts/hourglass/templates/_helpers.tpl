@@ -6,7 +6,7 @@
 {{- default "aggregator" .Values.aggregator.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{- define "aggregator.configSecretName" -}}
+{{- define "aggregator.secretName" -}}
 {{ include "aggregator.name" . }}-config-secret
 {{- end }}
 
@@ -40,7 +40,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- default "executor" .Values.executor.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{- define "executor.configSecretName" -}}
+{{- define "executor.secretName" -}}
 {{ include "executor.name" . }}-config-secret
 {{- end }}
 

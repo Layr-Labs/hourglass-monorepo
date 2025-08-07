@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"testing"
 	"time"
 
@@ -42,7 +43,8 @@ func (m *MockConnection) NewStream(ctx context.Context, desc *grpc.StreamDesc, m
 }
 
 func TestConnectionManager_CircuitBreaker_InitialState(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Circuit should be closed initially
 	if cm.IsCircuitOpen() {
@@ -61,7 +63,8 @@ func TestConnectionManager_CircuitBreaker_InitialState(t *testing.T) {
 }
 
 func TestConnectionManager_CircuitBreaker_FailureThreshold(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test below threshold
 	cm.unhealthyCount = 3
@@ -89,7 +92,8 @@ func TestConnectionManager_CircuitBreaker_FailureThreshold(t *testing.T) {
 }
 
 func TestConnectionManager_CircuitBreaker_TimeWindow(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Set high failure count but recent healthy time
 	cm.unhealthyCount = 10
@@ -108,7 +112,8 @@ func TestConnectionManager_CircuitBreaker_TimeWindow(t *testing.T) {
 }
 
 func TestConnectionManager_CircuitBreaker_Recovery(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Open the circuit
 	cm.unhealthyCount = 10
@@ -128,7 +133,8 @@ func TestConnectionManager_CircuitBreaker_Recovery(t *testing.T) {
 }
 
 func TestConnectionManager_HealthTracking(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test initial state
 	if cm.unhealthyCount != 0 {
@@ -153,7 +159,8 @@ func TestConnectionManager_HealthTracking(t *testing.T) {
 }
 
 func TestConnectionManager_ConnectionStates(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	_ = cm // Use the variable to avoid unused variable error
 
 	tests := []struct {
@@ -208,7 +215,8 @@ func TestConnectionManager_ConnectionStates(t *testing.T) {
 }
 
 func TestConnectionManager_StatsReporting(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	_ = cm // Use the variable to avoid unused variable error
 
 	// Set some state
@@ -295,7 +303,8 @@ func TestIsRetryableError_GrpcStatus(t *testing.T) {
 }
 
 func TestConnectionManager_ConcurrentAccess(t *testing.T) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 
 	// Test concurrent access to circuit breaker state
 	done := make(chan bool)
@@ -377,10 +386,12 @@ func TestConnectionManager_FailureScenarios(t *testing.T) {
 			expectedOpen:     true,
 		},
 	}
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cm := NewConnectionManager("localhost:8080", true, nil)
+
+			cm := NewConnectionManager("localhost:8080", true, nil, l)
 			cm.unhealthyCount = tt.failureCount
 			cm.lastHealthy = time.Now().Add(-tt.timeSinceHealthy)
 
@@ -395,7 +406,8 @@ func TestConnectionManager_FailureScenarios(t *testing.T) {
 
 // Benchmark tests for circuit breaker performance
 func BenchmarkCircuitBreaker_IsOpen(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	cm.unhealthyCount = 7
 	cm.lastHealthy = time.Now().Add(-2 * time.Minute)
 
@@ -406,7 +418,8 @@ func BenchmarkCircuitBreaker_IsOpen(b *testing.B) {
 }
 
 func BenchmarkCircuitBreaker_StatsCollection(b *testing.B) {
-	cm := NewConnectionManager("localhost:8080", true, nil)
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	cm := NewConnectionManager("localhost:8080", true, nil, l)
 	cm.unhealthyCount = 5
 	cm.lastHealthy = time.Now().Add(-time.Minute)
 
