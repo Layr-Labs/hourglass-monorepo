@@ -88,10 +88,10 @@ func NewExecutor(
 	if store == nil {
 		panic("store is required")
 	}
-	
+
 	// Create challenge token manager
 	tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
-	
+
 	// Choose the appropriate signer for authentication
 	var authSigner signer.ISigner
 	if signers.ECDSASigner != nil {
@@ -99,7 +99,7 @@ func NewExecutor(
 	} else if signers.BLSSigner != nil {
 		authSigner = signers.BLSSigner
 	}
-	
+
 	return &Executor{
 		logger:              logger,
 		config:              config,

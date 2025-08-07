@@ -57,10 +57,10 @@ func (c *AuthenticatedExecutorClient) createAuthSignature(ctx context.Context, m
 	// Construct message to sign: challenge_token:method:payload
 	message := fmt.Sprintf("%s:%s:", tokenResp.ChallengeToken, methodName)
 	messageBytes := append([]byte(message), requestBytes...)
-	
+
 	// Hash the message
 	digest := util.GetKeccak256Digest(messageBytes)
-	
+
 	// Sign the digest
 	signature, err := c.signer.SignMessage(digest[:])
 	if err != nil {
