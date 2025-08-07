@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -346,15 +347,13 @@ func TestAuthVerifier(t *testing.T) {
 	operatorAddress := "0xTestOperator123"
 	tokenManager := auth.NewChallengeTokenManager(operatorAddress, 5*time.Minute)
 
-	// Create a test signer with a fixed key
-	testKeyBytes := []byte{
-		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
-	}
+	// Create a test signer with a proper ECDSA private key
+	// This is a test private key for testing purposes only
+	testPrivateKeyHex := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	testPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(testPrivateKeyHex)
+	require.NoError(t, err)
 
-	testSigner := inMemorySigner.NewInMemorySigner(testKeyBytes, config.CurveTypeECDSA)
+	testSigner := inMemorySigner.NewInMemorySigner(testPrivateKey, config.CurveTypeECDSA)
 	verifier := auth.NewVerifier(tokenManager, testSigner)
 
 	t.Run("VerifyAuthentication_Success", func(t *testing.T) {
