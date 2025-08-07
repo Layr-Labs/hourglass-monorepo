@@ -304,6 +304,11 @@ echo "Exec Operator account: $execOperatorAccountAddress"
 # -----------------------------------------------------------------------------
 cd $PROJECT_ROOT/contracts
 
+# Ensure Foundry dependencies are installed
+echo "Installing Foundry dependencies..."
+forge install || true  # Continue even if already installed
+forge build  # Build contracts to ensure everything is ready
+
 export L1_RPC_URL="http://localhost:${anvilL1RpcPort}"
 export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 
