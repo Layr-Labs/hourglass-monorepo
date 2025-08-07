@@ -99,7 +99,7 @@ func ContractBeforeFunc(c *cli.Context) error {
 func needsContractClient(c *cli.Context) bool {
 	// List of commands that need contract client
 	contractCommands := map[string]bool{
-		"register":             true,
+		"register-operator":    true,
 		"register-avs":         true,
 		"register-key":         true,
 		"deposit":              true,
@@ -128,7 +128,7 @@ func validateAddresses(c *cli.Context, avsAddress, operatorAddress string) bool 
 
 	// Commands that only need operator address
 	operatorOnlyCommands := map[string]bool{
-		"register":             true,
+		"register-operator":    true,
 		"delegate":             true,
 		"deposit":              true,
 		"set-allocation-delay": true,
@@ -139,7 +139,6 @@ func validateAddresses(c *cli.Context, avsAddress, operatorAddress string) bool 
 		"register-avs": true,
 		"register-key": true,
 		"allocate":     true,
-		"operatorset":  true,
 		"get":          true,
 		"describe":     true,
 		"deploy":       true,

@@ -19,6 +19,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/describe"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/get"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/register"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/web3signer"
 )
@@ -109,7 +110,7 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			KeystoreCommand(),
 			Web3SignerCommand(),
 			// Operator management commands
-			RegisterCommand(),
+			RegisterOperatorCommand(),
 			RegisterAVSCommand(),
 			RegisterKeyCommand(),
 			DepositCommand(),
@@ -177,4 +178,24 @@ func DepositCommand() *cli.Command {
 // AllocateCommand returns the delegate command
 func AllocateCommand() *cli.Command {
 	return allocate.Command()
+}
+
+// RegisterOperatorCommand returns the register-operator command
+func RegisterOperatorCommand() *cli.Command {
+	return register.RegisterOperatorCommand()
+}
+
+// RegisterAVSCommand returns the register-avs command
+func RegisterAVSCommand() *cli.Command {
+	return register.RegisterAVSCommand()
+}
+
+// RegisterKeyCommand returns the register-key command
+func RegisterKeyCommand() *cli.Command {
+	return register.RegisterKeyCommand()
+}
+
+// SetAllocationDelayCommand returns the set-allocation-delay command
+func SetAllocationDelayCommand() *cli.Command {
+	return register.SetAllocationDelayCommand()
 }

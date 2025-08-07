@@ -10,7 +10,7 @@ func Command() *cli.Command {
 		Usage: "Manage keystores for operators",
 		Subcommands: []*cli.Command{
 			createCommand(),
-			registerCommand(),
+			importCommand(),
 			listCommand(),
 		},
 	}

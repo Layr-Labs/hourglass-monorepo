@@ -1,4 +1,4 @@
-package commands
+package register
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 )
 
-// RegisterCommand returns the register command for registering an operator with EigenLayer
-func RegisterCommand() *cli.Command {
+// RegisterOperatorCommand returns the register-operator command for registering an operator with EigenLayer
+func RegisterOperatorCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "register",
+		Name:  "register-operator",
 		Usage: "Register operator with EigenLayer",
 		Description: `Register an operator with EigenLayer's delegation manager.
 This command handles the operator registration process including setting up

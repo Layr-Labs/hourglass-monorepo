@@ -10,7 +10,7 @@ func Command() *cli.Command {
 		Name:  "web3signer",
 		Usage: "Manage web3 signer configurations (ECDSA only)",
 		Subcommands: []*cli.Command{
-			registerCommand(),
+			importCommand(),
 			listCommand(),
 		},
 	}

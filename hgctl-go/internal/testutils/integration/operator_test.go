@@ -22,7 +22,7 @@ func TestOperatorRegistration(t *testing.T) {
 		// Execute the register command
 		// TODO: use operator private key
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register",
+			"register-operator",
 			"--metadata-uri", "https://example.com/operator/metadata.json",
 			"--allocation-delay", allocationDelay,
 		)
@@ -30,12 +30,6 @@ func TestOperatorRegistration(t *testing.T) {
 		// Check execution succeeded
 		require.NoError(t, err, "Register command should not return an error")
 		require.Equal(t, 0, result.ExitCode, "Command should exit with code 0")
-
-		// Debug: Print the actual output
-		t.Logf("Command output:\n%s", result.Stdout)
-		if result.Stderr != "" {
-			t.Logf("Command stderr:\n%s", result.Stderr)
-		}
 
 		// Based on your log output, the command outputs these messages:
 		assert.Contains(t, result.Stdout, "Successfully registered operator with EigenLayer",
@@ -54,7 +48,7 @@ func TestOperatorRegistration(t *testing.T) {
 		// First registration
 		// TODO: use operator private key
 		result, err := h.ExecuteCLIWithKeystore("executor-ecdsa",
-			"register",
+			"register-operator",
 			"--allocation-delay", "1",
 			"--metadata-uri", "https://example.com/operator/metadata.json")
 
@@ -72,7 +66,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 			// Second registration attempt (should fail)
 			result, err = h.ExecuteCLIWithKeystore("executor-ecdsa",
-				"register",
+				"register-operator",
 				"--allocation-delay", "1",
 				"--metadata-uri", "https://example.com/operator/metadata.json")
 
@@ -108,7 +102,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 		// Try to delegate executor to aggregator (executor needs to be registered first)
 		result, err := h.ExecuteCLIWithKeystore("executor-ecdsa",
-			"register",
+			"register-operator",
 			"--allocation-delay", "1",
 			"--metadata-uri", "https://example.com/executor/metadata.json")
 

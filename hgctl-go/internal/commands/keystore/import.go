@@ -12,10 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
-func registerCommand() *cli.Command {
+func importCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "register",
-		Usage: "Register an existing keystore file reference",
+		Name:  "import",
+		Usage: "Import an existing keystore file reference",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "name",
