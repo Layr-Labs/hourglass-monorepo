@@ -143,6 +143,7 @@ type PerformerImage struct {
 type AvsPerformerKubernetesConfig struct {
 	// ServiceAccountName is the name of the ServiceAccount to use for the performer pod
 	ServiceAccountName string `json:"serviceAccountName,omitempty" yaml:"serviceAccountName,omitempty"`
+	EndpointOverride   string `json:"endpointOverride,omitempty" yaml:"endpointOverride,omitempty"` // Optional: Override auto-detected endpoint (for testing)
 }
 
 func (apc *AvsPerformerKubernetesConfig) Validate() error {
@@ -150,13 +151,12 @@ func (apc *AvsPerformerKubernetesConfig) Validate() error {
 }
 
 type AvsPerformerConfig struct {
-	Image            *PerformerImage
-	ProcessType      string
-	AvsAddress       string
-	Envs             []config.AVSPerformerEnv
-	DeploymentMode   DeploymentMode                `json:"deploymentMode" yaml:"deploymentMode"`
-	Kubernetes       *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
-	EndpointOverride string                        `json:"endpointOverride,omitempty" yaml:"endpointOverride,omitempty"` // Optional: Override auto-detected endpoint (for testing)
+	Image          *PerformerImage
+	ProcessType    string
+	AvsAddress     string
+	Envs           []config.AVSPerformerEnv
+	DeploymentMode DeploymentMode                `json:"deploymentMode" yaml:"deploymentMode"`
+	Kubernetes     *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 }
 
 func (ap *AvsPerformerConfig) Validate() error {

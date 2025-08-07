@@ -787,7 +787,8 @@ avsPerformers:
   avsAddress: "0xavs1..."
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
   deploymentMode: "kubernetes"
-  endpointOverride: "localhost:30080"
+  kubernetes:
+    endpointOverride: "localhost:30080"
 `
 	} else {
 		return `

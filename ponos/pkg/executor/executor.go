@@ -128,11 +128,17 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				return err
 			}
 
+			var serviceAccountName string
+			if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
+				serviceAccountName = avs.Kubernetes.ServiceAccountName
+			}
+
 			// Deploy performer using the performer's Deploy method
 			image := avsPerformer.PerformerImage{
-				Repository: avs.Image.Repository,
-				Tag:        avs.Image.Tag,
-				Envs:       avs.Envs,
+				Repository:         avs.Image.Repository,
+				Tag:                avs.Image.Tag,
+				Envs:               avs.Envs,
+				ServiceAccountName: serviceAccountName,
 			}
 
 			result, err := performer.Deploy(ctx, image)
@@ -227,19 +233,10 @@ func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAd
 
 // createDockerPerformer creates a Docker-based AVS performer
 func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
-	// Prepare the image
-	image := avsPerformer.PerformerImage{}
-	if avs.Image != nil {
-		image.Repository = avs.Image.Repository
-		image.Tag = avs.Image.Tag
-	}
-	image.Envs = avs.Envs
-
 	return avsContainerPerformer.NewAvsContainerPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
-			Image:                image,
 			PerformerNetworkName: e.config.PerformerNetworkName,
 		},
 		e.peeringFetcher,
@@ -264,25 +261,16 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		KubeconfigPath:    e.config.Kubernetes.KubeConfigPath,
 	}
 
-	// Prepare the image with service account if configured
-	image := avsPerformer.PerformerImage{}
-	if avs.Image != nil {
-		image.Repository = avs.Image.Repository
-		image.Tag = avs.Image.Tag
-	}
-	image.Envs = avs.Envs
-
-	// Set the service account name if provided in Kubernetes config
-	if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
-		image.ServiceAccountName = avs.Kubernetes.ServiceAccountName
+	var endpointOverride string
+	if avs.Kubernetes != nil && avs.Kubernetes.EndpointOverride != "" {
+		endpointOverride = avs.Kubernetes.EndpointOverride
 	}
 
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:       avsAddress,
 			ProcessType:      avsPerformer.AvsProcessType(avs.ProcessType),
-			Image:            image,
-			EndpointOverride: avs.EndpointOverride,
+			EndpointOverride: endpointOverride,
 		},
 		kubernetesConfig,
 		e.peeringFetcher,

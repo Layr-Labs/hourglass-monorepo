@@ -77,6 +77,7 @@ type AvsPerformerConfig struct {
 	PerformerNetworkName           string
 	EndpointOverride               string        // Optional: Override the auto-detected endpoint (for testing when executor is outside cluster)
 	ApplicationHealthCheckInterval time.Duration // Interval for health checks on the application running in the performer container
+	ServiceAccountName             string
 }
 
 // DeploymentStatus represents the current state of a deployment
