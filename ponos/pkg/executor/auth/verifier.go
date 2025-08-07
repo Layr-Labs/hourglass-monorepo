@@ -30,11 +30,6 @@ func (v *Verifier) GenerateChallengeToken(operatorAddress string) (*ChallengeTok
 	return v.tokenManager.GenerateChallengeToken(operatorAddress)
 }
 
-// GetTokenStats returns statistics about the token manager
-func (v *Verifier) GetTokenStats() (total, used, expired int) {
-	return v.tokenManager.GetStats()
-}
-
 // VerifyAuthentication verifies the authentication signature for a request
 func (v *Verifier) VerifyAuthentication(auth *executorV1.AuthSignature, methodName string, requestPayload []byte) error {
 	if auth == nil {
@@ -68,7 +63,7 @@ func ConstructSignedMessage(challengeToken, methodName string, requestPayload []
 	// Create a deterministic message to sign
 	message := fmt.Sprintf("%s:%s:", challengeToken, methodName)
 	messageBytes := append([]byte(message), requestPayload...)
-	
+
 	// Return the hash of the message
 	digest := util.GetKeccak256Digest(messageBytes)
 	return digest[:]
@@ -91,7 +86,7 @@ func bytesEqual(a, b []byte) bool {
 func GetRequestWithoutAuth[T proto.Message](req T) ([]byte, error) {
 	// Clone the request
 	cloned := proto.Clone(req)
-	
+
 	// Use reflection to set the auth field to nil
 	switch v := any(cloned).(type) {
 	case *executorV1.DeployArtifactRequest:
@@ -103,7 +98,7 @@ func GetRequestWithoutAuth[T proto.Message](req T) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported request type")
 	}
-	
+
 	// Marshal the request without auth
 	return proto.Marshal(cloned)
 }

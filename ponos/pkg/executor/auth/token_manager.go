@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/google/uuid"
 )
 
 // ChallengeTokenEntry represents a single challenge token with its metadata
@@ -104,22 +104,4 @@ func (ctm *ChallengeTokenManager) cleanupExpiredTokens() {
 		}
 		ctm.mu.Unlock()
 	}
-}
-
-// GetStats returns statistics about the challenge token manager
-func (ctm *ChallengeTokenManager) GetStats() (total, used, expired int) {
-	ctm.mu.RLock()
-	defer ctm.mu.RUnlock()
-
-	now := time.Now()
-	for _, entry := range ctm.tokens {
-		total++
-		if entry.Used {
-			used++
-		}
-		if now.After(entry.ExpiresAt) {
-			expired++
-		}
-	}
-	return
 }

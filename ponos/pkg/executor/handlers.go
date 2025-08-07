@@ -625,20 +625,8 @@ func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetCha
 		return nil, status.Error(codes.Internal, "failed to generate challenge token")
 	}
 
-	// Get challenge token statistics for logging
-	total, used, expired := e.authVerifier.GetTokenStats()
-	
-	e.logger.Info("Generated challenge token successfully",
-		zap.String("operatorAddress", req.GetOperatorAddress()),
-		zap.String("challengeToken", entry.Token),
-		zap.Time("expiresAt", entry.ExpiresAt),
-		zap.Int("totalTokens", total),
-		zap.Int("usedTokens", used),
-		zap.Int("expiredTokens", expired),
-	)
-
 	return &executorV1.GetChallengeTokenResponse{
 		ChallengeToken: entry.Token,
-		ExpiresAt: entry.ExpiresAt.Unix(),
+		ExpiresAt:      entry.ExpiresAt.Unix(),
 	}, nil
 }
