@@ -114,17 +114,28 @@ func needsContractClient(c *cli.Context) bool {
 	}
 
 	// Check if the current command needs a contract client
-	if c.NArg() == 0 {
+	// In the Before hook, c.Args() contains all arguments including the command name
+	if len(c.Args().Slice()) == 0 {
 		return false
 	}
 
-	command := c.Args().Get(0)
-	return contractCommands[command]
+	// The command is the first argument after the app name
+	args := c.Args().Slice()
+	if len(args) > 0 {
+		command := args[0]
+		return contractCommands[command]
+	}
+	return false
 }
 
 // validateAddresses checks if the required addresses are available for the command
 func validateAddresses(c *cli.Context, avsAddress, operatorAddress string) bool {
-	command := c.Args().Get(0)
+	// Get the command from args
+	args := c.Args().Slice()
+	if len(args) == 0 {
+		return false
+	}
+	command := args[0]
 
 	// Commands that only need operator address
 	operatorOnlyCommands := map[string]bool{
