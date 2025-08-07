@@ -7,11 +7,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func TestRegisterCommand(t *testing.T) {
-	cmd := RegisterCommand()
+func TestRegisterOperatorCommand(t *testing.T) {
+	cmd := RegisterOperatorCommand()
 
 	t.Run("Command Structure", func(t *testing.T) {
-		assert.Equal(t, "register", cmd.Name)
+		assert.Equal(t, "register-operator", cmd.Name)
 		assert.Equal(t, "Register operator with EigenLayer", cmd.Usage)
 		assert.NotNil(t, cmd.Action)
 	})
