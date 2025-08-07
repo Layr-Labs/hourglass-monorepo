@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
-func registerCommand() *cli.Command {
+func importCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "register",
-		Usage: "Register web3 signer configuration file paths",
+		Name:  "import",
+		Usage: "Import web3 signer configuration file paths",
 		Flags: addContextFlag([]cli.Flag{
 			&cli.StringFlag{
 				Name:     "name",
