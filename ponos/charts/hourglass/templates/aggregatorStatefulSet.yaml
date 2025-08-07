@@ -1,4 +1,3 @@
----
 {{- if .Values.aggregator.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
@@ -42,13 +41,17 @@ spec:
             {{- toYaml .Values.aggregator.env | nindent 12 }}
         {{- end }}
           volumeMounts:
+{{- if .Values.aggregator.secret.mountConfigAsVolume }}
           - name: aggregator-config
             mountPath: /etc/secrets/hourglass
             readOnly: true
+{{- end }}
       volumes:
+{{- if .Values.aggregator.secret.mountConfigAsVolume }}
       - name: aggregator-config
         secret:
-          secretName: {{ include "aggregator.configSecretName" .}}
+          secretName: {{ include "aggregator.secretName" .}}
+{{- end}}
       {{- if .Values.aggregator.additionalVolumes }}
       {{ .Values.aggregator.additionalVolumes | toYaml | nindent 8 }}
       {{- end}}

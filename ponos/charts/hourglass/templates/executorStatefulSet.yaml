@@ -1,4 +1,3 @@
----
 {{- if .Values.executor.enabled -}}
 apiVersion: apps/v1
 kind: StatefulSet
@@ -40,13 +39,17 @@ spec:
             {{- toYaml .Values.executor.env | nindent 12 }}
         {{- end }}
           volumeMounts:
+{{- if .Values.executor.secret.mountConfigAsVolume }}
           - name: executor-config
             mountPath: /etc/secrets/hourglass
             readOnly: true
+{{- end }}
       volumes:
+{{- if .Values.executor.secret.mountConfigAsVolume }}
       - name: executor-config
         secret:
-          secretName: {{ include "executor.configSecretName" .}}
+          secretName: {{ include "executor.secretName" .}}
+{{- end }}
       {{- if .Values.executor.additionalVolumes }}
       {{ .Values.executor.additionalVolumes | toYaml | nindent 8 }}
       {{- end}}
