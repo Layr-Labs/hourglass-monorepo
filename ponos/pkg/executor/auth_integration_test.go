@@ -31,7 +31,7 @@ import (
 // TestAuthenticationWithRealExecutor tests authentication using a real executor setup
 func TestAuthenticationWithRealExecutor(t *testing.T) {
 	t.Skip("Skipping integration test - requires Anvil and Docker")
-	
+
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(120*time.Second))
 	defer cancel()
 
@@ -47,7 +47,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 	// Setup executor config
 	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(authTestExecutorConfigYaml))
 	require.NoError(t, err)
-	
+
 	// Use a specific port for testing
 	execConfig.GrpcPort = 9091
 	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
@@ -79,14 +79,14 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 	defer func() {
 		_ = testUtils.KillAnvil(l1Anvil)
 	}()
-	
+
 	// Wait for Anvil to be ready
 	time.Sleep(2 * time.Second)
 
 	// Setup contract caller
 	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
 	require.NoError(t, err)
-	
+
 	l1CC, err := caller.NewContractCaller(l1EthClient, l1PrivateKeySigner, l)
 	require.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		ECDSASigner: execSigner,
 	}
 	store := memory.NewInMemoryExecutorStore()
-	
+
 	exec, err := NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, signers, pdf, l1CC, store)
 	require.NoError(t, err)
 
@@ -124,11 +124,11 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		defer conn.Close()
 
 		client := executorV1.NewExecutorManagementServiceClient(conn)
-		
+
 		resp, err := client.GetChallengeToken(ctx, &executorV1.GetChallengeTokenRequest{
 			OperatorAddress: execConfig.Operator.Address,
 		})
-		
+
 		assert.NoError(t, err)
 		assert.NotEmpty(t, resp.ChallengeToken)
 		assert.Greater(t, resp.ExpiresAt, int64(0))
@@ -141,11 +141,11 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		defer conn.Close()
 
 		client := executorV1.NewExecutorManagementServiceClient(conn)
-		
+
 		_, err = client.GetChallengeToken(ctx, &executorV1.GetChallengeTokenRequest{
 			OperatorAddress: "0xWrongOperator",
 		})
-		
+
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
@@ -165,7 +165,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		resp, err := authClient.ListPerformers(ctx, &executorV1.ListPerformersRequest{
 			AvsAddress: "",
 		})
-		
+
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
 		// Empty list is fine, we're testing auth not performers
@@ -178,11 +178,11 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		defer conn.Close()
 
 		client := executorV1.NewExecutorManagementServiceClient(conn)
-		
+
 		_, err = client.ListPerformers(ctx, &executorV1.ListPerformersRequest{
 			AvsAddress: "",
 		})
-		
+
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
@@ -196,7 +196,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		defer conn.Close()
 
 		managementClient := executorV1.NewExecutorManagementServiceClient(conn)
-		
+
 		// Get a challenge token
 		tokenResp, err := managementClient.GetChallengeToken(ctx, &executorV1.GetChallengeTokenRequest{
 			OperatorAddress: execConfig.Operator.Address,
@@ -207,7 +207,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		req := &executorV1.ListPerformersRequest{AvsAddress: ""}
 		requestBytes, err := auth.GetRequestWithoutAuth(req)
 		require.NoError(t, err)
-		
+
 		signedMessage := auth.ConstructSignedMessage(tokenResp.ChallengeToken, "ListPerformers", requestBytes)
 		signature, err := execSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		defer conn.Close()
 
 		client := executorV1.NewExecutorServiceClient(conn)
-		
+
 		// This will fail with "AVS performer not found" but that's OK
 		// We're testing that auth is not required
 		_, err = client.SubmitTask(ctx, &executorV1.TaskSubmission{
@@ -247,7 +247,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 			Signature:         []byte("sig"),
 			OperatorSetId:     1,
 		})
-		
+
 		// Should get Internal error (performer not found), not Unauthenticated
 		if err != nil {
 			statusErr, ok := status.FromError(err)
@@ -270,7 +270,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		resp, err := authClient.RemovePerformer(ctx, &executorV1.RemovePerformerRequest{
 			PerformerId: "non-existent",
 		})
-		
+
 		// Will fail with NotFound, but auth should pass
 		assert.Error(t, err)
 		assert.NotNil(t, resp)
@@ -345,7 +345,7 @@ func TestChallengeTokenManager(t *testing.T) {
 func TestAuthVerifier(t *testing.T) {
 	operatorAddress := "0xTestOperator123"
 	tokenManager := auth.NewChallengeTokenManager(operatorAddress, 5*time.Minute)
-	
+
 	// Create a test signer with a fixed key
 	testKeyBytes := []byte{
 		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
@@ -353,7 +353,7 @@ func TestAuthVerifier(t *testing.T) {
 		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
 		0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef,
 	}
-	
+
 	testSigner := inMemorySigner.NewInMemorySigner(testKeyBytes, config.CurveTypeECDSA)
 	verifier := auth.NewVerifier(tokenManager, testSigner)
 
