@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"strings"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
@@ -53,6 +55,22 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		zap.String("digest", req.Digest),
 		zap.String("registryUrl", req.RegistryUrl),
 	)
+
+	// Verify authentication
+	requestBytes, err := auth.GetRequestWithoutAuth(req)
+	if err != nil {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: "Failed to process request",
+		}, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := e.authVerifier.VerifyAuthentication(req.Auth, "DeployArtifact", requestBytes); err != nil {
+		return &executorV1.DeployArtifactResponse{
+			Success: false,
+			Message: "Authentication failed",
+		}, err
+	}
 
 	// Validate request
 	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
@@ -419,6 +437,16 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 		zap.String("avsAddressFilter", req.GetAvsAddress()),
 	)
 
+	// Verify authentication
+	requestBytes, err := auth.GetRequestWithoutAuth(req)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := e.authVerifier.VerifyAuthentication(req.Auth, "ListPerformers", requestBytes); err != nil {
+		return nil, err
+	}
+
 	var allPerformers []*executorV1.Performer
 	filterAddress := strings.ToLower(req.GetAvsAddress())
 
@@ -494,6 +522,22 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 	e.logger.Info("Received remove performer request",
 		zap.String("performerId", req.GetPerformerId()),
 	)
+
+	// Verify authentication
+	requestBytes, err := auth.GetRequestWithoutAuth(req)
+	if err != nil {
+		return &executorV1.RemovePerformerResponse{
+			Success: false,
+			Message: "Failed to process request",
+		}, status.Error(codes.Internal, err.Error())
+	}
+
+	if err := e.authVerifier.VerifyAuthentication(req.Auth, "RemovePerformer", requestBytes); err != nil {
+		return &executorV1.RemovePerformerResponse{
+			Success: false,
+			Message: "Authentication failed",
+		}, err
+	}
 
 	// Validate request
 	if err := e.validateRemovePerformerRequest(req); err != nil {
@@ -582,4 +626,36 @@ func (e *Executor) performerInfoToProto(info avsPerformer.PerformerMetadata) *ex
 		LastHealthCheck:    info.LastHealthCheck.Format(time.RFC3339),
 		ContainerId:        info.ResourceID,
 	}
+}
+
+// GetChallengeToken generates a new challenge token for authentication
+func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetChallengeTokenRequest) (*executorV1.GetChallengeTokenResponse, error) {
+	e.logger.Info("Received get challenge token request",
+		zap.String("operatorAddress", req.GetOperatorAddress()),
+	)
+
+	// Validate operator address
+	if req.GetOperatorAddress() == "" {
+		return nil, status.Error(codes.InvalidArgument, "operator address is required")
+	}
+
+	// Verify that the requested operator address matches our configured operator
+	if !strings.EqualFold(req.GetOperatorAddress(), e.config.Operator.Address) {
+		return nil, status.Error(codes.PermissionDenied, "operator address mismatch")
+	}
+
+	// Generate a new challenge token
+	entry, err := e.authVerifier.GenerateChallengeToken(req.GetOperatorAddress())
+	if err != nil {
+		e.logger.Error("Failed to generate challenge token",
+			zap.String("operatorAddress", req.GetOperatorAddress()),
+			zap.Error(err),
+		)
+		return nil, status.Error(codes.Internal, "failed to generate challenge token")
+	}
+
+	return &executorV1.GetChallengeTokenResponse{
+		ChallengeToken: entry.Token,
+		ExpiresAt:      entry.ExpiresAt.Unix(),
+	}, nil
 }

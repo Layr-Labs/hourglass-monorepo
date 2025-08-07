@@ -12,3 +12,11 @@ func NewExecutorClient(fullUrl string, insecureConn bool) (executorV1.ExecutorSe
 	}
 	return executorV1.NewExecutorServiceClient(grpcClient), nil
 }
+
+func NewExecutorManagementClient(fullUrl string, insecureConn bool) (executorV1.ExecutorManagementServiceClient, error) {
+	grpcClient, err := clients.NewGrpcClient(fullUrl, insecureConn)
+	if err != nil {
+		return nil, err
+	}
+	return executorV1.NewExecutorManagementServiceClient(grpcClient), nil
+}
