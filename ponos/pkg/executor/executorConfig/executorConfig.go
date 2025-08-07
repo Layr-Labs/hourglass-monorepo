@@ -145,6 +145,10 @@ type AvsPerformerKubernetesConfig struct {
 	ServiceAccountName string `json:"serviceAccountName,omitempty" yaml:"serviceAccountName,omitempty"`
 }
 
+func (apc *AvsPerformerKubernetesConfig) Validate() error {
+	return nil
+}
+
 type AvsPerformerConfig struct {
 	Image            *PerformerImage
 	ProcessType      string
@@ -184,8 +188,9 @@ func (ap *AvsPerformerConfig) Validate() error {
 
 	// Validate Kubernetes config if in Kubernetes mode
 	if ap.DeploymentMode == DeploymentModeKubernetes && ap.Kubernetes != nil {
-		// ServiceAccountName is optional, so no validation needed for now
-		// Add any future Kubernetes-specific validations here
+		if err := ap.Kubernetes.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("kubernetes"), ap.Kubernetes, err.Error()))
+		}
 	}
 
 	if len(allErrors) > 0 {

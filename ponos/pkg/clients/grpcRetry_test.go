@@ -298,20 +298,6 @@ func TestTestConnection(t *testing.T) {
 	// This test mainly ensures the function doesn't panic with nil input
 }
 
-// Helper function to check if string contains substring
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) && (str == substr || containsHelper(str, substr))
-}
-
-func containsHelper(str, substr string) bool {
-	for i := 0; i <= len(str)-len(substr); i++ {
-		if str[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 // Benchmark tests
 func BenchmarkNewConnectionManager(b *testing.B) {
 	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
