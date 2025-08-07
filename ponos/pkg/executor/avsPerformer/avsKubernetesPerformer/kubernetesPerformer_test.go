@@ -105,9 +105,8 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 	mockPeeringFetcher := &MockPeeringFetcher{}
 
 	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:                     "0x123",
-		ProcessType:                    avsPerformer.AvsProcessTypeServer,
-		ApplicationHealthCheckInterval: 5 * time.Second,
+		AvsAddress:  "0x123",
+		ProcessType: avsPerformer.AvsProcessTypeServer,
 	}
 
 	kubernetesConfig := &kubernetesManager.Config{
@@ -177,7 +176,6 @@ func TestAvsKubernetesPerformer_GeneratePerformerID(t *testing.T) {
 func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 	performer, _, _, _ := createTestKubernetesPerformer(t)
 
-	now := time.Now()
 	resource := &PerformerResource{
 		performerID: "test-performer",
 		avsAddress:  "0x123",
@@ -187,11 +185,6 @@ func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 			Digest:     "sha256:abc123",
 		},
 		status: avsPerformer.PerformerResourceStatusInService,
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      now,
-		},
 	}
 
 	metadata := performer.convertPerformerResource(resource)
@@ -204,7 +197,8 @@ func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 	assert.Equal(t, "sha256:abc123", metadata.ArtifactDigest)
 	assert.True(t, metadata.ContainerHealthy)
 	assert.True(t, metadata.ApplicationHealthy)
-	assert.Equal(t, now, metadata.LastHealthCheck)
+	// LastHealthCheck is set to time.Now() in the converter, so just check it's recent
+	assert.WithinDuration(t, time.Now(), metadata.LastHealthCheck, 1*time.Second)
 	assert.Equal(t, "test-performer", metadata.ResourceID)
 }
 
@@ -260,11 +254,6 @@ func TestAvsKubernetesPerformer_ListPerformers_WithPerformers(t *testing.T) {
 			Tag:        "v1.0.0",
 		},
 		status: avsPerformer.PerformerResourceStatusInService,
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
 	}
 	performer.currentPerformer.Store(currentPerformer)
 
@@ -277,11 +266,6 @@ func TestAvsKubernetesPerformer_ListPerformers_WithPerformers(t *testing.T) {
 			Tag:        "v2.0.0",
 		},
 		status: avsPerformer.PerformerResourceStatusStaged,
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
 	}
 
 	performers := performer.ListPerformers()
@@ -314,10 +298,7 @@ func TestAvsKubernetesPerformer_PromotePerformer_Success(t *testing.T) {
 	// Set up a healthy next performer
 	performer.nextPerformer = &PerformerResource{
 		performerID: "test-performer",
-		performerHealth: &avsPerformer.PerformerHealth{
-			ApplicationIsHealthy: true,
-		},
-		status: avsPerformer.PerformerResourceStatusStaged,
+		status:      avsPerformer.PerformerResourceStatusStaged,
 	}
 
 	err := performer.PromotePerformer(ctx, "test-performer")
@@ -340,24 +321,6 @@ func TestAvsKubernetesPerformer_PromotePerformer_NotInNextSlot(t *testing.T) {
 	err := performer.PromotePerformer(ctx, "non-existent-performer")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "performer non-existent-performer is not in the next deployment slot")
-}
-
-func TestAvsKubernetesPerformer_PromotePerformer_Unhealthy(t *testing.T) {
-	performer, _, _, _ := createTestKubernetesPerformer(t)
-
-	ctx := context.Background()
-
-	// Set up an unhealthy next performer
-	performer.nextPerformer = &PerformerResource{
-		performerID: "test-performer",
-		performerHealth: &avsPerformer.PerformerHealth{
-			ApplicationIsHealthy: false,
-		},
-	}
-
-	err := performer.PromotePerformer(ctx, "test-performer")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot promote unhealthy performer")
 }
 
 func TestAvsKubernetesPerformer_PromotePerformer_AlreadyCurrent(t *testing.T) {

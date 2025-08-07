@@ -75,8 +75,8 @@ type AvsPerformerConfig struct {
 	ProcessType                    AvsProcessType
 	Image                          PerformerImage
 	PerformerNetworkName           string
-	ApplicationHealthCheckInterval time.Duration // Interval for application health checks
-	SkipConnectionTest             bool          // Deprecated: Connection tests are no longer performed on initialization
+	EndpointOverride               string        // Optional: Override the auto-detected endpoint (for testing when executor is outside cluster)
+	ApplicationHealthCheckInterval time.Duration // Interval for health checks on the application running in the performer container
 }
 
 // DeploymentStatus represents the current state of a deployment

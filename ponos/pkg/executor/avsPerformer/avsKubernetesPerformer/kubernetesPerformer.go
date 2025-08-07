@@ -3,8 +3,6 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
-	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,29 +25,26 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 const (
-	defaultApplicationHealthCheckInterval   = 15 * time.Second
-	defaultDeploymentTimeout                = 5 * time.Minute // Kubernetes deployments can take longer
-	defaultRunningWaitTimeout               = 5 * time.Minute // K8s pods need more time to start
-	maxConsecutiveApplicationHealthFailures = 3
-	defaultGRPCPort                         = 8080
+	defaultDeploymentTimeout  = 5 * time.Minute // Kubernetes deployments can take longer
+	defaultRunningWaitTimeout = 5 * time.Minute // K8s pods need more time to start
+	defaultGRPCPort           = 8080
 )
 
 // PerformerResource holds information about a Kubernetes performer
 type PerformerResource struct {
-	performerID       string
-	avsAddress        string
-	image             avsPerformer.PerformerImage
-	status            avsPerformer.PerformerResourceStatus
-	client            performerV1.PerformerServiceClient
-	connectionManager *clients.ConnectionManager
-	endpoint          string
-	performerHealth   *avsPerformer.PerformerHealth
-	statusChan        chan avsPerformer.PerformerStatusEvent
-	createdAt         time.Time
-	lastHealthCheck   time.Time
+	performerID string
+	avsAddress  string
+	image       avsPerformer.PerformerImage
+	status      avsPerformer.PerformerResourceStatus
+	client      performerV1.PerformerServiceClient
+	grpcConn    *grpc.ClientConn // Single gRPC connection
+	endpoint    string
+	statusChan  chan avsPerformer.PerformerStatusEvent
+	createdAt   time.Time
 }
 
 // AvsKubernetesPerformer implements IAvsPerformer using Kubernetes CRDs
@@ -90,10 +85,6 @@ func NewAvsKubernetesPerformer(
 	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsKubernetesPerformer, error) {
-	// Set default health check interval if not specified
-	if config.ApplicationHealthCheckInterval == 0 {
-		config.ApplicationHealthCheckInterval = defaultApplicationHealthCheckInterval
-	}
 
 	// Initialize Kubernetes client
 	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
@@ -159,9 +150,6 @@ func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 
 	performerResource.status = avsPerformer.PerformerResourceStatusInService
 	akp.currentPerformer.Store(performerResource)
-
-	// Start monitoring for the initial performer
-	go akp.monitorPerformerHealth(ctx, performerResource)
 
 	return nil
 }
@@ -295,7 +283,7 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		return nil, fmt.Errorf("performer not ready: %w", err)
 	}
 
-	// Create connection manager with retry logic
+	// Create a single gRPC connection with retry logic
 	retryConfig := &clients.RetryConfig{
 		MaxRetries:        5,
 		InitialDelay:      2 * time.Second,
@@ -304,37 +292,49 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		ConnectionTimeout: 15 * time.Second,
 	}
 
-	connectionManager := clients.NewConnectionManager(createResponse.Endpoint, true, retryConfig, akp.logger)
+	// Use endpoint override if provided (for testing when executor is outside cluster)
+	endpoint := createResponse.Endpoint
+	if akp.config.EndpointOverride != "" {
+		akp.logger.Sugar().Info("Using endpoint override for performer",
+			zap.String("performerID", performerID),
+			zap.String("originalEndpoint", createResponse.Endpoint),
+			zap.String("overrideEndpoint", akp.config.EndpointOverride),
+		)
+		endpoint = akp.config.EndpointOverride
+	}
 
-	// Connection is now lazy - no need to test it here
-	akp.logger.Info("Created connection manager for performer",
+	akp.logger.Info("Creating gRPC client for performer",
 		zap.String("performerID", performerID),
-		zap.String("endpoint", createResponse.Endpoint),
+		zap.String("endpoint", endpoint),
+	)
+	grpcConn, err := clients.NewGrpcClientWithRetry(endpoint, true, retryConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC connection: %w", err)
+	}
+
+	// Create the client once for this performer
+	client := performerV1.NewPerformerServiceClient(grpcConn)
+
+	akp.logger.Info("Created gRPC client for performer",
+		zap.String("performerID", performerID),
+		zap.String("endpoint", endpoint),
 	)
 
-	// Client will be created lazily when needed
-	var client performerV1.PerformerServiceClient
-
 	performerResource := &PerformerResource{
-		performerID:       performerID,
-		avsAddress:        akp.config.AvsAddress,
-		image:             image,
-		status:            avsPerformer.PerformerResourceStatusStaged,
-		client:            client,
-		connectionManager: connectionManager,
-		endpoint:          createResponse.Endpoint,
-		statusChan:        make(chan avsPerformer.PerformerStatusEvent, 10),
-		createdAt:         time.Now(),
-		performerHealth: &avsPerformer.PerformerHealth{
-			ContainerIsHealthy:   true,
-			ApplicationIsHealthy: true,
-			LastHealthCheck:      time.Now(),
-		},
+		performerID: performerID,
+		avsAddress:  akp.config.AvsAddress,
+		image:       image,
+		status:      avsPerformer.PerformerResourceStatusStaged,
+		client:      client,
+		grpcConn:    grpcConn,
+		endpoint:    endpoint, // Use the potentially overridden endpoint
+		statusChan:  make(chan avsPerformer.PerformerStatusEvent, 10),
+		createdAt:   time.Now(),
 	}
 
 	akp.logger.Info("Kubernetes performer resource created successfully",
 		zap.String("performerID", performerID),
-		zap.String("endpoint", createResponse.Endpoint),
+		zap.String("endpoint", endpoint),
 	)
 
 	return performerResource, nil
@@ -385,119 +385,6 @@ func (akp *AvsKubernetesPerformer) waitForPerformerReady(ctx context.Context, pe
 	}
 }
 
-// monitorPerformerHealth monitors the health of a performer
-func (akp *AvsKubernetesPerformer) monitorPerformerHealth(ctx context.Context, performer *PerformerResource) {
-	ticker := time.NewTicker(akp.config.ApplicationHealthCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			akp.performApplicationHealthCheck(ctx, performer)
-		}
-	}
-}
-
-// performApplicationHealthCheck checks the health of a performer
-func (akp *AvsKubernetesPerformer) performApplicationHealthCheck(ctx context.Context, performer *PerformerResource) {
-	healthCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	// Check if circuit breaker is open
-	if performer.connectionManager.IsCircuitOpen() {
-		akp.logger.Warn("Circuit breaker is open for performer, skipping health check",
-			zap.String("performerID", performer.performerID),
-			zap.Any("connectionStats", performer.connectionManager.GetConnectionStats()),
-		)
-		performer.performerHealth.ApplicationIsHealthy = false
-		performer.performerHealth.ConsecutiveApplicationHealthFailures++
-		return
-	}
-
-	// Get a healthy connection
-	conn, err := performer.connectionManager.GetConnection()
-	if err != nil {
-		akp.logger.Warn("Failed to get healthy connection for health check",
-			zap.String("performerID", performer.performerID),
-			zap.Error(err),
-		)
-		performer.performerHealth.ApplicationIsHealthy = false
-		performer.performerHealth.ConsecutiveApplicationHealthFailures++
-		return
-	}
-
-	// Create a new client with the healthy connection
-	client, err := avsPerformerClient.NewAvsPerformerClientWithConn(conn)
-	if err != nil {
-		akp.logger.Warn("Failed to create performer client for health check",
-			zap.String("performerID", performer.performerID),
-			zap.Error(err),
-		)
-		performer.performerHealth.ApplicationIsHealthy = false
-		performer.performerHealth.ConsecutiveApplicationHealthFailures++
-		return
-	}
-
-	_, err = client.HealthClient.Check(healthCtx, &healthV1.HealthCheckRequest{})
-	performer.lastHealthCheck = time.Now()
-	performer.performerHealth.LastHealthCheck = time.Now()
-
-	if err != nil {
-		// Health check failed
-		performer.performerHealth.ApplicationIsHealthy = false
-		performer.performerHealth.ConsecutiveApplicationHealthFailures++
-
-		akp.logger.Warn("Application health check failed",
-			zap.String("performerID", performer.performerID),
-			zap.Error(err),
-			zap.Int("consecutiveFailures", performer.performerHealth.ConsecutiveApplicationHealthFailures),
-			zap.Any("connectionStats", performer.connectionManager.GetConnectionStats()),
-		)
-
-		// Send unhealthy status event
-		if performer.statusChan != nil {
-			select {
-			case performer.statusChan <- avsPerformer.PerformerStatusEvent{
-				Status:      avsPerformer.PerformerUnhealthy,
-				PerformerID: performer.performerID,
-				Message:     fmt.Sprintf("Health check failed: %v", err),
-				Timestamp:   time.Now(),
-			}:
-			default:
-			}
-		}
-
-		// Handle consecutive failures
-		if performer.performerHealth.ConsecutiveApplicationHealthFailures >= maxConsecutiveApplicationHealthFailures {
-			akp.logger.Error("Performer failed consecutive health checks",
-				zap.String("performerID", performer.performerID),
-				zap.Int("consecutiveFailures", performer.performerHealth.ConsecutiveApplicationHealthFailures),
-			)
-			// In Kubernetes, we could potentially restart the pod or recreate the performer
-			// For now, just log the failure - the operator will handle restarts
-		}
-	} else {
-		// Health check succeeded
-		performer.performerHealth.ApplicationIsHealthy = true
-		performer.performerHealth.ConsecutiveApplicationHealthFailures = 0
-
-		// Send healthy status event
-		if performer.statusChan != nil {
-			select {
-			case performer.statusChan <- avsPerformer.PerformerStatusEvent{
-				Status:      avsPerformer.PerformerHealthy,
-				PerformerID: performer.performerID,
-				Message:     "Performer is healthy",
-				Timestamp:   time.Now(),
-			}:
-			default:
-			}
-		}
-	}
-}
-
 // CreatePerformer creates a new performer and returns the creation result
 func (akp *AvsKubernetesPerformer) CreatePerformer(
 	ctx context.Context,
@@ -526,9 +413,6 @@ func (akp *AvsKubernetesPerformer) CreatePerformer(
 	// Always deploy as next performer
 	akp.nextPerformer = newPerformer
 	akp.nextPerformer.status = avsPerformer.PerformerResourceStatusStaged
-
-	// Start monitoring for the new performer
-	go akp.monitorPerformerHealth(ctx, newPerformer)
 
 	akp.logger.Info("Kubernetes performer created successfully",
 		zap.String("performerID", newPerformer.performerID),
@@ -560,11 +444,6 @@ func (akp *AvsKubernetesPerformer) PromotePerformer(ctx context.Context, perform
 	// Check if the performer is the next performer
 	if akp.nextPerformer == nil || akp.nextPerformer.performerID != performerID {
 		return fmt.Errorf("performer %s is not in the next deployment slot", performerID)
-	}
-
-	// Verify next performer is healthy
-	if !akp.nextPerformer.performerHealth.ApplicationIsHealthy {
-		return fmt.Errorf("cannot promote unhealthy performer %s", performerID)
 	}
 
 	akp.logger.Info("Promoting performer to current",
@@ -624,10 +503,10 @@ func (akp *AvsKubernetesPerformer) RemovePerformer(ctx context.Context, performe
 		close(targetPerformer.statusChan)
 	}
 
-	// Close connection manager
-	if targetPerformer.connectionManager != nil {
-		if err := targetPerformer.connectionManager.Close(); err != nil {
-			akp.logger.Warn("Failed to close connection manager",
+	// Close gRPC connection
+	if targetPerformer.grpcConn != nil {
+		if err := targetPerformer.grpcConn.Close(); err != nil {
+			akp.logger.Warn("Failed to close gRPC connection",
 				zap.String("performerID", performerID),
 				zap.Error(err),
 			)
@@ -661,13 +540,8 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	}
 
 	currentPerformer := current.(*PerformerResource)
-	if currentPerformer == nil || currentPerformer.connectionManager == nil {
-		return nil, fmt.Errorf("no current performer connection manager available to execute task")
-	}
-
-	// Check if circuit breaker is open
-	if currentPerformer.connectionManager.IsCircuitOpen() {
-		return nil, fmt.Errorf("circuit breaker is open for performer %s, task execution unavailable", currentPerformer.performerID)
+	if currentPerformer == nil || currentPerformer.client == nil {
+		return nil, fmt.Errorf("no current performer client available to execute task")
 	}
 
 	// Track this task with the performer's WaitGroup
@@ -675,23 +549,8 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	wg.Add(1)
 	defer wg.Done()
 
-	// Get a healthy connection for task execution
-	conn, err := currentPerformer.connectionManager.GetConnection()
-	if err != nil {
-		akp.logger.Error("Failed to get healthy connection for task execution",
-			zap.String("performerID", currentPerformer.performerID),
-			zap.String("taskID", task.TaskID),
-			zap.Error(err),
-			zap.Any("connectionStats", currentPerformer.connectionManager.GetConnectionStats()),
-		)
-		return nil, fmt.Errorf("failed to get healthy connection: %w", err)
-	}
-
-	// Create a new client with the healthy connection
-	client := performerV1.NewPerformerServiceClient(conn)
-
-	// Execute the task
-	res, err := client.ExecuteTask(ctx, &performerV1.TaskRequest{
+	// Execute the task using the pre-created client
+	res, err := currentPerformer.client.ExecuteTask(ctx, &performerV1.TaskRequest{
 		TaskId:  []byte(task.TaskID),
 		Payload: task.Payload,
 	})
@@ -700,7 +559,6 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 			zap.String("performerID", currentPerformer.performerID),
 			zap.String("taskID", task.TaskID),
 			zap.Error(err),
-			zap.Any("connectionStats", currentPerformer.connectionManager.GetConnectionStats()),
 		)
 		return nil, err
 	}
@@ -812,8 +670,8 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 	result.PerformerID = creationResult.PerformerID
 	result.Status = avsPerformer.DeploymentStatusInProgress
 
-	// Monitor deployment until healthy
-	if err := akp.waitForHealthy(deploymentCtx, creationResult.StatusChan); err != nil {
+	// Monitor deployment until pod is ready (Kubernetes handles health checks)
+	if err := akp.waitForPerformerReady(deploymentCtx, creationResult.PerformerID); err != nil {
 		// Deployment failed, clean up
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
@@ -866,33 +724,6 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 	return result, nil
 }
 
-// waitForHealthy waits for the performer to become healthy
-func (akp *AvsKubernetesPerformer) waitForHealthy(ctx context.Context, statusChan <-chan avsPerformer.PerformerStatusEvent) error {
-	for {
-		select {
-		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				return fmt.Errorf("deployment timeout")
-			}
-			return ctx.Err()
-		case status, ok := <-statusChan:
-			if !ok {
-				return fmt.Errorf("status channel closed unexpectedly")
-			}
-
-			switch status.Status {
-			case avsPerformer.PerformerHealthy:
-				return nil
-			case avsPerformer.PerformerUnhealthy:
-				akp.logger.Warn("Performer is unhealthy, continuing to monitor",
-					zap.String("performerID", status.PerformerID),
-					zap.String("message", status.Message),
-				)
-			}
-		}
-	}
-}
-
 // ListPerformers returns information about current and next performers
 func (akp *AvsKubernetesPerformer) ListPerformers() []avsPerformer.PerformerMetadata {
 	akp.performerResourcesMu.Lock()
@@ -923,9 +754,9 @@ func (akp *AvsKubernetesPerformer) convertPerformerResource(performer *Performer
 		ArtifactRegistry:   performer.image.Repository,
 		ArtifactTag:        performer.image.Tag,
 		ArtifactDigest:     performer.image.Digest,
-		ContainerHealthy:   performer.performerHealth.ContainerIsHealthy,
-		ApplicationHealthy: performer.performerHealth.ApplicationIsHealthy,
-		LastHealthCheck:    performer.performerHealth.LastHealthCheck,
+		ContainerHealthy:   true, // Kubernetes handles health checks
+		ApplicationHealthy: true, // Kubernetes handles health checks
+		LastHealthCheck:    time.Now(),
 		ResourceID:         performer.performerID, // In K8s, we use performer ID as resource ID
 	}
 }
@@ -996,10 +827,10 @@ func (akp *AvsKubernetesPerformer) startDrainAndRemove(performer *PerformerResou
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Close connection manager
-		if performer.connectionManager != nil {
-			if err := performer.connectionManager.Close(); err != nil {
-				akp.logger.Warn("Failed to close connection manager during drain",
+		// Close gRPC connection
+		if performer.grpcConn != nil {
+			if err := performer.grpcConn.Close(); err != nil {
+				akp.logger.Warn("Failed to close gRPC connection during drain",
 					zap.String("performerID", performerID),
 					zap.Error(err),
 				)
@@ -1046,10 +877,10 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 	if current := akp.currentPerformer.Load(); current != nil {
 		currentPerformer := current.(*PerformerResource)
 
-		// Close connection manager
-		if currentPerformer.connectionManager != nil {
-			if err := currentPerformer.connectionManager.Close(); err != nil {
-				errs = append(errs, fmt.Errorf("failed to close current performer connection manager: %w", err))
+		// Close gRPC connection
+		if currentPerformer.grpcConn != nil {
+			if err := currentPerformer.grpcConn.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to close current performer gRPC connection: %w", err))
 			}
 		}
 
@@ -1062,10 +893,10 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 
 	// Shutdown next performer
 	if akp.nextPerformer != nil {
-		// Close connection manager
-		if akp.nextPerformer.connectionManager != nil {
-			if err := akp.nextPerformer.connectionManager.Close(); err != nil {
-				errs = append(errs, fmt.Errorf("failed to close next performer connection manager: %w", err))
+		// Close gRPC connection
+		if akp.nextPerformer.grpcConn != nil {
+			if err := akp.nextPerformer.grpcConn.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to close next performer gRPC connection: %w", err))
 			}
 		}
 

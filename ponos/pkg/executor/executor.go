@@ -227,7 +227,7 @@ func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAd
 
 // createDockerPerformer creates a Docker-based AVS performer
 func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
-	// Prepare the image 
+	// Prepare the image
 	image := avsPerformer.PerformerImage{}
 	if avs.Image != nil {
 		image.Repository = avs.Image.Repository
@@ -271,7 +271,7 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		image.Tag = avs.Image.Tag
 	}
 	image.Envs = avs.Envs
-	
+
 	// Set the service account name if provided in Kubernetes config
 	if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
 		image.ServiceAccountName = avs.Kubernetes.ServiceAccountName
@@ -279,10 +279,10 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
-			AvsAddress:         avsAddress,
-			ProcessType:        avsPerformer.AvsProcessType(avs.ProcessType),
-			Image:              image,
-			SkipConnectionTest: avs.SkipConnectionTest,
+			AvsAddress:       avsAddress,
+			ProcessType:      avsPerformer.AvsProcessType(avs.ProcessType),
+			Image:            image,
+			EndpointOverride: avs.EndpointOverride,
 		},
 		kubernetesConfig,
 		e.peeringFetcher,

@@ -146,13 +146,13 @@ type AvsPerformerKubernetesConfig struct {
 }
 
 type AvsPerformerConfig struct {
-	Image              *PerformerImage
-	ProcessType        string
-	AvsAddress         string
-	Envs               []config.AVSPerformerEnv
-	DeploymentMode     DeploymentMode                 `json:"deploymentMode" yaml:"deploymentMode"`
-	SkipConnectionTest bool                           `json:"skipConnectionTest" yaml:"skipConnectionTest"` // Deprecated: Connection tests are no longer performed on initialization
-	Kubernetes         *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
+	Image            *PerformerImage
+	ProcessType      string
+	AvsAddress       string
+	Envs             []config.AVSPerformerEnv
+	DeploymentMode   DeploymentMode                `json:"deploymentMode" yaml:"deploymentMode"`
+	Kubernetes       *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
+	EndpointOverride string                        `json:"endpointOverride,omitempty" yaml:"endpointOverride,omitempty"` // Optional: Override auto-detected endpoint (for testing)
 }
 
 func (ap *AvsPerformerConfig) Validate() error {

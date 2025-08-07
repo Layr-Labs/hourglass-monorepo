@@ -77,28 +77,28 @@ func retryUnaryInterceptor(config *RetryConfig) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		var err error
 		delay := config.InitialDelay
-		
+
 		for attempt := 0; attempt <= config.MaxRetries; attempt++ {
 			// Create a context with timeout for this attempt
 			attemptCtx, cancel := context.WithTimeout(ctx, config.ConnectionTimeout)
 			err = invoker(attemptCtx, method, req, reply, cc, opts...)
 			cancel()
-			
+
 			// If successful or non-retryable error, return immediately
 			if err == nil || !isRetryableError(err) {
 				return err
 			}
-			
+
 			// Don't retry if we've hit max attempts
 			if attempt == config.MaxRetries {
 				break
 			}
-			
+
 			// Don't retry if the parent context is cancelled
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			
+
 			// Exponential backoff
 			time.Sleep(delay)
 			delay = time.Duration(float64(delay) * config.BackoffMultiplier)
@@ -106,7 +106,7 @@ func retryUnaryInterceptor(config *RetryConfig) grpc.UnaryClientInterceptor {
 				delay = config.MaxDelay
 			}
 		}
-		
+
 		return fmt.Errorf("request failed after %d attempts: %w", config.MaxRetries+1, err)
 	}
 }

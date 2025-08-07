@@ -115,7 +115,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 		// Deploy Hourglass operator
 		operatorConfig := testUtils.DefaultOperatorDeploymentConfig(root, l.Sugar())
-		operator, operatorCleanup, err := testUtils.DeployOperator(ctx, cluster, operatorConfig)
+		hgOperator, operatorCleanup, err := testUtils.DeployOperator(ctx, cluster, operatorConfig)
 		if err != nil {
 			t.Fatalf("Failed to deploy operator: %v", err)
 		}
@@ -136,7 +136,12 @@ func runAggregatorTest(t *testing.T, mode string) {
 			}
 		}()
 
-		t.Logf("Operator deployed successfully: %s", operator.ReleaseName)
+		t.Logf("Operator deployed successfully: %s", hgOperator.ReleaseName)
+
+		// Create NodePort service to expose performer pods to the host
+		if err := createPerformerNodePortService(ctx, cluster, l.Sugar()); err != nil {
+			t.Fatalf("Failed to create NodePort service: %v", err)
+		}
 	}
 
 	// ------------------------------------------------------------------------
@@ -782,7 +787,7 @@ avsPerformers:
   avsAddress: "0xavs1..."
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
   deploymentMode: "kubernetes"
-  skipConnectionTest: true
+  endpointOverride: "localhost:30080"
 `
 	} else {
 		return `
@@ -853,5 +858,36 @@ func loadOperatorImage(ctx context.Context, cluster *testUtils.KindCluster, logg
 	}
 
 	logger.Info("Successfully loaded Hourglass operator image")
+	return nil
+}
+
+// createPerformerNodePortService creates a NodePort service to expose performer pods
+func createPerformerNodePortService(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
+	logger.Info("Creating NodePort service to expose performer pods")
+
+	// Create the NodePort service YAML
+	serviceYAML := `
+apiVersion: v1
+kind: Service
+metadata:
+  name: performer-nodeport
+  namespace: default
+spec:
+  type: NodePort
+  selector:
+    app: hourglass-performer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080
+    protocol: TCP
+`
+
+	// Apply the service
+	if err := cluster.RunKubectlWithInput(ctx, serviceYAML, "apply", "-f", "-"); err != nil {
+		return fmt.Errorf("failed to create NodePort service: %v", err)
+	}
+
+	logger.Info("NodePort service created successfully on port 30080")
 	return nil
 }

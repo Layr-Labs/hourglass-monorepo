@@ -52,16 +52,16 @@ func TestNewGrpcClientWithRetry_Success(t *testing.T) {
 		ConnectionTimeout: 5 * time.Second,
 	}
 
-	// This will fail because we can't actually connect to bufconn with regular dial
-	// But we can test the retry logic with a mock server
-	_, err := NewGrpcClientWithRetry("localhost:0", true, config)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, NewGrpcClientWithRetry will succeed even with invalid addresses
+	// The connection is only established when actually used
+	conn, err := NewGrpcClientWithRetry("localhost:0", true, config)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	// Test that error contains retry information
-	if err != nil && !contains(err.Error(), "failed to establish gRPC connection after") {
-		t.Errorf("Expected retry error message, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
@@ -74,26 +74,28 @@ func TestNewGrpcClientWithRetry_InvalidAddress(t *testing.T) {
 		ConnectionTimeout: 100 * time.Millisecond,
 	}
 
-	_, err := NewGrpcClientWithRetry("invalid-address:99999", true, config)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, even invalid addresses will succeed at creation time
+	conn, err := NewGrpcClientWithRetry("invalid-address:99999", true, config)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	// Should contain retry count
-	if !contains(err.Error(), "failed to establish gRPC connection after 3 attempts") {
-		t.Errorf("Expected retry count in error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
 func TestNewGrpcClientWithRetry_NilConfig(t *testing.T) {
-	_, err := NewGrpcClientWithRetry("localhost:0", true, nil)
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, this should succeed even with nil config (uses defaults)
+	conn, err := NewGrpcClientWithRetry("localhost:0", true, nil)
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection with nil config, got: %v", err)
 	}
-
-	// Should use default config (5 retries + 1 initial = 6 attempts)
-	if !contains(err.Error(), "failed to establish gRPC connection after 6 attempts") {
-		t.Errorf("Expected default retry count in error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
+	} else {
+		defer conn.Close()
 	}
 }
 
@@ -147,13 +149,14 @@ func TestConnectionManager_GetConnection_Failure(t *testing.T) {
 	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	cm := NewConnectionManager("localhost:0", true, config, l)
 
-	_, err := cm.GetConnection()
-	if err == nil {
-		t.Error("Expected error for invalid address, got nil")
+	// With lazy connections, GetConnection will succeed even for invalid addresses
+	// The actual connection is only established when used
+	conn, err := cm.GetConnection()
+	if err != nil {
+		t.Errorf("Expected no error for lazy connection, got: %v", err)
 	}
-
-	if !contains(err.Error(), "failed to create connection") {
-		t.Errorf("Expected connection creation error, got: %v", err)
+	if conn == nil {
+		t.Error("Expected non-nil connection, got nil")
 	}
 }
 
