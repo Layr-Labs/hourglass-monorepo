@@ -125,9 +125,10 @@ var ExecutorService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ExecutorManagementService_DeployArtifact_FullMethodName  = "/eigenlayer.hourglass.v1.ExecutorManagementService/DeployArtifact"
-	ExecutorManagementService_ListPerformers_FullMethodName  = "/eigenlayer.hourglass.v1.ExecutorManagementService/ListPerformers"
-	ExecutorManagementService_RemovePerformer_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorManagementService/RemovePerformer"
+	ExecutorManagementService_DeployArtifact_FullMethodName    = "/eigenlayer.hourglass.v1.ExecutorManagementService/DeployArtifact"
+	ExecutorManagementService_ListPerformers_FullMethodName    = "/eigenlayer.hourglass.v1.ExecutorManagementService/ListPerformers"
+	ExecutorManagementService_RemovePerformer_FullMethodName   = "/eigenlayer.hourglass.v1.ExecutorManagementService/RemovePerformer"
+	ExecutorManagementService_GetChallengeToken_FullMethodName = "/eigenlayer.hourglass.v1.ExecutorManagementService/GetChallengeToken"
 )
 
 // ExecutorManagementServiceClient is the client API for ExecutorManagementService service.
@@ -140,6 +141,8 @@ type ExecutorManagementServiceClient interface {
 	ListPerformers(ctx context.Context, in *ListPerformersRequest, opts ...grpc.CallOption) (*ListPerformersResponse, error)
 	// RemovePerformer removes a performer from the executor
 	RemovePerformer(ctx context.Context, in *RemovePerformerRequest, opts ...grpc.CallOption) (*RemovePerformerResponse, error)
+	// GetChallengeToken returns a challenge token for authentication purposes
+	GetChallengeToken(ctx context.Context, in *GetChallengeTokenRequest, opts ...grpc.CallOption) (*GetChallengeTokenResponse, error)
 }
 
 type executorManagementServiceClient struct {
@@ -180,6 +183,16 @@ func (c *executorManagementServiceClient) RemovePerformer(ctx context.Context, i
 	return out, nil
 }
 
+func (c *executorManagementServiceClient) GetChallengeToken(ctx context.Context, in *GetChallengeTokenRequest, opts ...grpc.CallOption) (*GetChallengeTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetChallengeTokenResponse)
+	err := c.cc.Invoke(ctx, ExecutorManagementService_GetChallengeToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ExecutorManagementServiceServer is the server API for ExecutorManagementService service.
 // All implementations should embed UnimplementedExecutorManagementServiceServer
 // for forward compatibility.
@@ -190,6 +203,8 @@ type ExecutorManagementServiceServer interface {
 	ListPerformers(context.Context, *ListPerformersRequest) (*ListPerformersResponse, error)
 	// RemovePerformer removes a performer from the executor
 	RemovePerformer(context.Context, *RemovePerformerRequest) (*RemovePerformerResponse, error)
+	// GetChallengeToken returns a challenge token for authentication purposes
+	GetChallengeToken(context.Context, *GetChallengeTokenRequest) (*GetChallengeTokenResponse, error)
 }
 
 // UnimplementedExecutorManagementServiceServer should be embedded to have
@@ -207,6 +222,9 @@ func (UnimplementedExecutorManagementServiceServer) ListPerformers(context.Conte
 }
 func (UnimplementedExecutorManagementServiceServer) RemovePerformer(context.Context, *RemovePerformerRequest) (*RemovePerformerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemovePerformer not implemented")
+}
+func (UnimplementedExecutorManagementServiceServer) GetChallengeToken(context.Context, *GetChallengeTokenRequest) (*GetChallengeTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetChallengeToken not implemented")
 }
 func (UnimplementedExecutorManagementServiceServer) testEmbeddedByValue() {}
 
@@ -282,6 +300,24 @@ func _ExecutorManagementService_RemovePerformer_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ExecutorManagementService_GetChallengeToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetChallengeTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ExecutorManagementServiceServer).GetChallengeToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ExecutorManagementService_GetChallengeToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ExecutorManagementServiceServer).GetChallengeToken(ctx, req.(*GetChallengeTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ExecutorManagementService_ServiceDesc is the grpc.ServiceDesc for ExecutorManagementService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -300,6 +336,10 @@ var ExecutorManagementService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemovePerformer",
 			Handler:    _ExecutorManagementService_RemovePerformer_Handler,
+		},
+		{
+			MethodName: "GetChallengeToken",
+			Handler:    _ExecutorManagementService_GetChallengeToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

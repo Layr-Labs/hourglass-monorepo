@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsKubernetesPerformer"
@@ -36,6 +38,9 @@ type Executor struct {
 
 	// store is the persistence layer
 	store storage.ExecutorStore
+
+	// authVerifier handles authentication verification and token management
+	authVerifier *auth.Verifier
 }
 
 func NewExecutorWithRpcServers(
@@ -83,6 +88,18 @@ func NewExecutor(
 	if store == nil {
 		panic("store is required")
 	}
+
+	// Create challenge token manager
+	tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
+
+	// Choose the appropriate signer for authentication
+	var authSigner signer.ISigner
+	if signers.ECDSASigner != nil {
+		authSigner = signers.ECDSASigner
+	} else if signers.BLSSigner != nil {
+		authSigner = signers.BLSSigner
+	}
+
 	return &Executor{
 		logger:              logger,
 		config:              config,
@@ -95,6 +112,7 @@ func NewExecutor(
 		peeringFetcher:      peeringFetcher,
 		l1ContractCaller:    l1ContractCaller,
 		store:               store,
+		authVerifier:        auth.NewVerifier(tokenManager, authSigner),
 	}
 }
 
