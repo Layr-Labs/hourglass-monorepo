@@ -13,5 +13,9 @@ RUN cp bin/* /usr/local/bin
 
 FROM debian:stable-slim
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY --from=0 /usr/local/bin/executor /usr/local/bin/
 COPY --from=0 /usr/local/bin/aggregator /usr/local/bin/
