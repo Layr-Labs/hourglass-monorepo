@@ -226,6 +226,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
 					zap.String("executorAddress", peer.OperatorAddress),
+					zap.String("networkAddress", socket),
 					zap.String("taskId", ts.Task.TaskId),
 					zap.Error(err),
 				)

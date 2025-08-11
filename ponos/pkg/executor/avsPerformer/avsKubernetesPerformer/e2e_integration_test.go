@@ -98,9 +98,7 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 
 	// Create AvsKubernetesPerformer without image (so Initialize doesn't hang)
 	performerConfig := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:                     "0xtest-avs-address",
-		ApplicationHealthCheckInterval: 2 * time.Second,
-		SkipConnectionTest:             true, // Skip connection test since executor is outside cluster
+		AvsAddress: "0xtest-avs-address",
 		// No image - prevents Initialize from hanging
 	}
 

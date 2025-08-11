@@ -298,10 +298,25 @@ type OverrideContracts struct {
 	TaskMailbox *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
 }
 
+type KubernetesEnv struct {
+	ValueFrom struct {
+		SecretKeyRef struct {
+			Name string `json:"name" yaml:"name"` // Name of the secret
+			Key  string `json:"key" yaml:"key"`   // Key within the secret
+		} `json:"secretKeyRef" yaml:"secretKeyRef"` // SecretKeyRef is used to reference a key in a Kubernetes secret
+		ConfigMapKeyRef struct {
+			Name string `json:"name" yaml:"name"` // Name of the config map
+			Key  string `json:"key" yaml:"key"`   // Key within the config map
+		} `json:"configMapKeyRef" yaml:"configMapKeyRef"` // ConfigMapKeyRef is used to reference a key in a Kubernetes config map
+
+	} `json:"valueFrom" yaml:"valueFrom"` // ValueFrom is used to reference a Kubernetes secret
+}
+
 type AVSPerformerEnv struct {
-	Name         string
-	Value        string // Value is a direct value, passed to the Executor and forwarded
-	ValueFromEnv string // ValueFromEnv is the name of an environment variable that should be forwarded to the Performer
+	Name          string
+	Value         string // Value is a direct value, passed to the Executor and forwarded
+	ValueFromEnv  string // ValueFromEnv is the name of an environment variable that should be forwarded to the Performer
+	KubernetesEnv *KubernetesEnv
 }
 
 func (a *AVSPerformerEnv) Validate() error {
