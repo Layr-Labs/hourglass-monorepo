@@ -31,8 +31,6 @@ var runCmd = &cobra.Command{
 		l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: Config.Debug})
 		sugar := l.Sugar()
 
-		fmt.Printf("Config: %+v\n", Config)
-
 		if err := Config.Validate(); err != nil {
 			sugar.Errorw("Invalid configuration", "error", err)
 			return err
