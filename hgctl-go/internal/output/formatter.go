@@ -14,8 +14,9 @@ import (
 )
 
 type ReleaseWithSpec struct {
-	Release     *client.Release `json:"release"`
-	RuntimeSpec *runtime.Spec   `json:"runtimeSpec"`
+	Release        *client.Release `json:"release"`
+	RuntimeSpec    *runtime.Spec   `json:"runtimeSpec"`
+	RuntimeSpecRaw []byte          `json:"-"`
 }
 
 type Formatter struct {
@@ -34,7 +35,11 @@ func (f *Formatter) PrintReleaseWithSpec(data *ReleaseWithSpec) error {
 	case "json":
 		return f.printJSON(data)
 	case "yaml":
-		return f.printYAML(data)
+		if len(data.RuntimeSpecRaw) > 0 {
+			fmt.Print(string(data.RuntimeSpecRaw))
+			return nil
+		}
+		return f.printYAML(data.RuntimeSpec)
 	case "table":
 		return f.printReleaseTable(data)
 	default:
@@ -63,7 +68,12 @@ func (f *Formatter) printJSON(data interface{}) error {
 
 func (f *Formatter) printYAML(data interface{}) error {
 	encoder := yaml.NewEncoder(os.Stdout)
-	defer encoder.Close()
+	defer func(encoder *yaml.Encoder) {
+		err := encoder.Close()
+		if err != nil {
+			fmt.Printf("error closing output: %v\n\n", err)
+		}
+	}(encoder)
 	return encoder.Encode(data)
 }
 
@@ -73,6 +83,94 @@ func (f *Formatter) PrintJSON(data interface{}) error {
 
 func (f *Formatter) PrintYAML(data interface{}) error {
 	return f.printYAML(data)
+}
+
+// Print formats and prints generic data based on the configured format
+func (f *Formatter) Print(data interface{}) error {
+	switch f.format {
+	case "json":
+		return f.printJSON(data)
+	case "yaml":
+		return f.printYAML(data)
+	case "table":
+		// For table format, we need to handle different data types
+		// For now, we'll use a simple key-value table for structs
+		return f.printGenericTable(data)
+	default:
+		return fmt.Errorf("unsupported output format: %s", f.format)
+	}
+}
+
+// printGenericTable prints generic data in table format
+func (f *Formatter) printGenericTable(data interface{}) error {
+	// Marshal to JSON first to get a generic representation
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+
+	// Check if it's an array
+	var arr []interface{}
+	if err := json.Unmarshal(jsonData, &arr); err == nil {
+		// It's an array, print as table
+		if len(arr) == 0 {
+			fmt.Println("No data found")
+			return nil
+		}
+
+		// Get headers from first element
+		firstElem, _ := json.Marshal(arr[0])
+		var firstMap map[string]interface{}
+		if err := json.Unmarshal(firstElem, &firstMap); err != nil {
+			return fmt.Errorf("failed to parse data: %w", err)
+		}
+
+		// Create table
+		table := tablewriter.NewWriter(os.Stdout)
+
+		// Set headers
+		var headers []string
+		for key := range firstMap {
+			headers = append(headers, key)
+		}
+		table.SetHeader(headers)
+
+		// Add rows
+		for _, item := range arr {
+			itemData, _ := json.Marshal(item)
+			var itemMap map[string]interface{}
+			err := json.Unmarshal(itemData, &itemMap)
+			if err != nil {
+				return err
+			}
+
+			var row []string
+			for _, header := range headers {
+				val := fmt.Sprintf("%v", itemMap[header])
+				row = append(row, val)
+			}
+			table.Append(row)
+		}
+
+		table.Render()
+		return nil
+	}
+
+	// It's a single object, print as key-value pairs
+	var obj map[string]interface{}
+	if err := json.Unmarshal(jsonData, &obj); err != nil {
+		return fmt.Errorf("failed to parse data: %w", err)
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Field", "Value"})
+
+	for key, value := range obj {
+		table.Append([]string{key, fmt.Sprintf("%v", value)})
+	}
+
+	table.Render()
+	return nil
 }
 
 func (f *Formatter) printReleaseTable(data *ReleaseWithSpec) error {
@@ -125,31 +223,60 @@ func (f *Formatter) printReleaseTable(data *ReleaseWithSpec) error {
 
 func (f *Formatter) printReleasesTable(releases []*client.Release) error {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"RELEASE ID", "UPGRADE BY", "OPERATOR SETS", "ARTIFACTS"})
+	table.SetHeader([]string{"OPERATOR SET", "RELEASE ID", "UPGRADE BY", "ARTIFACTS"})
 
+	// Configure table for better formatting
+	table.SetAutoWrapText(false)
+	table.SetAutoFormatHeaders(true)
+	table.SetCenterSeparator("|")
+	table.SetColumnSeparator("|")
+	table.SetRowSeparator("-")
+	table.SetHeaderLine(true)
+	table.SetBorder(true)
+	table.SetTablePadding(" ")
+	table.SetNoWhiteSpace(false)
+
+	// Group releases by operator set
+	opSetReleases := make(map[string][]*client.Release)
 	for _, release := range releases {
-		upgradeBy := time.Unix(int64(release.UpgradeByTime), 0).Format("01/02/2006, 3:04:05 PM")
-
-		var opSets string
-		var artifacts string
-
-		for opSet, rel := range release.OperatorSetReleases {
-			if opSets != "" {
-				opSets += ", "
-			}
-			opSets += fmt.Sprintf("Set %s", opSet)
-
-			digest := rel.Digest
-			if len(digest) > 12 {
-				digest = digest[:12] + "..."
-			}
-			if artifacts != "" {
-				artifacts += "\n"
-			}
-			artifacts += fmt.Sprintf("%s @ %s", digest, rel.Registry)
+		for opSet := range release.OperatorSetReleases {
+			opSetReleases[opSet] = append(opSetReleases[opSet], release)
 		}
+	}
 
-		table.Append([]string{release.ID, upgradeBy, opSets, artifacts})
+	// Sort operator sets for consistent display
+	var sortedOpSets []string
+	for opSet := range opSetReleases {
+		sortedOpSets = append(sortedOpSets, opSet)
+	}
+	// Sort operator sets numerically
+	for i := 0; i < len(sortedOpSets); i++ {
+		for j := i + 1; j < len(sortedOpSets); j++ {
+			if sortedOpSets[i] > sortedOpSets[j] {
+				sortedOpSets[i], sortedOpSets[j] = sortedOpSets[j], sortedOpSets[i]
+			}
+		}
+	}
+
+	// Display releases grouped by operator set
+	for _, opSet := range sortedOpSets {
+		releases := opSetReleases[opSet]
+
+		// Show operator set header only on first release
+		firstRow := true
+		for _, release := range releases {
+			opSetStr := ""
+			if firstRow {
+				opSetStr = fmt.Sprintf("Set %s", opSet)
+				firstRow = false
+			}
+
+			upgradeBy := time.Unix(int64(release.UpgradeByTime), 0).Format("01/02/2006, 3:04:05 PM")
+			rel := release.OperatorSetReleases[opSet]
+			artifactStr := fmt.Sprintf("%s @ %s", rel.Digest, rel.Registry)
+
+			table.Append([]string{opSetStr, release.ID, upgradeBy, artifactStr})
+		}
 	}
 
 	table.Render()
