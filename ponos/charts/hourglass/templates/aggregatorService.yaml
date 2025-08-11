@@ -1,0 +1,20 @@
+{{- if .Values.aggregator.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aggregator.name" . }}
+  labels:
+    {{- include "aggregator.labels" . | nindent 4 }}
+spec:
+  ports:
+{{- range .Values.aggregator.ports }}
+    - name: {{ .name }}
+      protocol: {{ .protocol }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+{{- end }}
+  clusterIP: None
+  selector:
+  {{- include "aggregator.selectorLabels" . | nindent 6 }}
+
+{{- end }}

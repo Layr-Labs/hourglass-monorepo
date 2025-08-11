@@ -10,6 +10,11 @@ aggregator:
     mountConfigAsVolume: true
     data:
       config.yaml: ""
+  ports:
+    - name: management-grpc
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
   command:
     - aggregator
     - run
