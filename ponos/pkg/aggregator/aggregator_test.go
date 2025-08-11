@@ -478,7 +478,8 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// Create in-memory storage for testing
 	aggStore := memory.NewInMemoryAggregatorStore()
 
-	agg, err := NewAggregator(
+	agg, err := NewAggregatorWithManagementRpcServer(
+		9002,
 		&AggregatorConfig{
 			AVSs:             aggConfig.Avss,
 			Chains:           aggConfig.Chains,

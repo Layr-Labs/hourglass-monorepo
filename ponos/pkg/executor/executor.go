@@ -328,7 +328,12 @@ func (e *Executor) Run(ctx context.Context) error {
 		zap.String("operatorAddress", e.config.Operator.Address),
 	)
 	if err := e.taskRpcServer.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start RPC server: %v", err)
+		return fmt.Errorf("failed to start task RPC server: %v", err)
+	}
+	if e.managementRpcServer != nil && e.managementRpcServer != e.taskRpcServer {
+		if err := e.managementRpcServer.Start(ctx); err != nil {
+			return fmt.Errorf("failed to start management RPC server: %v", err)
+		}
 	}
 	return nil
 }

@@ -122,7 +122,8 @@ var runCmd = &cobra.Command{
 			store = memory.NewInMemoryAggregatorStore()
 		}
 
-		agg, err := aggregator.NewAggregator(
+		agg, err := aggregator.NewAggregatorWithManagementRpcServer(
+			Config.ManagementServerGrpcPort,
 			&aggregator.AggregatorConfig{
 				AVSs:             Config.Avss,
 				Chains:           Config.Chains,
