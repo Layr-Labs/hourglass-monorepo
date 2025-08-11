@@ -1,5 +1,5 @@
 operator:
   image:
     repository: hourglass-operator
-    tag: "1754419574"
+    tag: "1754508906"
     pullPolicy: Never

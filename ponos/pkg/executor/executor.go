@@ -128,11 +128,17 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				return err
 			}
 
+			var serviceAccountName string
+			if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
+				serviceAccountName = avs.Kubernetes.ServiceAccountName
+			}
+
 			// Deploy performer using the performer's Deploy method
 			image := avsPerformer.PerformerImage{
-				Repository: avs.Image.Repository,
-				Tag:        avs.Image.Tag,
-				Envs:       avs.Envs,
+				Repository:         avs.Image.Repository,
+				Tag:                avs.Image.Tag,
+				Envs:               avs.Envs,
+				ServiceAccountName: serviceAccountName,
 			}
 
 			result, err := performer.Deploy(ctx, image)
@@ -255,11 +261,16 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		KubeconfigPath:    e.config.Kubernetes.KubeConfigPath,
 	}
 
+	var endpointOverride string
+	if avs.Kubernetes != nil && avs.Kubernetes.EndpointOverride != "" {
+		endpointOverride = avs.Kubernetes.EndpointOverride
+	}
+
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
-			AvsAddress:         avsAddress,
-			ProcessType:        avsPerformer.AvsProcessType(avs.ProcessType),
-			SkipConnectionTest: avs.SkipConnectionTest,
+			AvsAddress:       avsAddress,
+			ProcessType:      avsPerformer.AvsProcessType(avs.ProcessType),
+			EndpointOverride: endpointOverride,
 		},
 		kubernetesConfig,
 		e.peeringFetcher,
