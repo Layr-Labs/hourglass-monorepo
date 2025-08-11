@@ -1,0 +1,42 @@
+debug: {{envDefault "DEBUG" "false"}}
+
+serverConfig:
+  port: {{envDefault "AGGREGATOR_PORT" "9000"}}
+  secureConnection: {{envDefault "SECURE_CONNECTION" "false"}}
+  aggregatorUrl: "{{envDefault "AGGREGATOR_URL" "aggregator:9000"}}"
+
+operator:
+  address: "{{env "OPERATOR_ADDRESS"}}"
+  operatorPrivateKey:
+    privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
+  signingKeys:
+    # Keystore configuration is determined by KEYSTORE_NAME environment variable
+    # The keystore type (bn254/bls or ecdsa) will determine which section is configured
+    bls:
+      keystoreFile: "/keystores/operator.keystore.json"
+      password: "{{env "KEYSTORE_PASSWORD"}}"
+
+l1ChainId: {{env "L1_CHAIN_ID"}}
+
+chains:
+  - name: "{{envDefault "L1_NETWORK_NAME" "ethereum"}}"
+    network: "{{envDefault "L1_NETWORK" "mainnet"}}"
+    chainId: {{env "L1_CHAIN_ID"}}
+    rpcUrl: "{{env "L1_RPC_URL"}}"
+    pollIntervalSeconds: {{envDefault "L1_POLL_INTERVAL" "2"}}
+  {{if env "L2_CHAIN_ID"}}
+  - name: "{{envDefault "L2_NETWORK_NAME" "base"}}"
+    network: "{{envDefault "L2_NETWORK" "mainnet"}}"
+    chainId: {{env "L2_CHAIN_ID"}}
+    rpcUrl: "{{env "L2_RPC_URL"}}"
+    pollIntervalSeconds: {{envDefault "L2_POLL_INTERVAL" "2"}}
+  {{end}}
+
+avss:
+  - address: "{{env "AVS_ADDRESS"}}"
+    responseTimeout: {{envDefault "RESPONSE_TIMEOUT" "3000"}}
+    chainIds:
+      - {{env "L1_CHAIN_ID"}}
+      {{if env "L2_CHAIN_ID"}}
+      - {{env "L2_CHAIN_ID"}}
+      {{end}}
