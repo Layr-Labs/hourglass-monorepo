@@ -162,13 +162,9 @@ func (arc *AggregatorConfig) Validate() error {
 		}
 	}
 
-	if len(arc.Avss) == 0 {
-		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
-	} else {
-		for _, avs := range arc.Avss {
-			if err := avs.Validate(); err != nil {
-				allErrors = append(allErrors, field.Invalid(field.NewPath("avss"), avs, "invalid avs config"))
-			}
+	for _, avs := range arc.Avss {
+		if err := avs.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("avss"), avs, "invalid avs config"))
 		}
 	}
 

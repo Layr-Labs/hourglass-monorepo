@@ -146,6 +146,8 @@ var (
 		ChainId_EthereumMainnet,
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
+		ChainId_EthereumSepolia,
+		ChainId_BaseSepolia,
 		ChainId_EthereumAnvil,
 		ChainId_BaseSepoliaAnvil,
 	}

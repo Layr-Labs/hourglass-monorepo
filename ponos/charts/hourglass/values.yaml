@@ -24,7 +24,14 @@ aggregator:
   additionalLabels: {}
   metadataLabels: {}
   serviceAccount:
-    name: "executor"
+    # Specifies whether a service account should be created
+    create: true
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the executor name
+    name: ""
+  rbac:
+    # Specifies whether RBAC resources should be created
+    create: true
   args: []
   resources:
     requests:
