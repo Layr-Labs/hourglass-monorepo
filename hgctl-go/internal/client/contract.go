@@ -458,7 +458,7 @@ func (c *ContractClient) DepositIntoStrategy(
 	ctx context.Context,
 	strategyAddress string,
 	tokenAddress string,
-	amount big.Int,
+	amount *big.Int,
 ) error {
 	if err := c.checkPrivateKey(); err != nil {
 		return err
@@ -490,7 +490,7 @@ func (c *ContractClient) DepositIntoStrategy(
 	}
 
 	// Deposit into strategy
-	depositTx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, tokenAddr, &amount)
+	depositTx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, tokenAddr, amount)
 	if err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
