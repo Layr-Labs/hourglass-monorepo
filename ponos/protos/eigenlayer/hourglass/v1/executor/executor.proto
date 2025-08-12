@@ -19,6 +19,15 @@ service ExecutorManagementService {
 
   // RemovePerformer removes a performer from the executor
   rpc RemovePerformer(RemovePerformerRequest) returns (RemovePerformerResponse) {}
+  
+  // GetChallengeToken returns a challenge token for authentication purposes
+  rpc GetChallengeToken(GetChallengeTokenRequest) returns (GetChallengeTokenResponse) {}
+}
+
+// AuthSignature contains authentication data for request verification
+message AuthSignature {
+  string challenge_token = 1;
+  bytes signature = 2;  // signature of Hash(challenge_token + method + request_payload)
 }
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
@@ -54,6 +63,7 @@ message DeployArtifactRequest {
   string registry_url = 3;
   repeated PerformerEnv env = 4;
   KubernetesConfig kubernetes = 5;
+  AuthSignature auth = 6;
 }
 
 message DeployArtifactResponse {
@@ -66,6 +76,7 @@ message DeployArtifactResponse {
 message ListPerformersRequest {
   // Optional: filter by AVS address
   string avs_address = 1;
+  AuthSignature auth = 2;
 }
 
 message PerformerEnv {
@@ -120,10 +131,22 @@ message ListPerformersResponse {
 // RemovePerformerRequest is the message used to remove a performer
 message RemovePerformerRequest {
   string performer_id = 1;
+  AuthSignature auth = 2;
 }
 
 // RemovePerformerResponse contains the result of performer removal
 message RemovePerformerResponse {
   bool success = 1;
   string message = 2;
+}
+
+// GetChallengeTokenRequest is used to request a challenge token for authentication
+message GetChallengeTokenRequest {
+  string operator_address = 1;
+}
+
+// GetChallengeTokenResponse returns a challenge token for authentication
+message GetChallengeTokenResponse {
+  string challenge_token = 1;
+  int64 expires_at = 2;  // Unix timestamp when token expires
 }
