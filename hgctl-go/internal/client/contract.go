@@ -79,6 +79,7 @@ type ContractClient struct {
 	strategyManager   *IStrategyManager.IStrategyManager
 	keyRegistrar      *IKeyRegistrar.IKeyRegistrar
 	releaseManager    *IReleaseManager.IReleaseManager
+	contractConfig    *ContractConfig
 }
 
 // DefaultContractAddresses contains the default contract addresses for a chain
@@ -161,6 +162,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		chainID:         chainID,
 		avsAddress:      common.HexToAddress(config.AVSAddress),
 		operatorAddress: common.HexToAddress(config.OperatorAddress),
+		contractConfig:  config,
 	}
 
 	// Get default addresses for this chain if not provided in config
@@ -478,7 +480,7 @@ func (c *ContractClient) DepositIntoStrategy(
 	if err != nil {
 		return err
 	}
-	approveTx, err := erc20.Transact(opts, "approve", c.strategyManager, amount)
+	approveTx, err := erc20.Transact(opts, "approve", c.contractConfig.StrategyManager, amount)
 	if err != nil {
 		return err
 	}
