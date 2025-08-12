@@ -26,6 +26,11 @@ The operator address must be configured in the context before running this comma
 				Required: true,
 			},
 			&cli.StringFlag{
+				Name:     "token-address",
+				Usage:    "Token address",
+				Required: true,
+			},
+			&cli.StringFlag{
 				Name:     "amount",
 				Usage:    "Amount to deposit (in wei or ether format, e.g., '1000000000000000000' or '1 ether')",
 				Required: true,
@@ -41,6 +46,7 @@ func depositAction(c *cli.Context) error {
 	// Get parameters
 	strategyAddress := c.String("strategy")
 	amountStr := c.String("amount")
+	tokenAddress := c.String("token-address")
 
 	// Parse amount
 	amount, err := parseAmount(amountStr)
@@ -60,7 +66,7 @@ func depositAction(c *cli.Context) error {
 	)
 
 	// Deposit into strategy
-	if err := contractClient.DepositIntoStrategy(c.Context, strategyAddress, amount); err != nil {
+	if err := contractClient.DepositIntoStrategy(c.Context, strategyAddress, tokenAddress, amount); err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
 

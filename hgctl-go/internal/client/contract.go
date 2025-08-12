@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
 	"math/big"
 	"strings"
 
@@ -451,7 +452,12 @@ func (c *ContractClient) RegisterOperatorToAVS(ctx context.Context, operatorSetI
 }
 
 // DepositIntoStrategy deposits tokens into a strategy
-func (c *ContractClient) DepositIntoStrategy(ctx context.Context, strategyAddress string, amount *big.Int) error {
+func (c *ContractClient) DepositIntoStrategy(
+	ctx context.Context,
+	strategyAddress string,
+	tokenAddress string,
+	amount *big.Int,
+) error {
 	if err := c.checkPrivateKey(); err != nil {
 		return err
 	}
@@ -467,30 +473,40 @@ func (c *ContractClient) DepositIntoStrategy(ctx context.Context, strategyAddres
 
 	// Convert strategy address
 	stratAddr := common.HexToAddress(strategyAddress)
-
-	// TODO: This needs to handle token approval first for non-ETH strategies
-	// For now, assuming ETH strategy
+	tokenAddr := common.HexToAddress(tokenAddress)
+	erc20, err := c.getERC20(tokenAddr)
+	if err != nil {
+		return err
+	}
+	approveTx, err := erc20.Transact(opts, "approve", c.strategyManager, amount)
+	if err != nil {
+		return err
+	}
+	_, err = bind.WaitMined(ctx, c.ethClient, approveTx)
+	if err != nil {
+		return err
+	}
 
 	// Deposit into strategy
-	tx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, common.Address{}, amount)
+	depositTx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, tokenAddr, amount)
 	if err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
 
 	// Wait for transaction
-	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	depositReceipt, err := bind.WaitMined(ctx, c.ethClient, depositTx)
 	if err != nil {
 		return fmt.Errorf("failed to wait for transaction: %w", err)
 	}
 
-	if receipt.Status == 0 {
+	if depositReceipt.Status == 0 {
 		return fmt.Errorf("transaction reverted")
 	}
 
 	c.logger.Info("Successfully deposited into strategy",
 		zap.String("strategy", strategyAddress),
 		zap.String("amount", amount.String()),
-		zap.String("txHash", receipt.TxHash.Hex()),
+		zap.String("txHash", depositReceipt.TxHash.Hex()),
 	)
 
 	return nil
@@ -971,4 +987,9 @@ func (c *ContractClient) GetOperatorSetMetadataURI(ctx context.Context, operator
 
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
+}
+
+// getERC20 returns an ERC20 bound contract instance
+func (c *ContractClient) getERC20(address common.Address) (*bind.BoundContract, error) {
+	return contracts.NewERC20Contract(address, c.ethClient)
 }
