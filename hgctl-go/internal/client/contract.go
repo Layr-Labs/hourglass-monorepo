@@ -480,7 +480,7 @@ func (c *ContractClient) DepositIntoStrategy(
 	if err != nil {
 		return err
 	}
-	approveTx, err := erc20.Transact(opts, "approve", c.contractConfig.StrategyManager, amount)
+	approveTx, err := erc20.Transact(opts, "approve", common.HexToAddress(c.contractConfig.StrategyManager), amount)
 	if err != nil {
 		return err
 	}
