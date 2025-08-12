@@ -129,12 +129,14 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	}
 
 	if ecp.lastObservedBlock == nil {
-		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1")
+		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1",
+			zap.Uint64("latestBlockNumber", latestBlockNum),
+		)
 		ecp.lastObservedBlock = &ethereum.EthereumBlock{
 			Number: ethereum.EthereumQuantity(latestBlockNum - 1),
 		}
 	} else {
-		ecp.logger.Sugar().Infow("latest on chain block",
+		ecp.logger.Sugar().Debugw("latest on chain block",
 			zap.Uint64("blockNumber", latestBlockNum),
 			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
 		)
@@ -142,7 +144,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 
 	// if the latest observed block is the same as the latest block, skip processing
 	if ecp.lastObservedBlock != nil && ecp.lastObservedBlock.Number.Value() == latestBlockNum {
-		ecp.logger.Sugar().Infow("Skipping block processing as the last observed block is the same as the latest block",
+		ecp.logger.Sugar().Debugw("Skipping block processing as the last observed block is the same as the latest block",
 			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
 			zap.Uint64("latestBlock", latestBlockNum),
 		)
@@ -164,7 +166,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			blocksToFetch = append(blocksToFetch, i)
 		}
 	}
-	ecp.logger.Sugar().Infow("Fetching blocks with logs",
+	ecp.logger.Sugar().Debugw("Fetching blocks with logs",
 		zap.Any("blocksToFetch", blocksToFetch),
 	)
 
@@ -178,9 +180,14 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			return err
 		}
 	}
-	ecp.logger.Sugar().Infow("All blocks processed",
+	ecp.logger.Sugar().Debugw("All blocks processed",
 		zap.Any("blocksToFetch", blocksToFetch),
 	)
+	if len(blocksToFetch) > 0 && blocksToFetch[len(blocksToFetch)-1]%100 == 0 {
+		ecp.logger.Sugar().Infow("Processed block",
+			zap.Uint64("blockNumber", blocksToFetch[len(blocksToFetch)-1]),
+		)
+	}
 
 	return nil
 }

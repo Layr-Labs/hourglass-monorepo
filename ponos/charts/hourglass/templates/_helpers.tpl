@@ -34,6 +34,14 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 {{- end }}
 
+{{- define "aggregator.serviceAccountName" -}}
+{{- if .Values.aggregator.serviceAccount.create -}}
+    {{- default (include "aggregator.name" .) .Values.aggregator.serviceAccount.name }}
+{{- else -}}
+    {{- default "default" .Values.aggregator.serviceAccount.name }}
+{{- end -}}
+{{- end }}
+
 
 
 {{- define "executor.name" -}}

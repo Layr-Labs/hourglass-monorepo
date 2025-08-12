@@ -1,0 +1,14 @@
+{{- if .Values.aggregator.enabled -}}
+{{- if .Values.aggregator.rbac.create -}}
+---
+# ServiceAccount for the Executor
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "aggregator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aggregator.labels" . | nindent 4 }}
+automountServiceAccountToken: true
+{{- end }}
+{{- end }}

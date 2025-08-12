@@ -1,57 +1,29 @@
----
 debug: false
 
 operator:
-  address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  address: "0x7c3522F9d3f4D1e0F24A133899945CAa9be7c405"
   operatorPrivateKey:
-    privateKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    privateKey: "0x4033c726d624c68d2d961ba142726e6a06cdffe37a14c2fbf1ae10e5f0ef108f"
   signingKeys:
-    bls:
-      keystore: |
-        {
-          "crypto": {
-            "kdf": {
-              "function": "scrypt",
-              "params": {
-                "dklen": 32,
-                "n": 262144,
-                "p": 1,
-                "r": 8,
-                "salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
-              },
-              "message": ""
-            },
-            "checksum": {
-              "function": "sha256",
-              "params": {},
-              "message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
-            },
-            "cipher": {
-              "function": "aes-128-ctr",
-              "params": {
-                "iv": "677edd29eff1f8635a51f66f71bc5c83"
-              },
-              "message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
-            }
-          },
-          "pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
-          "path": "m/1/0/0",
-          "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
-          "version": 4,
-          "curveType": "bn254"
-        }
-      password: ""
+    ecdsa:
+      privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
 
-l1ChainId: 1
+l1ChainId: 11155111
 
 chains:
   - name: "ethereum"
-    network: "mainnet"
-    chainId: 1
-    rpcUrl: "http://localhost:8545"
-    pollIntervalSeconds: 30
+    network: "sepolia"
+    chainId: 11155111
+    rpcUrl: "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
+    pollIntervalSeconds: 10
+  - name: "base"
+    network: "sepolia"
+    chainId: 84532
+    rpcUrl: "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
+    pollIntervalSeconds: 2
 
-avss:
-  - address: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
-    responseTimeout: 3000
-    chainIds: [1]
+avss: []
+
+# Storage configuration for persistence
+storage:
+  type: "memory"  # Options: "memory" or "badger"

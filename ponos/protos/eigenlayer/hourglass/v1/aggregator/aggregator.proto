@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package eigenlayer.hourglass.v1;
+
+option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator";
+
+message RegisterAvsRequest {
+  string avs_address = 1;
+  repeated uint32 chain_ids = 2;
+}
+
+message RegisterAvsResponse {
+  bool success = 1;
+}
+
+message DeRegisterAvsRequest {
+  string avs_address = 1;
+}
+
+message DeRegisterAvsResponse {
+  bool success = 1;
+}
+
+service AggregatorManagementService {
+  rpc RegisterAvs(RegisterAvsRequest) returns (RegisterAvsResponse) {}
+  rpc DeRegisterAvs(DeRegisterAvsRequest) returns (DeRegisterAvsResponse) {}
+}

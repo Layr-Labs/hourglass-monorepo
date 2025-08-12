@@ -3,6 +3,7 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
@@ -16,10 +17,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"strings"
 	"time"
@@ -61,8 +64,30 @@ type Aggregator struct {
 	// sequentially processing them
 	chainEventsChan chan *chainPoller.LogWithBlock
 
+	managementRpcServer *rpcServer.RpcServer
+
 	// store is the persistence layer for the aggregator
 	store storage.AggregatorStore
+}
+
+func NewAggregatorWithManagementRpcServer(
+	managementServerGrpcPort int,
+	cfg *AggregatorConfig,
+	contractStore contractStore.IContractStore,
+	tlp *transactionLogParser.TransactionLogParser,
+	peeringDataFetcher peering.IPeeringDataFetcher,
+	signers signer.Signers,
+	store storage.AggregatorStore,
+	logger *zap.Logger,
+) (*Aggregator, error) {
+	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: managementServerGrpcPort,
+	}, logger)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create aggregator management rpc server with port %d", managementServerGrpcPort)
+	}
+
+	return NewAggregator(cfg, contractStore, tlp, peeringDataFetcher, signers, store, rpc, logger)
 }
 
 func NewAggregator(
@@ -72,6 +97,7 @@ func NewAggregator(
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signers signer.Signers,
 	store storage.AggregatorStore,
+	managementRpcServer *rpcServer.RpcServer,
 	logger *zap.Logger,
 ) (*Aggregator, error) {
 	if cfg.L1ChainId == 0 {
@@ -92,6 +118,7 @@ func NewAggregator(
 		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
+		managementRpcServer:  managementRpcServer,
 	}
 	return agg, nil
 }
@@ -118,38 +145,50 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
-		supportedChains, err := a.getValidChainsForAvs(avs.Address)
-		if err != nil {
-			return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
+		if err := a.registerAvs(avs); err != nil {
+			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
 		}
-
-		om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
-			AvsAddress: avs.Address,
-			ChainIds:   supportedChains,
-			L1ChainId:  a.config.L1ChainId,
-		}, callers, a.peeringDataFetcher, a.logger)
-
-		aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
-			AvsAddress:               avs.Address,
-			SupportedChainIds:        supportedChains,
-			MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
-			L1ChainId:                a.config.L1ChainId,
-			AggregatorAddress:        a.config.Address,
-		},
-			a.chainContractCallers,
-			a.signers,
-			a.contractStore,
-			om,
-			a.store,
-			a.logger,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
-		}
-
-		a.avsExecutionManagers[avs.Address] = aem
 	}
 
+	a.registerHandlers()
+
+	return nil
+}
+
+func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+	if _, ok := a.avsExecutionManagers[avs.Address]; ok {
+		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
+	}
+	supportedChains, err := a.getValidChainsForAvs(avs.Address)
+	if err != nil {
+		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
+	}
+
+	om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
+		AvsAddress: avs.Address,
+		ChainIds:   supportedChains,
+		L1ChainId:  a.config.L1ChainId,
+	}, a.chainContractCallers, a.peeringDataFetcher, a.logger)
+
+	aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
+		AvsAddress:               avs.Address,
+		SupportedChainIds:        supportedChains,
+		MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
+		L1ChainId:                a.config.L1ChainId,
+		AggregatorAddress:        a.config.Address,
+	},
+		a.chainContractCallers,
+		a.signers,
+		a.contractStore,
+		om,
+		a.store,
+		a.logger,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
+	}
+
+	a.avsExecutionManagers[avs.Address] = aem
 	return nil
 }
 
@@ -287,6 +326,10 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		}
 	}
 
+	if err := a.managementRpcServer.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start management RPC server: %v", err)
+	}
+
 	<-ctx.Done()
 	a.logger.Sugar().Infow("Aggregator context done, stopping")
 	return nil
@@ -320,4 +363,8 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 		}
 	}
 	return nil
+}
+
+func (a *Aggregator) registerHandlers() {
+	aggregatorV1.RegisterAggregatorManagementServiceServer(a.managementRpcServer.GetGrpcServer(), a)
 }

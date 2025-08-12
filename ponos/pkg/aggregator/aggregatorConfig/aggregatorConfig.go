@@ -61,11 +61,6 @@ func (aa *AggregatorAvs) Validate() error {
 	return nil
 }
 
-type ServerConfig struct {
-	Port          int    `json:"port" yaml:"port"`
-	AggregatorUrl string `json:"aggregatorUrl" yaml:"aggregatorUrl"`
-}
-
 type BadgerConfig struct {
 	// Directory where BadgerDB will store its data
 	Dir string `json:"dir" yaml:"dir"`
@@ -111,6 +106,8 @@ func (sc *StorageConfig) Validate() field.ErrorList {
 type AggregatorConfig struct {
 	Debug bool `json:"debug" yaml:"debug"`
 
+	ManagementServerGrpcPort int `json:"managementServerGrpcPort" yaml:"managementServerGrpcPort"`
+
 	// Operator represents who is actually running the aggregator for the AVS
 	Operator *config.OperatorConfig `json:"operator" yaml:"operator"`
 
@@ -133,6 +130,11 @@ type AggregatorConfig struct {
 
 func (arc *AggregatorConfig) Validate() error {
 	var allErrors field.ErrorList
+
+	if arc.ManagementServerGrpcPort == 0 {
+		allErrors = append(allErrors, field.Required(field.NewPath("managementServerGrpcPort"), "managementServerGrpcPort is required"))
+	}
+
 	if arc.Operator == nil {
 		allErrors = append(allErrors, field.Required(field.NewPath("operator"), "operator is required"))
 	} else {
@@ -162,13 +164,9 @@ func (arc *AggregatorConfig) Validate() error {
 		}
 	}
 
-	if len(arc.Avss) == 0 {
-		allErrors = append(allErrors, field.Required(field.NewPath("avss"), "at least one avs is required"))
-	} else {
-		for _, avs := range arc.Avss {
-			if err := avs.Validate(); err != nil {
-				allErrors = append(allErrors, field.Invalid(field.NewPath("avss"), avs, "invalid avs config"))
-			}
+	for _, avs := range arc.Avss {
+		if err := avs.Validate(); err != nil {
+			allErrors = append(allErrors, field.Invalid(field.NewPath("avss"), avs, "invalid avs config"))
 		}
 	}
 
