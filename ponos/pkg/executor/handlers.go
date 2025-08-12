@@ -49,14 +49,20 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 }
 
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
-	e.logger.Info("Received deploy artifact request",
+	e.logger.Sugar().Infow("DeployArtifact called",
 		zap.String("avsAddress", req.AvsAddress),
 		zap.String("digest", req.Digest),
 		zap.String("registryUrl", req.RegistryUrl),
+		zap.Bool("hasAuth", req.Auth != nil),
+		zap.Bool("authEnabled", e.authVerifier != nil),
 	)
 
 	// Verify authentication
 	if err := e.verifyAuth(req.Auth); err != nil {
+		e.logger.Sugar().Errorw("Authentication failed for DeployArtifact",
+			zap.Error(err),
+			zap.String("avsAddress", req.AvsAddress),
+		)
 		// Preserve the original status code if it's already a status error
 		if s, ok := status.FromError(err); ok {
 			return &executorV1.DeployArtifactResponse{
@@ -71,6 +77,10 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, status.Error(codes.Unauthenticated, err.Error())
 	}
 
+	e.logger.Sugar().Infow("Authentication passed, proceeding with deployment",
+		zap.String("avsAddress", req.AvsAddress),
+	)
+	
 	// Validate request
 	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
 		return &executorV1.DeployArtifactResponse{
@@ -637,8 +647,9 @@ func (e *Executor) performerInfoToProto(info avsPerformer.PerformerMetadata) *ex
 
 // GetChallengeToken generates a new challenge token for authentication
 func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetChallengeTokenRequest) (*executorV1.GetChallengeTokenResponse, error) {
-	e.logger.Info("Received get challenge token request",
+	e.logger.Sugar().Infow("GetChallengeToken called",
 		zap.String("operatorAddress", req.GetOperatorAddress()),
+		zap.Bool("authEnabled", e.authVerifier != nil),
 	)
 
 	// Validate operator address
@@ -651,6 +662,12 @@ func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetCha
 		return nil, status.Error(codes.PermissionDenied, "operator address mismatch")
 	}
 
+	// Check if authentication is enabled
+	if e.authVerifier == nil {
+		e.logger.Sugar().Warnw("GetChallengeToken called but authentication is not configured")
+		return nil, status.Error(codes.Unimplemented, "authentication is not configured")
+	}
+	
 	// Generate a new challenge token
 	entry, err := e.authVerifier.GenerateChallengeToken(req.GetOperatorAddress())
 	if err != nil {

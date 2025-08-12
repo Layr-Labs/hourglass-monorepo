@@ -40,6 +40,15 @@ var runCmd = &cobra.Command{
 		}
 
 		l.Sugar().Infow("executor run")
+		
+		// Log authentication configuration
+		if Config.AuthConfig != nil {
+			l.Sugar().Infow("Authentication configuration loaded from config file",
+				"enabled", Config.AuthConfig.IsEnabled,
+			)
+		} else {
+			l.Sugar().Infow("No authentication configuration in config file")
+		}
 
 		execSigners, err := signerUtils.ParseSignersFromOperatorConfig(Config.Operator, l)
 		if err != nil {
@@ -125,6 +134,12 @@ var runCmd = &cobra.Command{
 			l.Sugar().Infow("No storage configured, running without persistence")
 		}
 
+		l.Sugar().Infow("Creating executor with configuration",
+			"grpcPort", Config.GrpcPort,
+			"managementPort", Config.ManagementServerGrpcPort,
+			"authEnabled", Config.AuthConfig != nil && Config.AuthConfig.IsEnabled,
+		)
+		
 		exec, err := executor.NewExecutorWithRpcServers(Config.GrpcPort, Config.ManagementServerGrpcPort, Config, l, execSigners, pdf, cc, store)
 		if err != nil {
 			return fmt.Errorf("failed to create executor: %w", err)

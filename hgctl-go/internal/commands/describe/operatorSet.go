@@ -12,9 +12,9 @@ import (
 
 func operatorSetCommand() *cli.Command {
 	return &cli.Command{
-		Name:      "describe",
+		Name:      "operator-set",
 		Usage:     "Describe a specific operator set",
-		ArgsUsage: "<operator-set-id>",
+		ArgsUsage: "[operator-set-id]",
 		Description: `Describe a specific operator set including its type and metadata.
 
 The AVS address must be configured in the context before running this command.`,

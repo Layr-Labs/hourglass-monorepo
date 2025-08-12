@@ -92,16 +92,38 @@ func NewExecutor(
 
 	// Create challenge token manager
 	var verifier *auth.Verifier
-	if config.AuthConfig != nil && config.AuthConfig.IsEnabled {
-		// Choose the appropriate signer for authentication
-		var authSigner signer.ISigner
-		if signers.ECDSASigner != nil {
-			authSigner = signers.ECDSASigner
-		} else if signers.BLSSigner != nil {
-			authSigner = signers.BLSSigner
+	if config.AuthConfig != nil {
+		logger.Sugar().Infow("Authentication configuration loaded",
+			zap.Bool("enabled", config.AuthConfig.IsEnabled),
+		)
+		if config.AuthConfig.IsEnabled {
+			logger.Sugar().Infow("Authentication is enabled, initializing verifier")
+			// Choose the appropriate signer for authentication
+			var authSigner signer.ISigner
+			if signers.ECDSASigner != nil {
+				authSigner = signers.ECDSASigner
+				logger.Sugar().Infow("Using ECDSA signer for authentication")
+			} else if signers.BLSSigner != nil {
+				authSigner = signers.BLSSigner
+				logger.Sugar().Infow("Using BLS signer for authentication")
+			} else {
+				logger.Sugar().Warnw("Authentication enabled but no signer available")
+			}
+
+			if authSigner != nil {
+				logger.Sugar().Infow("Creating authentication verifier",
+					zap.String("address", config.Operator.Address),
+					zap.Duration("tokenExpiry", 5*time.Minute),
+				)
+				tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
+				verifier = auth.NewVerifier(tokenManager, authSigner)
+				logger.Sugar().Infow("Authentication verifier created successfully")
+			}
+		} else {
+			logger.Sugar().Infow("Authentication is disabled via configuration")
 		}
-		tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
-		verifier = auth.NewVerifier(tokenManager, authSigner)
+	} else {
+		logger.Sugar().Infow("No authentication configuration provided, authentication disabled")
 	}
 
 	return &Executor{
@@ -121,6 +143,12 @@ func NewExecutor(
 }
 
 func (e *Executor) Initialize(ctx context.Context) error {
+	e.logger.Sugar().Infow("Starting executor initialization",
+		zap.String("address", e.config.Operator.Address),
+		zap.Int("numAVSPerformers", len(e.config.AvsPerformers)),
+		zap.Bool("authEnabled", e.authVerifier != nil),
+	)
+
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
 	// Perform recovery from storage
@@ -345,18 +373,32 @@ func (e *Executor) recoverFromStorage(ctx context.Context) error {
 }
 
 func (e *Executor) Run(ctx context.Context) error {
-	e.logger.Info("Executor is running",
+	e.logger.Sugar().Infow("Starting executor",
 		zap.String("version", "1.0.0"),
 		zap.String("operatorAddress", e.config.Operator.Address),
+		zap.Bool("authEnabled", e.authVerifier != nil),
+		zap.Int("numPerformers", len(e.avsPerformers)),
 	)
+	e.logger.Sugar().Infow("Starting task RPC server")
 	if err := e.taskRpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start task RPC server: %v", err)
 	}
+	e.logger.Sugar().Infow("Task RPC server started successfully")
+
 	if e.managementRpcServer != nil && e.managementRpcServer != e.taskRpcServer {
+		e.logger.Sugar().Infow("Starting management RPC server",
+			zap.Bool("authEnabled", e.authVerifier != nil),
+		)
 		if err := e.managementRpcServer.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start management RPC server: %v", err)
 		}
+		e.logger.Sugar().Infow("Management RPC server started successfully")
 	}
+
+	e.logger.Sugar().Infow("Executor fully started and running",
+		zap.Bool("authEnabled", e.authVerifier != nil),
+	)
+
 	return nil
 }
 
@@ -370,9 +412,18 @@ func (e *Executor) registerHandlers() error {
 // verifyAuth is a helper method to verify authentication
 func (e *Executor) verifyAuth(auth *commonV1.AuthSignature) error {
 	if e.authVerifier != nil {
+		e.logger.Sugar().Debugw("Verifying authentication",
+			zap.Bool("hasAuth", auth != nil),
+		)
 		if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
+			e.logger.Sugar().Warnw("Authentication verification failed",
+				zap.Error(err),
+			)
 			return err
 		}
+		e.logger.Sugar().Debugw("Authentication verification successful")
+	} else {
+		e.logger.Sugar().Debugw("Authentication verifier not configured, skipping verification")
 	}
 	return nil
 }
