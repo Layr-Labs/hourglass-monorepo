@@ -28,7 +28,7 @@ func NewOCIClient(logger logger.Logger) *OCIClient {
 }
 
 // PullRuntimeSpec pulls a runtime spec from an OCI registry by digest
-func (c *OCIClient) PullRuntimeSpec(ctx context.Context, registryName, digest string) (*runtime.Spec, error) {
+func (c *OCIClient) PullRuntimeSpec(ctx context.Context, registryName, digest string) (*runtime.Spec, []byte, error) {
 	// Clean up the digest (remove 0x prefix if present)
 	digest = strings.TrimPrefix(digest, "0x")
 	if !strings.HasPrefix(digest, "sha256:") {
@@ -42,151 +42,93 @@ func (c *OCIClient) PullRuntimeSpec(ctx context.Context, registryName, digest st
 	// Parse the registry URL
 	ref, err := registry.ParseReference(registryName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse registry reference: %w", err)
+		return nil, nil, fmt.Errorf("failed to parse registry reference: %w", err)
 	}
 
 	// Create repository
 	repo, err := remote.NewRepository(fmt.Sprintf("%s/%s", ref.Registry, ref.Repository))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create repository: %w", err)
+		return nil, nil, fmt.Errorf("failed to create repository: %w", err)
 	}
 
 	// Create memory store for artifact
 	memoryStore := memory.New()
 
-	// Copy the artifact
-	_, err = oras.Copy(ctx, repo, digest, memoryStore, digest, oras.DefaultCopyOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull artifact: %w", err)
+	// Use extended copy options to ensure all blobs are copied
+	copyOpts := oras.CopyOptions{
+		CopyGraphOptions: oras.CopyGraphOptions{
+			Concurrency: 3,
+		},
 	}
 
-	// Extract runtime spec from the artifact
-	spec, err := c.extractRuntimeSpec(ctx, memoryStore, digest)
+	// Copy the artifact - this should copy the manifest and all referenced blobs
+	_, err = oras.Copy(ctx, repo, digest, memoryStore, "", copyOpts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract runtime spec: %w", err)
+		return nil, nil, fmt.Errorf("failed to pull artifact: %w", err)
 	}
 
-	return spec, nil
-}
-
-// PullRuntimeSpecByTag pulls a runtime spec by tag reference
-func (c *OCIClient) PullRuntimeSpecByTag(ctx context.Context, registryName, avsName string, operatorSetID uint32, version string) (*runtime.Spec, error) {
-	tag := fmt.Sprintf("opset-%d-v%s", operatorSetID, version)
-	fullRef := fmt.Sprintf("%s/%s:%s", registryName, avsName, tag)
-
-	c.logger.Debug("Pulling runtime spec by tag",
-		zap.String("reference", fullRef))
-
-	// Parse the reference
-	ref, err := registry.ParseReference(fullRef)
+	// First, let's fetch the manifest to get the actual layer digest dynamically
+	manifestDesc, err := memoryStore.Resolve(ctx, digest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse reference: %w", err)
+		return nil, nil, fmt.Errorf("failed to resolve manifest: %w", err)
 	}
 
-	// Create repository
-	repo, err := remote.NewRepository(fmt.Sprintf("%s/%s", ref.Registry, ref.Repository))
+	manifestRC, err := memoryStore.Fetch(ctx, manifestDesc)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create repository: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch manifest: %w", err)
 	}
-
-	// Create memory store
-	memoryStore := memory.New()
-
-	// Copy the artifact
-	_, err = oras.Copy(ctx, repo, tag, memoryStore, tag, oras.DefaultCopyOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull artifact: %w", err)
-	}
-
-	// Get the manifest to find the digest
-	desc, err := memoryStore.Resolve(ctx, tag)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve tag: %w", err)
-	}
-
-	// Extract runtime spec
-	spec, err := c.extractRuntimeSpec(ctx, memoryStore, desc.Digest.String())
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract runtime spec: %w", err)
-	}
-
-	return spec, nil
-}
-
-func (c *OCIClient) extractRuntimeSpec(ctx context.Context, store oras.ReadOnlyTarget, digest string) (*runtime.Spec, error) {
-	// Fetch the manifest
-	manifestDesc, err := store.Resolve(ctx, digest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve manifest: %w", err)
-	}
-
-	manifestRC, err := store.Fetch(ctx, manifestDesc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch manifest: %w", err)
-	}
-	defer manifestRC.Close()
+	defer func(manifestRC io.ReadCloser) {
+		err := manifestRC.Close()
+		if err != nil {
+			c.logger.Error("failed to close manifest reader", zap.Error(err))
+		}
+	}(manifestRC)
 
 	manifestData, err := io.ReadAll(manifestRC)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest: %w", err)
+		return nil, nil, fmt.Errorf("failed to read manifest: %w", err)
 	}
 
-	// Parse manifest
 	var manifest ocispec.Manifest
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse manifest: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal manifest: %w", err)
 	}
 
-	c.logger.Debug("Found manifest",
-		zap.Int("layers", len(manifest.Layers)))
-
-	// Find the runtime spec layer
-	var runtimeSpecLayer *ocispec.Descriptor
+	// Find the YAML layer
+	var specLayer *ocispec.Descriptor
 	for _, layer := range manifest.Layers {
-		c.logger.Debug("Checking layer",
-			zap.String("mediaType", layer.MediaType),
-			zap.String("digest", layer.Digest.String()))
-
-		// Check annotations
-		if title, ok := layer.Annotations["org.opencontainers.image.title"]; ok && title == "runtime-spec.yaml" {
-			runtimeSpecLayer = &layer
-			break
-		}
-
-		// Check media type
-		if layer.MediaType == "text/yaml" || layer.MediaType == "application/vnd.eigenlayer.runtime-spec.v1+yaml" {
-			runtimeSpecLayer = &layer
+		if layer.MediaType == "text/yaml" {
+			specLayer = &layer
 			break
 		}
 	}
 
-	// If no specific layer found, use the first layer
-	if runtimeSpecLayer == nil && len(manifest.Layers) > 0 {
-		runtimeSpecLayer = &manifest.Layers[0]
-		c.logger.Debug("Using first layer as runtime spec")
+	if specLayer == nil {
+		return nil, nil, fmt.Errorf("no yaml layer found in manifest")
 	}
 
-	if runtimeSpecLayer == nil {
-		return nil, fmt.Errorf("no runtime spec layer found in artifact")
-	}
-
-	// Fetch the layer content
-	layerRC, err := store.Fetch(ctx, *runtimeSpecLayer)
+	// Fetch the spec layer
+	specRC, err := memoryStore.Fetch(ctx, *specLayer)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch layer: %w", err)
+		return nil, nil, fmt.Errorf("failed to fetch runtime spec layer: %w", err)
 	}
-	defer layerRC.Close()
+	defer func(specRC io.ReadCloser) {
+		err := specRC.Close()
+		if err != nil {
+			c.logger.Error("failed to close runtime spec reader", zap.Error(err))
+		}
+	}(specRC)
 
-	layerData, err := io.ReadAll(layerRC)
+	specBytes, err := io.ReadAll(specRC)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read layer: %w", err)
+		return nil, nil, fmt.Errorf("failed to read runtime spec: %w", err)
 	}
 
-	// Parse the YAML content
+	// Parse the spec
 	var spec runtime.Spec
-	if err := yaml.Unmarshal(layerData, &spec); err != nil {
-		return nil, fmt.Errorf("failed to parse runtime spec: %w", err)
+	if err := yaml.Unmarshal(specBytes, &spec); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal runtime spec: %w", err)
 	}
 
-	return &spec, nil
+	return &spec, specBytes, nil
 }
