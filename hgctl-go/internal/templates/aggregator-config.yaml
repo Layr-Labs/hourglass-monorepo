@@ -1,20 +1,37 @@
-debug: {{envDefault "DEBUG" "false"}}
+debug: {{envDefault "DEBUG" "true"}}
+managementServerGrpcPort: {{envDefault "AGGREGATOR_MGMT_PORT" "9010"}}
 
-serverConfig:
-  port: {{envDefault "AGGREGATOR_PORT" "9000"}}
-  secureConnection: {{envDefault "SECURE_CONNECTION" "false"}}
-  aggregatorUrl: "{{envDefault "AGGREGATOR_URL" "aggregator:9000"}}"
+# Disable authentication for management API
+authentication:
+  enabled: false
+
+storage:
+  type: "memory"
 
 operator:
   address: "{{env "OPERATOR_ADDRESS"}}"
   operatorPrivateKey:
+    # Operator key is always provided as a private key
+    # (keystores are converted to private keys during deployment)
     privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
   signingKeys:
-    # Keystore configuration is determined by KEYSTORE_NAME environment variable
-    # The keystore type (bn254/bls or ecdsa) will determine which section is configured
+    {{if env "SYSTEM_BN254_KEYSTORE_PATH"}}
+    # BN254 keystore configuration
     bls:
-      keystoreFile: "/keystores/operator.keystore.json"
-      password: "{{env "KEYSTORE_PASSWORD"}}"
+      keystoreFile: "{{env "SYSTEM_BN254_KEYSTORE_PATH"}}"
+      password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
+    {{end}}
+    {{if or (env "SYSTEM_ECDSA_KEYSTORE_PATH") (env "SYSTEM_PRIVATE_KEY")}}
+    # ECDSA configuration
+    ecdsa:
+      {{if env "SYSTEM_ECDSA_KEYSTORE_PATH"}}
+      keystore:
+        keystoreFile: "{{env "SYSTEM_ECDSA_KEYSTORE_PATH"}}"
+        password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
+      {{else}}
+      privateKey: "{{env "SYSTEM_PRIVATE_KEY"}}"
+      {{end}}
+    {{end}}
 
 l1ChainId: {{env "L1_CHAIN_ID"}}
 
@@ -31,12 +48,3 @@ chains:
     rpcUrl: "{{env "L2_RPC_URL"}}"
     pollIntervalSeconds: {{envDefault "L2_POLL_INTERVAL" "2"}}
   {{end}}
-
-avss:
-  - address: "{{env "AVS_ADDRESS"}}"
-    responseTimeout: {{envDefault "RESPONSE_TIMEOUT" "3000"}}
-    chainIds:
-      - {{env "L1_CHAIN_ID"}}
-      {{if env "L2_CHAIN_ID"}}
-      - {{env "L2_CHAIN_ID"}}
-      {{end}}

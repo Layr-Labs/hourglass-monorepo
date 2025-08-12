@@ -3,25 +3,23 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/allocate"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/delegate"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/deposit"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
 	"os"
 
 	contextcmd "github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/context"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/deploy"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/describe"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/get"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/keystore"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/register"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/web3signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
+
+	"github.com/urfave/cli/v2"
+	"go.uber.org/zap"
 )
 
 func Hgctl() *cli.App {
@@ -108,15 +106,8 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			RemoveCommand(),
 			ContextCommand(),
 			KeystoreCommand(),
-			Web3SignerCommand(),
-			// Operator management commands
-			RegisterOperatorCommand(),
-			RegisterAVSCommand(),
-			RegisterKeyCommand(),
-			DepositCommand(),
-			DelegateCommand(),
-			AllocateCommand(),
-			SetAllocationDelayCommand(),
+			SignerCommand(),
+			EigenLayerCommand(),
 		},
 		ExitErrHandler: middleware.ExitErrHandler,
 	}
@@ -132,22 +123,30 @@ func isConfigCommand(c *cli.Context) bool {
 
 // GetCommand returns the get command
 func GetCommand() *cli.Command {
-	return get.Command()
+	cmd := get.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // DescribeCommand returns the describe command
 func DescribeCommand() *cli.Command {
-	return describe.Command()
+	cmd := describe.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // DeployCommand returns the deploy command
 func DeployCommand() *cli.Command {
-	return deploy.Command()
+	cmd := deploy.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // RemoveCommand returns the remove command
 func RemoveCommand() *cli.Command {
-	return remove.Command()
+	cmd := remove.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // ContextCommand returns the context command
@@ -157,45 +156,21 @@ func ContextCommand() *cli.Command {
 
 // KeystoreCommand returns the keystore command
 func KeystoreCommand() *cli.Command {
-	return keystore.Command()
+	cmd := keystore.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
-// Web3SignerCommand returns the web3signer command
-func Web3SignerCommand() *cli.Command {
-	return web3signer.Command()
+// SignerCommand returns the web3signer command
+func SignerCommand() *cli.Command {
+	cmd := signer.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
-// DelegateCommand returns the delegate command
-func DelegateCommand() *cli.Command {
-	return delegate.Command()
-}
-
-// DepositCommand returns the delegate command
-func DepositCommand() *cli.Command {
-	return deposit.Command()
-}
-
-// AllocateCommand returns the delegate command
-func AllocateCommand() *cli.Command {
-	return allocate.Command()
-}
-
-// RegisterOperatorCommand returns the register-operator command
-func RegisterOperatorCommand() *cli.Command {
-	return register.RegisterOperatorCommand()
-}
-
-// RegisterAVSCommand returns the register-avs command
-func RegisterAVSCommand() *cli.Command {
-	return register.RegisterAVSCommand()
-}
-
-// RegisterKeyCommand returns the register-key command
-func RegisterKeyCommand() *cli.Command {
-	return register.RegisterKeyCommand()
-}
-
-// SetAllocationDelayCommand returns the set-allocation-delay command
-func SetAllocationDelayCommand() *cli.Command {
-	return register.SetAllocationDelayCommand()
+// EigenLayerCommand returns the eigenlayer command with all subcommands
+func EigenLayerCommand() *cli.Command {
+	cmd := eigenlayer.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }

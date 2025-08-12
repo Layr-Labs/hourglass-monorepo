@@ -54,10 +54,12 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 }
 
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
-	e.logger.Info("Received deploy artifact request",
+	e.logger.Sugar().Infow("DeployArtifact called",
 		zap.String("avsAddress", req.AvsAddress),
 		zap.String("digest", req.Digest),
 		zap.String("registryUrl", req.RegistryUrl),
+		zap.Bool("hasAuth", req.Auth != nil),
+		zap.Bool("authEnabled", e.authVerifier != nil),
 	)
 
 	// Verify authentication
@@ -67,6 +69,10 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 			Message: "Authentication failed",
 		}, err
 	}
+
+	e.logger.Sugar().Infow("Authentication passed, proceeding with deployment",
+		zap.String("avsAddress", req.AvsAddress),
+	)
 
 	// Validate request
 	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
@@ -738,8 +744,9 @@ func (e *Executor) performerInfoToProto(info avsPerformer.PerformerMetadata) *ex
 
 // GetChallengeToken generates a new challenge token for authentication
 func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetChallengeTokenRequest) (*executorV1.GetChallengeTokenResponse, error) {
-	e.logger.Info("Received get challenge token request",
+	e.logger.Sugar().Infow("GetChallengeToken called",
 		zap.String("operatorAddress", req.GetOperatorAddress()),
+		zap.Bool("authEnabled", e.authVerifier != nil),
 	)
 
 	// Validate operator address
