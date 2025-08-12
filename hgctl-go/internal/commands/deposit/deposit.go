@@ -66,7 +66,7 @@ func depositAction(c *cli.Context) error {
 	)
 
 	// Deposit into strategy
-	if err := contractClient.DepositIntoStrategy(c.Context, strategyAddress, tokenAddress, *amount); err != nil {
+	if err := contractClient.DepositIntoStrategy(c.Context, strategyAddress, tokenAddress, amount); err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
 
