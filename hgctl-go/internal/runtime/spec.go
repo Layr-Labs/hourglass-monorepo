@@ -23,18 +23,11 @@ type ComponentSpec struct {
 type EnvVar struct {
 	Name     string `yaml:"name"`
 	Kind     string `yaml:"kind"`
-	Value    string `yaml:"value"`
-	Required bool   `yaml:"required,omitempty"`
+	Value    string `yaml:"value,omitempty"`
+	Required bool   `yaml:"required"`
 }
 
 // ResourceRequirements represents resource requirements for a component
 type ResourceRequirements struct {
 	TEEEnabled bool `yaml:"tee_enabled,omitempty"`
-	GPUEnabled bool `yaml:"gpu_enabled,omitempty"`
-}
-
-// ResourceLimits represents CPU and memory limits
-type ResourceLimits struct {
-	CPU    string `yaml:"cpu,omitempty"`
-	Memory string `yaml:"memory,omitempty"`
 }

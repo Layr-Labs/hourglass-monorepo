@@ -16,7 +16,7 @@ func releaseCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "release",
 		Usage:     "Describe a specific release",
-		ArgsUsage: "<release-id>",
+		ArgsUsage: "[release-id]",
 		Description: `Describe a specific release by fetching its details from the release manager
 and pulling the runtime specification from the OCI registry.
 

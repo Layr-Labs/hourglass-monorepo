@@ -9,7 +9,6 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/output"
 )
 
@@ -37,7 +36,7 @@ func getPerformerAction(c *cli.Context) error {
 
 	// Get context
 	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	if currentCtx == nil {
 		return fmt.Errorf("no context configured")

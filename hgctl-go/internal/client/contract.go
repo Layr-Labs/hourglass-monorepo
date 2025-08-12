@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
@@ -79,6 +80,7 @@ type ContractClient struct {
 	strategyManager   *IStrategyManager.IStrategyManager
 	keyRegistrar      *IKeyRegistrar.IKeyRegistrar
 	releaseManager    *IReleaseManager.IReleaseManager
+	contractConfig    *ContractConfig
 }
 
 // DefaultContractAddresses contains the default contract addresses for a chain
@@ -97,9 +99,9 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 		return &DefaultContractAddresses{
 			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
 			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
 			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0xd9Cb89F1993292dEC2F973934bC63B0f2A702776",
+			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		}, nil
 	case 31337:
 		return &DefaultContractAddresses{
@@ -145,7 +147,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
 	} else {
-		log.Info("Private key not configured - read-only mode enabled")
+		log.Debug("Private key not configured - read-only mode enabled")
 	}
 
 	// Get chain ID
@@ -154,6 +156,18 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
+	// Get default addresses for this chain if not provided in config
+	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
+	}
+
+	config.DelegationManager = defaultAddresses.DelegationManager
+	config.ReleaseManager = defaultAddresses.ReleaseManager
+	config.StrategyManager = defaultAddresses.StrategyManager
+	config.KeyRegistrar = defaultAddresses.KeyRegistrar
+	config.AllocationManager = defaultAddresses.AllocationManager
+
 	contractClient := &ContractClient{
 		ethClient:       client,
 		logger:          log,
@@ -161,93 +175,58 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		chainID:         chainID,
 		avsAddress:      common.HexToAddress(config.AVSAddress),
 		operatorAddress: common.HexToAddress(config.OperatorAddress),
-	}
-
-	// Get default addresses for this chain if not provided in config
-	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
+		contractConfig:  config,
 	}
 
 	// Delegation Manager
-	delegationAddr := config.DelegationManager
-	if delegationAddr == "" && defaultAddresses != nil {
-		delegationAddr = defaultAddresses.DelegationManager
+	contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
+		common.HexToAddress(config.DelegationManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create delegation manager at %s: %w", config.DelegationManager, err)
 	}
-	if delegationAddr != "" {
-		contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
-			common.HexToAddress(delegationAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create delegation manager at %s: %w", delegationAddr, err)
-		}
-		log.Debug("Initialized delegation manager", zap.String("address", delegationAddr))
-	}
+	log.Debug("Initialized delegation manager", zap.String("address", config.DelegationManager))
 
 	// Allocation Manager
-	allocationAddr := config.AllocationManager
-	if allocationAddr == "" && defaultAddresses != nil {
-		allocationAddr = defaultAddresses.AllocationManager
+	contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
+		common.HexToAddress(config.AllocationManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create allocation manager at %s: %w", config.AllocationManager, err)
 	}
-	if allocationAddr != "" {
-		contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
-			common.HexToAddress(allocationAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create allocation manager at %s: %w", allocationAddr, err)
-		}
-		log.Debug("Initialized allocation manager", zap.String("address", allocationAddr))
-	}
+	log.Debug("Initialized allocation manager", zap.String("address", config.AllocationManager))
 
 	// Strategy Manager
-	strategyAddr := config.StrategyManager
-	if strategyAddr == "" && defaultAddresses != nil {
-		strategyAddr = defaultAddresses.StrategyManager
+	contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
+		common.HexToAddress(config.StrategyManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create strategy manager at %s: %w", config.StrategyManager, err)
 	}
-	if strategyAddr != "" {
-		contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
-			common.HexToAddress(strategyAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create strategy manager at %s: %w", strategyAddr, err)
-		}
-		log.Debug("Initialized strategy manager", zap.String("address", strategyAddr))
-	}
+	log.Debug("Initialized strategy manager", zap.String("address", config.StrategyManager))
 
 	// Key Registrar
-	keyRegistrarAddr := config.KeyRegistrar
-	if keyRegistrarAddr == "" && defaultAddresses != nil {
-		keyRegistrarAddr = defaultAddresses.KeyRegistrar
+	contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
+		common.HexToAddress(config.KeyRegistrar),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key registrar at %s: %w", config.KeyRegistrar, err)
 	}
-	if keyRegistrarAddr != "" {
-		contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
-			common.HexToAddress(keyRegistrarAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create key registrar at %s: %w", keyRegistrarAddr, err)
-		}
-		log.Debug("Initialized key registrar", zap.String("address", keyRegistrarAddr))
-	}
+	log.Debug("Initialized key registrar", zap.String("address", config.KeyRegistrar))
 
 	// Release Manager
-	releaseManagerAddr := config.ReleaseManager
-	if releaseManagerAddr == "" && defaultAddresses != nil {
-		releaseManagerAddr = defaultAddresses.ReleaseManager
+	contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
+		common.HexToAddress(config.ReleaseManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create release manager at %s: %w", config.ReleaseManager, err)
 	}
-	if releaseManagerAddr != "" {
-		contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
-			common.HexToAddress(releaseManagerAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create release manager at %s: %w", releaseManagerAddr, err)
-		}
-		log.Debug("Initialized release manager", zap.String("address", releaseManagerAddr))
-	}
+	log.Debug("Initialized release manager", zap.String("address", config.ReleaseManager))
 
 	return contractClient, nil
 }
@@ -466,29 +445,66 @@ func (c *ContractClient) DepositIntoStrategy(
 		return fmt.Errorf("strategy manager not initialized")
 	}
 
-	opts, err := c.buildTxOpts(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Convert strategy address
+	// Convert addresses
 	stratAddr := common.HexToAddress(strategyAddress)
 	tokenAddr := common.HexToAddress(tokenAddress)
+
+	// Get ERC20 contract
 	erc20, err := c.getERC20(tokenAddr)
 	if err != nil {
 		return err
 	}
-	approveTx, err := erc20.Transact(opts, "approve", c.strategyManager, amount)
+	// Check balance first
+	balanceOpts := &bind.CallOpts{Context: ctx}
+	var balance *big.Int
+	results := erc20.Call(balanceOpts, &[]interface{}{&balance}, "balanceOf", c.operatorAddress)
+	if results != nil {
+		return fmt.Errorf("failed to get token balance: %w", results)
+	}
+
+	if balance.Cmp(amount) <= 0 {
+		return fmt.Errorf("insufficient token balance: have %s, need %s", balance.String(), amount.String())
+	}
+
+	// Build transaction options for approval
+	approveOpts, err := c.buildTxOpts(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = bind.WaitMined(ctx, c.ethClient, approveTx)
+
+	// Approve the strategy manager to spend tokens
+	c.logger.Debug("Approving token spend",
+		zap.String("token", tokenAddress),
+		zap.String("spender", c.contractConfig.StrategyManager),
+		zap.String("amount", amount.String()),
+	)
+
+	approveTx, err := erc20.Transact(approveOpts, "approve", common.HexToAddress(c.contractConfig.StrategyManager), amount)
+	if err != nil {
+		return fmt.Errorf("failed to approve token spend: %w", err)
+	}
+
+	approveReceipt, err := bind.WaitMined(ctx, c.ethClient, approveTx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for approval transaction: %w", err)
+	}
+
+	if approveReceipt.Status == 0 {
+		return fmt.Errorf("approval transaction reverted")
+	}
+
+	c.logger.Debug("Token approval successful",
+		zap.String("txHash", approveReceipt.TxHash.Hex()),
+	)
+
+	// Build new transaction options for deposit (important: new nonce)
+	depositOpts, err := c.buildTxOpts(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Deposit into strategy
-	depositTx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, tokenAddr, amount)
+	depositTx, err := c.strategyManager.DepositIntoStrategy(depositOpts, stratAddr, tokenAddr, amount)
 	if err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
@@ -496,15 +512,16 @@ func (c *ContractClient) DepositIntoStrategy(
 	// Wait for transaction
 	depositReceipt, err := bind.WaitMined(ctx, c.ethClient, depositTx)
 	if err != nil {
-		return fmt.Errorf("failed to wait for transaction: %w", err)
+		return fmt.Errorf("failed to wait for deposit transaction: %w", err)
 	}
 
 	if depositReceipt.Status == 0 {
-		return fmt.Errorf("transaction reverted")
+		return fmt.Errorf("deposit transaction reverted")
 	}
 
 	c.logger.Info("Successfully deposited into strategy",
 		zap.String("strategy", strategyAddress),
+		zap.String("token", tokenAddress),
 		zap.String("amount", amount.String()),
 		zap.String("txHash", depositReceipt.TxHash.Hex()),
 	)
@@ -689,7 +706,7 @@ func (c *ContractClient) RegisterKey(
 		}
 
 		if receipt.Status == 0 {
-			return fmt.Errorf("transaction reverted")
+			return fmt.Errorf("transaction reverted: %w", err)
 		}
 
 		c.logger.Info("Successfully registered BN254 key",
@@ -775,6 +792,45 @@ func (c *ContractClient) RegisterBN254Key(
 	)
 
 	return nil
+}
+
+func (c *ContractClient) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error) {
+	// Convert G1 point
+	g1Point := &bn254.G1Point{
+		G1Affine: pubKey.GetG1Point(),
+	}
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	keyRegG1 := IKeyRegistrar.BN254G1Point{
+		X: new(big.Int).SetBytes(g1Bytes[0:32]),
+		Y: new(big.Int).SetBytes(g1Bytes[32:64]),
+	}
+
+	g2Point := bn254.NewZeroG2Point().AddPublicKey(pubKey)
+	g2Bytes, err := g2Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+	// Convert to IKeyRegistrar G2 point format
+	keyRegG2 := IKeyRegistrar.BN254G2Point{
+		X: [2]*big.Int{
+			new(big.Int).SetBytes(g2Bytes[0:32]),
+			new(big.Int).SetBytes(g2Bytes[32:64]),
+		},
+		Y: [2]*big.Int{
+			new(big.Int).SetBytes(g2Bytes[64:96]),
+			new(big.Int).SetBytes(g2Bytes[96:128]),
+		},
+	}
+
+	return c.keyRegistrar.EncodeBN254KeyData(
+		&bind.CallOpts{},
+		keyRegG1,
+		keyRegG2,
+	)
 }
 
 // GenerateBN254KeyRegistrationSignature gets the message hash for BN254 key registration
@@ -959,11 +1015,6 @@ func (c *ContractClient) CreateOperatorSets(
 	)
 
 	return nil
-}
-
-// GetAVSAddress returns the AVS address configured for this client
-func (c *ContractClient) GetAVSAddress() common.Address {
-	return c.avsAddress
 }
 
 // GetOperatorSetMetadataURI gets the metadata URI for an operator set

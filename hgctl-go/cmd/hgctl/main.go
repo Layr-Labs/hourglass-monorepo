@@ -11,15 +11,12 @@ import (
 )
 
 func main() {
-	// Initialize telemetry
 	telemetry.Init()
 	defer telemetry.Close()
 
-	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
