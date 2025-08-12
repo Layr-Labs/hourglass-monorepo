@@ -3,7 +3,9 @@ package register
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"math/big"
@@ -423,12 +425,34 @@ func encodeBN254Signature(sig *bn254.Signature) []byte {
 
 // decryptKeystore decrypts a keystore file to get the private key
 func decryptKeystore(keystoreData []byte, password string) ([]byte, error) {
-	// Use go-ethereum's keystore package to decrypt directly
+	// Check if it's a BLS keystore
+	var testKeystore map[string]interface{}
+	if err := json.Unmarshal(keystoreData, &testKeystore); err == nil {
+		if crypto, ok := testKeystore["crypto"].(map[string]interface{}); ok {
+			if _, ok := crypto["kdf"].(map[string]interface{}); ok {
+				var keystoreFile blskeystore.EIP2335Keystore
+				if err := json.Unmarshal(keystoreData, &keystoreFile); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal BLS keystore: %w", err)
+				}
+				scheme, err := blskeystore.GetSigningSchemeForCurveType("bn254")
+				if err != nil {
+					return nil, fmt.Errorf("failed to get bn254 scheme: %w", err)
+				}
+				privateKey, err := keystoreFile.GetPrivateKey(password, scheme)
+				if err != nil {
+					return nil, fmt.Errorf("failed to decrypt BLS private key: %w", err)
+				}
+
+				return privateKey.Bytes(), nil
+			}
+		}
+	}
+
+	// Try standard Ethereum keystore
 	key, err := keystore.DecryptKey(keystoreData, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt keystore: %w", err)
 	}
 
-	// Return the private key bytes
 	return key.PrivateKey.D.Bytes(), nil
 }
