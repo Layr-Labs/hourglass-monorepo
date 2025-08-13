@@ -43,19 +43,20 @@ type AggregatedECDSACertificate struct {
 }
 
 func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
-	if len(cert.SignersSignatures) == 0 {
-		return nil, fmt.Errorf("no signatures found in certificate")
+	// Extract and sort addresses
+	addresses := make([]common.Address, 0, len(cert.SignersSignatures))
+	for addr := range cert.SignersSignatures {
+		addresses = append(addresses, addr)
 	}
+	sort.Slice(addresses, func(i, j int) bool {
+		return addresses[i].Hex() < addresses[j].Hex()
+	})
 
-	// For ECDSA, we concat all signatures together into a []byte value
+	// Concatenate in sorted order
 	var finalSignature []byte
-	for _, sig := range cert.SignersSignatures {
-		finalSignature = append(finalSignature, sig...)
-	}
-	// each sig should be 64 bytes long, so we can check the length
-	expectedTotalLen := len(cert.SignersSignatures) * 65
-	if len(finalSignature) != expectedTotalLen {
-		return nil, fmt.Errorf("final signature length mismatch: expected %d, got %d", expectedTotalLen, len(finalSignature))
+	for _, addr := range addresses {
+		finalSignature = append(finalSignature,
+			cert.SignersSignatures[addr]...)
 	}
 	return finalSignature, nil
 }
