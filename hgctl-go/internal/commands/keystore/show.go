@@ -5,34 +5,30 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"os"
 	"path/filepath"
 	"strings"
 
-	ecdsalib "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/output"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/urfave/cli/v2"
 )
 
 // Define constants
 const (
-	KeyTypeECDSA              = "ecdsa"
-	KeyTypeBN254              = "bn254"
-	KeyTypeBLS                = "bls" // Alias for bn254
-	OperatorKeystoreSubFolder = ".eigenlayer/operator_keys"
+	KeyTypeECDSA = "ecdsa"
+	KeyTypeBN254 = "bn254"
 )
 
 var (
 	ErrInvalidKeyType = errors.New("invalid key type")
 )
 
-func ExportCmd() *cli.Command {
-	exportCmd := &cli.Command{
-		Name:      "export",
-		Usage:     "Used to export existing keys from local keystore",
-		UsageText: "export --key-type <key-type> [flags] [keyname]",
+func showCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "show",
+		Usage: "Used to show existing keys from local keystore",
 		Description: `Used to export ecdsa and bls key from local keystore
 
 keyname - This will be the name of the key to be imported. If the path of keys is
@@ -50,29 +46,20 @@ It will prompt for password to encrypt the key.
 This command will import keys from $HOME/.eigenlayer/operator_keys/ location
 
 But if you want it to export from a different location, use --key-path flag`,
-
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "key-type",
-				Aliases:  []string{"k"},
 				Required: true,
 				Usage:    "Type of key you want to export. Currently supports 'ecdsa' and 'bn254' (or 'bls')",
-				EnvVars:  []string{"KEY_TYPE"},
 			},
 			&cli.StringFlag{
-				Name:    "key-path",
-				Aliases: []string{"p"},
-				Usage:   "Use this flag to specify the path of the key",
-				EnvVars: []string{"KEY_PATH"},
+				Name:     "key-path",
+				Required: true,
+				Usage:    "Use this flag to specify the path of the key",
 			},
 		},
 		Action: func(c *cli.Context) error {
 			keyType := strings.ToLower(c.String("key-type"))
-
-			// Handle 'bls' as alias for 'bn254'
-			if keyType == "bls" {
-				keyType = KeyTypeBN254
-			}
 
 			keyName := c.Args().Get(0)
 
@@ -83,11 +70,6 @@ But if you want it to export from a different location, use --key-path flag`,
 
 			if len(keyPath) > 0 && len(keyName) > 0 {
 				return errors.New("keyname and --key-path both are provided. Please provide only one")
-			}
-
-			filePath, err := getKeyPath(keyPath, keyName, keyType)
-			if err != nil {
-				return err
 			}
 
 			confirm, err := output.Confirm("This will show your private key. Are you sure you want to export?")
@@ -104,9 +86,9 @@ But if you want it to export from a different location, use --key-path flag`,
 			if err != nil {
 				return err
 			}
-			fmt.Println("exporting key from: ", filePath)
+			fmt.Println("exporting key from: ", keyPath)
 
-			privateKey, err := getPrivateKey(keyType, filePath, password)
+			privateKey, err := getPrivateKey(keyType, keyPath, password)
 			if err != nil {
 				return err
 			}
@@ -114,32 +96,23 @@ But if you want it to export from a different location, use --key-path flag`,
 			return nil
 		},
 	}
-
-	return exportCmd
 }
 
 func getPrivateKey(keyType string, filePath string, password string) (string, error) {
 	switch keyType {
 	case KeyTypeECDSA:
-		// Read the keystore file
-		keystoreData, err := os.ReadFile(filePath)
+		keyStoreContents, err := os.ReadFile(filepath.Clean(filePath))
 		if err != nil {
-			return "", fmt.Errorf("failed to read keystore file: %w", err)
+			return "", err
 		}
 
-		// Try to decrypt using standard Ethereum keystore
-		key, err := keystore.DecryptKey(keystoreData, password)
+		key, err := keystore.DecryptKey(keyStoreContents, password)
 		if err != nil {
-			// Try using the crypto-libs ecdsa library
-			privateKey, err := ecdsalib.NewPrivateKeyFromHexString(password)
-			if err != nil {
-				return "", fmt.Errorf("failed to decrypt ECDSA keystore: %w", err)
-			}
-			return hex.EncodeToString(privateKey.Bytes()), nil
+			return "", err
 		}
 		return hex.EncodeToString(key.PrivateKey.D.Bytes()), nil
 
-	case KeyTypeBN254, KeyTypeBLS:
+	case KeyTypeBN254:
 		// Read the keystore file
 		keystoreData, err := os.ReadFile(filePath)
 		if err != nil {
@@ -178,30 +151,6 @@ func getPrivateKey(keyType string, filePath string, password string) (string, er
 	default:
 		return "", ErrInvalidKeyType
 	}
-}
-
-func getKeyPath(keyPath string, keyName string, keyType string) (string, error) {
-	homePath, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	var filePath string
-	if len(keyName) > 0 {
-		switch keyType {
-		case KeyTypeECDSA:
-			filePath = filepath.Join(homePath, OperatorKeystoreSubFolder, keyName+".ecdsa.key.json")
-		case KeyTypeBN254, KeyTypeBLS:
-			filePath = filepath.Join(homePath, OperatorKeystoreSubFolder, keyName+".bls.key.json")
-		default:
-			return "", ErrInvalidKeyType
-		}
-
-	} else {
-		filePath = filepath.Clean(keyPath)
-	}
-
-	return filePath, nil
 }
 
 // decryptBn254Keystore decrypts a keystore file to get the private key
