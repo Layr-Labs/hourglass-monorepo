@@ -1,11 +1,11 @@
 package register
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"math/big"
@@ -83,7 +83,7 @@ type KeyRegistrationParams struct {
 // KeyHandler interface for different key types
 type KeyHandler interface {
 	PrepareKeyData(c *cli.Context) ([]byte, error)
-	GenerateSignature(c *cli.Context, contractClient interface{}, operatorSetID uint32, keyData []byte) ([]byte, error)
+	GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error)
 	ValidateParams(c *cli.Context) error
 }
 
@@ -210,7 +210,7 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context) ([]byte, error) {
 	return addr.Bytes(), nil
 }
 
-func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient interface{}, operatorSetID uint32, keyData []byte) ([]byte, error) {
+func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error) {
 	h.log.Info("Generating signature for ECDSA key registration")
 
 	// Get the private key from environment
@@ -227,16 +227,8 @@ func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient inter
 	// Convert keyData back to address
 	addr := common.BytesToAddress(keyData)
 
-	// Type assert contract client
-	client, ok := contractClient.(interface {
-		GenerateECDSAKeyRegistrationSignature(context.Context, uint32, common.Address) ([32]byte, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("contract client does not support ECDSA key registration")
-	}
-
 	// Get the message hash
-	messageHash, err := client.GenerateECDSAKeyRegistrationSignature(
+	messageHash, err := contractClient.GenerateECDSAKeyRegistrationSignature(
 		c.Context,
 		operatorSetID,
 		addr,
@@ -332,23 +324,15 @@ func (h *BN254KeyHandler) prepareKeyDataFromKeystore(c *cli.Context, keystorePat
 	return keyData, nil
 }
 
-func (h *BN254KeyHandler) GenerateSignature(c *cli.Context, contractClient interface{}, operatorSetID uint32, keyData []byte) ([]byte, error) {
+func (h *BN254KeyHandler) GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error) {
 	if h.privateKey == nil {
 		return nil, fmt.Errorf("no private key available for signature generation")
 	}
 
 	h.log.Info("Generating BN254 signature")
 
-	// Type assert contract client
-	client, ok := contractClient.(interface {
-		GenerateBN254KeyRegistrationSignature(context.Context, uint32, []byte) ([32]byte, error)
-	})
-	if !ok {
-		return nil, fmt.Errorf("contract client does not support BN254 key registration")
-	}
-
 	// Get message hash from contract
-	messageHash, err := client.GenerateBN254KeyRegistrationSignature(
+	messageHash, err := contractClient.GenerateBN254KeyRegistrationSignature(
 		c.Context,
 		operatorSetID,
 		keyData,
@@ -363,12 +347,13 @@ func (h *BN254KeyHandler) GenerateSignature(c *cli.Context, contractClient inter
 		return nil, fmt.Errorf("failed to sign: %w", err)
 	}
 
-	// Encode signature
-	signature := encodeBN254Signature(sig)
-
-	h.log.Debug("Generated BN254 signature",
-		zap.String("signatureHex", hex.EncodeToString(signature)))
-
+	g1Point := &bn254.G1Point{
+		G1Affine: sig.GetG1Point(),
+	}
+	signature, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
 	return signature, nil
 }
 
@@ -401,24 +386,6 @@ func encodeBN254KeyData(publicKey *bn254.PublicKey) []byte {
 	g2X1.FillBytes(data[96:128])
 	g2Y0.FillBytes(data[128:160])
 	g2Y1.FillBytes(data[160:192])
-
-	return data
-}
-
-// encodeBN254Signature encodes a BN254 signature for the contract
-func encodeBN254Signature(sig *bn254.Signature) []byte {
-	g1Point := sig.GetG1Point()
-
-	// Convert to big.Int
-	x := new(big.Int)
-	y := new(big.Int)
-	g1Point.X.BigInt(x)
-	g1Point.Y.BigInt(y)
-
-	// Pack as 32-byte padded values (matching Solidity abi.decode)
-	data := make([]byte, 64) // 2 * 32 bytes
-	x.FillBytes(data[0:32])
-	y.FillBytes(data[32:64])
 
 	return data
 }
