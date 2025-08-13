@@ -48,10 +48,10 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 
 	t.Run("Returns_Unauthenticated_For_Missing_Auth", func(t *testing.T) {
 		verifier := NewVerifier(tokenManager, &MockFailingSigner{})
-		
+
 		err := verifier.VerifyAuthentication(nil)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, statusErr.Code())
@@ -60,15 +60,15 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 
 	t.Run("Returns_Unauthenticated_For_Invalid_Token", func(t *testing.T) {
 		verifier := NewVerifier(tokenManager, &MockFailingSigner{})
-		
+
 		authSig := &commonV1.AuthSignature{
 			ChallengeToken: "invalid-token",
 			Signature:      []byte("signature"),
 		}
-		
+
 		err := verifier.VerifyAuthentication(authSig)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, statusErr.Code())
@@ -79,20 +79,20 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 		// Use a signer that will fail
 		failingSigner := &MockFailingSigner{}
 		verifier := NewVerifier(tokenManager, failingSigner)
-		
+
 		// Generate a valid token
 		entry, err := tokenManager.GenerateChallengeToken(entityAddress)
 		require.NoError(t, err)
-		
+
 		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      []byte("some-signature"),
 		}
-		
+
 		// This should fail with Internal error because the signer fails
 		err = verifier.VerifyAuthentication(authSig)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Internal, statusErr.Code())
@@ -105,22 +105,22 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 		testPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(testPrivateKeyHex)
 		require.NoError(t, err)
 		testSigner := inMemorySigner.NewInMemorySigner(testPrivateKey, config.CurveTypeECDSA)
-		
+
 		verifier := NewVerifier(tokenManager, testSigner)
-		
+
 		// Generate a valid token
 		entry, err := tokenManager.GenerateChallengeToken(entityAddress)
 		require.NoError(t, err)
-		
+
 		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      []byte("wrong-signature"),
 		}
-		
+
 		// This should fail with Unauthenticated because signature doesn't match
 		err = verifier.VerifyAuthentication(authSig)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, statusErr.Code())
@@ -130,35 +130,35 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 	t.Run("Returns_Unauthenticated_For_Expired_Token", func(t *testing.T) {
 		// Create a token manager with very short expiration
 		shortExpiryManager := NewChallengeTokenManager(entityAddress, 1*time.Millisecond)
-		
+
 		testPrivateKeyHex := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 		testPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(testPrivateKeyHex)
 		require.NoError(t, err)
 		testSigner := inMemorySigner.NewInMemorySigner(testPrivateKey, config.CurveTypeECDSA)
-		
+
 		verifier := NewVerifier(shortExpiryManager, testSigner)
-		
+
 		// Generate a token
 		entry, err := shortExpiryManager.GenerateChallengeToken(entityAddress)
 		require.NoError(t, err)
-		
+
 		// Wait for token to expire
 		time.Sleep(2 * time.Millisecond)
-		
+
 		// Create valid signature
 		signedMessage := ConstructSignedMessage(entry.Token)
 		signature, err := testSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
-		
+
 		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      signature,
 		}
-		
+
 		// This should fail with Unauthenticated because token is expired
 		err = verifier.VerifyAuthentication(authSig)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, statusErr.Code())
@@ -171,31 +171,31 @@ func TestVerifyAuthenticationErrorCodes(t *testing.T) {
 		testPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(testPrivateKeyHex)
 		require.NoError(t, err)
 		testSigner := inMemorySigner.NewInMemorySigner(testPrivateKey, config.CurveTypeECDSA)
-		
+
 		verifier := NewVerifier(tokenManager, testSigner)
-		
+
 		// Generate a token
 		entry, err := tokenManager.GenerateChallengeToken(entityAddress)
 		require.NoError(t, err)
-		
+
 		// Create valid signature
 		signedMessage := ConstructSignedMessage(entry.Token)
 		signature, err := testSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
-		
+
 		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      signature,
 		}
-		
+
 		// First use should succeed
 		err = verifier.VerifyAuthentication(authSig)
 		assert.NoError(t, err)
-		
+
 		// Second use should fail with Unauthenticated
 		err = verifier.VerifyAuthentication(authSig)
 		require.Error(t, err)
-		
+
 		statusErr, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.Unauthenticated, statusErr.Code())
