@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
@@ -777,6 +778,45 @@ func (c *ContractClient) RegisterBN254Key(
 	)
 
 	return nil
+}
+
+func (c *ContractClient) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, error) {
+	// Convert G1 point
+	g1Point := &bn254.G1Point{
+		G1Affine: pubKey.GetG1Point(),
+	}
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	keyRegG1 := IKeyRegistrar.BN254G1Point{
+		X: new(big.Int).SetBytes(g1Bytes[0:32]),
+		Y: new(big.Int).SetBytes(g1Bytes[32:64]),
+	}
+
+	g2Point := bn254.NewZeroG2Point().AddPublicKey(pubKey)
+	g2Bytes, err := g2Point.ToPrecompileFormat()
+	if err != nil {
+		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+	// Convert to IKeyRegistrar G2 point format
+	keyRegG2 := IKeyRegistrar.BN254G2Point{
+		X: [2]*big.Int{
+			new(big.Int).SetBytes(g2Bytes[0:32]),
+			new(big.Int).SetBytes(g2Bytes[32:64]),
+		},
+		Y: [2]*big.Int{
+			new(big.Int).SetBytes(g2Bytes[64:96]),
+			new(big.Int).SetBytes(g2Bytes[96:128]),
+		},
+	}
+
+	return c.keyRegistrar.EncodeBN254KeyData(
+		&bind.CallOpts{},
+		keyRegG1,
+		keyRegG2,
+	)
 }
 
 // GenerateBN254KeyRegistrationSignature gets the message hash for BN254 key registration
