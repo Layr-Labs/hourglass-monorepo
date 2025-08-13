@@ -376,7 +376,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		// Create a single test operator
 		privKey, pubKey, err := bn254.GenerateKeyPair()
 		require.NoError(t, err)
-		
+
 		operators := []*Operator[signing.PublicKey]{
 			{
 				Address:   "0x1",
@@ -435,7 +435,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		// Certificate should use the single operator's response
 		assert.Equal(t, payload, cert.TaskResponse)
 		assert.Equal(t, digest[:], cert.TaskResponseDigest)
-		
+
 		// Verify signature
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
