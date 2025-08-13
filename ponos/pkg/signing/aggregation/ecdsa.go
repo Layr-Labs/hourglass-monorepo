@@ -154,6 +154,10 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	taskId string,
 	taskResponse *types.TaskResult,
 ) error {
+	if taskId != taskResponse.TaskId {
+		return fmt.Errorf("task ID mismatch: expected %s, got %s", taskId, taskResponse.TaskId)
+	}
+
 	tra.mu.Lock()
 	defer tra.mu.Unlock()
 
