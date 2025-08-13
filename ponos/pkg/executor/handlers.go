@@ -57,6 +57,14 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	// Verify authentication
 	if err := e.verifyAuth(req.Auth); err != nil {
+		// Preserve the original status code if it's already a status error
+		if s, ok := status.FromError(err); ok {
+			return &executorV1.DeployArtifactResponse{
+				Success: false,
+				Message: "Authentication failed",
+			}, status.Error(s.Code(), s.Message())
+		}
+		// Fallback to Unauthenticated for non-status errors
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
 			Message: "Authentication failed",
@@ -430,6 +438,11 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 
 	// Verify authentication
 	if err := e.verifyAuth(req.Auth); err != nil {
+		// Preserve the original status code if it's already a status error
+		if s, ok := status.FromError(err); ok {
+			return nil, status.Error(s.Code(), s.Message())
+		}
+		// Fallback to Unauthenticated for non-status errors
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
@@ -511,6 +524,14 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 
 	// Verify authentication
 	if err := e.verifyAuth(req.Auth); err != nil {
+		// Preserve the original status code if it's already a status error
+		if s, ok := status.FromError(err); ok {
+			return &executorV1.RemovePerformerResponse{
+				Success: false,
+				Message: "Authentication failed",
+			}, status.Error(s.Code(), s.Message())
+		}
+		// Fallback to Unauthenticated for non-status errors
 		return &executorV1.RemovePerformerResponse{
 			Success: false,
 			Message: "Authentication failed",

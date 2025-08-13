@@ -3,6 +3,7 @@ package executorConfig
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"slices"
 	"time"
 
@@ -264,6 +265,7 @@ type ExecutorConfig struct {
 	OverrideContracts        *config.OverrideContracts `json:"overrideContracts" yaml:"overrideContracts"`
 	Kubernetes               *KubernetesConfig         `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 	Storage                  *StorageConfig            `json:"storage,omitempty" yaml:"storage,omitempty"`
+	AuthConfig               *auth.Config              `json:"authentication,omitempty" yaml:"authentication,omitempty"`
 }
 
 func (ec *ExecutorConfig) Validate() error {

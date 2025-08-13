@@ -91,14 +91,17 @@ func NewExecutor(
 	}
 
 	// Create challenge token manager
-	tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
-
-	// Choose the appropriate signer for authentication
-	var authSigner signer.ISigner
-	if signers.ECDSASigner != nil {
-		authSigner = signers.ECDSASigner
-	} else if signers.BLSSigner != nil {
-		authSigner = signers.BLSSigner
+	var verifier *auth.Verifier
+	if config.AuthConfig.IsEnabled {
+		// Choose the appropriate signer for authentication
+		var authSigner signer.ISigner
+		if signers.ECDSASigner != nil {
+			authSigner = signers.ECDSASigner
+		} else if signers.BLSSigner != nil {
+			authSigner = signers.BLSSigner
+		}
+		tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
+		verifier = auth.NewVerifier(tokenManager, authSigner)
 	}
 
 	return &Executor{
@@ -113,7 +116,7 @@ func NewExecutor(
 		peeringFetcher:      peeringFetcher,
 		l1ContractCaller:    l1ContractCaller,
 		store:               store,
-		authVerifier:        auth.NewVerifier(tokenManager, authSigner),
+		authVerifier:        verifier,
 	}
 }
 

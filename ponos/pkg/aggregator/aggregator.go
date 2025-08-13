@@ -36,7 +36,7 @@ type AggregatorConfig struct {
 	AVSs             []*aggregatorConfig.AggregatorAvs
 	Chains           []*aggregatorConfig.Chain
 	L1ChainId        config.ChainId
-	Authentication   *aggregatorConfig.Authentication
+	Authentication   *auth.Config
 }
 
 type Aggregator struct {
@@ -112,11 +112,18 @@ func NewAggregator(
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
+
 	// Initialize auth verifier for management APIs
 	var authVerifier *auth.Verifier
 	if cfg.Authentication != nil && cfg.Authentication.IsEnabled {
+		var authSigner signer.ISigner
+		if signers.ECDSASigner != nil {
+			authSigner = signers.ECDSASigner
+		} else if signers.BLSSigner != nil {
+			authSigner = signers.BLSSigner
+		}
 		tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
-		authVerifier = auth.NewVerifier(tokenManager, signers.ECDSASigner)
+		authVerifier = auth.NewVerifier(tokenManager, authSigner)
 	}
 
 	agg := &Aggregator{

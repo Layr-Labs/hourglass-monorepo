@@ -13,6 +13,11 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 	// Verify authentication
 	err := a.verifyAuth(request.Auth)
 	if err != nil {
+		// Preserve the original status code if it's already a status error
+		if s, ok := status.FromError(err); ok {
+			return nil, status.Error(s.Code(), s.Message())
+		}
+		// Fallback to Unauthenticated for non-status errors
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
@@ -31,6 +36,11 @@ func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.De
 	// Verify authentication
 	err := a.verifyAuth(request.Auth)
 	if err != nil {
+		// Preserve the original status code if it's already a status error
+		if s, ok := status.FromError(err); ok {
+			return nil, status.Error(s.Code(), s.Message())
+		}
+		// Fallback to Unauthenticated for non-status errors
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 

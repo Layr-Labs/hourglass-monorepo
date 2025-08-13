@@ -38,7 +38,7 @@ func (v *Verifier) VerifyAuthentication(auth AuthSignature) error {
 		return status.Error(codes.Unauthenticated, "missing authentication")
 	}
 
-	// Use the challenge token (this also validates it)
+	// Use the challenge token
 	if err := v.tokenManager.UseChallengeToken(auth.GetChallengeToken()); err != nil {
 		return status.Errorf(codes.Unauthenticated, "invalid challenge token: %v", err)
 	}
