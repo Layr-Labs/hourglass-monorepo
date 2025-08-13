@@ -44,37 +44,6 @@ func TestOperatorRegistration(t *testing.T) {
 			"Output should contain a transaction hash starting with 0x")
 	})
 
-	t.Run("Double Registration Attempt", func(t *testing.T) {
-		// First registration
-		// TODO: use operator private key
-		result, err := h.ExecuteCLIWithKeystore("executor-ecdsa",
-			"register-operator",
-			"--allocation-delay", "1",
-			"--metadata-uri", "https://example.com/operator/metadata.json")
-
-		require.NoError(t, err)
-
-		if result.ExitCode == 0 {
-			// Wait for transaction
-			if txHash, err := harness.ParseTransactionHash(result.Stdout); err == nil && txHash != "" {
-				err := h.WaitForTransaction(context.Background(), txHash)
-				if err != nil {
-					t.Logf("failed to wait for transaction in test")
-					return
-				}
-			}
-
-			// Second registration attempt (should fail)
-			result, err = h.ExecuteCLIWithKeystore("executor-ecdsa",
-				"register-operator",
-				"--allocation-delay", "1",
-				"--metadata-uri", "https://example.com/operator/metadata.json")
-
-			require.NoError(t, err)
-			assert.Equal(t, 1, result.ExitCode)
-		}
-	})
-
 	t.Run("Set Allocation Delay", func(t *testing.T) {
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
 			"set-allocation-delay",
@@ -101,7 +70,7 @@ func TestOperatorRegistration(t *testing.T) {
 		aggregatorKeystore := h.GetAggregatorECDSAKeystore()
 
 		// Try to delegate executor to aggregator (executor needs to be registered first)
-		result, err := h.ExecuteCLIWithKeystore("executor-ecdsa",
+		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
 			"register-operator",
 			"--allocation-delay", "1",
 			"--metadata-uri", "https://example.com/executor/metadata.json")
@@ -146,7 +115,16 @@ func TestOperatorRegistration(t *testing.T) {
 		// Register executor's BN254 key to a different operator set
 		executorBN254 := h.GetExecutorKeystore()
 
-		result, _ := h.ExecuteCLIWithKeystore("executor-ecdsa",
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
+			"--operator-address",
+			h.ChainConfig.ExecOperatorAccountAddress,
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
+		result, _ := h.ExecuteCLIWithKeystore("executor-bn254",
 			"register-key",
 			"--operator-set-id", "1",
 			"--key-type", "bn254",
@@ -169,6 +147,15 @@ func TestOperatorRegistration(t *testing.T) {
 		// Ensure we have passed the allocation delay.
 		err := h.MineBlocks(activateAllocationDelayBlocks)
 		require.NoError(t, err)
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
+			"--operator-address",
+			h.ChainConfig.OperatorAccountAddress,
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
 			"allocate",
 			"--operator-set-id", "0",

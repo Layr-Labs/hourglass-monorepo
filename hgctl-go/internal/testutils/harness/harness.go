@@ -249,6 +249,8 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 				privateKey = h.ChainConfig.OperatorAccountPk
 			} else if keystoreName == "executor-ecdsa" {
 				privateKey = h.ChainConfig.ExecOperatorAccountPk
+			} else if keystoreName == "executor-bn254" {
+				privateKey = h.ChainConfig.ExecOperatorAccountPk
 			}
 
 			if privateKey != "" {
@@ -258,6 +260,8 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 				originalEnv["PRIVATE_KEY"] = os.Getenv("PRIVATE_KEY")
 				os.Setenv("PRIVATE_KEY", privateKey)
 			}
+		} else {
+
 		}
 	}
 

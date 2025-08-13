@@ -4,17 +4,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"math/big"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"os"
 	"strings"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
@@ -82,7 +82,7 @@ type KeyRegistrationParams struct {
 
 // KeyHandler interface for different key types
 type KeyHandler interface {
-	PrepareKeyData(c *cli.Context) ([]byte, error)
+	PrepareKeyData(c *cli.Context, contractClient *client.ContractClient) ([]byte, error)
 	GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error)
 	ValidateParams(c *cli.Context) error
 }
@@ -119,7 +119,7 @@ func registerKeyAction(c *cli.Context) error {
 	}
 
 	// Prepare key data
-	keyData, err := handler.PrepareKeyData(c)
+	keyData, err := handler.PrepareKeyData(c, contractClient)
 	if err != nil {
 		return fmt.Errorf("failed to prepare key data: %w", err)
 	}
@@ -204,7 +204,7 @@ func (h *ECDSAKeyHandler) ValidateParams(c *cli.Context) error {
 	return nil
 }
 
-func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context) ([]byte, error) {
+func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClient) ([]byte, error) {
 	keyAddress := c.String("key-address")
 	addr := common.HexToAddress(keyAddress)
 	return addr.Bytes(), nil
@@ -219,7 +219,7 @@ func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *clie
 		return nil, fmt.Errorf("PRIVATE_KEY environment variable required to generate signature")
 	}
 
-	privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))
+	privateKey, err := ecdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(privateKeyHex, "0x"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid private key: %w", err)
 	}
@@ -237,18 +237,31 @@ func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *clie
 		return nil, fmt.Errorf("failed to get message hash: %w", err)
 	}
 
-	// Sign the message hash
-	signature, err := crypto.Sign(messageHash[:], privateKey)
+	rawSig, err := privateKey.Sign(messageHash[:])
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign message: %w", err)
+		return nil, fmt.Errorf("failed to sign message hash: %w", err)
 	}
+	fmt.Printf("Sig: %+v\n", rawSig)
 
-	// Convert to Ethereum signature format (v = 27 or 28)
-	if signature[64] < 27 {
-		signature[64] += 27
+	signature, err := privateKey.SignAndPack(messageHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign message hash: %w", err)
 	}
+	fmt.Printf("Signature: %s\n", hexutil.Encode(signature))
 
-	h.log.Debug("Generated ECDSA signature", zap.String("signature", hex.EncodeToString(signature)))
+	// verify the signature
+	sig, err := ecdsa.NewSignatureFromBytes(signature)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
+	}
+	valid, err := sig.Verify(privateKey.Public(), messageHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify signature: %w", err)
+	}
+	if !valid {
+		return nil, fmt.Errorf("signature verification failed")
+	}
+	h.log.Sugar().Infow("Signature verified successfully")
 	return signature, nil
 }
 
@@ -269,12 +282,12 @@ func (h *BN254KeyHandler) ValidateParams(c *cli.Context) error {
 	return nil
 }
 
-func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context) ([]byte, error) {
+func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context, contractClient *client.ContractClient) ([]byte, error) {
 	keyDataHex := c.String("key-data")
 	keystorePath := c.String("keystore-path")
 
 	if keystorePath != "" {
-		return h.prepareKeyDataFromKeystore(c, keystorePath)
+		return h.prepareKeyDataFromKeystore(c, contractClient, keystorePath)
 	}
 
 	// Use provided key data
@@ -290,7 +303,11 @@ func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context) ([]byte, error) {
 	return keyData, nil
 }
 
-func (h *BN254KeyHandler) prepareKeyDataFromKeystore(c *cli.Context, keystorePath string) ([]byte, error) {
+func (h *BN254KeyHandler) prepareKeyDataFromKeystore(
+	c *cli.Context,
+	contractClient *client.ContractClient,
+	keystorePath string,
+) ([]byte, error) {
 	password := c.String("password")
 
 	// Read keystore file
@@ -300,7 +317,7 @@ func (h *BN254KeyHandler) prepareKeyDataFromKeystore(c *cli.Context, keystorePat
 	}
 
 	// Decrypt keystore
-	privateKeyBytes, err := decryptKeystore(keystoreBytes, password)
+	privateKeyBytes, err := deccryptBn254Keystore(keystoreBytes, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt keystore: %w", err)
 	}
@@ -314,12 +331,20 @@ func (h *BN254KeyHandler) prepareKeyDataFromKeystore(c *cli.Context, keystorePat
 	// Store for signature generation
 	h.privateKey = privateKey
 
-	keyData := encodeBN254KeyData(privateKey.Public())
+	keyData, err := contractClient.EncodeBN254KeyData(privateKey.Public())
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode key: %w", err)
+	}
 
 	return keyData, nil
 }
 
-func (h *BN254KeyHandler) GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error) {
+func (h *BN254KeyHandler) GenerateSignature(
+	c *cli.Context,
+	contractClient *client.ContractClient,
+	operatorSetID uint32,
+	keyData []byte,
+) ([]byte, error) {
 	if h.privateKey == nil {
 		return nil, fmt.Errorf("no private key available for signature generation")
 	}
@@ -352,62 +377,25 @@ func (h *BN254KeyHandler) GenerateSignature(c *cli.Context, contractClient *clie
 	return signature, nil
 }
 
-// encodeBN254KeyData encodes the public key for the contract
-func encodeBN254KeyData(publicKey *bn254.PublicKey) []byte {
-	g1 := publicKey.GetG1Point()
-	g2 := publicKey.GetG2Point()
-
-	// Convert points to big.Int format
-	g1X := new(big.Int)
-	g1Y := new(big.Int)
-	g2X0 := new(big.Int)
-	g2X1 := new(big.Int)
-	g2Y0 := new(big.Int)
-	g2Y1 := new(big.Int)
-
-	// Extract coordinates from field elements
-	g1.X.BigInt(g1X)
-	g1.Y.BigInt(g1Y)
-	g2.X.A0.BigInt(g2X0)
-	g2.X.A1.BigInt(g2X1)
-	g2.Y.A0.BigInt(g2Y0)
-	g2.Y.A1.BigInt(g2Y1)
-
-	// Pack as 32-byte padded values (matching Solidity abi.encode)
-	data := make([]byte, 192) // 6 * 32 bytes
-	g1X.FillBytes(data[0:32])
-	g1Y.FillBytes(data[32:64])
-	g2X0.FillBytes(data[64:96])
-	g2X1.FillBytes(data[96:128])
-	g2Y0.FillBytes(data[128:160])
-	g2Y1.FillBytes(data[160:192])
-
-	return data
-}
-
-// decryptKeystore decrypts a keystore file to get the private key
-func decryptKeystore(keystoreData []byte, password string) ([]byte, error) {
+// deccryptBn254Keystore decrypts a keystore file to get the private key
+func deccryptBn254Keystore(keystoreData []byte, password string) ([]byte, error) {
 	// Check if it's a BLS keystore
 	var testKeystore map[string]interface{}
 	if err := json.Unmarshal(keystoreData, &testKeystore); err == nil {
-		if crypto, ok := testKeystore["crypto"].(map[string]interface{}); ok {
-			if _, ok := crypto["kdf"].(map[string]interface{}); ok {
-				var keystoreFile blskeystore.EIP2335Keystore
-				if err := json.Unmarshal(keystoreData, &keystoreFile); err != nil {
-					return nil, fmt.Errorf("failed to unmarshal BLS keystore: %w", err)
-				}
-				scheme, err := blskeystore.GetSigningSchemeForCurveType("bn254")
-				if err != nil {
-					return nil, fmt.Errorf("failed to get bn254 scheme: %w", err)
-				}
-				privateKey, err := keystoreFile.GetPrivateKey(password, scheme)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decrypt BLS private key: %w", err)
-				}
-
-				return privateKey.Bytes(), nil
-			}
+		var keystoreFile blskeystore.EIP2335Keystore
+		if err := json.Unmarshal(keystoreData, &keystoreFile); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal BLS keystore: %w", err)
 		}
+		scheme, err := blskeystore.GetSigningSchemeForCurveType("bn254")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get bn254 scheme: %w", err)
+		}
+		privateKey, err := keystoreFile.GetPrivateKey(password, scheme)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt BLS private key: %w", err)
+		}
+
+		return privateKey.Bytes(), nil
 	}
 
 	// Try standard Ethereum keystore
