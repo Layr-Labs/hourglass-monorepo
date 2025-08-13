@@ -221,6 +221,295 @@ func Test_Aggregation(t *testing.T) {
 }
 
 func Test_MostCommonDigestTracking(t *testing.T) {
+	t.Run("BN254 - Multiple Digests", func(t *testing.T) {
+		// Create test operators with key pairs
+		operators := make([]*Operator[signing.PublicKey], 5)
+		privateKeys := make([]*bn254.PrivateKey, 5)
+		for i := 0; i < 5; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:   fmt.Sprintf("0x%d", i+1),
+				PublicKey: pubKey,
+			}
+			privateKeys[i] = privKey
+		}
+
+		// Initialize new task
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100, // taskCreatedBlock
+			1,   // operatorSetId
+			60,  // thresholdPercentage (3/5)
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, agg)
+
+		// Create different response payloads
+		payloadA := []byte("response-A")
+		payloadB := []byte("response-B")
+		payloadC := []byte("response-C")
+
+		digestA := util.GetKeccak256Digest(payloadA)
+		digestB := util.GetKeccak256Digest(payloadB)
+		digestC := util.GetKeccak256Digest(payloadC)
+
+		// Test scenario:
+		// - Operator 0: submits digest A
+		// - Operator 1: submits digest B
+		// - Operator 2: submits digest A (A now has 2 votes, should become most common)
+		// - Operator 3: submits digest C
+		// - Operator 4: submits digest B (B now has 2 votes, but A should remain most common as it got 2 first)
+
+		// Operator 0 submits digest A
+		taskResult0 := &types.TaskResult{
+			OperatorAddress: operators[0].Address,
+			Output:          payloadA,
+			OutputDigest:    digestA[:],
+		}
+		sig0, err := privateKeys[0].SignSolidityCompatible(digestA)
+		require.NoError(t, err)
+		taskResult0.Signature = sig0.Bytes()
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult0)
+		require.NoError(t, err)
+
+		// Verify mostCommonCount is 1 and points to digest A
+		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digestA[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+
+		// Operator 1 submits digest B
+		taskResult1 := &types.TaskResult{
+			OperatorAddress: operators[1].Address,
+			Output:          payloadB,
+			OutputDigest:    digestB[:],
+		}
+		sig1, err := privateKeys[1].SignSolidityCompatible(digestB)
+		require.NoError(t, err)
+		taskResult1.Signature = sig1.Bytes()
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult1)
+		require.NoError(t, err)
+
+		// Most common should still be A (both have count 1, A came first)
+		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digestA[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+
+		// Operator 2 submits digest A
+		taskResult2 := &types.TaskResult{
+			OperatorAddress: operators[2].Address,
+			Output:          payloadA,
+			OutputDigest:    digestA[:],
+		}
+		sig2, err := privateKeys[2].SignSolidityCompatible(digestA)
+		require.NoError(t, err)
+		taskResult2.Signature = sig2.Bytes()
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult2)
+		require.NoError(t, err)
+
+		// Now A should have count 2 and be most common
+		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digestA[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+		assert.Equal(t, payloadA, agg.aggregatedOperators.mostCommonResponse.TaskResult.Output)
+
+		// Operator 3 submits digest C
+		taskResult3 := &types.TaskResult{
+			OperatorAddress: operators[3].Address,
+			Output:          payloadC,
+			OutputDigest:    digestC[:],
+		}
+		sig3, err := privateKeys[3].SignSolidityCompatible(digestC)
+		require.NoError(t, err)
+		taskResult3.Signature = sig3.Bytes()
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult3)
+		require.NoError(t, err)
+
+		// A should still be most common with count 2
+		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digestA[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+
+		// Operator 4 submits digest B
+		taskResult4 := &types.TaskResult{
+			OperatorAddress: operators[4].Address,
+			Output:          payloadB,
+			OutputDigest:    digestB[:],
+		}
+		sig4, err := privateKeys[4].SignSolidityCompatible(digestB)
+		require.NoError(t, err)
+		taskResult4.Signature = sig4.Bytes()
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult4)
+		require.NoError(t, err)
+
+		// A should still be most common (both A and B have count 2, but A reached 2 first)
+		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digestA[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+
+		// Verify digest counts
+		var digestArrayA, digestArrayB, digestArrayC [32]byte
+		copy(digestArrayA[:], digestA[:])
+		copy(digestArrayB[:], digestB[:])
+		copy(digestArrayC[:], digestC[:])
+		assert.Equal(t, 2, agg.aggregatedOperators.digestCounts[digestArrayA])
+		assert.Equal(t, 2, agg.aggregatedOperators.digestCounts[digestArrayB])
+		assert.Equal(t, 1, agg.aggregatedOperators.digestCounts[digestArrayC])
+
+		// Verify threshold is met
+		assert.True(t, agg.SigningThresholdMet())
+
+		// Generate final certificate and verify it uses the most common response
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		require.NotNil(t, cert)
+
+		// Certificate should use payload A (the most common)
+		assert.Equal(t, payloadA, cert.TaskResponse)
+		assert.Equal(t, digestA[:], cert.TaskResponseDigest)
+	})
+
+	t.Run("BN254 - Single Operator", func(t *testing.T) {
+		// Create a single test operator
+		privKey, pubKey, err := bn254.GenerateKeyPair()
+		require.NoError(t, err)
+		
+		operators := []*Operator[signing.PublicKey]{
+			{
+				Address:   "0x1",
+				PublicKey: pubKey,
+			},
+		}
+
+		// Initialize task with 100% threshold (requiring the single operator)
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			100, // 100% threshold - requires the single operator
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+
+		// Single operator submits response
+		payload := []byte("single-operator-response")
+		digest := util.GetKeccak256Digest(payload)
+
+		taskResult := &types.TaskResult{
+			OperatorAddress: operators[0].Address,
+			Output:          payload,
+			OutputDigest:    digest[:],
+		}
+		sig, err := privKey.SignSolidityCompatible(digest)
+		require.NoError(t, err)
+		taskResult.Signature = sig.Bytes()
+
+		// Process the single signature
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		require.NoError(t, err)
+
+		// Verify mostCommonResponse is set correctly
+		assert.NotNil(t, agg.aggregatedOperators.mostCommonResponse)
+		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
+		assert.Equal(t, digest[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+		assert.Equal(t, payload, agg.aggregatedOperators.mostCommonResponse.TaskResult.Output)
+
+		// Verify threshold is met
+		assert.True(t, agg.SigningThresholdMet())
+
+		// Generate certificate and verify it works with single operator
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		require.NotNil(t, cert)
+
+		// Certificate should use the single operator's response
+		assert.Equal(t, payload, cert.TaskResponse)
+		assert.Equal(t, digest[:], cert.TaskResponseDigest)
+		
+		// Verify signature
+		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
+		require.NoError(t, err)
+		var responseDigest [32]byte
+		copy(responseDigest[:], cert.TaskResponseDigest)
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, responseDigest)
+		require.NoError(t, err)
+		assert.True(t, verified, "Single operator signature verification failed")
+
+		// Should have no non-signers and one total operator
+		assert.Equal(t, 0, len(cert.NonSignersPubKeys), "Should have no non-signers")
+		assert.Equal(t, 1, len(cert.AllOperatorsPubKeys), "Should have one total operator")
+	})
+
+	t.Run("BN254 - Unanimous Agreement", func(t *testing.T) {
+		// Create test operators
+		operators := make([]*Operator[signing.PublicKey], 3)
+		privateKeys := make([]*bn254.PrivateKey, 3)
+		for i := 0; i < 3; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:   fmt.Sprintf("0x%d", i+1),
+				PublicKey: pubKey,
+			}
+			privateKeys[i] = privKey
+		}
+
+		// Initialize task
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			100, // 100% threshold
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+
+		// All operators submit the same response
+		commonPayload := []byte("unanimous-response")
+		digest := util.GetKeccak256Digest(commonPayload)
+
+		for i := 0; i < 3; i++ {
+			taskResult := &types.TaskResult{
+				OperatorAddress: operators[i].Address,
+				Output:          commonPayload,
+				OutputDigest:    digest[:],
+			}
+			sig, err := privateKeys[i].SignSolidityCompatible(digest)
+			require.NoError(t, err)
+			taskResult.Signature = sig.Bytes()
+
+			err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+			require.NoError(t, err)
+
+			// Most common count should increase with each submission
+			assert.Equal(t, i+1, agg.aggregatedOperators.mostCommonCount)
+			assert.Equal(t, digest[:], agg.aggregatedOperators.mostCommonResponse.Digest)
+		}
+
+		// Generate certificate
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		assert.Equal(t, commonPayload, cert.TaskResponse)
+		assert.Equal(t, digest[:], cert.TaskResponseDigest)
+	})
+
 	t.Run("ECDSA - Multiple Digests", func(t *testing.T) {
 		// Create test operators with key pairs
 		operators := make([]*Operator[common.Address], 5)

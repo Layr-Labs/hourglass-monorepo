@@ -125,7 +125,19 @@ type aggregatedBN254Operators struct {
 	// simple count of signers. eventually this could represent stake weight or something
 	totalSigners int
 
-	lastReceivedResponse *ReceivedBN254ResponseWithDigest
+	// Track digest counts to find most common result
+	// digest -> count
+	digestCounts map[[32]byte]int
+
+	// Track which response to use for each digest
+	// digest -> response
+	digestResponses map[[32]byte]*ReceivedBN254ResponseWithDigest
+
+	// The response with the most common digest (updated as we aggregate)
+	mostCommonResponse *ReceivedBN254ResponseWithDigest
+
+	// The response with the most common digest (updated as we aggregate)
+	mostCommonCount int
 }
 
 func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
@@ -178,6 +190,9 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
 
+	var digest [32]byte
+	copy(digest[:], taskResponse.OutputDigest)
+
 	rr := &ReceivedBN254ResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
@@ -193,11 +208,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Begin aggregating signatures and public keys.
-	// The lastReceivedResponse will end up being the value used to for the final certificate.
-	//
-	// TODO: probably need some kind of comparison on results, otherwise the last operator in
-	// will always be the one that is used for the final certificate and could potentially be
-	// wrong or malicious.
+	// Track digest counts to select the most common result for the final certificate
 	if tra.aggregatedOperators == nil {
 		// no signers yet, initialize the aggregated operators
 		tra.aggregatedOperators = &aggregatedBN254Operators{
@@ -213,15 +224,36 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 			// initialize the count of signers (could eventually be weight or something else)
 			totalSigners: 1,
 
-			// store the last received response
-			lastReceivedResponse: rr,
+			// Initialize digest tracking maps
+			digestCounts:       make(map[[32]byte]int),
+			digestResponses:    make(map[[32]byte]*ReceivedBN254ResponseWithDigest),
+			mostCommonResponse: rr,
+			mostCommonCount:    1,
 		}
+		// Track this digest for the first operator
+		tra.aggregatedOperators.digestCounts[digest] = 1
+		tra.aggregatedOperators.digestResponses[digest] = rr
+		tra.aggregatedOperators.mostCommonResponse = rr
 	} else {
 		tra.aggregatedOperators.signersG2.AddPublicKey(bn254PubKey)
 		tra.aggregatedOperators.signersAggSig.Add(sig)
 		tra.aggregatedOperators.signersOperatorSet[taskResponse.OperatorAddress] = true
 		tra.aggregatedOperators.totalSigners++
-		tra.aggregatedOperators.lastReceivedResponse = rr
+
+		// Update digest count
+		newCount := tra.aggregatedOperators.digestCounts[digest] + 1
+		tra.aggregatedOperators.digestCounts[digest] = newCount
+
+		// Store the first response for this digest (if not already stored)
+		if _, exists := tra.aggregatedOperators.digestResponses[digest]; !exists {
+			tra.aggregatedOperators.digestResponses[digest] = rr
+		}
+
+		// Check if this digest is now the most common
+		if newCount > tra.aggregatedOperators.mostCommonCount {
+			tra.aggregatedOperators.mostCommonCount = newCount
+			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[digest]
+		}
 	}
 
 	return nil
@@ -281,10 +313,15 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		return nil, fmt.Errorf("failed to decode taskId: %w", err)
 	}
 
+	// Use the most common response for the certificate
+	if tra.aggregatedOperators.mostCommonResponse == nil {
+		return nil, fmt.Errorf("no common response found")
+	}
+
 	return &AggregatedBN254Certificate{
 		TaskId:              taskIdBytes,
-		TaskResponse:        tra.aggregatedOperators.lastReceivedResponse.TaskResult.Output,
-		TaskResponseDigest:  tra.aggregatedOperators.lastReceivedResponse.Digest,
+		TaskResponse:        tra.aggregatedOperators.mostCommonResponse.TaskResult.Output,
+		TaskResponseDigest:  tra.aggregatedOperators.mostCommonResponse.Digest,
 		NonSignersPubKeys:   nonSignerPublicKeys,
 		AllOperatorsPubKeys: allPublicKeys,
 		SignersPublicKey:    tra.aggregatedOperators.signersG2,
