@@ -181,6 +181,7 @@ func Test_Aggregation(t *testing.T) {
 			operator := operators[i]
 			// Create task result
 			taskResult := &types.TaskResult{
+				TaskId:          taskId,
 				OperatorAddress: operator.Address,
 				Output:          commonPayload,
 				OutputDigest:    digest[:],
