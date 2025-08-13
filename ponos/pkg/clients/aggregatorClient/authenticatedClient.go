@@ -8,7 +8,6 @@ import (
 	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"google.golang.org/protobuf/proto"
 )
 
 // AuthenticatedAggregatorClient wraps the aggregator client with authentication
@@ -33,7 +32,7 @@ func NewAuthenticatedAggregatorClient(fullUrl string, aggregatorAddress string, 
 }
 
 // createAuthSignature creates an authentication signature for a request
-func (c *AuthenticatedAggregatorClient) createAuthSignature(ctx context.Context, methodName string, request proto.Message) (*commonV1.AuthSignature, error) {
+func (c *AuthenticatedAggregatorClient) createAuthSignature(ctx context.Context) (*commonV1.AuthSignature, error) {
 	// First, get a challenge token from the server
 	tokenResp, err := c.managementClient.GetChallengeToken(ctx, &aggregatorV1.AggregatorGetChallengeTokenRequest{
 		AggregatorAddress: c.aggregatorAddress,
@@ -42,14 +41,8 @@ func (c *AuthenticatedAggregatorClient) createAuthSignature(ctx context.Context,
 		return nil, fmt.Errorf("failed to get challenge token: %w", err)
 	}
 
-	// Marshal the request payload
-	requestBytes, err := proto.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Construct and sign the message
-	signedMessage := auth.ConstructSignedMessage(tokenResp.ChallengeToken, methodName, requestBytes)
+	// Construct and sign the message (just the token)
+	signedMessage := auth.ConstructSignedMessage(tokenResp.ChallengeToken)
 
 	// Sign the message
 	signature, err := c.signer.SignMessage(signedMessage)
@@ -65,14 +58,8 @@ func (c *AuthenticatedAggregatorClient) createAuthSignature(ctx context.Context,
 
 // RegisterAvs registers an AVS with authentication
 func (c *AuthenticatedAggregatorClient) RegisterAvs(ctx context.Context, req *aggregatorV1.RegisterAvsRequest) (*aggregatorV1.RegisterAvsResponse, error) {
-	// Create a copy of the request without auth field
-	requestCopy := &aggregatorV1.RegisterAvsRequest{
-		AvsAddress: req.AvsAddress,
-		ChainIds:   req.ChainIds,
-	}
-
 	// Create auth signature
-	auth, err := c.createAuthSignature(ctx, "RegisterAvs", requestCopy)
+	auth, err := c.createAuthSignature(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -86,13 +73,8 @@ func (c *AuthenticatedAggregatorClient) RegisterAvs(ctx context.Context, req *ag
 
 // DeRegisterAvs deregisters an AVS with authentication
 func (c *AuthenticatedAggregatorClient) DeRegisterAvs(ctx context.Context, req *aggregatorV1.DeRegisterAvsRequest) (*aggregatorV1.DeRegisterAvsResponse, error) {
-	// Create a copy of the request without auth field
-	requestCopy := &aggregatorV1.DeRegisterAvsRequest{
-		AvsAddress: req.AvsAddress,
-	}
-
 	// Create auth signature
-	auth, err := c.createAuthSignature(ctx, "DeRegisterAvs", requestCopy)
+	auth, err := c.createAuthSignature(ctx)
 	if err != nil {
 		return nil, err
 	}

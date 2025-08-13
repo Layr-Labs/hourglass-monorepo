@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
@@ -35,6 +36,7 @@ type AggregatorConfig struct {
 	AVSs             []*aggregatorConfig.AggregatorAvs
 	Chains           []*aggregatorConfig.Chain
 	L1ChainId        config.ChainId
+	Authentication   *aggregatorConfig.Authentication
 }
 
 type Aggregator struct {
@@ -112,7 +114,7 @@ func NewAggregator(
 	}
 	// Initialize auth verifier for management APIs
 	var authVerifier *auth.Verifier
-	if signers.ECDSASigner != nil {
+	if cfg.Authentication != nil && cfg.Authentication.IsEnabled {
 		tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
 		authVerifier = auth.NewVerifier(tokenManager, signers.ECDSASigner)
 	}
@@ -379,4 +381,13 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 
 func (a *Aggregator) registerHandlers() {
 	aggregatorV1.RegisterAggregatorManagementServiceServer(a.managementRpcServer.GetGrpcServer(), a)
+}
+
+func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
+	if a.authVerifier != nil {
+		if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
+			return err
+		}
+	}
+	return nil
 }

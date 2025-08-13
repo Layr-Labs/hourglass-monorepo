@@ -17,13 +17,13 @@ func TestBuildHealthCheckConfig_EnabledFieldBehavior(t *testing.T) {
 			Retries:          3,
 			StartPeriod:      10 * time.Second,
 			FailureThreshold: 3,
-			// Enabled not set - should default to false
+			// IsEnabled not set - should default to false
 		}
 
 		result := builder.BuildHealthCheckConfig(config)
 
-		// Verify that Enabled remains false (the zero value)
-		assert.False(t, result.Enabled, "Enabled should default to false when not explicitly set")
+		// Verify that IsEnabled remains false (the zero value)
+		assert.False(t, result.Enabled, "IsEnabled should default to false when not explicitly set")
 	})
 
 	t.Run("enabled can be explicitly set to true", func(t *testing.T) {
@@ -38,8 +38,8 @@ func TestBuildHealthCheckConfig_EnabledFieldBehavior(t *testing.T) {
 
 		result := builder.BuildHealthCheckConfig(config)
 
-		// Verify that Enabled is true when explicitly set
-		assert.True(t, result.Enabled, "Enabled should be true when explicitly set")
+		// Verify that IsEnabled is true when explicitly set
+		assert.True(t, result.Enabled, "IsEnabled should be true when explicitly set")
 	})
 
 	t.Run("enabled can be explicitly set to false", func(t *testing.T) {
@@ -54,21 +54,21 @@ func TestBuildHealthCheckConfig_EnabledFieldBehavior(t *testing.T) {
 
 		result := builder.BuildHealthCheckConfig(config)
 
-		// Verify that Enabled remains false when explicitly set to false
-		assert.False(t, result.Enabled, "Enabled should be false when explicitly set to false")
+		// Verify that IsEnabled remains false when explicitly set to false
+		assert.False(t, result.Enabled, "IsEnabled should be false when explicitly set to false")
 	})
 
 	t.Run("nil config results in enabled false", func(t *testing.T) {
 		result := builder.BuildHealthCheckConfig(nil)
 
-		// Verify that Enabled defaults to false for nil config
-		assert.False(t, result.Enabled, "Enabled should default to false for nil config")
+		// Verify that IsEnabled defaults to false for nil config
+		assert.False(t, result.Enabled, "IsEnabled should default to false for nil config")
 	})
 }
 
 func TestHealthCheckEnabledBehaviorInStartHealthCheck(t *testing.T) {
 	t.Run("health check returns nil when disabled", func(t *testing.T) {
-		// This test verifies that StartHealthCheck returns nil when Enabled is false
+		// This test verifies that StartHealthCheck returns nil when IsEnabled is false
 		// We can't easily test the actual DockerContainerManager here without a full Docker setup,
 		// but we can verify the logic is correct by checking that the condition works as expected
 
@@ -78,7 +78,7 @@ func TestHealthCheckEnabledBehaviorInStartHealthCheck(t *testing.T) {
 
 		// Simulate the check condition from dockerManager.go
 		if !config.Enabled {
-			// This is the path that should be taken when Enabled is false
+			// This is the path that should be taken when IsEnabled is false
 			assert.True(t, true, "Correct path taken when health check is disabled")
 		} else {
 			assert.Fail(t, "Should not reach this path when health check is disabled")
@@ -94,7 +94,7 @@ func TestHealthCheckEnabledBehaviorInStartHealthCheck(t *testing.T) {
 		if !config.Enabled {
 			assert.Fail(t, "Should not reach this path when health check is enabled")
 		} else {
-			// This is the path that should be taken when Enabled is true
+			// This is the path that should be taken when IsEnabled is true
 			assert.True(t, true, "Correct path taken when health check is enabled")
 		}
 	})

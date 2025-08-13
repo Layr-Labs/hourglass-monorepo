@@ -60,7 +60,7 @@ func (cb *ConfigBuilder) BuildHealthCheckConfig(config *HealthCheckConfig) *Heal
 		config.FailureThreshold = DefaultFailureThreshold
 	}
 
-	// Enabled defaults to false - must be explicitly set to true to enable health checks
+	// IsEnabled defaults to false - must be explicitly set to true to enable health checks
 	// No automatic enabling - this makes the behavior explicit and predictable
 
 	return config
@@ -146,7 +146,7 @@ func (cb *ConfigBuilder) BuildResourceThresholds(thresholds *ResourceThresholds)
 func (cb *ConfigBuilder) mergeHealthCheckConfig(userConfig, defaultConfig *HealthCheckConfig) *HealthCheckConfig {
 	merged := *defaultConfig
 
-	// Always apply user's Enabled value (whether true or false)
+	// Always apply user's IsEnabled value (whether true or false)
 	merged.Enabled = userConfig.Enabled
 	if userConfig.Interval != 0 {
 		merged.Interval = userConfig.Interval

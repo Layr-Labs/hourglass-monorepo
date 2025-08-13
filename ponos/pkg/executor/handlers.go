@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 
@@ -57,19 +56,11 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	)
 
 	// Verify authentication
-	requestBytes, err := auth.GetRequestWithoutAuth(req)
-	if err != nil {
-		return &executorV1.DeployArtifactResponse{
-			Success: false,
-			Message: "Failed to process request",
-		}, status.Error(codes.Internal, err.Error())
-	}
-
-	if err := e.authVerifier.VerifyAuthentication(req.Auth, "DeployArtifact", requestBytes); err != nil {
+	if err := e.verifyAuth(req.Auth); err != nil {
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
 			Message: "Authentication failed",
-		}, err
+		}, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	// Validate request
@@ -438,13 +429,8 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 	)
 
 	// Verify authentication
-	requestBytes, err := auth.GetRequestWithoutAuth(req)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	if err := e.authVerifier.VerifyAuthentication(req.Auth, "ListPerformers", requestBytes); err != nil {
-		return nil, err
+	if err := e.verifyAuth(req.Auth); err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	var allPerformers []*executorV1.Performer
@@ -524,19 +510,11 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 	)
 
 	// Verify authentication
-	requestBytes, err := auth.GetRequestWithoutAuth(req)
-	if err != nil {
-		return &executorV1.RemovePerformerResponse{
-			Success: false,
-			Message: "Failed to process request",
-		}, status.Error(codes.Internal, err.Error())
-	}
-
-	if err := e.authVerifier.VerifyAuthentication(req.Auth, "RemovePerformer", requestBytes); err != nil {
+	if err := e.verifyAuth(req.Auth); err != nil {
 		return &executorV1.RemovePerformerResponse{
 			Success: false,
 			Message: "Authentication failed",
-		}, err
+		}, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	// Validate request

@@ -61,6 +61,10 @@ func (aa *AggregatorAvs) Validate() error {
 	return nil
 }
 
+type Authentication struct {
+	IsEnabled bool `json:"enabled" yaml:"enabled"`
+}
+
 type BadgerConfig struct {
 	// Directory where BadgerDB will store its data
 	Dir string `json:"dir" yaml:"dir"`

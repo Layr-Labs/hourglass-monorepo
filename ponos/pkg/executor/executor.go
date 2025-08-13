@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsKubernetesPerformer"
@@ -360,5 +361,15 @@ func (e *Executor) registerHandlers() error {
 	executorV1.RegisterExecutorServiceServer(e.taskRpcServer.GetGrpcServer(), e)
 	executorV1.RegisterExecutorManagementServiceServer(e.managementRpcServer.GetGrpcServer(), e)
 
+	return nil
+}
+
+// verifyAuth is a helper method to verify authentication
+func (e *Executor) verifyAuth(auth *commonV1.AuthSignature) error {
+	if e.authVerifier != nil {
+		if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
+			return err
+		}
+	}
 	return nil
 }

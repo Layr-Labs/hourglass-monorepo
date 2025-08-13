@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"fmt"
-
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"google.golang.org/grpc/codes"
@@ -35,7 +33,7 @@ func (v *Verifier) GenerateChallengeToken(entity string) (*ChallengeTokenEntry, 
 }
 
 // VerifyAuthentication verifies the authentication signature for a request
-func (v *Verifier) VerifyAuthentication(auth AuthSignature, methodName string, requestPayload []byte) error {
+func (v *Verifier) VerifyAuthentication(auth AuthSignature) error {
 	if auth == nil {
 		return status.Error(codes.Unauthenticated, "missing authentication")
 	}
@@ -45,8 +43,8 @@ func (v *Verifier) VerifyAuthentication(auth AuthSignature, methodName string, r
 		return status.Errorf(codes.Unauthenticated, "invalid challenge token: %v", err)
 	}
 
-	// Construct the message that was signed
-	signedMessage := ConstructSignedMessage(auth.GetChallengeToken(), methodName, requestPayload)
+	// Construct the message that was signed (just the token)
+	signedMessage := ConstructSignedMessage(auth.GetChallengeToken())
 
 	// Verify the signature matches our entity's signature
 	expectedSig, err := v.signer.SignMessage(signedMessage)
@@ -62,14 +60,10 @@ func (v *Verifier) VerifyAuthentication(auth AuthSignature, methodName string, r
 	return nil
 }
 
-// ConstructSignedMessage creates the message to be signed
-func ConstructSignedMessage(challengeToken, methodName string, requestPayload []byte) []byte {
-	// Create a deterministic message to sign
-	message := fmt.Sprintf("%s:%s:", challengeToken, methodName)
-	messageBytes := append([]byte(message), requestPayload...)
-
-	// Return the hash of the message
-	digest := util.GetKeccak256Digest(messageBytes)
+// ConstructSignedMessage creates the message to be signed (simplified to just the token)
+func ConstructSignedMessage(challengeToken string) []byte {
+	// Return the hash of just the challenge token
+	digest := util.GetKeccak256Digest([]byte(challengeToken))
 	return digest[:]
 }
 
