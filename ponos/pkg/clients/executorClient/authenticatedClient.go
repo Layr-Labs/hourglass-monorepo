@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
@@ -39,7 +40,7 @@ func NewAuthenticatedExecutorClient(fullUrl string, operatorAddress string, sign
 }
 
 // createAuthSignature creates an authentication signature for a request
-func (c *AuthenticatedExecutorClient) createAuthSignature(ctx context.Context, methodName string, request proto.Message) (*executorV1.AuthSignature, error) {
+func (c *AuthenticatedExecutorClient) createAuthSignature(ctx context.Context, methodName string, request proto.Message) (*commonV1.AuthSignature, error) {
 	// First, get a challenge token from the server
 	tokenResp, err := c.managementClient.GetChallengeToken(ctx, &executorV1.GetChallengeTokenRequest{
 		OperatorAddress: c.operatorAddress,
@@ -67,7 +68,7 @@ func (c *AuthenticatedExecutorClient) createAuthSignature(ctx context.Context, m
 		return nil, fmt.Errorf("failed to sign message: %w", err)
 	}
 
-	return &executorV1.AuthSignature{
+	return &commonV1.AuthSignature{
 		ChallengeToken: tokenResp.ChallengeToken,
 		Signature:      signature,
 	}, nil

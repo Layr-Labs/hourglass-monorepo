@@ -7,6 +7,7 @@
 package executor
 
 import (
+	common "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -20,59 +21,6 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
-
-// AuthSignature contains authentication data for request verification
-type AuthSignature struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChallengeToken string                 `protobuf:"bytes,1,opt,name=challenge_token,json=challengeToken,proto3" json:"challenge_token,omitempty"`
-	Signature      []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // signature of Hash(challenge_token + method + request_payload)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *AuthSignature) Reset() {
-	*x = AuthSignature{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AuthSignature) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AuthSignature) ProtoMessage() {}
-
-func (x *AuthSignature) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AuthSignature.ProtoReflect.Descriptor instead.
-func (*AuthSignature) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *AuthSignature) GetChallengeToken() string {
-	if x != nil {
-		return x.ChallengeToken
-	}
-	return ""
-}
-
-func (x *AuthSignature) GetSignature() []byte {
-	if x != nil {
-		return x.Signature
-	}
-	return nil
-}
 
 // TaskSubmission is the message used to submit a task to the executor from the aggregator
 type TaskSubmission struct {
@@ -90,7 +38,7 @@ type TaskSubmission struct {
 
 func (x *TaskSubmission) Reset() {
 	*x = TaskSubmission{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[1]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +50,7 @@ func (x *TaskSubmission) String() string {
 func (*TaskSubmission) ProtoMessage() {}
 
 func (x *TaskSubmission) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[1]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +63,7 @@ func (x *TaskSubmission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskSubmission.ProtoReflect.Descriptor instead.
 func (*TaskSubmission) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{1}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *TaskSubmission) GetTaskId() string {
@@ -182,7 +130,7 @@ type TaskResult struct {
 
 func (x *TaskResult) Reset() {
 	*x = TaskResult{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[2]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -194,7 +142,7 @@ func (x *TaskResult) String() string {
 func (*TaskResult) ProtoMessage() {}
 
 func (x *TaskResult) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[2]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -207,7 +155,7 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
 func (*TaskResult) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{2}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TaskResult) GetTaskId() string {
@@ -269,7 +217,7 @@ type KubernetesConfig struct {
 
 func (x *KubernetesConfig) Reset() {
 	*x = KubernetesConfig{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[3]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -281,7 +229,7 @@ func (x *KubernetesConfig) String() string {
 func (*KubernetesConfig) ProtoMessage() {}
 
 func (x *KubernetesConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[3]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -294,7 +242,7 @@ func (x *KubernetesConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KubernetesConfig.ProtoReflect.Descriptor instead.
 func (*KubernetesConfig) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{3}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *KubernetesConfig) GetServiceAccountName() string {
@@ -312,14 +260,14 @@ type DeployArtifactRequest struct {
 	RegistryUrl   string                 `protobuf:"bytes,3,opt,name=registry_url,json=registryUrl,proto3" json:"registry_url,omitempty"`
 	Env           []*PerformerEnv        `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty"`
 	Kubernetes    *KubernetesConfig      `protobuf:"bytes,5,opt,name=kubernetes,proto3" json:"kubernetes,omitempty"`
-	Auth          *AuthSignature         `protobuf:"bytes,6,opt,name=auth,proto3" json:"auth,omitempty"`
+	Auth          *common.AuthSignature  `protobuf:"bytes,6,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeployArtifactRequest) Reset() {
 	*x = DeployArtifactRequest{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -331,7 +279,7 @@ func (x *DeployArtifactRequest) String() string {
 func (*DeployArtifactRequest) ProtoMessage() {}
 
 func (x *DeployArtifactRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +292,7 @@ func (x *DeployArtifactRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployArtifactRequest.ProtoReflect.Descriptor instead.
 func (*DeployArtifactRequest) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{4}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DeployArtifactRequest) GetAvsAddress() string {
@@ -382,7 +330,7 @@ func (x *DeployArtifactRequest) GetKubernetes() *KubernetesConfig {
 	return nil
 }
 
-func (x *DeployArtifactRequest) GetAuth() *AuthSignature {
+func (x *DeployArtifactRequest) GetAuth() *common.AuthSignature {
 	if x != nil {
 		return x.Auth
 	}
@@ -400,7 +348,7 @@ type DeployArtifactResponse struct {
 
 func (x *DeployArtifactResponse) Reset() {
 	*x = DeployArtifactResponse{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -412,7 +360,7 @@ func (x *DeployArtifactResponse) String() string {
 func (*DeployArtifactResponse) ProtoMessage() {}
 
 func (x *DeployArtifactResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -425,7 +373,7 @@ func (x *DeployArtifactResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeployArtifactResponse.ProtoReflect.Descriptor instead.
 func (*DeployArtifactResponse) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{5}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DeployArtifactResponse) GetSuccess() bool {
@@ -453,15 +401,15 @@ func (x *DeployArtifactResponse) GetDeploymentId() string {
 type ListPerformersRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Optional: filter by AVS address
-	AvsAddress    string         `protobuf:"bytes,1,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
-	Auth          *AuthSignature `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	AvsAddress    string                `protobuf:"bytes,1,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
+	Auth          *common.AuthSignature `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListPerformersRequest) Reset() {
 	*x = ListPerformersRequest{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -473,7 +421,7 @@ func (x *ListPerformersRequest) String() string {
 func (*ListPerformersRequest) ProtoMessage() {}
 
 func (x *ListPerformersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -486,7 +434,7 @@ func (x *ListPerformersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPerformersRequest.ProtoReflect.Descriptor instead.
 func (*ListPerformersRequest) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{6}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListPerformersRequest) GetAvsAddress() string {
@@ -496,7 +444,7 @@ func (x *ListPerformersRequest) GetAvsAddress() string {
 	return ""
 }
 
-func (x *ListPerformersRequest) GetAuth() *AuthSignature {
+func (x *ListPerformersRequest) GetAuth() *common.AuthSignature {
 	if x != nil {
 		return x.Auth
 	}
@@ -515,7 +463,7 @@ type PerformerEnv struct {
 
 func (x *PerformerEnv) Reset() {
 	*x = PerformerEnv{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -527,7 +475,7 @@ func (x *PerformerEnv) String() string {
 func (*PerformerEnv) ProtoMessage() {}
 
 func (x *PerformerEnv) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -540,7 +488,7 @@ func (x *PerformerEnv) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformerEnv.ProtoReflect.Descriptor instead.
 func (*PerformerEnv) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{7}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PerformerEnv) GetName() string {
@@ -581,7 +529,7 @@ type KubernetesEnv struct {
 
 func (x *KubernetesEnv) Reset() {
 	*x = KubernetesEnv{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -593,7 +541,7 @@ func (x *KubernetesEnv) String() string {
 func (*KubernetesEnv) ProtoMessage() {}
 
 func (x *KubernetesEnv) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -606,7 +554,7 @@ func (x *KubernetesEnv) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KubernetesEnv.ProtoReflect.Descriptor instead.
 func (*KubernetesEnv) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{8}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *KubernetesEnv) GetValueFrom() *EnvValueFrom {
@@ -627,7 +575,7 @@ type EnvValueFrom struct {
 
 func (x *EnvValueFrom) Reset() {
 	*x = EnvValueFrom{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[9]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -639,7 +587,7 @@ func (x *EnvValueFrom) String() string {
 func (*EnvValueFrom) ProtoMessage() {}
 
 func (x *EnvValueFrom) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[9]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -652,7 +600,7 @@ func (x *EnvValueFrom) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnvValueFrom.ProtoReflect.Descriptor instead.
 func (*EnvValueFrom) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{9}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EnvValueFrom) GetSecretKeyRef() *SecretKeyRef {
@@ -680,7 +628,7 @@ type SecretKeyRef struct {
 
 func (x *SecretKeyRef) Reset() {
 	*x = SecretKeyRef{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[10]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -692,7 +640,7 @@ func (x *SecretKeyRef) String() string {
 func (*SecretKeyRef) ProtoMessage() {}
 
 func (x *SecretKeyRef) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[10]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,7 +653,7 @@ func (x *SecretKeyRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretKeyRef.ProtoReflect.Descriptor instead.
 func (*SecretKeyRef) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{10}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SecretKeyRef) GetName() string {
@@ -733,7 +681,7 @@ type ConfigMapKeyRef struct {
 
 func (x *ConfigMapKeyRef) Reset() {
 	*x = ConfigMapKeyRef{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[11]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -745,7 +693,7 @@ func (x *ConfigMapKeyRef) String() string {
 func (*ConfigMapKeyRef) ProtoMessage() {}
 
 func (x *ConfigMapKeyRef) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[11]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +706,7 @@ func (x *ConfigMapKeyRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigMapKeyRef.ProtoReflect.Descriptor instead.
 func (*ConfigMapKeyRef) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{11}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ConfigMapKeyRef) GetName() string {
@@ -794,7 +742,7 @@ type Performer struct {
 
 func (x *Performer) Reset() {
 	*x = Performer{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[12]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -806,7 +754,7 @@ func (x *Performer) String() string {
 func (*Performer) ProtoMessage() {}
 
 func (x *Performer) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[12]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -819,7 +767,7 @@ func (x *Performer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Performer.ProtoReflect.Descriptor instead.
 func (*Performer) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{12}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Performer) GetPerformerId() string {
@@ -902,7 +850,7 @@ type ListPerformersResponse struct {
 
 func (x *ListPerformersResponse) Reset() {
 	*x = ListPerformersResponse{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[13]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -914,7 +862,7 @@ func (x *ListPerformersResponse) String() string {
 func (*ListPerformersResponse) ProtoMessage() {}
 
 func (x *ListPerformersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[13]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -927,7 +875,7 @@ func (x *ListPerformersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPerformersResponse.ProtoReflect.Descriptor instead.
 func (*ListPerformersResponse) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{13}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListPerformersResponse) GetPerformers() []*Performer {
@@ -941,14 +889,14 @@ func (x *ListPerformersResponse) GetPerformers() []*Performer {
 type RemovePerformerRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PerformerId   string                 `protobuf:"bytes,1,opt,name=performer_id,json=performerId,proto3" json:"performer_id,omitempty"`
-	Auth          *AuthSignature         `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
+	Auth          *common.AuthSignature  `protobuf:"bytes,2,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RemovePerformerRequest) Reset() {
 	*x = RemovePerformerRequest{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[14]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -960,7 +908,7 @@ func (x *RemovePerformerRequest) String() string {
 func (*RemovePerformerRequest) ProtoMessage() {}
 
 func (x *RemovePerformerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[14]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -973,7 +921,7 @@ func (x *RemovePerformerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePerformerRequest.ProtoReflect.Descriptor instead.
 func (*RemovePerformerRequest) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{14}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RemovePerformerRequest) GetPerformerId() string {
@@ -983,7 +931,7 @@ func (x *RemovePerformerRequest) GetPerformerId() string {
 	return ""
 }
 
-func (x *RemovePerformerRequest) GetAuth() *AuthSignature {
+func (x *RemovePerformerRequest) GetAuth() *common.AuthSignature {
 	if x != nil {
 		return x.Auth
 	}
@@ -1001,7 +949,7 @@ type RemovePerformerResponse struct {
 
 func (x *RemovePerformerResponse) Reset() {
 	*x = RemovePerformerResponse{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[15]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1013,7 +961,7 @@ func (x *RemovePerformerResponse) String() string {
 func (*RemovePerformerResponse) ProtoMessage() {}
 
 func (x *RemovePerformerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[15]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1026,7 +974,7 @@ func (x *RemovePerformerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePerformerResponse.ProtoReflect.Descriptor instead.
 func (*RemovePerformerResponse) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{15}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RemovePerformerResponse) GetSuccess() bool {
@@ -1053,7 +1001,7 @@ type GetChallengeTokenRequest struct {
 
 func (x *GetChallengeTokenRequest) Reset() {
 	*x = GetChallengeTokenRequest{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[16]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1065,7 +1013,7 @@ func (x *GetChallengeTokenRequest) String() string {
 func (*GetChallengeTokenRequest) ProtoMessage() {}
 
 func (x *GetChallengeTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[16]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1078,7 +1026,7 @@ func (x *GetChallengeTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetChallengeTokenRequest.ProtoReflect.Descriptor instead.
 func (*GetChallengeTokenRequest) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{16}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetChallengeTokenRequest) GetOperatorAddress() string {
@@ -1099,7 +1047,7 @@ type GetChallengeTokenResponse struct {
 
 func (x *GetChallengeTokenResponse) Reset() {
 	*x = GetChallengeTokenResponse{}
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[17]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1111,7 +1059,7 @@ func (x *GetChallengeTokenResponse) String() string {
 func (*GetChallengeTokenResponse) ProtoMessage() {}
 
 func (x *GetChallengeTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[17]
+	mi := &file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1124,7 +1072,7 @@ func (x *GetChallengeTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetChallengeTokenResponse.ProtoReflect.Descriptor instead.
 func (*GetChallengeTokenResponse) Descriptor() ([]byte, []int) {
-	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{17}
+	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetChallengeTokenResponse) GetChallengeToken() string {
@@ -1145,10 +1093,7 @@ var File_eigenlayer_hourglass_v1_executor_executor_proto protoreflect.FileDescri
 
 const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\n" +
-	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\"V\n" +
-	"\rAuthSignature\x12'\n" +
-	"\x0fchallenge_token\x18\x01 \x01(\tR\x0echallengeToken\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"\x8a\x02\n" +
+	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\x1a)eigenlayer/hourglass/v1/common/auth.proto\"\x8a\x02\n" +
 	"\x0eTaskSubmission\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12-\n" +
 	"\x12aggregator_address\x18\x02 \x01(\tR\x11aggregatorAddress\x12\x1f\n" +
@@ -1169,7 +1114,7 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\x0foperator_set_id\x18\x06 \x01(\rR\roperatorSetId\x12#\n" +
 	"\routput_digest\x18\a \x01(\fR\foutputDigest\"D\n" +
 	"\x10KubernetesConfig\x120\n" +
-	"\x14service_account_name\x18\x01 \x01(\tR\x12serviceAccountName\"\xb3\x02\n" +
+	"\x14service_account_name\x18\x01 \x01(\tR\x12serviceAccountName\"\xba\x02\n" +
 	"\x15DeployArtifactRequest\x12\x1f\n" +
 	"\vavs_address\x18\x01 \x01(\tR\n" +
 	"avsAddress\x12\x16\n" +
@@ -1178,16 +1123,16 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\x03env\x18\x04 \x03(\v2%.eigenlayer.hourglass.v1.PerformerEnvR\x03env\x12I\n" +
 	"\n" +
 	"kubernetes\x18\x05 \x01(\v2).eigenlayer.hourglass.v1.KubernetesConfigR\n" +
-	"kubernetes\x12:\n" +
-	"\x04auth\x18\x06 \x01(\v2&.eigenlayer.hourglass.v1.AuthSignatureR\x04auth\"q\n" +
+	"kubernetes\x12A\n" +
+	"\x04auth\x18\x06 \x01(\v2-.eigenlayer.hourglass.v1.common.AuthSignatureR\x04auth\"q\n" +
 	"\x16DeployArtifactResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12#\n" +
-	"\rdeployment_id\x18\x03 \x01(\tR\fdeploymentId\"t\n" +
+	"\rdeployment_id\x18\x03 \x01(\tR\fdeploymentId\"{\n" +
 	"\x15ListPerformersRequest\x12\x1f\n" +
 	"\vavs_address\x18\x01 \x01(\tR\n" +
-	"avsAddress\x12:\n" +
-	"\x04auth\x18\x02 \x01(\v2&.eigenlayer.hourglass.v1.AuthSignatureR\x04auth\"\xad\x01\n" +
+	"avsAddress\x12A\n" +
+	"\x04auth\x18\x02 \x01(\v2-.eigenlayer.hourglass.v1.common.AuthSignatureR\x04auth\"\xad\x01\n" +
 	"\fPerformerEnv\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12$\n" +
@@ -1221,10 +1166,10 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\x16ListPerformersResponse\x12B\n" +
 	"\n" +
 	"performers\x18\x01 \x03(\v2\".eigenlayer.hourglass.v1.PerformerR\n" +
-	"performers\"w\n" +
+	"performers\"~\n" +
 	"\x16RemovePerformerRequest\x12!\n" +
-	"\fperformer_id\x18\x01 \x01(\tR\vperformerId\x12:\n" +
-	"\x04auth\x18\x02 \x01(\v2&.eigenlayer.hourglass.v1.AuthSignatureR\x04auth\"M\n" +
+	"\fperformer_id\x18\x01 \x01(\tR\vperformerId\x12A\n" +
+	"\x04auth\x18\x02 \x01(\v2-.eigenlayer.hourglass.v1.common.AuthSignatureR\x04auth\"M\n" +
 	"\x17RemovePerformerResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"E\n" +
@@ -1256,48 +1201,48 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescGZIP() []byte {
 	return file_eigenlayer_hourglass_v1_executor_executor_proto_rawDescData
 }
 
-var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_eigenlayer_hourglass_v1_executor_executor_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_eigenlayer_hourglass_v1_executor_executor_proto_goTypes = []any{
-	(*AuthSignature)(nil),             // 0: eigenlayer.hourglass.v1.AuthSignature
-	(*TaskSubmission)(nil),            // 1: eigenlayer.hourglass.v1.TaskSubmission
-	(*TaskResult)(nil),                // 2: eigenlayer.hourglass.v1.TaskResult
-	(*KubernetesConfig)(nil),          // 3: eigenlayer.hourglass.v1.KubernetesConfig
-	(*DeployArtifactRequest)(nil),     // 4: eigenlayer.hourglass.v1.DeployArtifactRequest
-	(*DeployArtifactResponse)(nil),    // 5: eigenlayer.hourglass.v1.DeployArtifactResponse
-	(*ListPerformersRequest)(nil),     // 6: eigenlayer.hourglass.v1.ListPerformersRequest
-	(*PerformerEnv)(nil),              // 7: eigenlayer.hourglass.v1.PerformerEnv
-	(*KubernetesEnv)(nil),             // 8: eigenlayer.hourglass.v1.KubernetesEnv
-	(*EnvValueFrom)(nil),              // 9: eigenlayer.hourglass.v1.EnvValueFrom
-	(*SecretKeyRef)(nil),              // 10: eigenlayer.hourglass.v1.SecretKeyRef
-	(*ConfigMapKeyRef)(nil),           // 11: eigenlayer.hourglass.v1.ConfigMapKeyRef
-	(*Performer)(nil),                 // 12: eigenlayer.hourglass.v1.Performer
-	(*ListPerformersResponse)(nil),    // 13: eigenlayer.hourglass.v1.ListPerformersResponse
-	(*RemovePerformerRequest)(nil),    // 14: eigenlayer.hourglass.v1.RemovePerformerRequest
-	(*RemovePerformerResponse)(nil),   // 15: eigenlayer.hourglass.v1.RemovePerformerResponse
-	(*GetChallengeTokenRequest)(nil),  // 16: eigenlayer.hourglass.v1.GetChallengeTokenRequest
-	(*GetChallengeTokenResponse)(nil), // 17: eigenlayer.hourglass.v1.GetChallengeTokenResponse
+	(*TaskSubmission)(nil),            // 0: eigenlayer.hourglass.v1.TaskSubmission
+	(*TaskResult)(nil),                // 1: eigenlayer.hourglass.v1.TaskResult
+	(*KubernetesConfig)(nil),          // 2: eigenlayer.hourglass.v1.KubernetesConfig
+	(*DeployArtifactRequest)(nil),     // 3: eigenlayer.hourglass.v1.DeployArtifactRequest
+	(*DeployArtifactResponse)(nil),    // 4: eigenlayer.hourglass.v1.DeployArtifactResponse
+	(*ListPerformersRequest)(nil),     // 5: eigenlayer.hourglass.v1.ListPerformersRequest
+	(*PerformerEnv)(nil),              // 6: eigenlayer.hourglass.v1.PerformerEnv
+	(*KubernetesEnv)(nil),             // 7: eigenlayer.hourglass.v1.KubernetesEnv
+	(*EnvValueFrom)(nil),              // 8: eigenlayer.hourglass.v1.EnvValueFrom
+	(*SecretKeyRef)(nil),              // 9: eigenlayer.hourglass.v1.SecretKeyRef
+	(*ConfigMapKeyRef)(nil),           // 10: eigenlayer.hourglass.v1.ConfigMapKeyRef
+	(*Performer)(nil),                 // 11: eigenlayer.hourglass.v1.Performer
+	(*ListPerformersResponse)(nil),    // 12: eigenlayer.hourglass.v1.ListPerformersResponse
+	(*RemovePerformerRequest)(nil),    // 13: eigenlayer.hourglass.v1.RemovePerformerRequest
+	(*RemovePerformerResponse)(nil),   // 14: eigenlayer.hourglass.v1.RemovePerformerResponse
+	(*GetChallengeTokenRequest)(nil),  // 15: eigenlayer.hourglass.v1.GetChallengeTokenRequest
+	(*GetChallengeTokenResponse)(nil), // 16: eigenlayer.hourglass.v1.GetChallengeTokenResponse
+	(*common.AuthSignature)(nil),      // 17: eigenlayer.hourglass.v1.common.AuthSignature
 }
 var file_eigenlayer_hourglass_v1_executor_executor_proto_depIdxs = []int32{
-	7,  // 0: eigenlayer.hourglass.v1.DeployArtifactRequest.env:type_name -> eigenlayer.hourglass.v1.PerformerEnv
-	3,  // 1: eigenlayer.hourglass.v1.DeployArtifactRequest.kubernetes:type_name -> eigenlayer.hourglass.v1.KubernetesConfig
-	0,  // 2: eigenlayer.hourglass.v1.DeployArtifactRequest.auth:type_name -> eigenlayer.hourglass.v1.AuthSignature
-	0,  // 3: eigenlayer.hourglass.v1.ListPerformersRequest.auth:type_name -> eigenlayer.hourglass.v1.AuthSignature
-	8,  // 4: eigenlayer.hourglass.v1.PerformerEnv.kubernetes_env:type_name -> eigenlayer.hourglass.v1.KubernetesEnv
-	9,  // 5: eigenlayer.hourglass.v1.KubernetesEnv.value_from:type_name -> eigenlayer.hourglass.v1.EnvValueFrom
-	10, // 6: eigenlayer.hourglass.v1.EnvValueFrom.secret_key_ref:type_name -> eigenlayer.hourglass.v1.SecretKeyRef
-	11, // 7: eigenlayer.hourglass.v1.EnvValueFrom.config_map_key_ref:type_name -> eigenlayer.hourglass.v1.ConfigMapKeyRef
-	12, // 8: eigenlayer.hourglass.v1.ListPerformersResponse.performers:type_name -> eigenlayer.hourglass.v1.Performer
-	0,  // 9: eigenlayer.hourglass.v1.RemovePerformerRequest.auth:type_name -> eigenlayer.hourglass.v1.AuthSignature
-	1,  // 10: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:input_type -> eigenlayer.hourglass.v1.TaskSubmission
-	4,  // 11: eigenlayer.hourglass.v1.ExecutorManagementService.DeployArtifact:input_type -> eigenlayer.hourglass.v1.DeployArtifactRequest
-	6,  // 12: eigenlayer.hourglass.v1.ExecutorManagementService.ListPerformers:input_type -> eigenlayer.hourglass.v1.ListPerformersRequest
-	14, // 13: eigenlayer.hourglass.v1.ExecutorManagementService.RemovePerformer:input_type -> eigenlayer.hourglass.v1.RemovePerformerRequest
-	16, // 14: eigenlayer.hourglass.v1.ExecutorManagementService.GetChallengeToken:input_type -> eigenlayer.hourglass.v1.GetChallengeTokenRequest
-	2,  // 15: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
-	5,  // 16: eigenlayer.hourglass.v1.ExecutorManagementService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
-	13, // 17: eigenlayer.hourglass.v1.ExecutorManagementService.ListPerformers:output_type -> eigenlayer.hourglass.v1.ListPerformersResponse
-	15, // 18: eigenlayer.hourglass.v1.ExecutorManagementService.RemovePerformer:output_type -> eigenlayer.hourglass.v1.RemovePerformerResponse
-	17, // 19: eigenlayer.hourglass.v1.ExecutorManagementService.GetChallengeToken:output_type -> eigenlayer.hourglass.v1.GetChallengeTokenResponse
+	6,  // 0: eigenlayer.hourglass.v1.DeployArtifactRequest.env:type_name -> eigenlayer.hourglass.v1.PerformerEnv
+	2,  // 1: eigenlayer.hourglass.v1.DeployArtifactRequest.kubernetes:type_name -> eigenlayer.hourglass.v1.KubernetesConfig
+	17, // 2: eigenlayer.hourglass.v1.DeployArtifactRequest.auth:type_name -> eigenlayer.hourglass.v1.common.AuthSignature
+	17, // 3: eigenlayer.hourglass.v1.ListPerformersRequest.auth:type_name -> eigenlayer.hourglass.v1.common.AuthSignature
+	7,  // 4: eigenlayer.hourglass.v1.PerformerEnv.kubernetes_env:type_name -> eigenlayer.hourglass.v1.KubernetesEnv
+	8,  // 5: eigenlayer.hourglass.v1.KubernetesEnv.value_from:type_name -> eigenlayer.hourglass.v1.EnvValueFrom
+	9,  // 6: eigenlayer.hourglass.v1.EnvValueFrom.secret_key_ref:type_name -> eigenlayer.hourglass.v1.SecretKeyRef
+	10, // 7: eigenlayer.hourglass.v1.EnvValueFrom.config_map_key_ref:type_name -> eigenlayer.hourglass.v1.ConfigMapKeyRef
+	11, // 8: eigenlayer.hourglass.v1.ListPerformersResponse.performers:type_name -> eigenlayer.hourglass.v1.Performer
+	17, // 9: eigenlayer.hourglass.v1.RemovePerformerRequest.auth:type_name -> eigenlayer.hourglass.v1.common.AuthSignature
+	0,  // 10: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:input_type -> eigenlayer.hourglass.v1.TaskSubmission
+	3,  // 11: eigenlayer.hourglass.v1.ExecutorManagementService.DeployArtifact:input_type -> eigenlayer.hourglass.v1.DeployArtifactRequest
+	5,  // 12: eigenlayer.hourglass.v1.ExecutorManagementService.ListPerformers:input_type -> eigenlayer.hourglass.v1.ListPerformersRequest
+	13, // 13: eigenlayer.hourglass.v1.ExecutorManagementService.RemovePerformer:input_type -> eigenlayer.hourglass.v1.RemovePerformerRequest
+	15, // 14: eigenlayer.hourglass.v1.ExecutorManagementService.GetChallengeToken:input_type -> eigenlayer.hourglass.v1.GetChallengeTokenRequest
+	1,  // 15: eigenlayer.hourglass.v1.ExecutorService.SubmitTask:output_type -> eigenlayer.hourglass.v1.TaskResult
+	4,  // 16: eigenlayer.hourglass.v1.ExecutorManagementService.DeployArtifact:output_type -> eigenlayer.hourglass.v1.DeployArtifactResponse
+	12, // 17: eigenlayer.hourglass.v1.ExecutorManagementService.ListPerformers:output_type -> eigenlayer.hourglass.v1.ListPerformersResponse
+	14, // 18: eigenlayer.hourglass.v1.ExecutorManagementService.RemovePerformer:output_type -> eigenlayer.hourglass.v1.RemovePerformerResponse
+	16, // 19: eigenlayer.hourglass.v1.ExecutorManagementService.GetChallengeToken:output_type -> eigenlayer.hourglass.v1.GetChallengeTokenResponse
 	15, // [15:20] is the sub-list for method output_type
 	10, // [10:15] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
@@ -1316,7 +1261,7 @@ func file_eigenlayer_hourglass_v1_executor_executor_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc), len(file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   18,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

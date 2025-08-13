@@ -7,9 +7,27 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.RegisterAvsRequest) (*aggregatorV1.RegisterAvsResponse, error) {
+	// Verify authentication
+	if a.authVerifier != nil {
+		// Create request copy without auth for verification
+		requestCopy := &aggregatorV1.RegisterAvsRequest{
+			AvsAddress: request.AvsAddress,
+			ChainIds:   request.ChainIds,
+		}
+		requestBytes, err := proto.Marshal(requestCopy)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to marshal request: %v", err)
+		}
+
+		if err := a.authVerifier.VerifyAuthentication(request.Auth, "RegisterAvs", requestBytes); err != nil {
+			return nil, err
+		}
+	}
+
 	err := a.registerAvs(&aggregatorConfig.AggregatorAvs{
 		Address: request.AvsAddress,
 		ChainIds: util.Map(request.ChainIds, func(id uint32, i uint64) uint {
@@ -22,5 +40,38 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 }
 
 func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.DeRegisterAvsRequest) (*aggregatorV1.DeRegisterAvsResponse, error) {
+	// Verify authentication
+	if a.authVerifier != nil {
+		// Create request copy without auth for verification
+		requestCopy := &aggregatorV1.DeRegisterAvsRequest{
+			AvsAddress: request.AvsAddress,
+		}
+		requestBytes, err := proto.Marshal(requestCopy)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to marshal request: %v", err)
+		}
+
+		if err := a.authVerifier.VerifyAuthentication(request.Auth, "DeRegisterAvs", requestBytes); err != nil {
+			return nil, err
+		}
+	}
+
 	return nil, status.Errorf(codes.Unimplemented, "DeRegisterAvs is not implemented yet")
+}
+
+// GetChallengeToken generates a challenge token for authentication
+func (a *Aggregator) GetChallengeToken(ctx context.Context, request *aggregatorV1.AggregatorGetChallengeTokenRequest) (*aggregatorV1.AggregatorGetChallengeTokenResponse, error) {
+	if a.authVerifier == nil {
+		return nil, status.Error(codes.Unimplemented, "authentication is not configured")
+	}
+
+	entry, err := a.authVerifier.GenerateChallengeToken(request.AggregatorAddress)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to generate challenge token: %v", err)
+	}
+
+	return &aggregatorV1.AggregatorGetChallengeTokenResponse{
+		ChallengeToken: entry.Token,
+		ExpiresAt:      entry.ExpiresAt.Unix(),
+	}, nil
 }

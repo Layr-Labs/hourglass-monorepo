@@ -7,6 +7,7 @@ import (
 	"time"
 
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -213,7 +214,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		signature, err := execSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
 
-		req.Auth = &executorV1.AuthSignature{
+		req.Auth = &commonV1.AuthSignature{
 			ChallengeToken: tokenResp.ChallengeToken,
 			Signature:      signature,
 		}
@@ -368,7 +369,7 @@ func TestAuthVerifier(t *testing.T) {
 		signature, err := testSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
 
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      signature,
 		}
@@ -387,7 +388,7 @@ func TestAuthVerifier(t *testing.T) {
 	})
 
 	t.Run("VerifyAuthentication_InvalidToken", func(t *testing.T) {
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: "invalid-token",
 			Signature:      []byte("signature"),
 		}
@@ -404,7 +405,7 @@ func TestAuthVerifier(t *testing.T) {
 		entry, err := verifier.GenerateChallengeToken(operatorAddress)
 		require.NoError(t, err)
 
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      []byte("wrong-signature"),
 		}

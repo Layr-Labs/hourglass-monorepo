@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -68,6 +69,9 @@ type Aggregator struct {
 
 	// store is the persistence layer for the aggregator
 	store storage.AggregatorStore
+
+	// authVerifier handles authentication for management APIs
+	authVerifier *auth.Verifier
 }
 
 func NewAggregatorWithManagementRpcServer(
@@ -106,6 +110,13 @@ func NewAggregator(
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
+	// Initialize auth verifier for management APIs
+	var authVerifier *auth.Verifier
+	if signers.ECDSASigner != nil {
+		tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
+		authVerifier = auth.NewVerifier(tokenManager, signers.ECDSASigner)
+	}
+
 	agg := &Aggregator{
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
@@ -119,6 +130,7 @@ func NewAggregator(
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
 		managementRpcServer:  managementRpcServer,
+		authVerifier:         authVerifier,
 	}
 	return agg, nil
 }

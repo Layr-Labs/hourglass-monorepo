@@ -3,14 +3,17 @@ package auth
 import (
 	"fmt"
 
-	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
-	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
+
+// AuthSignature represents the authentication signature for a request
+type AuthSignature interface {
+	GetChallengeToken() string
+	GetSignature() []byte
+}
 
 // Verifier handles authentication verification for requests
 type Verifier struct {
@@ -26,33 +29,33 @@ func NewVerifier(tokenManager *ChallengeTokenManager, signer signer.ISigner) *Ve
 	}
 }
 
-// GenerateChallengeToken generates a new challenge token for the given operator
-func (v *Verifier) GenerateChallengeToken(operatorAddress string) (*ChallengeTokenEntry, error) {
-	return v.tokenManager.GenerateChallengeToken(operatorAddress)
+// GenerateChallengeToken generates a new challenge token for the given entity
+func (v *Verifier) GenerateChallengeToken(entity string) (*ChallengeTokenEntry, error) {
+	return v.tokenManager.GenerateChallengeToken(entity)
 }
 
 // VerifyAuthentication verifies the authentication signature for a request
-func (v *Verifier) VerifyAuthentication(auth *commonV1.AuthSignature, methodName string, requestPayload []byte) error {
+func (v *Verifier) VerifyAuthentication(auth AuthSignature, methodName string, requestPayload []byte) error {
 	if auth == nil {
 		return status.Error(codes.Unauthenticated, "missing authentication")
 	}
 
 	// Use the challenge token (this also validates it)
-	if err := v.tokenManager.UseChallengeToken(auth.ChallengeToken); err != nil {
+	if err := v.tokenManager.UseChallengeToken(auth.GetChallengeToken()); err != nil {
 		return status.Errorf(codes.Unauthenticated, "invalid challenge token: %v", err)
 	}
 
 	// Construct the message that was signed
-	signedMessage := ConstructSignedMessage(auth.ChallengeToken, methodName, requestPayload)
+	signedMessage := ConstructSignedMessage(auth.GetChallengeToken(), methodName, requestPayload)
 
-	// Verify the signature matches our operator's signature
+	// Verify the signature matches our entity's signature
 	expectedSig, err := v.signer.SignMessage(signedMessage)
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to generate expected signature: %v", err)
 	}
 
 	// Compare signatures
-	if !bytesEqual(auth.Signature, expectedSig) {
+	if !bytesEqual(auth.GetSignature(), expectedSig) {
 		return status.Error(codes.Unauthenticated, "invalid signature")
 	}
 
@@ -81,25 +84,4 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
-}
-
-// GetRequestWithoutAuth returns a copy of the request with the auth field removed
-func GetRequestWithoutAuth[T proto.Message](req T) ([]byte, error) {
-	// Clone the request
-	cloned := proto.Clone(req)
-
-	// Use reflection to set the auth field to nil
-	switch v := any(cloned).(type) {
-	case *executorV1.DeployArtifactRequest:
-		v.Auth = nil
-	case *executorV1.ListPerformersRequest:
-		v.Auth = nil
-	case *executorV1.RemovePerformerRequest:
-		v.Auth = nil
-	default:
-		return nil, fmt.Errorf("unsupported request type")
-	}
-
-	// Marshal the request without auth
-	return proto.Marshal(cloned)
 }

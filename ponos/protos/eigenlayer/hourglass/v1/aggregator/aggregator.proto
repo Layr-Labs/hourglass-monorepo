@@ -2,11 +2,14 @@ syntax = "proto3";
 
 package eigenlayer.hourglass.v1;
 
+import "eigenlayer/hourglass/v1/common/auth.proto";
+
 option go_package = "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator";
 
 message RegisterAvsRequest {
   string avs_address = 1;
   repeated uint32 chain_ids = 2;
+  eigenlayer.hourglass.v1.common.AuthSignature auth = 3;
 }
 
 message RegisterAvsResponse {
@@ -15,13 +18,28 @@ message RegisterAvsResponse {
 
 message DeRegisterAvsRequest {
   string avs_address = 1;
+  eigenlayer.hourglass.v1.common.AuthSignature auth = 2;
 }
 
 message DeRegisterAvsResponse {
   bool success = 1;
 }
 
+// AggregatorGetChallengeTokenRequest is used to request a challenge token for authentication
+message AggregatorGetChallengeTokenRequest {
+  string aggregator_address = 1;
+}
+
+// AggregatorGetChallengeTokenResponse returns a challenge token for authentication
+message AggregatorGetChallengeTokenResponse {
+  string challenge_token = 1;
+  int64 expires_at = 2;  // Unix timestamp when token expires
+}
+
 service AggregatorManagementService {
   rpc RegisterAvs(RegisterAvsRequest) returns (RegisterAvsResponse) {}
   rpc DeRegisterAvs(DeRegisterAvsRequest) returns (DeRegisterAvsResponse) {}
+  
+  // GetChallengeToken returns a challenge token for authentication purposes
+  rpc GetChallengeToken(AggregatorGetChallengeTokenRequest) returns (AggregatorGetChallengeTokenResponse) {}
 }
