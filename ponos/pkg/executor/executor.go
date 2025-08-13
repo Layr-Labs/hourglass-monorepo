@@ -92,7 +92,7 @@ func NewExecutor(
 
 	// Create challenge token manager
 	var verifier *auth.Verifier
-	if config.AuthConfig.IsEnabled {
+	if config.AuthConfig != nil && config.AuthConfig.IsEnabled {
 		// Choose the appropriate signer for authentication
 		var authSigner signer.ISigner
 		if signers.ECDSASigner != nil {
