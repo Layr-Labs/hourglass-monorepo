@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 )
 
+const maximumTaskResponseSize = 1.5 * 1024 * 1024
+
 type TaskSession[SigT, CertT, PubKeyT any] struct {
 	Task                *types.Task
 	aggregatorSignature []byte
@@ -237,7 +239,17 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.Any("result", res),
 			)
-			resultsChan <- types.TaskResultFromTaskResultProto(res)
+			tr := types.TaskResultFromTaskResultProto(res)
+			outputSize := len(tr.Output)
+			if outputSize >= maximumTaskResponseSize {
+				ts.logger.Sugar().Errorw("dropping response exceeding maximum output size",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.Int("size", outputSize),
+					zap.Int("maximum", maximumTaskResponseSize),
+				)
+				return
+			}
+			resultsChan <- tr
 		}(peer)
 	}
 
