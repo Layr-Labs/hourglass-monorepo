@@ -99,9 +99,9 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 		return &DefaultContractAddresses{
 			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
 			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
 			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0xd9Cb89F1993292dEC2F973934bC63B0f2A702776",
+			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		}, nil
 	case 31337:
 		return &DefaultContractAddresses{
