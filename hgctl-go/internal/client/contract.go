@@ -692,7 +692,7 @@ func (c *ContractClient) RegisterKey(
 		}
 
 		if receipt.Status == 0 {
-			return fmt.Errorf("transaction reverted")
+			return fmt.Errorf("transaction reverted: %w", err)
 		}
 
 		c.logger.Info("Successfully registered BN254 key",
