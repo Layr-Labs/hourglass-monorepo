@@ -314,12 +314,7 @@ func (h *BN254KeyHandler) prepareKeyDataFromKeystore(c *cli.Context, keystorePat
 	// Store for signature generation
 	h.privateKey = privateKey
 
-	// Generate public key and encode
-	publicKey := privateKey.Public()
-	keyData := encodeBN254KeyData(publicKey)
-
-	h.log.Debug("Generated BN254 key data from keystore",
-		zap.String("keyDataHex", hex.EncodeToString(keyData)))
+	keyData := encodeBN254KeyData(privateKey.Public())
 
 	return keyData, nil
 }
