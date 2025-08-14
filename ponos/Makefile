@@ -3,7 +3,7 @@
 GO = $(shell which go)
 BIN = ./bin
 
-GO_FLAGS=-ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Version=$(shell cat VERSION)' -X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Commit=$(shell cd ../ && git rev-parse --short HEAD)'"
+GO_FLAGS=-ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Version=$(shell cat ../VERSION)' -X 'github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version.Commit=$(shell cd ../ && git rev-parse --short HEAD)'"
 
 PROTO_OPTS=--proto_path=protos --go_out=paths=source_relative:protos
 

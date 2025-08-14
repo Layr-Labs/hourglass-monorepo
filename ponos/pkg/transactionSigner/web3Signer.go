@@ -42,11 +42,17 @@ func NewWeb3Signer(web3SignerClient *web3signer.Client, fromAddress common.Addre
 
 // GetTransactOpts returns transaction options for creating unsigned transactions
 func (w3s *Web3Signer) GetTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
+	// We need to provide a Signer function that returns the transaction unsigned
+	// The actual signing happens in SignAndSendTransaction via Web3Signer
 	opts := &bind.TransactOpts{
 		From:    w3s.fromAddress,
 		Context: ctx,
 		NoSend:  true,
-		Signer:  w3s.signTransaction,
+		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+			// Just return the transaction as-is without signing
+			// The actual signing will happen in SignAndSendTransaction
+			return tx, nil
+		},
 	}
 	return opts, nil
 }
@@ -86,12 +92,14 @@ func (w3s *Web3Signer) SignAndSendTransaction(ctx context.Context, tx *types.Tra
 	if err != nil {
 		return nil, fmt.Errorf("failed to send transaction: %w", err)
 	}
+	w3s.logger.Info("Transaction sent", zap.String("txHash", signedTx.Hash().Hex()))
 
 	// Wait for receipt
 	receipt, err := bind.WaitMined(ctx, w3s.ethClient, &signedTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for transaction receipt: %w", err)
 	}
+	w3s.logger.Info("Transaction mined", zap.String("txHash", receipt.TxHash.Hex()))
 
 	return receipt, nil
 }
@@ -105,11 +113,4 @@ func (w3s *Web3Signer) GetFromAddress() common.Address {
 func (w3s *Web3Signer) EstimateGasPriceAndLimit(ctx context.Context, tx *types.Transaction) (*big.Int, uint64, error) {
 	// For now, return nil values - this method isn't fully implemented yet
 	return nil, 0, nil
-}
-
-// signTransaction is a signing function for bind.TransactOpts
-func (w3s *Web3Signer) signTransaction(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	// This would be called by go-ethereum binding code
-	// Implementation depends on specific requirements
-	return nil, fmt.Errorf("direct signing not supported for Web3Signer")
 }

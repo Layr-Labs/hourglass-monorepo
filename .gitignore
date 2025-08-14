@@ -26,3 +26,5 @@ node_modules
 Thumbs.db
 *.swp
 *.swo
+/charts
+/chart_releases
