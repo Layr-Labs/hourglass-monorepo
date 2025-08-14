@@ -3,14 +3,15 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-	"strings"
-	"time"
 )
 
 // TaskEvent is a struct that represents a task event as consumed from on-chain events
@@ -98,6 +99,10 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		return nil, fmt.Errorf("failed to unmarshal output data: %w", err)
 	}
 	parsedTaskDeadline := new(big.Int).SetUint64(od.TaskDeadline)
+	// Check for integer overflow when converting to int64
+	if parsedTaskDeadline.Int64() < 0 {
+		return nil, fmt.Errorf("value %s exceeds int64 bounds", parsedTaskDeadline.String())
+	}
 	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
 
 	return &Task{
