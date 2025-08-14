@@ -28,7 +28,6 @@ The AVS address must be configured in the context before running this command.`,
 			&cli.Uint64Flag{
 				Name:  "operator-set-id",
 				Usage: "Operator set ID",
-				Value: 0,
 			},
 			&cli.StringFlag{
 				Name:  "release-id",
@@ -70,6 +69,14 @@ func deployExecutorAction(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
+	opSetId := currentCtx.OperatorSetID
+	if opSetId == 0 {
+		opSetId = uint32(c.Uint64("operator-set-id"))
+		if opSetId == 0 {
+			return fmt.Errorf("AVS address not configured. Run 'hgctl context set --operator-set-id <id>' or provide flag")
+		}
+	}
+
 	// Get contract client
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
@@ -81,7 +88,7 @@ func deployExecutorAction(c *cli.Context) error {
 		currentCtx,
 		log,
 		contractClient,
-		uint32(c.Uint64("operator-set-id")),
+		opSetId,
 		c.String("release-id"),
 		c.String("env-file"),
 		c.StringSlice("env"),
