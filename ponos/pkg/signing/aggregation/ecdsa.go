@@ -170,6 +170,11 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	tra.mu.Lock()
 	defer tra.mu.Unlock()
 
+	// Validate task ID matches
+	if taskId != taskResponse.TaskId {
+		return fmt.Errorf("task ID mismatch: expected %s, got %s", taskId, taskResponse.TaskId)
+	}
+
 	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator[common.Address]) bool {
 		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)

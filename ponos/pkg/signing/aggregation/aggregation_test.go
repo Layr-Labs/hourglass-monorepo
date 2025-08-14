@@ -65,6 +65,7 @@ func Test_Aggregation(t *testing.T) {
 			operator := operators[i]
 			// Create task result
 			taskResult := &types.TaskResult{
+				TaskId:          taskId,
 				OperatorAddress: operator.Address,
 				Output:          commonPayload,
 				OutputDigest:    digest[:],
@@ -271,6 +272,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 0 submits digest A
 		taskResult0 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[0].Address,
 			Output:          payloadA,
 			OutputDigest:    digestA[:],
@@ -287,6 +289,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 1 submits digest B
 		taskResult1 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[1].Address,
 			Output:          payloadB,
 			OutputDigest:    digestB[:],
@@ -303,6 +306,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 2 submits digest A
 		taskResult2 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[2].Address,
 			Output:          payloadA,
 			OutputDigest:    digestA[:],
@@ -320,6 +324,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 3 submits digest C
 		taskResult3 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[3].Address,
 			Output:          payloadC,
 			OutputDigest:    digestC[:],
@@ -336,6 +341,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 4 submits digest B
 		taskResult4 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[4].Address,
 			Output:          payloadB,
 			OutputDigest:    digestB[:],
@@ -406,6 +412,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		digest := util.GetKeccak256Digest(payload)
 
 		taskResult := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[0].Address,
 			Output:          payload,
 			OutputDigest:    digest[:],
@@ -728,5 +735,164 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, commonPayload, cert.TaskResponse)
 		assert.Equal(t, digest, cert.TaskResponseDigest)
+	})
+}
+
+func Test_TaskIDMismatchValidation(t *testing.T) {
+	t.Run("BN254 - Task ID Mismatch", func(t *testing.T) {
+		// Create test operators with key pairs
+		operators := make([]*Operator[signing.PublicKey], 2)
+		privateKeys := make([]*bn254.PrivateKey, 2)
+		for i := 0; i < 2; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:   fmt.Sprintf("0x%d", i+1),
+				PublicKey: pubKey,
+			}
+			privateKeys[i] = privKey
+		}
+
+		// Initialize task with specific ID
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			50, // 50% threshold
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, agg)
+
+		// Create a task result with mismatched task ID
+		mismatchedTaskId := "0xdifferenttaskid1234567890abcdef12345678"
+		payload := []byte("test-response")
+		digest := util.GetKeccak256Digest(payload)
+
+		taskResult := &types.TaskResult{
+			TaskId:          mismatchedTaskId, // Wrong task ID
+			OperatorAddress: operators[0].Address,
+			Output:          payload,
+			OutputDigest:    digest[:],
+		}
+		sig, err := privateKeys[0].SignSolidityCompatible(digest)
+		require.NoError(t, err)
+		taskResult.Signature = sig.Bytes()
+
+		// Process the signature with mismatched task ID
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+
+		// Should return an error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "task ID mismatch")
+		assert.Contains(t, err.Error(), taskId)
+		assert.Contains(t, err.Error(), mismatchedTaskId)
+
+		// Verify that no signature was recorded
+		assert.Equal(t, 0, len(agg.ReceivedSignatures))
+		assert.False(t, agg.SigningThresholdMet())
+
+		// Now submit with correct task ID to verify aggregator works properly
+		correctTaskResult := &types.TaskResult{
+			TaskId:          taskId, // Correct task ID
+			OperatorAddress: operators[0].Address,
+			Output:          payload,
+			OutputDigest:    digest[:],
+		}
+		correctTaskResult.Signature = sig.Bytes()
+
+		err = agg.ProcessNewSignature(context.Background(), taskId, correctTaskResult)
+		require.NoError(t, err)
+
+		// Verify signature was recorded
+		assert.Equal(t, 1, len(agg.ReceivedSignatures))
+		assert.True(t, agg.SigningThresholdMet()) // 1/2 = 50% threshold met
+	})
+
+	t.Run("ECDSA - Task ID Mismatch", func(t *testing.T) {
+		// Create test operators with key pairs
+		operators := make([]*Operator[common.Address], 2)
+		privateKeys := make([]*cryptoLibsEcdsa.PrivateKey, 2)
+		for i := 0; i < 2; i++ {
+			privKey, _, err := cryptoLibsEcdsa.GenerateKeyPair()
+			require.NoError(t, err)
+			derivedAddress, err := privKey.DeriveAddress()
+			require.NoError(t, err)
+
+			operators[i] = &Operator[common.Address]{
+				Address:   derivedAddress.String(),
+				PublicKey: derivedAddress,
+			}
+			privateKeys[i] = privKey
+		}
+
+		// Initialize task with specific ID
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewECDSATaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			50, // 50% threshold
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, agg)
+
+		// Create a task result with mismatched task ID
+		mismatchedTaskId := "0xdifferenttaskid1234567890abcdef12345678"
+		payload := []byte("test-response")
+		digest := util.GetKeccak256Digest(payload)
+
+		taskResult := &types.TaskResult{
+			TaskId:          mismatchedTaskId, // Wrong task ID
+			OperatorAddress: operators[0].Address,
+			Output:          payload,
+			OutputDigest:    digest[:],
+		}
+		sig, err := privateKeys[0].Sign(digest[:])
+		require.NoError(t, err)
+		taskResult.Signature = sig.Bytes()
+
+		// Process the signature with mismatched task ID
+		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+
+		// Should return an error
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "task ID mismatch")
+		assert.Contains(t, err.Error(), taskId)
+		assert.Contains(t, err.Error(), mismatchedTaskId)
+
+		// Verify that no signature was recorded
+		assert.Equal(t, 0, len(agg.ReceivedSignatures))
+		assert.False(t, agg.SigningThresholdMet())
+
+		// Now submit with correct task ID to verify aggregator works properly
+		correctTaskResult := &types.TaskResult{
+			TaskId:          taskId, // Correct task ID
+			OperatorAddress: operators[0].Address,
+			Output:          payload,
+			OutputDigest:    digest[:],
+		}
+		correctTaskResult.Signature = sig.Bytes()
+
+		err = agg.ProcessNewSignature(context.Background(), taskId, correctTaskResult)
+		require.NoError(t, err)
+
+		// Verify signature was recorded
+		assert.Equal(t, 1, len(agg.ReceivedSignatures))
+		assert.True(t, agg.SigningThresholdMet()) // 1/2 = 50% threshold met
 	})
 }
