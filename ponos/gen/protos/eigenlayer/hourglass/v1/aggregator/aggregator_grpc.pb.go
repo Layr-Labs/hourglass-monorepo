@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AggregatorManagementService_RegisterAvs_FullMethodName   = "/eigenlayer.hourglass.v1.AggregatorManagementService/RegisterAvs"
-	AggregatorManagementService_DeRegisterAvs_FullMethodName = "/eigenlayer.hourglass.v1.AggregatorManagementService/DeRegisterAvs"
+	AggregatorManagementService_RegisterAvs_FullMethodName       = "/eigenlayer.hourglass.v1.AggregatorManagementService/RegisterAvs"
+	AggregatorManagementService_DeRegisterAvs_FullMethodName     = "/eigenlayer.hourglass.v1.AggregatorManagementService/DeRegisterAvs"
+	AggregatorManagementService_GetChallengeToken_FullMethodName = "/eigenlayer.hourglass.v1.AggregatorManagementService/GetChallengeToken"
 )
 
 // AggregatorManagementServiceClient is the client API for AggregatorManagementService service.
@@ -29,6 +30,8 @@ const (
 type AggregatorManagementServiceClient interface {
 	RegisterAvs(ctx context.Context, in *RegisterAvsRequest, opts ...grpc.CallOption) (*RegisterAvsResponse, error)
 	DeRegisterAvs(ctx context.Context, in *DeRegisterAvsRequest, opts ...grpc.CallOption) (*DeRegisterAvsResponse, error)
+	// GetChallengeToken returns a challenge token for authentication purposes
+	GetChallengeToken(ctx context.Context, in *AggregatorGetChallengeTokenRequest, opts ...grpc.CallOption) (*AggregatorGetChallengeTokenResponse, error)
 }
 
 type aggregatorManagementServiceClient struct {
@@ -59,12 +62,24 @@ func (c *aggregatorManagementServiceClient) DeRegisterAvs(ctx context.Context, i
 	return out, nil
 }
 
+func (c *aggregatorManagementServiceClient) GetChallengeToken(ctx context.Context, in *AggregatorGetChallengeTokenRequest, opts ...grpc.CallOption) (*AggregatorGetChallengeTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AggregatorGetChallengeTokenResponse)
+	err := c.cc.Invoke(ctx, AggregatorManagementService_GetChallengeToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AggregatorManagementServiceServer is the server API for AggregatorManagementService service.
 // All implementations should embed UnimplementedAggregatorManagementServiceServer
 // for forward compatibility.
 type AggregatorManagementServiceServer interface {
 	RegisterAvs(context.Context, *RegisterAvsRequest) (*RegisterAvsResponse, error)
 	DeRegisterAvs(context.Context, *DeRegisterAvsRequest) (*DeRegisterAvsResponse, error)
+	// GetChallengeToken returns a challenge token for authentication purposes
+	GetChallengeToken(context.Context, *AggregatorGetChallengeTokenRequest) (*AggregatorGetChallengeTokenResponse, error)
 }
 
 // UnimplementedAggregatorManagementServiceServer should be embedded to have
@@ -79,6 +94,9 @@ func (UnimplementedAggregatorManagementServiceServer) RegisterAvs(context.Contex
 }
 func (UnimplementedAggregatorManagementServiceServer) DeRegisterAvs(context.Context, *DeRegisterAvsRequest) (*DeRegisterAvsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeRegisterAvs not implemented")
+}
+func (UnimplementedAggregatorManagementServiceServer) GetChallengeToken(context.Context, *AggregatorGetChallengeTokenRequest) (*AggregatorGetChallengeTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetChallengeToken not implemented")
 }
 func (UnimplementedAggregatorManagementServiceServer) testEmbeddedByValue() {}
 
@@ -136,6 +154,24 @@ func _AggregatorManagementService_DeRegisterAvs_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AggregatorManagementService_GetChallengeToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AggregatorGetChallengeTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AggregatorManagementServiceServer).GetChallengeToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AggregatorManagementService_GetChallengeToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AggregatorManagementServiceServer).GetChallengeToken(ctx, req.(*AggregatorGetChallengeTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AggregatorManagementService_ServiceDesc is the grpc.ServiceDesc for AggregatorManagementService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -150,6 +186,10 @@ var AggregatorManagementService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeRegisterAvs",
 			Handler:    _AggregatorManagementService_DeRegisterAvs_Handler,
+		},
+		{
+			MethodName: "GetChallengeToken",
+			Handler:    _AggregatorManagementService_GetChallengeToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

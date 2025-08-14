@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsKubernetesPerformer"
@@ -90,14 +91,17 @@ func NewExecutor(
 	}
 
 	// Create challenge token manager
-	tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
-
-	// Choose the appropriate signer for authentication
-	var authSigner signer.ISigner
-	if signers.ECDSASigner != nil {
-		authSigner = signers.ECDSASigner
-	} else if signers.BLSSigner != nil {
-		authSigner = signers.BLSSigner
+	var verifier *auth.Verifier
+	if config.AuthConfig != nil && config.AuthConfig.IsEnabled {
+		// Choose the appropriate signer for authentication
+		var authSigner signer.ISigner
+		if signers.ECDSASigner != nil {
+			authSigner = signers.ECDSASigner
+		} else if signers.BLSSigner != nil {
+			authSigner = signers.BLSSigner
+		}
+		tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
+		verifier = auth.NewVerifier(tokenManager, authSigner)
 	}
 
 	return &Executor{
@@ -112,7 +116,7 @@ func NewExecutor(
 		peeringFetcher:      peeringFetcher,
 		l1ContractCaller:    l1ContractCaller,
 		store:               store,
-		authVerifier:        auth.NewVerifier(tokenManager, authSigner),
+		authVerifier:        verifier,
 	}
 }
 
@@ -360,5 +364,15 @@ func (e *Executor) registerHandlers() error {
 	executorV1.RegisterExecutorServiceServer(e.taskRpcServer.GetGrpcServer(), e)
 	executorV1.RegisterExecutorManagementServiceServer(e.managementRpcServer.GetGrpcServer(), e)
 
+	return nil
+}
+
+// verifyAuth is a helper method to verify authentication
+func (e *Executor) verifyAuth(auth *commonV1.AuthSignature) error {
+	if e.authVerifier != nil {
+		if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
+			return err
+		}
+	}
 	return nil
 }

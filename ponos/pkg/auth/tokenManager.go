@@ -21,32 +21,32 @@ type ChallengeTokenEntry struct {
 
 // ChallengeTokenManager handles challenge token generation and validation
 type ChallengeTokenManager struct {
-	mu              sync.RWMutex
-	tokens          map[string]*ChallengeTokenEntry
-	operatorAddress string
-	expiration      time.Duration
+	mu               sync.RWMutex
+	tokens           map[string]*ChallengeTokenEntry
+	authorizedEntity string // Can be operator address or aggregator address
+	expiration       time.Duration
 }
 
 // NewChallengeTokenManager creates a new challenge token manager
-func NewChallengeTokenManager(operatorAddress string, expiration time.Duration) *ChallengeTokenManager {
+func NewChallengeTokenManager(authorizedEntity string, expiration time.Duration) *ChallengeTokenManager {
 	ctm := &ChallengeTokenManager{
-		tokens:          make(map[string]*ChallengeTokenEntry),
-		operatorAddress: strings.ToLower(operatorAddress),
-		expiration:      expiration,
+		tokens:           make(map[string]*ChallengeTokenEntry),
+		authorizedEntity: strings.ToLower(authorizedEntity),
+		expiration:       expiration,
 	}
 	// Start cleanup goroutine
 	go ctm.cleanupExpiredTokens()
 	return ctm
 }
 
-// GenerateChallengeToken creates a new challenge token for the given operator
-func (ctm *ChallengeTokenManager) GenerateChallengeToken(operatorAddress string) (*ChallengeTokenEntry, error) {
+// GenerateChallengeToken creates a new challenge token for the given entity
+func (ctm *ChallengeTokenManager) GenerateChallengeToken(entity string) (*ChallengeTokenEntry, error) {
 	ctm.mu.Lock()
 	defer ctm.mu.Unlock()
 
-	// Verify operator address matches
-	if !strings.EqualFold(operatorAddress, ctm.operatorAddress) {
-		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s", ctm.operatorAddress, operatorAddress)
+	// Verify entity matches
+	if !strings.EqualFold(entity, ctm.authorizedEntity) {
+		return nil, fmt.Errorf("entity mismatch: expected %s, got %s", ctm.authorizedEntity, entity)
 	}
 
 	// Generate UUID and hash it

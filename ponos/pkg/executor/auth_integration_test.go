@@ -7,13 +7,14 @@ import (
 	"time"
 
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
@@ -204,18 +205,17 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// Create auth signature
-		req := &executorV1.ListPerformersRequest{AvsAddress: ""}
-		requestBytes, err := auth.GetRequestWithoutAuth(req)
-		require.NoError(t, err)
-
-		signedMessage := auth.ConstructSignedMessage(tokenResp.ChallengeToken, "ListPerformers", requestBytes)
+		// Create auth signature (simplified - only sign the token)
+		signedMessage := auth.ConstructSignedMessage(tokenResp.ChallengeToken)
 		signature, err := execSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
 
-		req.Auth = &executorV1.AuthSignature{
-			ChallengeToken: tokenResp.ChallengeToken,
-			Signature:      signature,
+		req := &executorV1.ListPerformersRequest{
+			AvsAddress: "",
+			Auth: &commonV1.AuthSignature{
+				ChallengeToken: tokenResp.ChallengeToken,
+				Signature:      signature,
+			},
 		}
 
 		// First request should succeed
@@ -297,7 +297,7 @@ func TestChallengeTokenManager(t *testing.T) {
 	t.Run("GenerateToken_WrongOperator", func(t *testing.T) {
 		_, err := tokenManager.GenerateChallengeToken("0xWrongOperator")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator address mismatch")
+		assert.Contains(t, err.Error(), "entity mismatch")
 	})
 
 	t.Run("UseToken_Success", func(t *testing.T) {
@@ -362,24 +362,22 @@ func TestAuthVerifier(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create auth signature
-		methodName := "TestMethod"
-		requestPayload := []byte("test-payload")
-		signedMessage := auth.ConstructSignedMessage(entry.Token, methodName, requestPayload)
+		signedMessage := auth.ConstructSignedMessage(entry.Token)
 		signature, err := testSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
 
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      signature,
 		}
 
 		// Verify
-		err = verifier.VerifyAuthentication(authSig, methodName, requestPayload)
+		err = verifier.VerifyAuthentication(authSig)
 		assert.NoError(t, err)
 	})
 
 	t.Run("VerifyAuthentication_MissingAuth", func(t *testing.T) {
-		err := verifier.VerifyAuthentication(nil, "TestMethod", []byte("payload"))
+		err := verifier.VerifyAuthentication(nil)
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
@@ -387,12 +385,12 @@ func TestAuthVerifier(t *testing.T) {
 	})
 
 	t.Run("VerifyAuthentication_InvalidToken", func(t *testing.T) {
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: "invalid-token",
 			Signature:      []byte("signature"),
 		}
 
-		err := verifier.VerifyAuthentication(authSig, "TestMethod", []byte("payload"))
+		err := verifier.VerifyAuthentication(authSig)
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
@@ -404,12 +402,12 @@ func TestAuthVerifier(t *testing.T) {
 		entry, err := verifier.GenerateChallengeToken(operatorAddress)
 		require.NoError(t, err)
 
-		authSig := &executorV1.AuthSignature{
+		authSig := &commonV1.AuthSignature{
 			ChallengeToken: entry.Token,
 			Signature:      []byte("wrong-signature"),
 		}
 
-		err = verifier.VerifyAuthentication(authSig, "TestMethod", []byte("payload"))
+		err = verifier.VerifyAuthentication(authSig)
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)

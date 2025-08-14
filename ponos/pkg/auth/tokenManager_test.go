@@ -19,12 +19,12 @@ func TestChallengeTokenManager(t *testing.T) {
 		assert.True(t, entry.ExpiresAt.After(time.Now()))
 	})
 
-	t.Run("GenerateChallengeToken_WrongOperator", func(t *testing.T) {
+	t.Run("GenerateChallengeToken_WrongEntity", func(t *testing.T) {
 		ctm := NewChallengeTokenManager("0x123", 5*time.Minute)
 
 		_, err := ctm.GenerateChallengeToken("0x456")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "operator address mismatch")
+		assert.Contains(t, err.Error(), "entity mismatch")
 	})
 
 	t.Run("UseChallengeToken_Success", func(t *testing.T) {
@@ -78,19 +78,17 @@ func TestChallengeTokenManager(t *testing.T) {
 
 func TestConstructSignedMessage(t *testing.T) {
 	challengeToken := "test-token"
-	methodName := "DeployArtifact"
-	requestPayload := []byte("test-payload")
 
-	message := ConstructSignedMessage(challengeToken, methodName, requestPayload)
+	message := ConstructSignedMessage(challengeToken)
 
 	// Verify it's a hash (32 bytes)
 	assert.Len(t, message, 32)
 
 	// Verify deterministic
-	message2 := ConstructSignedMessage(challengeToken, methodName, requestPayload)
+	message2 := ConstructSignedMessage(challengeToken)
 	assert.Equal(t, message, message2)
 
 	// Verify different inputs produce different hashes
-	message3 := ConstructSignedMessage("different-token", methodName, requestPayload)
+	message3 := ConstructSignedMessage("different-token")
 	assert.NotEqual(t, message, message3)
 }

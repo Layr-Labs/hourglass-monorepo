@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -34,6 +36,7 @@ type AggregatorConfig struct {
 	AVSs             []*aggregatorConfig.AggregatorAvs
 	Chains           []*aggregatorConfig.Chain
 	L1ChainId        config.ChainId
+	Authentication   *auth.Config
 }
 
 type Aggregator struct {
@@ -68,6 +71,9 @@ type Aggregator struct {
 
 	// store is the persistence layer for the aggregator
 	store storage.AggregatorStore
+
+	// authVerifier handles authentication for management APIs
+	authVerifier *auth.Verifier
 }
 
 func NewAggregatorWithManagementRpcServer(
@@ -106,6 +112,20 @@ func NewAggregator(
 	if store == nil {
 		return nil, fmt.Errorf("store is required")
 	}
+
+	// Initialize auth verifier for management APIs
+	var authVerifier *auth.Verifier
+	if cfg.Authentication != nil && cfg.Authentication.IsEnabled {
+		var authSigner signer.ISigner
+		if signers.ECDSASigner != nil {
+			authSigner = signers.ECDSASigner
+		} else if signers.BLSSigner != nil {
+			authSigner = signers.BLSSigner
+		}
+		tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
+		authVerifier = auth.NewVerifier(tokenManager, authSigner)
+	}
+
 	agg := &Aggregator{
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
@@ -119,6 +139,7 @@ func NewAggregator(
 		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
 		managementRpcServer:  managementRpcServer,
+		authVerifier:         authVerifier,
 	}
 	return agg, nil
 }
@@ -367,4 +388,13 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 
 func (a *Aggregator) registerHandlers() {
 	aggregatorV1.RegisterAggregatorManagementServiceServer(a.managementRpcServer.GetGrpcServer(), a)
+}
+
+func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
+	if a.authVerifier != nil {
+		if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
+			return err
+		}
+	}
+	return nil
 }
