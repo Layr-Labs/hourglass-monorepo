@@ -255,14 +255,16 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 
 			// Check if done before sending to prevent race condition
 			select {
-			case resultsChan <- tr:
 			case <-doneChan:
 				ts.logger.Sugar().Infow("task threshold already met, discarding result",
 					zap.String("taskId", ts.Task.TaskId),
 					zap.String("operatorAddress", peer.OperatorAddress),
 				)
 				return
+			default:
 			}
+
+			resultsChan <- tr
 		}(peer)
 	}
 
@@ -310,7 +312,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 
 		// Signal producers to stop before closing results channel
 		close(doneChan)
-		close(resultsChan)
 
 		ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
 			zap.String("taskId", taskResult.TaskId),
