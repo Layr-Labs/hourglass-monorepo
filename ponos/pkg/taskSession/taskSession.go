@@ -266,6 +266,13 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 			)
 			continue
 		}
+		if ts.Task.TaskId != taskResult.TaskId {
+			ts.logger.Sugar().Errorw("task ID mismatch: expected",
+				zap.String("expected", ts.Task.TaskId),
+				zap.String("received", taskResult.TaskId),
+			)
+			continue
+		}
 		if err := ts.taskAggregator.ProcessNewSignature(ts.context, ts.Task.TaskId, taskResult); err != nil {
 			ts.logger.Sugar().Errorw("Failed to process task result",
 				zap.String("taskId", taskResult.TaskId),
