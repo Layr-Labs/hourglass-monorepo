@@ -198,6 +198,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	)
 
 	resultsChan := make(chan *types.TaskResult)
+	doneChan := make(chan struct{})
 
 	for _, peer := range ts.operatorPeersWeight.Operators {
 		go func(peer *peering.OperatorPeerInfo) {
@@ -251,7 +252,17 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				)
 				return
 			}
-			resultsChan <- tr
+
+			// Check if done before sending to prevent race condition
+			select {
+			case resultsChan <- tr:
+			case <-doneChan:
+				ts.logger.Sugar().Infow("task threshold already met, discarding result",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.String("operatorAddress", peer.OperatorAddress),
+				)
+				return
+			}
 		}(peer)
 	}
 
@@ -297,7 +308,8 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 		}
 		ts.thresholdMet.Store(true)
 
-		// threshold met, close the results channel to stop further processing
+		// Signal producers to stop before closing results channel
+		close(doneChan)
 		close(resultsChan)
 
 		ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
