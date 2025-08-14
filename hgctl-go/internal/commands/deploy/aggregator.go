@@ -25,10 +25,6 @@ func aggregatorCommand() *cli.Command {
 
 The AVS address must be configured in the context before running this command.`,
 		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:  "operator-set-id",
-				Usage: "Operator set ID",
-			},
 			&cli.StringFlag{
 				Name:  "release-id",
 				Usage: "Release ID to deploy (defaults to latest)",
@@ -75,11 +71,6 @@ func deployAggregatorAction(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
-	opSetId := uint32(c.Uint64("operator-set-id"))
-	if opSetId == 0 {
-		opSetId = currentCtx.OperatorSetID
-	}
-
 	// Get contract client
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
@@ -92,7 +83,7 @@ func deployAggregatorAction(c *cli.Context) error {
 		log,
 		contractClient,
 		currentCtx.AVSAddress,
-		opSetId,
+		currentCtx.OperatorSetID,
 		c.String("release-id"),
 		c.String("env-file"),
 		c.StringSlice("env"),
@@ -125,12 +116,17 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	// Step 3: Prepare environment configuration
 	cfg := d.PrepareEnvironmentConfig()
 
-	// Step 4: Validate configuration
-	if err := ValidateAggregator(cfg.FinalEnvMap); err != nil {
+	// Step 4: Validate configuration using component spec
+	if err := ValidateComponentSpec(component, cfg.FinalEnvMap); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Step 5: Validate keystore
+	// Step 5: Validate signer configuration
+	if err := ValidateSignerConfig(cfg.FinalEnvMap); err != nil {
+		return fmt.Errorf("signer validation failed: %w", err)
+	}
+
+	// Step 6: Validate keystore
 	keystoreName := cfg.FinalEnvMap["KEYSTORE_NAME"]
 	if _, err := d.ValidateKeystore(keystoreName); err != nil {
 		return err
@@ -180,8 +176,7 @@ func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string
 // generateConfiguration generates aggregator configuration files
 func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	// Generate aggregator configuration using ConfigBuilder
-	configBuilder := templates.NewConfigBuilder()
-	aggregatorConfig, err := configBuilder.BuildAggregatorConfig(nil, cfg.FinalEnvMap)
+	aggregatorConfig, err := templates.BuildAggregatorConfig(cfg.FinalEnvMap)
 	if err != nil {
 		return fmt.Errorf("failed to build aggregator config: %w", err)
 	}
@@ -206,9 +201,6 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 
 // deployContainer handles the aggregator-specific container deployment
 func (d *AggregatorDeployer) deployContainer(component *runtime.ComponentSpec, cfg *DeploymentConfig) error {
-	// Substitute environment variables in component
-	runtime.SubstituteComponentEnv(component, cfg.EnvMap)
-
 	// Prepare container configuration
 	containerName := fmt.Sprintf("hgctl-aggregator-%s", cfg.EnvMap["AVS_ADDRESS"])
 	imageRef := fmt.Sprintf("%s@%s", component.Registry, component.Digest)

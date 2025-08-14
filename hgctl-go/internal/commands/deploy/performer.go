@@ -121,9 +121,8 @@ func (d *PerformerDeployer) Deploy(ctx context.Context) error {
 	// Step 3: Prepare environment configuration
 	cfg := d.PrepareEnvironmentConfig()
 
-	// Step 4: Collect and validate required environment variables from spec
-	requiredVars := d.collectRequiredEnvironmentVariables(component)
-	if err := d.validateEnvironmentVariables(cfg.FinalEnvMap, requiredVars); err != nil {
+	// Step 4: Validate required environment variables from spec
+	if err := ValidateComponentSpec(component, cfg.FinalEnvMap); err != nil {
 		return err
 	}
 
@@ -134,70 +133,6 @@ func (d *PerformerDeployer) Deploy(ctx context.Context) error {
 
 	// Step 6: Deploy via executor
 	return d.deployViaExecutor(ctx, component, cfg)
-}
-
-// collectRequiredEnvironmentVariables extracts required environment variables from component spec
-func (d *PerformerDeployer) collectRequiredEnvironmentVariables(component *runtime.ComponentSpec) []string {
-	var required []string
-
-	for _, env := range component.Env {
-		// Check if this environment variable is required
-		if env.Required || env.Kind == "required" {
-			// Extract the variable name from the value if it's a template
-			varName := d.extractVariableName(env.Value)
-			if varName != "" {
-				required = append(required, varName)
-			}
-		}
-	}
-
-	return required
-}
-
-// extractVariableName extracts the environment variable name from a template string
-// e.g., "{{env "MY_VAR"}}" -> "MY_VAR"
-func (d *PerformerDeployer) extractVariableName(value string) string {
-	// Check if it's a template
-	if strings.HasPrefix(value, "{{") && strings.HasSuffix(value, "}}") {
-		// Extract content between {{ and }}
-		content := strings.TrimPrefix(strings.TrimSuffix(value, "}}"), "{{")
-		content = strings.TrimSpace(content)
-
-		// Check if it's an env function
-		if strings.HasPrefix(content, "env ") {
-			// Extract the variable name
-			parts := strings.Fields(content)
-			if len(parts) >= 2 {
-				// Remove quotes if present
-				varName := strings.Trim(parts[1], `"'`)
-				return varName
-			}
-		}
-	}
-
-	return ""
-}
-
-// validateEnvironmentVariables checks that all required variables are present
-func (d *PerformerDeployer) validateEnvironmentVariables(envMap map[string]string, required []string) error {
-	var missing []string
-
-	for _, req := range required {
-		if envMap[req] == "" {
-			missing = append(missing, req)
-		}
-	}
-
-	// Also check performer-specific base requirements
-	if err := ValidatePerformer(envMap); err != nil {
-		return err
-	}
-
-	if len(missing) > 0 {
-		return fmt.Errorf("missing required environment variables:\n  - %s", strings.Join(missing, "\n  - "))
-	}
-
-	return nil
 }
 
 // handleDryRun handles the dry-run scenario
@@ -241,14 +176,12 @@ func (d *PerformerDeployer) deployViaExecutor(
 	}
 	defer executorClient.Close()
 
-	// Substitute environment variables in component
-	runtime.SubstituteComponentEnv(component, cfg.EnvMap)
-
 	d.Log.Info("Deploying performer via executor",
 		zap.String("executor", d.Context.ExecutorAddress),
 		zap.String("avsAddress", cfg.FinalEnvMap["AVS_ADDRESS"]),
 		zap.String("image", component.Registry),
-		zap.String("digest", component.Digest))
+		zap.String("digest", component.Digest),
+	)
 
 	// Deploy performer with environment variables
 	deploymentID, err := executorClient.DeployPerformerWithEnv(

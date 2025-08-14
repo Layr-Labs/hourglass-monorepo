@@ -130,13 +130,6 @@ func contextSetAction(c *cli.Context) error {
 			key := parts[0]
 			value := parts[1]
 
-			// Check if it's a secret variable
-			if config.IsSecretVariable(key) {
-				log.Warn("Skipping secret variable (use runtime flags instead)",
-					zap.String("variable", key))
-				continue
-			}
-
 			ctx.EnvironmentVars[key] = value
 			log.Info("Set environment variable", zap.String("key", key))
 			updated = true
