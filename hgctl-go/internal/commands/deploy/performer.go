@@ -88,6 +88,7 @@ func deployPerformerAction(c *cli.Context) error {
 		currentCtx,
 		log,
 		contractClient,
+		currentCtx.AVSAddress,
 		opSetId,
 		c.String("release-id"),
 		c.String("env-file"),

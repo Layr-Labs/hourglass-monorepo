@@ -36,6 +36,7 @@ func Command() *cli.Command {
 type PlatformDeployer struct {
 	Context        *config.Context
 	Log            logger.Logger
+	AVSAddress     string
 	OperatorSetID  uint32
 	ReleaseID      string
 	ContractClient *client.ContractClient
@@ -64,6 +65,7 @@ func NewPlatformDeployer(
 	ctx *config.Context,
 	log logger.Logger,
 	contractClient *client.ContractClient,
+	avsAddress string,
 	operatorSetID uint32,
 	releaseID string,
 	envFile string,
@@ -72,6 +74,7 @@ func NewPlatformDeployer(
 	return &PlatformDeployer{
 		Context:        ctx,
 		Log:            log,
+		AVSAddress:     avsAddress,
 		OperatorSetID:  operatorSetID,
 		ReleaseID:      releaseID,
 		ContractClient: contractClient,
@@ -83,10 +86,8 @@ func NewPlatformDeployer(
 // FetchRuntimeSpec retrieves the runtime specification via release manager
 func (d *PlatformDeployer) FetchRuntimeSpec(ctx context.Context) (*runtime.Spec, error) {
 	// Get AVS address from contract client
-	avsAddress := d.ContractClient.GetAVSAddress()
-
 	d.Log.Info("Fetching release from ReleaseManager",
-		zap.String("avs", avsAddress.Hex()),
+		zap.String("avs", d.AVSAddress),
 		zap.Uint32("operatorSetID", d.OperatorSetID))
 
 	// Create OCI client and DAO
@@ -119,8 +120,7 @@ func (d *PlatformDeployer) PrepareEnvironmentConfig() *DeploymentConfig {
 	envMap := d.LoadEnvironmentVariables()
 
 	// Set AVS address
-	envMap["AVS_ADDRESS"] = d.ContractClient.GetAVSAddress().Hex()
-
+	envMap["AVS_ADDRESS"] = d.AVSAddress
 	return &DeploymentConfig{
 		EnvMap:      envMap,
 		FinalEnvMap: envMap,
@@ -134,6 +134,22 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 	// 1. Start with context environment variables
 	for k, v := range d.Context.EnvironmentVars {
 		envVars[k] = v
+	}
+
+	// Add operator address from context as default if not already set
+	if d.Context.OperatorAddress != "" {
+		if _, exists := envVars["OPERATOR_ADDRESS"]; !exists {
+			envVars["OPERATOR_ADDRESS"] = d.Context.OperatorAddress
+			d.Log.Debug("Using operator address from context", zap.String("address", d.Context.OperatorAddress))
+		}
+	}
+
+	// Map PRIVATE_KEY to OPERATOR_PRIVATE_KEY if PRIVATE_KEY exists and OPERATOR_PRIVATE_KEY doesn't
+	if privateKey := os.Getenv("PRIVATE_KEY"); privateKey != "" {
+		if _, exists := envVars["OPERATOR_PRIVATE_KEY"]; !exists {
+			envVars["OPERATOR_PRIVATE_KEY"] = privateKey
+			d.Log.Debug("Using PRIVATE_KEY environment variable as OPERATOR_PRIVATE_KEY")
+		}
 	}
 
 	// 2. Load from env file if specified
