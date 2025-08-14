@@ -487,6 +487,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		for i := 0; i < 3; i++ {
 			taskResult := &types.TaskResult{
+				TaskId:          taskId,
 				OperatorAddress: operators[i].Address,
 				Output:          commonPayload,
 				OutputDigest:    digest[:],
@@ -563,6 +564,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 0 submits digest A
 		taskResult0 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[0].Address,
 			Output:          payloadA,
 			OutputDigest:    digestA[:],
@@ -579,6 +581,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 1 submits digest B
 		taskResult1 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[1].Address,
 			Output:          payloadB,
 			OutputDigest:    digestB[:],
@@ -595,6 +598,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 2 submits digest A
 		taskResult2 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[2].Address,
 			Output:          payloadA,
 			OutputDigest:    digestA[:],
@@ -612,6 +616,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 3 submits digest C
 		taskResult3 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[3].Address,
 			Output:          payloadC,
 			OutputDigest:    digestC[:],
@@ -628,6 +633,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Operator 4 submits digest B
 		taskResult4 := &types.TaskResult{
+			TaskId:          taskId,
 			OperatorAddress: operators[4].Address,
 			Output:          payloadB,
 			OutputDigest:    digestB[:],
@@ -700,6 +706,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		for i := 0; i < 3; i++ {
 			taskResult := &types.TaskResult{
+				TaskId:          taskId,
 				OperatorAddress: operators[i].Address,
 				Output:          commonPayload,
 				OutputDigest:    digest[:],
