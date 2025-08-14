@@ -1003,11 +1003,6 @@ func (c *ContractClient) CreateOperatorSets(
 	return nil
 }
 
-// GetAVSAddress returns the AVS address configured for this client
-func (c *ContractClient) GetAVSAddress() common.Address {
-	return c.avsAddress
-}
-
 // GetOperatorSetMetadataURI gets the metadata URI for an operator set
 func (c *ContractClient) GetOperatorSetMetadataURI(ctx context.Context, operatorSetID uint32) (string, error) {
 	if c.releaseManager == nil {
