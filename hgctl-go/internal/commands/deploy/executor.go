@@ -119,7 +119,7 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	cfg := d.PrepareEnvironmentConfig()
 
 	// Step 4: Validate configuration
-	if err := ValidateExecutor(cfg.FinalEnvMap); err != nil {
+	if err := ValidateComponentSpec(component, cfg.FinalEnvMap); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
@@ -172,8 +172,7 @@ func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, 
 // generateConfiguration generates executor configuration files
 func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	// Generate executor configuration using ConfigBuilder
-	configBuilder := templates.NewConfigBuilder()
-	executorConfig, err := configBuilder.BuildExecutorConfig(nil, cfg.FinalEnvMap)
+	executorConfig, err := templates.BuildExecutorConfig(cfg.FinalEnvMap)
 	if err != nil {
 		return fmt.Errorf("failed to build executor config: %w", err)
 	}
@@ -198,9 +197,6 @@ func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 
 // deployContainer handles the executor-specific container deployment
 func (d *ExecutorDeployer) deployContainer(component *runtime.ComponentSpec, cfg *DeploymentConfig) error {
-	// Substitute environment variables in component
-	runtime.SubstituteComponentEnv(component, cfg.EnvMap)
-
 	// Prepare container configuration
 	containerName := fmt.Sprintf("hgctl-executor-%s", cfg.EnvMap["AVS_ADDRESS"])
 	imageRef := fmt.Sprintf("%s@%s", component.Registry, component.Digest)

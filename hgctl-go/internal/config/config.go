@@ -2,11 +2,9 @@ package config
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Define custom types for context keys to avoid collisions
@@ -244,27 +242,4 @@ func (c *Context) ToMap() map[string]interface{} {
 	}
 
 	return result
-}
-
-// IsSecretVariable checks if an environment variable name indicates it contains a secret
-func IsSecretVariable(name string) bool {
-	// List of patterns that indicate secret variables
-	secretPatterns := []string{
-		"PRIVATE_KEY",
-		"PASSWORD",
-		"SECRET",
-		"TOKEN",
-		"API_KEY",
-		"MNEMONIC",
-		"SEED",
-	}
-
-	upperName := strings.ToUpper(name)
-	for _, pattern := range secretPatterns {
-		if strings.Contains(upperName, pattern) {
-			return true
-		}
-	}
-
-	return false
 }

@@ -88,7 +88,8 @@ func (d *PlatformDeployer) FetchRuntimeSpec(ctx context.Context) (*runtime.Spec,
 	// Get AVS address from contract client
 	d.Log.Info("Fetching release from ReleaseManager",
 		zap.String("avs", d.AVSAddress),
-		zap.Uint32("operatorSetID", d.OperatorSetID))
+		zap.Uint32("operatorSetID", d.OperatorSetID),
+	)
 
 	// Create OCI client and DAO
 	ociClient := client.NewOCIClient(d.Log)
@@ -110,7 +111,8 @@ func (d *PlatformDeployer) ExtractComponent(spec *runtime.Spec, componentName st
 
 	d.Log.Info(fmt.Sprintf("Found %s component", componentName),
 		zap.String("registry", component.Registry),
-		zap.String("digest", component.Digest))
+		zap.String("digest", component.Digest),
+	)
 
 	return &component, nil
 }
