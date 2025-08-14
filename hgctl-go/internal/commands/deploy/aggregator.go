@@ -229,6 +229,14 @@ func (d *AggregatorDeployer) deployContainer(component *runtime.ComponentSpec, c
 		dockerArgs = append(dockerArgs[:2], append([]string{"--network", d.networkMode}, dockerArgs[2:]...)...)
 	}
 
+	// Add management port mapping
+	mgmtPort := cfg.FinalEnvMap["AGGREGATOR_MGMT_PORT"]
+	if mgmtPort == "" {
+		mgmtPort = "9010" // Default from aggregator-config.yaml template
+	}
+	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
+	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
+
 	// Mount keystores
 	if err := d.MountKeystores(&dockerArgs, cfg.FinalEnvMap["KEYSTORE_NAME"]); err != nil {
 		return err
