@@ -6,7 +6,7 @@ import (
 )
 
 func NewExecutorClient(fullUrl string, insecureConn bool) (executorV1.ExecutorServiceClient, error) {
-	grpcClient, err := clients.NewGrpcClient(fullUrl, insecureConn)
+	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, insecureConn, clients.DefaultRetryConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -14,7 +14,7 @@ func NewExecutorClient(fullUrl string, insecureConn bool) (executorV1.ExecutorSe
 }
 
 func NewExecutorManagementClient(fullUrl string, insecureConn bool) (executorV1.ExecutorManagementServiceClient, error) {
-	grpcClient, err := clients.NewGrpcClient(fullUrl, insecureConn)
+	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, insecureConn, clients.DefaultRetryConfig())
 	if err != nil {
 		return nil, err
 	}

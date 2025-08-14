@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
@@ -15,8 +18,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
-	"sync"
-	"sync/atomic"
 )
 
 const maximumTaskResponseSize = 1.5 * 1024 * 1024
@@ -224,6 +225,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.String("networkAddress", socket),
 			)
+
 			res, err := c.SubmitTask(ts.context, taskSubmission)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
