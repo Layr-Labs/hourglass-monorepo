@@ -68,12 +68,9 @@ func deployPerformerAction(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
-	opSetId := currentCtx.OperatorSetID
+	opSetId := uint32(c.Uint64("operator-set-id"))
 	if opSetId == 0 {
-		opSetId = uint32(c.Uint64("operator-set-id"))
-		if opSetId == 0 {
-			return fmt.Errorf("AVS address not configured. Run 'hgctl context set --operator-set-id <id>' or provide flag")
-		}
+		opSetId = currentCtx.OperatorSetID
 	}
 
 	if currentCtx.ExecutorAddress == "" {

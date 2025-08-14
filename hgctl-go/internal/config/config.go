@@ -177,9 +177,8 @@ func (c *Context) ToMap() map[string]interface{} {
 		result["avs-address"] = c.AVSAddress
 	}
 
-	if c.OperatorSetID != 0 {
-		result["operator-set-id"] = c.OperatorSetID
-	}
+	// Always show operator-set-id since 0 is a valid value
+	result["operator-set-id"] = c.OperatorSetID
 
 	if c.NetworkID != 0 {
 		result["network-id"] = c.NetworkID
