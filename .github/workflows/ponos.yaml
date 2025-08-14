@@ -137,3 +137,72 @@ jobs:
           make release-with-docker
           sudo chown -R $USER:$USER .
           ./scripts/bundleReleases.sh $VERSION
+  build-create-release:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [ build-container, lint, test ]
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check and set release version
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          ./scripts/version.sh $REF
+      - name: Build binary
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Building binary for version $VERSION"
+          make release-with-docker
+          sudo chown -R $USER:$USER .
+          ./scripts/bundleReleases.sh $VERSION
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BUCKET_NAME: ${{ vars.RELEASE_BUCKET_NAME }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          set -x
+          ls -al ./release
+
+          echo "Upload URL: ${{ steps.create_release.outputs.upload_url }}"
+          export upload_url=$(echo "${{ steps.create_release.outputs.upload_url }}" | sed -e "s/{?name,label}//")
+
+          for asset_name in $(ls ./release | grep '.tar');
+          do
+            asset="./release/${asset_name}"
+            echo "Uploading ${asset_name}..."
+            curl --fail \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: $(file -b --mime-type "$asset")" \
+              --data-binary @"$asset" \
+              "${upload_url}?name=$asset_name"
+          done
+  release-helm-chart:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    needs: [ build-binaries ]
+    permissions: write-all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Release Helm Chart
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          ./scripts/releaseChart.sh
