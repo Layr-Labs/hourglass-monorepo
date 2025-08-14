@@ -85,7 +85,7 @@ jobs:
         env:
           REF: ${{ github.ref }}
         run: |
-          cd ponos && ./scripts/version.sh $REF
+          ./scripts/version.sh $REF
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -106,7 +106,7 @@ jobs:
           REGISTRY: "public.ecr.aws/z6g0f8n7"
           REPOSITORY: "eigenlayer-hourglass"
         run: |
-          VERSION=$(cat ./ponos/VERSION | tr -d '[:space:]' | sed 's/+/_/g')
+          VERSION=$(cat VERSION | tr -d '[:space:]' | sed 's/+/_/g')
           echo "Building docker image for version $VERSION"
           if [[ $GITHUB_REF == refs/heads/master || $GITHUB_REF == refs/tags/* ]]; then
             docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:$VERSION -t $REGISTRY/$REPOSITORY:latest --push -f ./ponos/Dockerfile .
@@ -128,11 +128,11 @@ jobs:
         env:
           REF: ${{ github.ref }}
         run: |
-          cd ponos && ./scripts/version.sh $REF
+          ./scripts/version.sh $REF
       - name: Build binary
         run: |
-          cd ponos
           VERSION=$(cat VERSION | tr -d '[:space:]')
+          cd ponos
           echo "Building binary for version $VERSION"
           make release-with-docker
           sudo chown -R $USER:$USER .
