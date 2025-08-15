@@ -21,7 +21,7 @@ func createTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 
 	// Register core v1 types (including Namespace)
-	corev1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 
 	// Register our CRD types with the proper GroupVersion
 	gv := schema.GroupVersion{Group: "hourglass.eigenlayer.io", Version: "v1alpha1"}

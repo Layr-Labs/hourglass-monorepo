@@ -58,6 +58,8 @@ func Test_ExecutorConfig(t *testing.T) {
 // TestDeploymentMode tests the deployment mode functionality
 func TestDeploymentMode(t *testing.T) {
 	t.Run("Should default to docker mode when not specified", func(t *testing.T) {
+		mode := DeploymentModeDocker
+
 		config := &AvsPerformerConfig{
 			AvsAddress:  "0x123",
 			ProcessType: "server",
@@ -67,41 +69,23 @@ func TestDeploymentMode(t *testing.T) {
 			},
 		}
 
-		err := config.Validate()
+		err := config.Validate(mode)
 		require.NoError(t, err)
-		assert.Equal(t, DeploymentModeDocker, config.DeploymentMode)
 	})
 
 	t.Run("Should accept kubernetes mode", func(t *testing.T) {
+		mode := DeploymentModeKubernetes
 		config := &AvsPerformerConfig{
-			AvsAddress:     "0x123",
-			ProcessType:    "server",
-			DeploymentMode: DeploymentModeKubernetes,
+			AvsAddress:  "0x123",
+			ProcessType: "server",
 			Image: &PerformerImage{
 				Repository: "test/image",
 				Tag:        "v1.0.0",
 			},
 		}
 
-		err := config.Validate()
+		err := config.Validate(mode)
 		require.NoError(t, err)
-		assert.Equal(t, DeploymentModeKubernetes, config.DeploymentMode)
-	})
-
-	t.Run("Should reject invalid deployment mode", func(t *testing.T) {
-		config := &AvsPerformerConfig{
-			AvsAddress:     "0x123",
-			ProcessType:    "server",
-			DeploymentMode: "invalid",
-			Image: &PerformerImage{
-				Repository: "test/image",
-				Tag:        "v1.0.0",
-			},
-		}
-
-		err := config.Validate()
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "deploymentMode must be one of [docker, kubernetes]")
 	})
 }
 
@@ -177,11 +161,11 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 					},
 				},
 			},
+			DeploymentMode: DeploymentModeKubernetes,
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes,
+					AvsAddress:  "0x456",
+					ProcessType: "server",
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
@@ -213,11 +197,11 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 					},
 				},
 			},
+			DeploymentMode: DeploymentModeKubernetes,
 			AvsPerformers: []*AvsPerformerConfig{
 				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes,
+					AvsAddress:  "0x456",
+					ProcessType: "server",
 					Image: &PerformerImage{
 						Repository: "test/image",
 						Tag:        "v1.0.0",
@@ -233,51 +217,6 @@ func TestExecutorConfigKubernetes(t *testing.T) {
 
 		err := config.Validate()
 		require.NoError(t, err)
-	})
-
-	t.Run("Should not allow mixed deployment modes", func(t *testing.T) {
-		config := &ExecutorConfig{
-			Operator: &config.OperatorConfig{
-				Address: "0x123",
-				OperatorPrivateKey: &config.ECDSAKeyConfig{
-					PrivateKey: "private_key",
-				},
-				SigningKeys: config.SigningKeys{
-					BLS: &config.SigningKey{
-						Keystore: "keystore_content",
-						Password: "password",
-					},
-				},
-			},
-			AvsPerformers: []*AvsPerformerConfig{
-				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeDocker,
-					Image: &PerformerImage{
-						Repository: "test/image",
-						Tag:        "v1.0.0",
-					},
-				},
-				{
-					AvsAddress:     "0xabc",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes,
-					Image: &PerformerImage{
-						Repository: "test/image2",
-						Tag:        "v1.0.0",
-					},
-				},
-			},
-			L1Chain: &Chain{
-				RpcUrl:  "http://localhost:8545",
-				ChainId: 1,
-			},
-			Kubernetes: NewDefaultKubernetesConfig(),
-		}
-
-		err := config.Validate()
-		require.Error(t, err)
 	})
 }
 
@@ -299,11 +238,11 @@ avsPerformers:
     tag: "v1.0.0"
   processType: "server"
   avsAddress: "0xavs1..."
-  deploymentMode: "kubernetes"
   avsRegistrarAddress: "0x789"
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 1
+deploymentMode: 'kubernetes'
 kubernetes:
   namespace: "test-namespace"
   operatorNamespace: "hourglass-system"
@@ -317,7 +256,7 @@ kubernetes:
 		require.NoError(t, err)
 		require.NotNil(t, config)
 
-		assert.Equal(t, DeploymentModeKubernetes, config.AvsPerformers[0].DeploymentMode)
+		assert.Equal(t, DeploymentModeKubernetes, config.DeploymentMode)
 		assert.NotNil(t, config.Kubernetes)
 		assert.Equal(t, "test-namespace", config.Kubernetes.Namespace)
 		assert.Equal(t, "hourglass-system", config.Kubernetes.OperatorNamespace)
@@ -343,8 +282,8 @@ avsPerformers:
     tag: "v1.0.0"
   processType: "server"
   avsAddress: "0xavs1..."
-  deploymentMode: "docker"
   avsRegistrarAddress: "0x789"
+deploymentMode: 'docker'
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 1
@@ -354,7 +293,7 @@ l1Chain:
 		require.NoError(t, err)
 		require.NotNil(t, config)
 
-		assert.Equal(t, DeploymentModeDocker, config.AvsPerformers[0].DeploymentMode)
+		assert.Equal(t, DeploymentModeDocker, config.DeploymentMode)
 		assert.Nil(t, config.Kubernetes)
 	})
 }
@@ -456,140 +395,3 @@ avsPerformers:
   }
 }`
 )
-
-// TestMixedDeploymentModeValidation tests that mixed deployment modes are rejected
-func TestMixedDeploymentModeValidation(t *testing.T) {
-	t.Run("Should reject mixed deployment modes", func(t *testing.T) {
-		config := &ExecutorConfig{
-			Operator: &config.OperatorConfig{
-				Address: "0x123",
-				OperatorPrivateKey: &config.ECDSAKeyConfig{
-					PrivateKey: "private_key",
-				},
-				SigningKeys: config.SigningKeys{
-					BLS: &config.SigningKey{
-						Keystore: "keystore_content",
-						Password: "password",
-					},
-				},
-			},
-			AvsPerformers: []*AvsPerformerConfig{
-				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeDocker, // Docker mode
-					Image: &PerformerImage{
-						Repository: "test/image",
-						Tag:        "v1.0.0",
-					},
-				},
-				{
-					AvsAddress:     "0xabc",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes, // Kubernetes mode
-					Image: &PerformerImage{
-						Repository: "test/image2",
-						Tag:        "v1.0.0",
-					},
-				},
-			},
-			L1Chain: &Chain{
-				RpcUrl:  "http://localhost:8545",
-				ChainId: 1,
-			},
-		}
-
-		err := config.Validate()
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "mixed deployment modes not supported")
-	})
-
-	t.Run("Should accept all Docker deployment modes", func(t *testing.T) {
-		config := &ExecutorConfig{
-			Operator: &config.OperatorConfig{
-				Address: "0x123",
-				OperatorPrivateKey: &config.ECDSAKeyConfig{
-					PrivateKey: "private_key",
-				},
-				SigningKeys: config.SigningKeys{
-					BLS: &config.SigningKey{
-						Keystore: "keystore_content",
-						Password: "password",
-					},
-				},
-			},
-			AvsPerformers: []*AvsPerformerConfig{
-				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeDocker,
-					Image: &PerformerImage{
-						Repository: "test/image",
-						Tag:        "v1.0.0",
-					},
-				},
-				{
-					AvsAddress:     "0xabc",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeDocker,
-					Image: &PerformerImage{
-						Repository: "test/image2",
-						Tag:        "v1.0.0",
-					},
-				},
-			},
-			L1Chain: &Chain{
-				RpcUrl:  "http://localhost:8545",
-				ChainId: 1,
-			},
-		}
-
-		err := config.Validate()
-		require.NoError(t, err)
-	})
-
-	t.Run("Should accept all Kubernetes deployment modes with proper config", func(t *testing.T) {
-		config := &ExecutorConfig{
-			Operator: &config.OperatorConfig{
-				Address: "0x123",
-				OperatorPrivateKey: &config.ECDSAKeyConfig{
-					PrivateKey: "private_key",
-				},
-				SigningKeys: config.SigningKeys{
-					BLS: &config.SigningKey{
-						Keystore: "keystore_content",
-						Password: "password",
-					},
-				},
-			},
-			AvsPerformers: []*AvsPerformerConfig{
-				{
-					AvsAddress:     "0x456",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes,
-					Image: &PerformerImage{
-						Repository: "test/image",
-						Tag:        "v1.0.0",
-					},
-				},
-				{
-					AvsAddress:     "0xabc",
-					ProcessType:    "server",
-					DeploymentMode: DeploymentModeKubernetes,
-					Image: &PerformerImage{
-						Repository: "test/image2",
-						Tag:        "v1.0.0",
-					},
-				},
-			},
-			L1Chain: &Chain{
-				RpcUrl:  "http://localhost:8545",
-				ChainId: 1,
-			},
-			Kubernetes: NewDefaultKubernetesConfig(),
-		}
-
-		err := config.Validate()
-		require.NoError(t, err)
-	})
-}

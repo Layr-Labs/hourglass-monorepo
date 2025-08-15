@@ -772,6 +772,7 @@ operator:
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 31337
+deploymentMode: "kubernetes"
 kubernetes:
   namespace: "default"
   operatorNamespace: "hourglass-system"
@@ -787,7 +788,6 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-  deploymentMode: "kubernetes"
   kubernetes:
     endpointOverride: "localhost:30080"
 `
@@ -838,6 +838,7 @@ operator:
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 31337
+deploymentMode: "docker"
 avsPerformers:
 - image:
     repository: "hello-performer"
@@ -845,7 +846,6 @@ avsPerformers:
   processType: "server"
   avsAddress: "0xavs1..."
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-  deploymentMode: "docker"
 `
 	}
 }

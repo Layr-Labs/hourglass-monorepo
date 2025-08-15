@@ -24,6 +24,10 @@ const (
 // DeploymentMode represents the deployment mode for performers
 type DeploymentMode string
 
+func (d DeploymentMode) String() string {
+	return string(d)
+}
+
 const (
 	DeploymentModeDocker     DeploymentMode = "docker"
 	DeploymentModeKubernetes DeploymentMode = "kubernetes"
@@ -152,15 +156,14 @@ func (apc *AvsPerformerKubernetesConfig) Validate() error {
 }
 
 type AvsPerformerConfig struct {
-	Image          *PerformerImage
-	ProcessType    string
-	AvsAddress     string
-	Envs           []config.AVSPerformerEnv
-	DeploymentMode DeploymentMode                `json:"deploymentMode" yaml:"deploymentMode"`
-	Kubernetes     *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
+	Image       *PerformerImage
+	ProcessType string
+	AvsAddress  string
+	Envs        []config.AVSPerformerEnv
+	Kubernetes  *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 }
 
-func (ap *AvsPerformerConfig) Validate() error {
+func (ap *AvsPerformerConfig) Validate(deploymentMode DeploymentMode) error {
 	var allErrors field.ErrorList
 	if ap.AvsAddress == "" {
 		allErrors = append(allErrors, field.Required(field.NewPath("avsAddress"), "avsAddress is required"))
@@ -180,15 +183,8 @@ func (ap *AvsPerformerConfig) Validate() error {
 		}
 	}
 
-	// Validate deployment mode - default to docker if not specified
-	if ap.DeploymentMode == "" {
-		ap.DeploymentMode = DeploymentModeDocker
-	} else if !slices.Contains([]DeploymentMode{DeploymentModeDocker, DeploymentModeKubernetes}, ap.DeploymentMode) {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("deploymentMode"), ap.DeploymentMode, "deploymentMode must be one of [docker, kubernetes]"))
-	}
-
 	// Validate Kubernetes config if in Kubernetes mode
-	if ap.DeploymentMode == DeploymentModeKubernetes && ap.Kubernetes != nil {
+	if deploymentMode == DeploymentModeKubernetes && ap.Kubernetes != nil {
 		if err := ap.Kubernetes.Validate(); err != nil {
 			allErrors = append(allErrors, field.Invalid(field.NewPath("kubernetes"), ap.Kubernetes, err.Error()))
 		}
@@ -266,6 +262,7 @@ type ExecutorConfig struct {
 	Kubernetes               *KubernetesConfig         `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 	Storage                  *StorageConfig            `json:"storage,omitempty" yaml:"storage,omitempty"`
 	AuthConfig               *auth.Config              `json:"authentication,omitempty" yaml:"authentication,omitempty"`
+	DeploymentMode           DeploymentMode            `json:"deploymentMode" yaml:"deploymentMode"` // Deployment mode for the executor (docker or kubernetes)
 }
 
 func (ec *ExecutorConfig) Validate() error {
@@ -278,27 +275,21 @@ func (ec *ExecutorConfig) Validate() error {
 		}
 	}
 
-	// Validate single runtime configuration approach
-	dockerCount := 0
-	kubernetesCount := 0
+	if ec.DeploymentMode == "" {
+		ec.DeploymentMode = DeploymentModeDocker // Default to Docker if not specified
+	}
+	if !slices.Contains([]DeploymentMode{DeploymentModeDocker, DeploymentModeKubernetes}, ec.DeploymentMode) {
+		allErrors = append(allErrors, field.Invalid(field.NewPath("deploymentMode"), ec.DeploymentMode, "deploymentMode must be one of [docker, kubernetes]"))
+	}
+
 	for _, avs := range ec.AvsPerformers {
-		if err := avs.Validate(); err != nil {
+		if err := avs.Validate(ec.DeploymentMode); err != nil {
 			allErrors = append(allErrors, field.Invalid(field.NewPath("avsPerformers"), avs, err.Error()))
 		}
-		if avs.DeploymentMode == DeploymentModeDocker {
-			dockerCount++
-		} else if avs.DeploymentMode == DeploymentModeKubernetes {
-			kubernetesCount++
-		}
 	}
 
-	// Enforce single runtime configuration: all performers must use the same deployment mode
-	if dockerCount > 0 && kubernetesCount > 0 {
-		allErrors = append(allErrors, field.Invalid(field.NewPath("avsPerformers"), ec.AvsPerformers, "mixed deployment modes not supported: all performers must use the same deployment mode (either 'docker' or 'kubernetes')"))
-	}
-
-	// If any performer uses Kubernetes mode, validate Kubernetes config
-	if kubernetesCount > 0 {
+	// If we're using Kubernetes deployment mode, validate the Kubernetes configuration
+	if ec.DeploymentMode == DeploymentModeKubernetes {
 		if ec.Kubernetes == nil {
 			allErrors = append(allErrors, field.Required(field.NewPath("kubernetes"), "kubernetes configuration is required when using kubernetes deployment mode"))
 		} else {

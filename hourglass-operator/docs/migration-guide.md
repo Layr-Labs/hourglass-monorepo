@@ -140,10 +140,10 @@ avs:
   supportedAvs:
     - address: "0x1234567890abcdef1234567890abcdef12345678"
       name: "my-avs"
+      deploymentMode: "kubernetes"  # CHANGED FROM DOCKER
       performer:
         image: "my-org/my-avs-performer"  # Same as Docker
         version: "v1.0.0"  # Same as Docker
-        deploymentMode: "kubernetes"  # CHANGED FROM DOCKER
       resources:
         requests:
           cpu: "500m"

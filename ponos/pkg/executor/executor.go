@@ -167,13 +167,13 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			if err != nil {
 				e.logger.Sugar().Errorw("Failed to deploy performer during startup",
 					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentMode", string(avs.DeploymentMode)),
+					zap.String("deploymentMode", string(e.config.DeploymentMode)),
 					zap.Error(err),
 				)
 			} else {
 				e.logger.Sugar().Infow("AVS performer deployed successfully",
 					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentMode", string(avs.DeploymentMode)),
+					zap.String("deploymentMode", string(e.config.DeploymentMode)),
 					zap.String("deploymentId", result.ID),
 					zap.String("performerId", result.PerformerID),
 				)
@@ -190,7 +190,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				ArtifactRegistry:   avs.Image.Repository,
 				ArtifactTag:        avs.Image.Tag,
 				ArtifactDigest:     "", // Not available during initialization
-				DeploymentMode:     string(avs.DeploymentMode),
+				DeploymentMode:     e.config.DeploymentMode.String(),
 				CreatedAt:          result.StartTime,
 				LastHealthCheck:    result.EndTime,
 				ContainerHealthy:   true,
@@ -237,19 +237,13 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 // createPerformer creates an AVS performer based on the deployment mode
 func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
-	// Use default deployment mode if not specified
-	deploymentMode := avs.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = executorConfig.DeploymentModeDocker
-	}
-
-	switch deploymentMode {
+	switch e.config.DeploymentMode {
 	case executorConfig.DeploymentModeDocker:
 		return e.createDockerPerformer(avs, avsAddress)
 	case executorConfig.DeploymentModeKubernetes:
 		return e.createKubernetesPerformer(avs, avsAddress)
 	default:
-		return nil, fmt.Errorf("unsupported deployment mode: %s", deploymentMode)
+		return nil, fmt.Errorf("unsupported deployment mode: %s", e.config.DeploymentMode)
 	}
 }
 
