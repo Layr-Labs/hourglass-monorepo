@@ -14,7 +14,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
@@ -200,7 +199,7 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 	// Use shortened address hash (6 chars) + shortened UUID (8 chars) for uniqueness
 	// This keeps the total length under Kubernetes 63-character limit for labels
 	shortUUID := strings.Replace(uuid.New().String(), "-", "", -1)[:8]
-	return fmt.Sprintf("performer-%s-%s", containerManager.HashAvsAddress(akp.config.AvsAddress), shortUUID)
+	return fmt.Sprintf("performer-%s-%s", strings.ToLower(akp.config.AvsAddress[:8]), shortUUID)
 }
 
 // buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
