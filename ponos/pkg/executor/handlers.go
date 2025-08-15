@@ -387,29 +387,37 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 
 	var signerToUse signer.ISigner
 	if curveType == config.CurveTypeBN254 {
+
 		if e.bn254Signer == nil {
 			return nil, signedOverBytes, fmt.Errorf("BN254 signer is not initialized")
 		}
 		signerToUse = e.bn254Signer
 
-		signedOverBytes = result.Result
+		signedOverBytes, err = e.l1ContractCaller.CalculateBN254CertificateDigestBytes(
+			context.Background(),
+			task.ReferenceTimestamp,
+			util.GetKeccak256Digest(result.Result),
+		)
+		if err != nil {
+			return nil, signedOverBytes, fmt.Errorf("failed to calculate BN254 certificate digest: %w", err)
+		}
+
 	} else if curveType == config.CurveTypeECDSA {
+
 		if e.ecdsaSigner == nil {
 			return nil, signedOverBytes, fmt.Errorf("ECDSA signer is not initialized")
 		}
 		signerToUse = e.ecdsaSigner
 
-		digestBytes := util.GetKeccak256Digest(result.Result)
-		// ecdsa is a special snowflake and requires an EIP-712 digest calculation
-		digest, err := e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
+		signedOverBytes, err = e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
 			context.Background(),
 			task.ReferenceTimestamp,
-			digestBytes,
+			util.GetKeccak256Digest(result.Result),
 		)
 		if err != nil {
 			return nil, signedOverBytes, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
 		}
-		signedOverBytes = digest
+
 	} else {
 		return nil, signedOverBytes, fmt.Errorf("unsupported curve type: %s", curveType)
 	}

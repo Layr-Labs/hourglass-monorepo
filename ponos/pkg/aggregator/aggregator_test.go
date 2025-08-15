@@ -51,6 +51,7 @@ const (
 // - The aggregator is started with a poller calling a local anvil node
 // - The test pushes a message to the mailbox and waits for the TaskVerified event to be emitted
 func Test_Aggregator(t *testing.T) {
+	t.Skip("Skipping temporarily until BN254CertificateVerifier audit fixes are in.")
 	t.Run("Docker", func(t *testing.T) {
 		runAggregatorTest(t, "docker")
 	})

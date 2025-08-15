@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IECDSACertificateVerifier"
@@ -39,6 +40,7 @@ type ContractCaller struct {
 	crossChainRegistry *ICrossChainRegistry.ICrossChainRegistry
 	keyRegistrar       *IKeyRegistrar.IKeyRegistrar
 	ecdsaCertVerifier  *IECDSACertificateVerifier.IECDSACertificateVerifier
+	bn254CertVerifier  *IBN254CertificateVerifier.IBN254CertificateVerifier
 	ethclient          *ethclient.Client
 	logger             *zap.Logger
 	coreContracts      *config.CoreContractAddresses
@@ -100,6 +102,11 @@ func NewContractCaller(
 		return nil, fmt.Errorf("failed to create ECDSACertificateVerifier: %w", err)
 	}
 
+	bn254CertVerifier, err := IBN254CertificateVerifier.NewIBN254CertificateVerifier(common.HexToAddress(coreContracts.BN254CertificateVerifier), ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create BN254CertificateVerifier: %w", err)
+	}
+
 	taskMailbox, err := ITaskMailbox.NewITaskMailbox(common.HexToAddress(coreContracts.TaskMailbox), ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create TaskMailbox: %w", err)
@@ -112,6 +119,7 @@ func NewContractCaller(
 		delegationManager:  delegationManager,
 		crossChainRegistry: crossChainRegistry,
 		ecdsaCertVerifier:  ecdsaCertVerifier,
+		bn254CertVerifier:  bn254CertVerifier,
 		ethclient:          ethclient,
 		coreContracts:      coreContracts,
 		logger:             logger,
@@ -298,6 +306,14 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 
 func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
 	return cc.ecdsaCertVerifier.CalculateCertificateDigestBytes(&bind.CallOpts{}, referenceTimestamp, messageHash)
+}
+
+func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+	digest, err := cc.bn254CertVerifier.CalculateCertificateDigest(&bind.CallOpts{}, referenceTimestamp, messageHash)
+	if err != nil {
+		return nil, err
+	}
+	return digest[:], nil
 }
 
 func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*contractCaller.TaskMailboxExecutorOperatorSetConfig, error) {
