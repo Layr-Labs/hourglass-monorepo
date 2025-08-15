@@ -63,6 +63,8 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
+	execConfig.DeploymentMode = executorConfig.DeploymentModeDocker
+
 	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.ExecOperatorAccountPk,
 	}
@@ -81,6 +83,7 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("Failed to create aggregator config: %v", err)
 	}
+
 	simAggConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
