@@ -297,18 +297,23 @@ type OverrideContracts struct {
 	TaskMailbox *OverrideContract `json:"taskMailbox" yaml:"taskMailbox"`
 }
 
-type KubernetesEnv struct {
-	ValueFrom struct {
-		SecretKeyRef struct {
-			Name string `json:"name" yaml:"name"` // Name of the secret
-			Key  string `json:"key" yaml:"key"`   // Key within the secret
-		} `json:"secretKeyRef" yaml:"secretKeyRef"` // SecretKeyRef is used to reference a key in a Kubernetes secret
-		ConfigMapKeyRef struct {
-			Name string `json:"name" yaml:"name"` // Name of the config map
-			Key  string `json:"key" yaml:"key"`   // Key within the config map
-		} `json:"configMapKeyRef" yaml:"configMapKeyRef"` // ConfigMapKeyRef is used to reference a key in a Kubernetes config map
+type SecretKeyRef struct {
+	Name string `json:"name" yaml:"name"` // Name of the secret
+	Key  string `json:"key" yaml:"key"`   // Key within the secret
+}
 
-	} `json:"valueFrom" yaml:"valueFrom"` // ValueFrom is used to reference a Kubernetes secret
+type ConfigMapKeyRef struct {
+	Name string `json:"name" yaml:"name"` // Name of the config map
+	Key  string `json:"key" yaml:"key"`   // Key within the config map
+}
+
+type ValueFrom struct {
+	SecretKeyRef    SecretKeyRef    `json:"secretKeyRef" yaml:"secretKeyRef"`       // SecretKeyRef is used to reference a key in a Kubernetes secret
+	ConfigMapKeyRef ConfigMapKeyRef `json:"configMapKeyRef" yaml:"configMapKeyRef"` // ConfigMapKeyRef is used to reference a key in a Kubernetes config map
+}
+
+type KubernetesEnv struct {
+	ValueFrom ValueFrom `json:"valueFrom" yaml:"valueFrom"` // ValueFrom is used to reference a Kubernetes secret
 }
 
 type AVSPerformerEnv struct {

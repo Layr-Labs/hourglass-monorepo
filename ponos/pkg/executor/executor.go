@@ -141,67 +141,13 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 		switch avs.ProcessType {
 		case string(avsPerformer.AvsProcessTypeServer):
-			performer, err := e.createPerformer(avs, avsAddress)
-			if err != nil {
-				return fmt.Errorf("failed to create AVS performer for %s: %v", avs.ProcessType, err)
-			}
-
-			err = performer.Initialize(ctx)
-			if err != nil {
-				return err
-			}
-
-			var serviceAccountName string
-			if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
-				serviceAccountName = avs.Kubernetes.ServiceAccountName
-			}
-
-			// Deploy performer using the performer's Deploy method
-			image := avsPerformer.PerformerImage{
-				Repository:         avs.Image.Repository,
-				Tag:                avs.Image.Tag,
-				Envs:               avs.Envs,
-				ServiceAccountName: serviceAccountName,
-			}
-
-			result, err := performer.Deploy(ctx, image)
-			if err != nil {
-				e.logger.Sugar().Errorw("Failed to deploy performer during startup",
+			if _, _, err := e.createAndInitializePerformer(ctx, avs); err != nil {
+				e.logger.Sugar().Errorw("Failed to create and initialize AVS performer",
 					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentMode", string(e.config.DeploymentMode)),
+					zap.String("processType", avs.ProcessType),
 					zap.Error(err),
 				)
-			} else {
-				e.logger.Sugar().Infow("AVS performer deployed successfully",
-					zap.String("avsAddress", avsAddress),
-					zap.String("deploymentMode", string(e.config.DeploymentMode)),
-					zap.String("deploymentId", result.ID),
-					zap.String("performerId", result.PerformerID),
-				)
-			}
-
-			e.avsPerformers[avsAddress] = performer
-
-			// Save performer state to storage
-			performerState := &storage.PerformerState{
-				PerformerId:        result.PerformerID,
-				AvsAddress:         avsAddress,
-				ContainerId:        result.ID,
-				Status:             "running",
-				ArtifactRegistry:   avs.Image.Repository,
-				ArtifactTag:        avs.Image.Tag,
-				ArtifactDigest:     "", // Not available during initialization
-				DeploymentMode:     e.config.DeploymentMode.String(),
-				CreatedAt:          result.StartTime,
-				LastHealthCheck:    result.EndTime,
-				ContainerHealthy:   true,
-				ApplicationHealthy: true,
-			}
-			if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
-				e.logger.Sugar().Warnw("Failed to save performer state to storage",
-					"error", err,
-					"performerId", result.PerformerID,
-				)
+				return fmt.Errorf("failed to create and initialize AVS performer: %v", err)
 			}
 
 		default:
@@ -234,6 +180,74 @@ func (e *Executor) Initialize(ctx context.Context) error {
 	}()
 
 	return nil
+}
+
+func (e *Executor) createAndInitializePerformer(ctx context.Context, avs *executorConfig.AvsPerformerConfig) (avsPerformer.IAvsPerformer, *avsPerformer.DeploymentResult, error) {
+	avsAddress := strings.ToLower(avs.AvsAddress)
+
+	performer, err := e.createPerformer(avs, avsAddress)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create AVS performer for %s: %v", avs.ProcessType, err)
+	}
+
+	err = performer.Initialize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var serviceAccountName string
+	if avs.Kubernetes != nil && avs.Kubernetes.ServiceAccountName != "" {
+		serviceAccountName = avs.Kubernetes.ServiceAccountName
+	}
+
+	// Deploy performer using the performer's Deploy method
+	image := avsPerformer.PerformerImage{
+		Repository:         avs.Image.Repository,
+		Tag:                avs.Image.Tag,
+		Envs:               avs.Envs,
+		ServiceAccountName: serviceAccountName,
+	}
+
+	result, err := performer.Deploy(ctx, image)
+	if err != nil {
+		e.logger.Sugar().Errorw("Failed to deploy performer during startup",
+			zap.String("avsAddress", avsAddress),
+			zap.String("deploymentMode", string(e.config.DeploymentMode)),
+			zap.Error(err),
+		)
+	} else {
+		e.logger.Sugar().Infow("AVS performer deployed successfully",
+			zap.String("avsAddress", avsAddress),
+			zap.String("deploymentMode", string(e.config.DeploymentMode)),
+			zap.String("deploymentId", result.ID),
+			zap.String("performerId", result.PerformerID),
+		)
+	}
+
+	e.avsPerformers[avsAddress] = performer
+
+	// Save performer state to storage
+	performerState := &storage.PerformerState{
+		PerformerId:        result.PerformerID,
+		AvsAddress:         avsAddress,
+		ContainerId:        result.ID,
+		Status:             "running",
+		ArtifactRegistry:   avs.Image.Repository,
+		ArtifactTag:        avs.Image.Tag,
+		ArtifactDigest:     "", // Not available during initialization
+		DeploymentMode:     e.config.DeploymentMode.String(),
+		CreatedAt:          result.StartTime,
+		LastHealthCheck:    result.EndTime,
+		ContainerHealthy:   true,
+		ApplicationHealthy: true,
+	}
+	if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+		e.logger.Sugar().Warnw("Failed to save performer state to storage",
+			"error", err,
+			"performerId", result.PerformerID,
+		)
+	}
+	return performer, result, nil
 }
 
 // createPerformer creates an AVS performer based on the deployment mode

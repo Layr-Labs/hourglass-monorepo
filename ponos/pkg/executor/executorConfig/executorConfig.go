@@ -159,11 +159,12 @@ func (apc *AvsPerformerKubernetesConfig) Validate() error {
 }
 
 type AvsPerformerConfig struct {
-	Image       *PerformerImage
-	ProcessType string
-	AvsAddress  string
-	Envs        []config.AVSPerformerEnv
-	Kubernetes  *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
+	Image                *PerformerImage
+	ProcessType          string
+	AvsAddress           string
+	Envs                 []config.AVSPerformerEnv
+	PerformerNetworkName string
+	Kubernetes           *AvsPerformerKubernetesConfig `json:"kubernetes,omitempty" yaml:"kubernetes,omitempty"`
 }
 
 func (ap *AvsPerformerConfig) Validate(deploymentMode DeploymentMode) error {

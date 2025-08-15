@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
 	"strings"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
@@ -39,20 +39,71 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 	if req.GetAvsAddress() == "" {
 		return "AVS address is required"
 	}
-	if req.GetDigest() == "" {
+	image := req.GetImage()
+	if image == nil {
+		return "Image is required"
+	}
+	if image.GetTag() == "" {
 		return "Artifact digest is required"
 	}
-	if req.GetRegistryUrl() == "" {
-		return "Registry URL is required"
+	if image.GetRepository() == "" {
+		return "Image repository is required"
 	}
 	return ""
+}
+
+func (e *Executor) convertPerformerK8sConfigFromProto(k8sCfg *executorV1.KubernetesConfig) *executorConfig.AvsPerformerKubernetesConfig {
+	if k8sCfg == nil {
+		return nil
+	}
+
+	return &executorConfig.AvsPerformerKubernetesConfig{
+		ServiceAccountName: k8sCfg.GetServiceAccountName(),
+	}
+}
+
+func (e *Executor) convertEnvsFromProto(reqEnvs []*executorV1.PerformerEnv) []config.AVSPerformerEnv {
+	if reqEnvs == nil {
+		return nil
+	}
+
+	envs := make([]config.AVSPerformerEnv, 0, len(reqEnvs))
+
+	for _, reqE := range reqEnvs {
+		e := config.AVSPerformerEnv{
+			Name:         reqE.GetName(),
+			Value:        reqE.GetValue(),
+			ValueFromEnv: reqE.GetValueFromEnv(),
+		}
+		k8sEnv := reqE.GetKubernetesEnv()
+		if k8sEnv != nil && k8sEnv.GetValueFrom() != nil {
+			valueFrom := k8sEnv.GetValueFrom()
+			e.KubernetesEnv = &config.KubernetesEnv{
+				ValueFrom: config.ValueFrom{},
+			}
+			if valueFrom.GetSecretKeyRef() != nil {
+				e.KubernetesEnv.ValueFrom.SecretKeyRef = config.SecretKeyRef{
+					Name: valueFrom.GetSecretKeyRef().GetName(),
+					Key:  valueFrom.GetSecretKeyRef().GetKey(),
+				}
+			}
+			if valueFrom.GetConfigMapKeyRef() != nil {
+				e.KubernetesEnv.ValueFrom.ConfigMapKeyRef = config.ConfigMapKeyRef{
+					Name: valueFrom.GetConfigMapKeyRef().GetName(),
+					Key:  valueFrom.GetConfigMapKeyRef().GetKey(),
+				}
+			}
+		}
+		envs = append(envs, e)
+	}
+	return envs
 }
 
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
 	e.logger.Info("Received deploy artifact request",
 		zap.String("avsAddress", req.AvsAddress),
-		zap.String("digest", req.Digest),
-		zap.String("registryUrl", req.RegistryUrl),
+		zap.String("digest", req.GetImage().GetTag()),
+		zap.String("registryUrl", req.GetImage().GetTag()),
 	)
 
 	// Verify authentication
@@ -81,22 +132,13 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	avsAddress := strings.ToLower(req.AvsAddress)
 
-	// Find or create the AVS performer
-	performer, err := e.getOrCreateAvsPerformer(ctx, avsAddress)
-	if err != nil {
-		return &executorV1.DeployArtifactResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to get or create AVS performer: %v", err),
-		}, status.Error(codes.Internal, err.Error())
-	}
-
 	// Create deployment record in storage
 	deploymentId := fmt.Sprintf("deployment-%s-%d", avsAddress, time.Now().UnixNano())
 	deploymentInfo := &storage.DeploymentInfo{
 		DeploymentId:     deploymentId,
 		AvsAddress:       avsAddress,
-		ArtifactRegistry: req.GetRegistryUrl(),
-		ArtifactDigest:   req.GetDigest(),
+		ArtifactRegistry: req.GetImage().GetRepository(),
+		ArtifactDigest:   req.GetImage().GetTag(),
 		Status:           storage.DeploymentStatusPending,
 		StartedAt:        time.Now(),
 		CompletedAt:      nil,
@@ -109,46 +151,16 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		)
 	}
 
-	// Deploy using the performer's Deploy method
-	image := avsPerformer.PerformerImage{
-		Repository: req.GetRegistryUrl(),
-		Digest:     req.GetDigest(),
-		Envs: util.Map(req.GetEnv(), func(env *executorV1.PerformerEnv, i uint64) config.AVSPerformerEnv {
-			performerEnv := config.AVSPerformerEnv{
-				Name:         env.GetName(),
-				Value:        env.GetValue(),
-				ValueFromEnv: env.GetValueFromEnv(),
-			}
-			// Map Kubernetes environment variables if present
-			if env.GetKubernetesEnv() != nil && env.GetKubernetesEnv().GetValueFrom() != nil {
-				performerEnv.KubernetesEnv = &config.KubernetesEnv{
-					ValueFrom: struct {
-						SecretKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"secretKeyRef" yaml:"secretKeyRef"`
-						ConfigMapKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
-					}{},
-				}
-				if env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef() != nil {
-					performerEnv.KubernetesEnv.ValueFrom.SecretKeyRef.Name = env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef().GetName()
-					performerEnv.KubernetesEnv.ValueFrom.SecretKeyRef.Key = env.GetKubernetesEnv().GetValueFrom().GetSecretKeyRef().GetKey()
-				}
-				if env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef() != nil {
-					performerEnv.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name = env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef().GetName()
-					performerEnv.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key = env.GetKubernetesEnv().GetValueFrom().GetConfigMapKeyRef().GetKey()
-				}
-			}
-			return performerEnv
-		}),
-	}
-
-	// Set Kubernetes service account if provided
-	if req.GetKubernetes() != nil && req.GetKubernetes().GetServiceAccountName() != "" {
-		image.ServiceAccountName = req.GetKubernetes().GetServiceAccountName()
+	// Find or create the AVS performer
+	performerConfig := &executorConfig.AvsPerformerConfig{
+		Image: &executorConfig.PerformerImage{
+			Repository: req.GetImage().GetRepository(),
+			Tag:        req.GetImage().GetTag(),
+		},
+		ProcessType: req.GetProcessType(),
+		AvsAddress:  req.GetAvsAddress(),
+		Envs:        e.convertEnvsFromProto(req.GetEnvs()),
+		Kubernetes:  e.convertPerformerK8sConfigFromProto(req.GetKubernetes()),
 	}
 
 	// Update deployment status to deploying
@@ -159,7 +171,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		)
 	}
 
-	result, err := performer.Deploy(ctx, image)
+	// create and deploy
+	_, result, err := e.getOrCreateAvsPerformer(ctx, performerConfig)
 	if err != nil {
 		// Update deployment status to failed
 		if updateErr := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusFailed); updateErr != nil {
@@ -187,8 +200,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		// Log the error with full context
 		e.logger.Error("Deployment failed",
 			zap.String("avsAddress", avsAddress),
-			zap.String("registryUrl", req.GetRegistryUrl()),
-			zap.String("digest", req.GetDigest()),
+			zap.String("registryUrl", req.GetImage().GetRepository()),
+			zap.String("digest", req.GetImage().GetTag()),
 			zap.Error(err),
 		)
 
@@ -213,28 +226,6 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		)
 	}
 
-	// Save performer state
-	performerState := &storage.PerformerState{
-		PerformerId:        result.PerformerID,
-		AvsAddress:         avsAddress,
-		ContainerId:        result.ID,
-		Status:             "running",
-		ArtifactRegistry:   req.GetRegistryUrl(),
-		ArtifactTag:        "", // Not available from request
-		ArtifactDigest:     req.GetDigest(),
-		DeploymentMode:     "docker", // Default for now
-		CreatedAt:          result.StartTime,
-		LastHealthCheck:    result.EndTime,
-		ContainerHealthy:   true,
-		ApplicationHealthy: true,
-	}
-	if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
-		e.logger.Sugar().Warnw("Failed to save performer state to storage",
-			"error", err,
-			"performerId", result.PerformerID,
-		)
-	}
-
 	return &executorV1.DeployArtifactResponse{
 		Success:      true,
 		Message:      result.Message,
@@ -243,43 +234,30 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 }
 
 // getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
-func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsConfig *executorConfig.AvsPerformerConfig) (avsPerformer.IAvsPerformer, *avsPerformer.DeploymentResult, error) {
+	avsAddress := strings.ToLower(avsConfig.AvsAddress)
 	// Check if performer already exists
 	performer, ok := e.avsPerformers[avsAddress]
 	if ok {
-		return performer, nil
+		return performer, nil, nil
 	}
 
 	// Create new AVS performer for this address
 	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
 
-	// Create config without image info - will be deployed via Deploy method
-	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:           avsAddress,
-		ProcessType:          avsPerformer.AvsProcessTypeServer,
-		Image:                avsPerformer.PerformerImage{},
-		PerformerNetworkName: e.config.PerformerNetworkName,
-	}
+	avsConfig.PerformerNetworkName = e.config.PerformerNetworkName
 
-	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
-		config,
-		e.peeringFetcher,
-		e.l1ContractCaller,
-		e.logger,
-	)
+	newPerformer, result, err := e.createAndInitializePerformer(ctx, avsConfig)
+
 	if err != nil {
-		return nil, err
+		e.logger.Error("Failed to create and initialize AVS performer",
+			zap.String("avsAddress", avsAddress),
+			zap.Error(err),
+		)
+		return nil, nil, fmt.Errorf("failed to create AVS performer: %w", err)
 	}
 
-	// Initialize the performer (fetches aggregator peers, but won't create container)
-	if err := newPerformer.Initialize(ctx); err != nil {
-		return nil, fmt.Errorf("failed to initialize AVS performer: %w", err)
-	}
-
-	// Add to performers map
-	e.avsPerformers[avsAddress] = newPerformer
-
-	return newPerformer, nil
+	return newPerformer, result, nil
 }
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
