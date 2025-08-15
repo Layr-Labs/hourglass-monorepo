@@ -59,7 +59,6 @@ type AggregatorDeployer struct {
 }
 
 func deployAggregatorAction(c *cli.Context) error {
-	// Get context and validate
 	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
 	log := logger.FromContext(c.Context)
 
@@ -71,13 +70,11 @@ func deployAggregatorAction(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
-	// Get contract client
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Create platform deployer
 	platform := NewPlatformDeployer(
 		currentCtx,
 		log,
@@ -89,7 +86,6 @@ func deployAggregatorAction(c *cli.Context) error {
 		c.StringSlice("env"),
 	)
 
-	// Create aggregator deployer
 	deployer := &AggregatorDeployer{
 		PlatformDeployer: platform,
 		networkMode:      c.String("network"),
@@ -101,43 +97,35 @@ func deployAggregatorAction(c *cli.Context) error {
 
 // Deploy executes the aggregator deployment
 func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
-	// Step 1: Fetch runtime specification
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Step 2: Extract aggregator component
 	component, err := d.ExtractComponent(spec, "aggregator")
 	if err != nil {
 		return err
 	}
 
-	// Step 3: Prepare environment configuration
-	cfg := d.PrepareEnvironmentConfig()
+	cfg := &DeploymentConfig{
+		Env: d.LoadEnvironmentVariables(),
+	}
 
-	// Step 4: Validate configuration using component spec
-	if err := ValidateComponentSpec(component, cfg.FinalEnvMap); err != nil {
+	if err := ValidateComponentSpec(component, cfg.Env); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Step 5: Validate signer configuration
-	if err := ValidateSignerConfig(cfg.FinalEnvMap); err != nil {
+	keystoreName := cfg.Env[config.KeystoreName]
+	keystorePassword := cfg.Env[config.KeystorePassword]
+	var keystore *config.KeystoreReference
+	if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
 		return fmt.Errorf("signer validation failed: %w", err)
 	}
 
-	// Step 6: Validate keystore
-	keystoreName := cfg.FinalEnvMap["KEYSTORE_NAME"]
-	if _, err := d.ValidateKeystore(keystoreName); err != nil {
-		return err
-	}
-
-	// Step 6: Handle dry-run
 	if d.dryRun {
 		return d.handleDryRun(cfg, component.Registry, component.Digest)
 	}
 
-	// Step 7: Create temp directories
 	tempCfg, err := d.CreateTempDirectories("aggregator")
 	if err != nil {
 		return err
@@ -147,41 +135,20 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	cfg.ConfigDir = tempCfg.ConfigDir
 	cfg.KeystoreDir = tempCfg.KeystoreDir
 
-	// Step 8: Generate configuration files
 	if err := d.generateConfiguration(cfg); err != nil {
 		return err
 	}
 
-	// Step 9: Deploy container
-	return d.deployContainer(component, cfg)
-}
-
-// handleDryRun handles the dry-run scenario
-func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
-	d.Log.Info("✅ Dry run successful - aggregator configuration is valid")
-
-	// Display configuration summary
-	d.Log.Info("Configuration:",
-		zap.String("keystoreName", cfg.FinalEnvMap["KEYSTORE_NAME"]),
-		zap.String("operatorAddress", cfg.FinalEnvMap["OPERATOR_ADDRESS"]),
-		zap.String("avsAddress", cfg.FinalEnvMap["AVS_ADDRESS"]),
-		zap.String("registry", registry),
-		zap.String("digest", digest),
-		zap.String("network", d.networkMode))
-
-	fmt.Println("\n✅ Configuration is valid. Run without --dry-run to deploy.")
-	return nil
+	return d.deployContainer(component, keystore, cfg)
 }
 
 // generateConfiguration generates aggregator configuration files
 func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
-	// Generate aggregator configuration using ConfigBuilder
-	aggregatorConfig, err := templates.BuildAggregatorConfig(cfg.FinalEnvMap)
+	aggregatorConfig, err := templates.BuildAggregatorConfig(cfg.Env)
 	if err != nil {
 		return fmt.Errorf("failed to build aggregator config: %w", err)
 	}
 
-	// Write aggregator config
 	cfg.ConfigPath = filepath.Join(cfg.ConfigDir, "aggregator.yaml")
 	if err := os.WriteFile(cfg.ConfigPath, aggregatorConfig, 0600); err != nil {
 		return fmt.Errorf("failed to write aggregator config: %w", err)
@@ -189,7 +156,6 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 
 	d.Log.Info("Configuration written to", zap.String("path", cfg.ConfigPath))
 
-	// Verify config file
 	if stat, err := os.Stat(cfg.ConfigPath); err != nil {
 		return fmt.Errorf("failed to stat config file: %w", err)
 	} else {
@@ -200,58 +166,66 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 }
 
 // deployContainer handles the aggregator-specific container deployment
-func (d *AggregatorDeployer) deployContainer(component *runtime.ComponentSpec, cfg *DeploymentConfig) error {
-	// Prepare container configuration
-	containerName := fmt.Sprintf("hgctl-aggregator-%s", cfg.EnvMap["AVS_ADDRESS"])
+func (d *AggregatorDeployer) deployContainer(
+	component *runtime.ComponentSpec,
+	keystore *config.KeystoreReference,
+	cfg *DeploymentConfig,
+) error {
+
+	containerName := fmt.Sprintf("hgctl-aggregator-%s-%s", d.Context.Name, d.Context.AVSAddress)
 	imageRef := fmt.Sprintf("%s@%s", component.Registry, component.Digest)
 
-	// Pull the image
 	if err := d.PullDockerImage(imageRef, "aggregator"); err != nil {
 		return err
 	}
 
-	// Stop and remove existing container
 	d.CleanupExistingContainer(containerName)
 
-	// Build docker arguments
 	dockerArgs := d.BuildDockerArgs(containerName, component, cfg)
 
-	// Add aggregator-specific options
 	if d.networkMode != "" {
-		// Insert network mode after "run" but before other flags
 		dockerArgs = append(dockerArgs[:2], append([]string{"--network", d.networkMode}, dockerArgs[2:]...)...)
 	}
 
-	// Add management port mapping
-	mgmtPort := cfg.FinalEnvMap["AGGREGATOR_MGMT_PORT"]
+	mgmtPort := cfg.Env["AGGREGATOR_MGMT_PORT"]
 	if mgmtPort == "" {
-		mgmtPort = "9010" // Default from aggregator-config.yaml template
+		mgmtPort = "9010"
 	}
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
 	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
 
-	// Mount keystores
-	if err := d.MountKeystores(&dockerArgs, cfg.FinalEnvMap["KEYSTORE_NAME"]); err != nil {
+	if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
 		return err
 	}
 
-	// Inject file contents as environment variables (for legacy support)
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
 
-	// Add image
 	dockerArgs = append(dockerArgs, imageRef)
 
-	// Override command to use our config file
 	dockerArgs = append(dockerArgs, "aggregator", "run", "--config", "/config/aggregator.yaml")
 
-	// Run the container
 	containerID, err := d.RunDockerContainer(dockerArgs, "aggregator")
 	if err != nil {
 		return err
 	}
 
-	// Print success message
 	d.printSuccessMessage(containerName, containerID, cfg)
+	return nil
+}
+
+// handleDryRun handles the dry-run scenario
+func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
+	d.Log.Info("✅ Dry run successful - aggregator configuration is valid")
+
+	d.Log.Info("Configuration:",
+		zap.String("keystoreName", cfg.Env[config.KeystoreName]),
+		zap.String("operatorAddress", d.Context.OperatorAddress),
+		zap.String("avsAddress", d.Context.AVSAddress),
+		zap.String("registry", registry),
+		zap.String("digest", digest),
+		zap.String("network", d.networkMode))
+
+	fmt.Println("\n✅ Configuration is valid. Run without --dry-run to deploy.")
 	return nil
 }
 

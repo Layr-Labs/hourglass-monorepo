@@ -16,6 +16,8 @@ var (
 	EnvKey            contextKey = "env"
 	ContractClientKey contextKey = "contractClient"
 	LoggerKey         contextKey = "loggerKey"
+	KeystoreName      string     = "KEYSTORE_NAME"
+	KeystorePassword  string     = "KEYSTORE_PASSWORD"
 )
 
 type KeystoreReference struct {
@@ -42,19 +44,15 @@ type ContractOverrides struct {
 
 type Context struct {
 	Name            string `yaml:"-"`
-	ExecutorAddress string `yaml:"executorAddress"`
+	ExecutorAddress string `yaml:"executorAddress,omitempty"`
 	AVSAddress      string `yaml:"avsAddress,omitempty"`
-	OperatorAddress string `yaml:"operatorAddress"`
+	OperatorAddress string `yaml:"operatorAddress,omitempty"`
 	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
 	NetworkID       uint64 `yaml:"networkId,omitempty"`
 	L1RPCUrl        string `yaml:"rpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
 	PrivateKey string `yaml:"-"`
-
-	// Environment variables for deployments (non-secret values only)
-	// Secrets should be provided at runtime via flags or environment variables
-	EnvironmentVars map[string]string `yaml:"environmentVars,omitempty"`
 
 	// Path to secrets file (e.g., .env.secrets)
 	EnvSecretsPath string `yaml:"envSecretsPath"` // Remove omitempty to preserve field
@@ -196,11 +194,6 @@ func (c *Context) ToMap() map[string]interface{} {
 
 	if c.EnvSecretsPath != "" {
 		result["env-secrets-path"] = c.EnvSecretsPath
-	}
-
-	// Add environment variables if any
-	if len(c.EnvironmentVars) > 0 {
-		result["env"] = c.EnvironmentVars
 	}
 
 	// Add env secrets path if set

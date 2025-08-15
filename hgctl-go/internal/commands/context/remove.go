@@ -2,13 +2,9 @@ package context
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
-
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/urfave/cli/v2"
 )
 
 func removeCommand() *cli.Command {
@@ -143,33 +139,6 @@ func contextRemoveAction(c *cli.Context) error {
 			ctx.EnvSecretsPath = ""
 			removed = true
 			log.Info("Removed env secrets path")
-		}
-	}
-
-	// Handle environment variables removal
-	if c.Bool("all-env") {
-		if len(ctx.EnvironmentVars) > 0 {
-			ctx.EnvironmentVars = nil
-			removed = true
-			log.Info("Removed all environment variables")
-		}
-	} else {
-		envKeys := c.StringSlice("env")
-		if len(envKeys) > 0 && ctx.EnvironmentVars != nil {
-			for _, key := range envKeys {
-				key = strings.TrimSpace(key)
-				if _, exists := ctx.EnvironmentVars[key]; exists {
-					delete(ctx.EnvironmentVars, key)
-					removed = true
-					log.Info("Removed environment variable", zap.String("key", key))
-				} else {
-					log.Warn("Environment variable not found", zap.String("key", key))
-				}
-			}
-			// Clean up empty map
-			if len(ctx.EnvironmentVars) == 0 {
-				ctx.EnvironmentVars = nil
-			}
 		}
 	}
 
