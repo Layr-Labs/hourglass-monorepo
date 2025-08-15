@@ -121,6 +121,11 @@ func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 	akp.performerResourcesMu.Lock()
 	defer akp.performerResourcesMu.Unlock()
 
+	// Ensure namespace exists before any operations
+	if err := akp.kubernetesManager.Initialize(ctx); err != nil {
+		return fmt.Errorf("failed to initialize Kubernetes namespace: %w", err)
+	}
+
 	// Fetch aggregator peer information
 	aggregatorPeers, err := akp.fetchAggregatorPeerInfo(ctx)
 	if err != nil {

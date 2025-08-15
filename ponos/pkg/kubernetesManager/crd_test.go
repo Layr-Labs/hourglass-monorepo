@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -19,6 +20,9 @@ import (
 func createTestScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 
+	// Register core v1 types (including Namespace)
+	corev1.AddToScheme(scheme)
+	
 	// Register our CRD types with the proper GroupVersion
 	gv := schema.GroupVersion{Group: "hourglass.eigenlayer.io", Version: "v1alpha1"}
 	scheme.AddKnownTypes(gv, &PerformerCRD{}, &PerformerList{})
@@ -705,6 +709,118 @@ func TestConvertResourceRequirements(t *testing.T) {
 
 	memoryLimit := k8sReq.Limits[corev1.ResourceMemory]
 	assert.Equal(t, resource.MustParse("512Mi"), memoryLimit)
+}
+
+func TestNamespaceManagement(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	scheme := createTestScheme()
+
+	tests := []struct {
+		name            string
+		namespace       string
+		existingObjects []runtime.Object
+		expectCreation  bool
+		expectError     bool
+	}{
+		{
+			name:           "create namespace when it doesn't exist",
+			namespace:      "test-namespace",
+			expectCreation: true,
+			expectError:    false,
+		},
+		{
+			name:      "namespace already exists",
+			namespace: "existing-namespace",
+			existingObjects: []runtime.Object{
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "existing-namespace",
+					},
+				},
+			},
+			expectCreation: false,
+			expectError:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := NewDefaultConfig()
+			config.Namespace = tt.namespace
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(tt.existingObjects...).
+				Build()
+
+			ops := NewCRDOperations(fakeClient, config, l)
+
+			// Test Initialize method (which calls ensureNamespaceExists)
+			err := ops.Initialize(context.Background())
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+
+				// Verify namespace exists
+				namespace := &corev1.Namespace{}
+				err = fakeClient.Get(context.Background(), types.NamespacedName{Name: tt.namespace}, namespace)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.namespace, namespace.Name)
+
+				if tt.expectCreation {
+					// Verify labels were set
+					assert.Equal(t, "hourglass-executor", namespace.Labels["app.kubernetes.io/name"])
+					assert.Equal(t, "hourglass", namespace.Labels["app.kubernetes.io/part-of"])
+					assert.Equal(t, "hourglass-executor", namespace.Labels["app.kubernetes.io/managed-by"])
+				}
+			}
+		})
+	}
+}
+
+func TestCreatePerformerWithNamespaceCreation(t *testing.T) {
+	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	scheme := createTestScheme()
+
+	config := NewDefaultConfig()
+	config.Namespace = "new-namespace"
+
+	// Create fake client without the namespace
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		Build()
+
+	ops := NewCRDOperations(fakeClient, config, l)
+
+	request := &CreatePerformerRequest{
+		Name:       "test-performer",
+		AVSAddress: "0x123",
+		Image:      "test-image:latest",
+		GRPCPort:   9090,
+	}
+
+	// Create performer (should create namespace first)
+	response, err := ops.CreatePerformer(context.Background(), request)
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+
+	// Verify namespace was created
+	namespace := &corev1.Namespace{}
+	err = fakeClient.Get(context.Background(), types.NamespacedName{Name: config.Namespace}, namespace)
+	assert.NoError(t, err)
+	assert.Equal(t, config.Namespace, namespace.Name)
+
+	// Verify performer was created
+	performer := &PerformerCRD{}
+	err = fakeClient.Get(context.Background(), types.NamespacedName{
+		Name:      request.Name,
+		Namespace: config.Namespace,
+	}, performer)
+	assert.NoError(t, err)
+	assert.Equal(t, request.Name, performer.Name)
+	assert.Equal(t, config.Namespace, performer.Namespace)
 }
 
 func TestParseQuantity(t *testing.T) {
