@@ -261,11 +261,20 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 	// Build environment variables and sources
 	envMap, envVarSources := akp.buildEnvironmentFromImage(image)
 
+	containerImage := image.Repository
+	if image.Tag != "" {
+		containerImage = fmt.Sprintf("%s:%s", image.Repository, image.Tag)
+	}
+	if image.Digest != "" {
+		// If a digest is provided, use it directly
+		containerImage = fmt.Sprintf("%s@%s", image.Repository, image.Digest)
+	}
+
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
 		Name:               performerID,
 		AVSAddress:         akp.config.AvsAddress,
-		Image:              fmt.Sprintf("%s:%s", image.Repository, image.Tag),
+		Image:              containerImage,
 		ImagePullPolicy:    "Never", // Use local images only for testing
 		ImageTag:           image.Tag,
 		ImageDigest:        image.Digest,

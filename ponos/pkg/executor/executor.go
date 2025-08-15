@@ -204,6 +204,7 @@ func (e *Executor) createAndInitializePerformer(ctx context.Context, avs *execut
 	image := avsPerformer.PerformerImage{
 		Repository:         avs.Image.Repository,
 		Tag:                avs.Image.Tag,
+		Digest:             avs.Image.Digest,
 		Envs:               avs.Envs,
 		ServiceAccountName: serviceAccountName,
 	}

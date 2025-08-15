@@ -52,7 +52,6 @@ const (
 // - The test pushes a message to the mailbox and waits for the TaskVerified event to be emitted
 func Test_Aggregator(t *testing.T) {
 	t.Run("Docker", func(t *testing.T) {
-		t.Skip()
 		runAggregatorTest(t, "docker")
 	})
 

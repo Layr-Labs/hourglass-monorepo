@@ -43,11 +43,11 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 	if image == nil {
 		return "Image is required"
 	}
-	if image.GetDigest() == "" {
-		return "Artifact digest is required"
-	}
 	if image.GetRegistry() == "" {
 		return "Image registry is required"
+	}
+	if image.GetDigest() == "" && image.GetTag() == "" {
+		return "Either artifact digest or tag is required"
 	}
 	return ""
 }
@@ -155,7 +155,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	performerConfig := &executorConfig.AvsPerformerConfig{
 		Image: &executorConfig.PerformerImage{
 			Repository: req.GetImage().GetRegistry(),
-			Tag:        req.GetImage().GetDigest(),
+			Tag:        req.GetImage().GetTag(),
+			Digest:     req.GetImage().GetDigest(),
 		},
 		ProcessType: req.GetProcessType(),
 		AvsAddress:  req.GetAvsAddress(),

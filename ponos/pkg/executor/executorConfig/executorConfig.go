@@ -145,6 +145,7 @@ func NewDefaultKubernetesConfig() *KubernetesConfig {
 type PerformerImage struct {
 	Repository string
 	Tag        string
+	Digest     string
 }
 
 // AvsPerformerKubernetesConfig contains Kubernetes-specific configuration for an AVS performer
