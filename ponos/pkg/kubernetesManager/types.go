@@ -11,6 +11,9 @@ type Config struct {
 	// Namespace is the Kubernetes namespace to operate in
 	Namespace string `json:"namespace" yaml:"namespace"`
 
+	// GenerateNamespace indicates if the namespace name should be generated to override Namespace
+	GenerateNamespace bool `json:"generateNamespace,omitempty" yaml:"generateNamespace,omitempty"`
+
 	// KubeconfigPath is the path to the kubeconfig file (optional, defaults to in-cluster)
 	KubeconfigPath string `json:"kubeconfigPath,omitempty" yaml:"kubeconfigPath,omitempty"`
 

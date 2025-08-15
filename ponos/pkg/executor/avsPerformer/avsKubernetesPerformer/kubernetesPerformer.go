@@ -77,6 +77,11 @@ type AvsKubernetesPerformer struct {
 	activeDeploymentMu sync.Mutex
 }
 
+func generatePerformerNamespace(performerConfig *avsPerformer.AvsPerformerConfig) string {
+	shortAvsAddress := strings.ToLower(performerConfig.AvsAddress[:8])
+	return fmt.Sprintf("hg-perf-%s", shortAvsAddress)
+}
+
 // NewAvsKubernetesPerformer creates a new Kubernetes-based AVS performer
 func NewAvsKubernetesPerformer(
 	config *avsPerformer.AvsPerformerConfig,
@@ -85,7 +90,6 @@ func NewAvsKubernetesPerformer(
 	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsKubernetesPerformer, error) {
-
 	// Initialize Kubernetes client
 	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
 	if err != nil {
@@ -98,6 +102,16 @@ func NewAvsKubernetesPerformer(
 
 	if err := clientWrapper.TestConnection(ctx); err != nil {
 		logger.Warn("Failed to test Kubernetes connection, continuing anyway", zap.Error(err))
+	}
+
+	if kubernetesConfig.GenerateNamespace {
+		originalNamespace := kubernetesConfig.Namespace
+		kubernetesConfig.Namespace = generatePerformerNamespace(config)
+		logger.Sugar().Infow("Overriding Kubernetes namespace for performer",
+			zap.String("avsAddress", config.AvsAddress),
+			zap.String("originalNamespace", originalNamespace),
+			zap.String("namespace", kubernetesConfig.Namespace),
+		)
 	}
 
 	// Create CRD operations manager

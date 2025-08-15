@@ -275,6 +275,7 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		CRDVersion:        e.config.Kubernetes.CRDVersion,
 		ConnectionTimeout: e.config.Kubernetes.ConnectionTimeout,
 		KubeconfigPath:    e.config.Kubernetes.KubeConfigPath,
+		GenerateNamespace: e.config.Kubernetes.GenerateNamespace,
 	}
 
 	var endpointOverride string

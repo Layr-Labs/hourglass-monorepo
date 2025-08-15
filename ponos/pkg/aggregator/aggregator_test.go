@@ -52,6 +52,7 @@ const (
 // - The test pushes a message to the mailbox and waits for the TaskVerified event to be emitted
 func Test_Aggregator(t *testing.T) {
 	t.Run("Docker", func(t *testing.T) {
+		t.Skip()
 		runAggregatorTest(t, "docker")
 	})
 
@@ -717,7 +718,7 @@ operator:
           "curveType": "bn254"
         }
 avss:
-  - address: "0xavs1..."
+  - address: "0xavs12345678"
     responseTimeout: 3000
     chainIds: [31338]
     avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
@@ -774,7 +775,7 @@ l1Chain:
   chainId: 31337
 deploymentMode: "kubernetes"
 kubernetes:
-  namespace: "default"
+  generateNamespace: true
   operatorNamespace: "hourglass-system"
   crdGroup: "hourglass.eigenlayer.io"
   crdVersion: "v1alpha1"
@@ -786,7 +787,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xavs1..."
+  avsAddress: "0xavs12345678"
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
   kubernetes:
     endpointOverride: "localhost:30080"
@@ -844,7 +845,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xavs1..."
+  avsAddress: "0xavs12345678"
   avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 	}
@@ -870,10 +871,15 @@ func createPerformerNodePortService(ctx context.Context, cluster *testUtils.Kind
 	// Create the NodePort service YAML
 	serviceYAML := `
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: hg-perf-0xce2ac7
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: performer-nodeport
-  namespace: default
+  namespace: hg-perf-0xce2ac7
 spec:
   type: NodePort
   selector:

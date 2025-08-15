@@ -38,6 +38,9 @@ type KubernetesConfig struct {
 	// Namespace is the Kubernetes namespace where performers will be deployed
 	Namespace string `json:"namespace" yaml:"namespace"`
 
+	// GenerateNamespace tells the Executor to be responsible for creating the namespace for the performer
+	GenerateNamespace bool `json:"generateNamespace,omitempty" yaml:"generateNamespace,omitempty"`
+
 	// OperatorNamespace is the namespace where the Hourglass operator is deployed
 	OperatorNamespace string `json:"operatorNamespace" yaml:"operatorNamespace"`
 
@@ -96,7 +99,7 @@ func (k *KubernetesConfig) UnmarshalJSON(data []byte) error {
 func (kc *KubernetesConfig) Validate() error {
 	var allErrors field.ErrorList
 
-	if kc.Namespace == "" {
+	if kc.Namespace == "" && !kc.GenerateNamespace {
 		allErrors = append(allErrors, field.Required(field.NewPath("namespace"), "namespace is required"))
 	}
 
