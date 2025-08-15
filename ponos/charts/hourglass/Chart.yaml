@@ -5,7 +5,7 @@ description: A Helm chart for Hourglass
 type: application
 
 # chart version
-version: 0.1.0
+version: 0.1.1
 
 # hourglass version
 appVersion: "v1.0.0-rc.3"
