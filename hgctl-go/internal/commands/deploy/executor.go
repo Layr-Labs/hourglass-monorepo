@@ -57,7 +57,6 @@ type ExecutorDeployer struct {
 }
 
 func deployExecutorAction(c *cli.Context) error {
-	// Get context and validate
 	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
 	log := logger.FromContext(c.Context)
 
@@ -74,13 +73,11 @@ func deployExecutorAction(c *cli.Context) error {
 		opSetId = currentCtx.OperatorSetID
 	}
 
-	// Get contract client
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Create platform deployer
 	platform := NewPlatformDeployer(
 		currentCtx,
 		log,
@@ -92,7 +89,6 @@ func deployExecutorAction(c *cli.Context) error {
 		c.StringSlice("env"),
 	)
 
-	// Create executor deployer
 	deployer := &ExecutorDeployer{
 		PlatformDeployer: platform,
 		dryRun:           c.Bool("dry-run"),
@@ -103,38 +99,35 @@ func deployExecutorAction(c *cli.Context) error {
 
 // Deploy executes the executor deployment
 func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
-	// Step 1: Fetch runtime specification
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Step 2: Extract executor component
 	component, err := d.ExtractComponent(spec, "executor")
 	if err != nil {
 		return err
 	}
 
-	// Step 3: Prepare environment configuration
-	cfg := d.PrepareEnvironmentConfig()
+	cfg := &DeploymentConfig{
+		Env: d.LoadEnvironmentVariables(),
+	}
 
-	// Step 4: Validate configuration
-	if err := ValidateComponentSpec(component, cfg.FinalEnvMap); err != nil {
+	if err := ValidateComponentSpec(component, cfg.Env); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Step 5: Validate keystore
-	keystoreName := cfg.FinalEnvMap["KEYSTORE_NAME"]
-	if _, err := d.ValidateKeystore(keystoreName); err != nil {
+	keystoreName := cfg.Env[config.KeystoreName]
+	keystorePassword := cfg.Env[config.KeystorePassword]
+	var keystore *config.KeystoreReference
+	if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
 		return err
 	}
 
-	// Step 6: Handle dry-run
 	if d.dryRun {
 		return d.handleDryRun(cfg, component.Registry, component.Digest)
 	}
 
-	// Step 7: Create temp directories
 	tempCfg, err := d.CreateTempDirectories("executor")
 	if err != nil {
 		return err
@@ -144,40 +137,20 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	cfg.ConfigDir = tempCfg.ConfigDir
 	cfg.KeystoreDir = tempCfg.KeystoreDir
 
-	// Step 8: Generate configuration files
 	if err := d.generateConfiguration(cfg); err != nil {
 		return err
 	}
 
-	// Step 9: Deploy container
-	return d.deployContainer(component, cfg)
-}
-
-// handleDryRun handles the dry-run scenario
-func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
-	d.Log.Info("✅ Dry run successful - executor configuration is valid")
-
-	// Display configuration summary
-	d.Log.Info("Configuration:",
-		zap.String("keystoreName", cfg.FinalEnvMap["KEYSTORE_NAME"]),
-		zap.String("operatorAddress", cfg.FinalEnvMap["OPERATOR_ADDRESS"]),
-		zap.String("avsAddress", cfg.FinalEnvMap["AVS_ADDRESS"]),
-		zap.String("registry", registry),
-		zap.String("digest", digest))
-
-	fmt.Println("\n✅ Configuration is valid. Run without --dry-run to deploy.")
-	return nil
+	return d.deployContainer(component, keystore, cfg)
 }
 
 // generateConfiguration generates executor configuration files
 func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
-	// Generate executor configuration using ConfigBuilder
-	executorConfig, err := templates.BuildExecutorConfig(cfg.FinalEnvMap)
+	executorConfig, err := templates.BuildExecutorConfig(cfg.Env)
 	if err != nil {
 		return fmt.Errorf("failed to build executor config: %w", err)
 	}
 
-	// Write executor config
 	cfg.ConfigPath = filepath.Join(cfg.ConfigDir, "executor.yaml")
 	if err := os.WriteFile(cfg.ConfigPath, executorConfig, 0600); err != nil {
 		return fmt.Errorf("failed to write executor config: %w", err)
@@ -185,7 +158,6 @@ func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 
 	d.Log.Info("Configuration written to", zap.String("path", cfg.ConfigPath))
 
-	// Verify config file
 	if stat, err := os.Stat(cfg.ConfigPath); err != nil {
 		return fmt.Errorf("failed to stat config file: %w", err)
 	} else {
@@ -196,48 +168,55 @@ func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 }
 
 // deployContainer handles the executor-specific container deployment
-func (d *ExecutorDeployer) deployContainer(component *runtime.ComponentSpec, cfg *DeploymentConfig) error {
-	// Prepare container configuration
-	containerName := fmt.Sprintf("hgctl-executor-%s", cfg.EnvMap["AVS_ADDRESS"])
+func (d *ExecutorDeployer) deployContainer(
+	component *runtime.ComponentSpec,
+	keystore *config.KeystoreReference,
+	cfg *DeploymentConfig,
+) error {
+	containerName := fmt.Sprintf("hgctl-executor-%s-%s", d.Context.Name, d.Context.AVSAddress)
 	imageRef := fmt.Sprintf("%s@%s", component.Registry, component.Digest)
 
-	// Pull the image
 	if err := d.PullDockerImage(imageRef, "executor"); err != nil {
 		return err
 	}
 
-	// Stop and remove existing container
 	d.CleanupExistingContainer(containerName)
 
-	// Build docker arguments
 	dockerArgs := d.BuildDockerArgs(containerName, component, cfg)
 
-	// Mount keystores
-	if err := d.MountKeystores(&dockerArgs, cfg.FinalEnvMap["KEYSTORE_NAME"]); err != nil {
+	if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
 		return err
 	}
 
-	// Inject file contents as environment variables (for legacy support)
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
 
-	// Override config path environment variable
 	dockerArgs = append(dockerArgs, "-e", "EXECUTOR_CONFIG_PATH=/config/executor.yaml")
 
-	// Add image
 	dockerArgs = append(dockerArgs, imageRef)
 
-	// Always add the executor command - the image has bash as entrypoint
-	// so we need to explicitly run the executor binary
 	dockerArgs = append(dockerArgs, "executor", "run", "--config", "/config/executor.yaml")
 
-	// Run the container
 	containerID, err := d.RunDockerContainer(dockerArgs, "executor")
 	if err != nil {
 		return err
 	}
 
-	// Print success message
 	d.printSuccessMessage(containerName, containerID, cfg)
+	return nil
+}
+
+// handleDryRun handles the dry-run scenario
+func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
+	d.Log.Info("✅ Dry run successful - executor configuration is valid")
+
+	d.Log.Info("Configuration:",
+		zap.String("keystoreName", cfg.Env["KEYSTORE_NAME"]),
+		zap.String("operatorAddress", d.Context.OperatorAddress),
+		zap.String("avsAddress", d.Context.AVSAddress),
+		zap.String("registry", registry),
+		zap.String("digest", digest))
+
+	fmt.Println("\n✅ Configuration is valid. Run without --dry-run to deploy.")
 	return nil
 }
 

@@ -2,8 +2,6 @@ package context
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
@@ -112,28 +110,6 @@ func contextSetAction(c *cli.Context) error {
 		ctx.L1RPCUrl = url
 		updated = true
 		log.Info("Updated RPC URL", zap.String("url", url))
-	}
-
-	// Handle environment variables
-	envFlags := c.StringSlice("env")
-	if len(envFlags) > 0 {
-		if ctx.EnvironmentVars == nil {
-			ctx.EnvironmentVars = make(map[string]string)
-		}
-
-		for _, env := range envFlags {
-			parts := strings.SplitN(env, "=", 2)
-			if len(parts) != 2 {
-				return fmt.Errorf("invalid env format: %s (expected KEY=VALUE)", env)
-			}
-
-			key := parts[0]
-			value := parts[1]
-
-			ctx.EnvironmentVars[key] = value
-			log.Info("Set environment variable", zap.String("key", key))
-			updated = true
-		}
 	}
 
 	// Handle contract addresses

@@ -23,7 +23,7 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "deploy",
-		Usage: "Deploy resources",
+		Usage: "Deploy hourglass components",
 		Subcommands: []*cli.Command{
 			performerCommand(),
 			executorCommand(),
@@ -50,8 +50,7 @@ type DeploymentConfig struct {
 	ConfigDir   string
 	KeystoreDir string
 	ConfigPath  string
-	FinalEnvMap map[string]string
-	EnvMap      map[string]string
+	Env         map[string]string
 }
 
 // DeploymentArtifact represents a deployment artifact
@@ -117,26 +116,9 @@ func (d *PlatformDeployer) ExtractComponent(spec *runtime.Spec, componentName st
 	return &component, nil
 }
 
-// PrepareEnvironmentConfig prepares the environment configuration
-func (d *PlatformDeployer) PrepareEnvironmentConfig() *DeploymentConfig {
-	envMap := d.LoadEnvironmentVariables()
-
-	// Set AVS address
-	envMap["AVS_ADDRESS"] = d.AVSAddress
-	return &DeploymentConfig{
-		EnvMap:      envMap,
-		FinalEnvMap: envMap,
-	}
-}
-
 // LoadEnvironmentVariables loads environment variables from all sources with proper precedence
 func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 	envVars := make(map[string]string)
-
-	// 1. Start with context environment variables
-	for k, v := range d.Context.EnvironmentVars {
-		envVars[k] = v
-	}
 
 	// Add operator address from context as default if not already set
 	if d.Context.OperatorAddress != "" {
@@ -154,12 +136,12 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// 2. Load from env file if specified
+	// 1. Load from env file if specified
 	if d.EnvFile != "" {
 		d.loadEnvFile(d.EnvFile, envVars)
 	}
 
-	// 3. Apply command-line env overrides
+	// 2. Apply command-line env overrides
 	for _, env := range d.EnvFlags {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
@@ -167,7 +149,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// 4. Add system environment variables as fallback
+	// 3. Add system environment variables as fallback
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
@@ -177,10 +159,10 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// 5. Load from env secrets file if configured (highest priority)
+	// 4. Load from env secrets file if configured (highest priority)
 	if d.Context.EnvSecretsPath != "" {
 		secretsPath := d.expandPath(d.Context.EnvSecretsPath)
-		d.Log.Info("Loading environment from secrets file", zap.String("path", secretsPath))
+		d.Log.Info("Loading environment from secrets file")
 		d.loadEnvFile(secretsPath, envVars)
 	}
 
@@ -216,9 +198,19 @@ func (d *PlatformDeployer) CreateTempDirectories(componentType string) (*Deploym
 }
 
 // ValidateKeystore validates that a keystore exists and is accessible
-func (d *PlatformDeployer) ValidateKeystore(keystoreName string) (*config.KeystoreReference, error) {
+func (d *PlatformDeployer) ValidateKeystore(keystoreName string, keystorePassword string) (*config.KeystoreReference, error) {
+	var missing []string
+
+	// Check for keystore configuration
 	if keystoreName == "" {
-		return nil, fmt.Errorf("KEYSTORE_NAME environment variable is required")
+		missing = append(missing, "KEYSTORE_NAME")
+	}
+	if keystorePassword == "" {
+		missing = append(missing, "KEYSTORE_PASSWORD")
+	}
+
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing required signer configuration:\n  - %s", strings.Join(missing, "\n  - "))
 	}
 
 	var foundKeystore *config.KeystoreReference
@@ -286,12 +278,7 @@ func (d *PlatformDeployer) CleanupExistingContainer(containerName string) {
 }
 
 // MountKeystores adds keystore volume mounts to docker arguments
-func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystoreName string) error {
-	keystore, err := d.ValidateKeystore(keystoreName)
-	if err != nil {
-		return err
-	}
-
+func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystore *config.KeystoreReference) error {
 	// Mount the specific keystore file
 	*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:/keystores/operator.keystore.json:ro", keystore.Path))
 

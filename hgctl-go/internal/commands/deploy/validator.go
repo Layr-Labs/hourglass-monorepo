@@ -28,22 +28,3 @@ func ValidateComponentSpec(component *runtime.ComponentSpec, envMap map[string]s
 
 	return nil
 }
-
-// ValidateSignerConfig validates that the required signer configuration is present
-func ValidateSignerConfig(envMap map[string]string) error {
-	var missing []string
-
-	// Check for keystore configuration
-	if envMap["KEYSTORE_NAME"] == "" {
-		missing = append(missing, "KEYSTORE_NAME")
-	}
-	if envMap["KEYSTORE_PASSWORD"] == "" {
-		missing = append(missing, "KEYSTORE_PASSWORD")
-	}
-
-	if len(missing) > 0 {
-		return fmt.Errorf("missing required signer configuration:\n  - %s", strings.Join(missing, "\n  - "))
-	}
-
-	return nil
-}
