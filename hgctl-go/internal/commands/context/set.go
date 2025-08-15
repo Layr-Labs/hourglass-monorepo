@@ -62,6 +62,10 @@ func setCommand() *cli.Command {
 				Name:  "env-secrets-path",
 				Usage: "Set the path to environment secrets file",
 			},
+			&cli.StringFlag{
+				Name:  "signer-key",
+				Usage: "Set the signer keystore name (must be a keystore in this context)",
+			},
 		},
 		Action: contextSetAction,
 	}
@@ -168,6 +172,23 @@ func contextSetAction(c *cli.Context) error {
 		ctx.EnvSecretsPath = path
 		updated = true
 		log.Info("Updated env secrets path", zap.String("path", path))
+	}
+
+	if signerKey := c.String("signer-key"); signerKey != "" {
+		// Validate that the signer key exists in the context's keystores
+		found := false
+		for _, ks := range ctx.Keystores {
+			if ks.Name == signerKey {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("keystore '%s' not found in context '%s'", signerKey, cfg.CurrentContext)
+		}
+		ctx.SignerKey = signerKey
+		updated = true
+		log.Info("Updated signer key", zap.String("signerKey", signerKey))
 	}
 
 	if !updated {

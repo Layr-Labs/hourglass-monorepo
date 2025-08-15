@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/output"
 	"github.com/urfave/cli/v2"
 )
@@ -27,49 +28,55 @@ var (
 
 func showCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "show",
-		Usage: "Used to show existing keys from local keystore",
-		Description: `Used to export ecdsa and bls key from local keystore
-
-keyname - This will be the name of the key to be imported. If the path of keys is
-different from default path created by "create"/"import" command, then provide the
-full path using --key-path flag.
-
-If both keyname is provided and --key-path flag is provided, then keyname will be used. 
-
-use --key-type ecdsa/bn254 to export ecdsa/bn254 key. 
-- ecdsa - exported key will be plaintext hex encoded private key
-- bn254 (or bls) - exported key will be plaintext bn254 private key
-
-It will prompt for password to encrypt the key.
-
-This command will import keys from $HOME/.eigenlayer/operator_keys/ location
-
-But if you want it to export from a different location, use --key-path flag`,
+		Name:      "show",
+		Usage:     "Show the private key of a keystore from your context",
+		ArgsUsage: "[key-name]",
+		Description: `Shows the private key of a keystore that has been added to your context.
+		
+You can specify the key name either as a positional argument or using the --name flag.
+The keystore must have been previously added to your context using 'keystore add'.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:     "key-type",
-				Required: true,
-				Usage:    "Type of key you want to export. Currently supports 'ecdsa' and 'bn254' (or 'bls')",
-			},
-			&cli.StringFlag{
-				Name:     "key-path",
-				Required: true,
-				Usage:    "Use this flag to specify the path of the key",
+				Name:     "name",
+				Required: false,
+				Usage:    "Name of the key you want to show.",
 			},
 		},
 		Action: func(c *cli.Context) error {
-			keyType := strings.ToLower(c.String("key-type"))
-
-			keyName := c.Args().Get(0)
-
-			keyPath := c.String("key-path")
-			if len(keyPath) == 0 && len(keyName) == 0 {
-				return errors.New("one of keyname or --key-path is required")
+			// Get key name from flag or positional argument
+			keyName := c.String("name")
+			if keyName == "" && c.NArg() > 0 {
+				keyName = c.Args().Get(0)
 			}
 
-			if len(keyPath) > 0 && len(keyName) > 0 {
-				return errors.New("keyname and --key-path both are provided. Please provide only one")
+			if keyName == "" {
+				return errors.New("key name is required (use --name flag or provide as argument)")
+			}
+
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			currentCtx, exists := cfg.Contexts[cfg.CurrentContext]
+			if !exists {
+				return fmt.Errorf("current context '%s' not found", cfg.CurrentContext)
+			}
+
+			var keystoreRef *config.KeystoreReference
+			for _, ks := range currentCtx.Keystores {
+				if ks.Name == keyName {
+					keystoreRef = &ks
+					break
+				}
+			}
+
+			if keystoreRef == nil {
+				return fmt.Errorf("keystore '%s' not found in current context", keyName)
+			}
+
+			if _, err := os.Stat(keystoreRef.Path); os.IsNotExist(err) {
+				return fmt.Errorf("keystore file does not exist at path: %s", keystoreRef.Path)
 			}
 
 			confirm, err := output.Confirm("This will show your private key. Are you sure you want to export?")
@@ -86,13 +93,13 @@ But if you want it to export from a different location, use --key-path flag`,
 			if err != nil {
 				return err
 			}
-			fmt.Println("exporting key from: ", keyPath)
+			fmt.Printf("Showing the key '%s' from: %s\n", keyName, keystoreRef.Path)
 
-			privateKey, err := getPrivateKey(keyType, keyPath, password)
+			privateKey, err := getPrivateKey(strings.ToLower(keystoreRef.Type), keystoreRef.Path, password)
 			if err != nil {
 				return err
 			}
-			fmt.Println("Private key: ", privateKey)
+			fmt.Println("Private key:", privateKey)
 			return nil
 		},
 	}
