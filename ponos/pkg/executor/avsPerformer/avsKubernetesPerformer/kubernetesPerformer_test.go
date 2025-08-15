@@ -431,20 +431,8 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_SecretRef(t *testing.T
 			{
 				Name: "API_KEY",
 				KubernetesEnv: &config.KubernetesEnv{
-					ValueFrom: struct {
-						SecretKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"secretKeyRef" yaml:"secretKeyRef"`
-						ConfigMapKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
-					}{
-						SecretKeyRef: struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						}{
+					ValueFrom: config.ValueFrom{
+						SecretKeyRef: config.SecretKeyRef{
 							Name: "api-secrets",
 							Key:  "api-key",
 						},
@@ -481,20 +469,8 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_ConfigMapRef(t *testin
 			{
 				Name: "APP_CONFIG",
 				KubernetesEnv: &config.KubernetesEnv{
-					ValueFrom: struct {
-						SecretKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"secretKeyRef" yaml:"secretKeyRef"`
-						ConfigMapKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
-					}{
-						ConfigMapKeyRef: struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						}{
+					ValueFrom: config.ValueFrom{
+						ConfigMapKeyRef: config.ConfigMapKeyRef{
 							Name: "app-config",
 							Key:  "config.json",
 						},
@@ -535,20 +511,8 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_Mixed(t *testing.T) {
 			{
 				Name: "API_KEY",
 				KubernetesEnv: &config.KubernetesEnv{
-					ValueFrom: struct {
-						SecretKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"secretKeyRef" yaml:"secretKeyRef"`
-						ConfigMapKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
-					}{
-						SecretKeyRef: struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						}{
+					ValueFrom: config.ValueFrom{
+						SecretKeyRef: config.SecretKeyRef{
 							Name: "api-secrets",
 							Key:  "api-key",
 						},
@@ -558,20 +522,8 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_Mixed(t *testing.T) {
 			{
 				Name: "APP_CONFIG",
 				KubernetesEnv: &config.KubernetesEnv{
-					ValueFrom: struct {
-						SecretKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"secretKeyRef" yaml:"secretKeyRef"`
-						ConfigMapKeyRef struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						} `json:"configMapKeyRef" yaml:"configMapKeyRef"`
-					}{
-						ConfigMapKeyRef: struct {
-							Name string `json:"name" yaml:"name"`
-							Key  string `json:"key" yaml:"key"`
-						}{
+					ValueFrom: config.ValueFrom{
+						ConfigMapKeyRef: config.ConfigMapKeyRef{
 							Name: "app-config",
 							Key:  "config.json",
 						},
