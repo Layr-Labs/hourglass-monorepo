@@ -43,11 +43,11 @@ func validateDeployArtifactRequest(req *executorV1.DeployArtifactRequest) string
 	if image == nil {
 		return "Image is required"
 	}
-	if image.GetTag() == "" {
+	if image.GetDigest() == "" {
 		return "Artifact digest is required"
 	}
-	if image.GetRepository() == "" {
-		return "Image repository is required"
+	if image.GetRegistry() == "" {
+		return "Image registry is required"
 	}
 	return ""
 }
@@ -102,8 +102,8 @@ func (e *Executor) convertEnvsFromProto(reqEnvs []*executorV1.PerformerEnv) []co
 func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArtifactRequest) (*executorV1.DeployArtifactResponse, error) {
 	e.logger.Info("Received deploy artifact request",
 		zap.String("avsAddress", req.AvsAddress),
-		zap.String("digest", req.GetImage().GetTag()),
-		zap.String("registryUrl", req.GetImage().GetTag()),
+		zap.String("digest", req.GetImage().GetRegistry()),
+		zap.String("registryUrl", req.GetImage().GetDigest()),
 	)
 
 	// Verify authentication
@@ -137,8 +137,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	deploymentInfo := &storage.DeploymentInfo{
 		DeploymentId:     deploymentId,
 		AvsAddress:       avsAddress,
-		ArtifactRegistry: req.GetImage().GetRepository(),
-		ArtifactDigest:   req.GetImage().GetTag(),
+		ArtifactRegistry: req.GetImage().GetRegistry(),
+		ArtifactDigest:   req.GetImage().GetDigest(),
 		Status:           storage.DeploymentStatusPending,
 		StartedAt:        time.Now(),
 		CompletedAt:      nil,
@@ -154,8 +154,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	// Find or create the AVS performer
 	performerConfig := &executorConfig.AvsPerformerConfig{
 		Image: &executorConfig.PerformerImage{
-			Repository: req.GetImage().GetRepository(),
-			Tag:        req.GetImage().GetTag(),
+			Repository: req.GetImage().GetRegistry(),
+			Tag:        req.GetImage().GetDigest(),
 		},
 		ProcessType: req.GetProcessType(),
 		AvsAddress:  req.GetAvsAddress(),
@@ -200,8 +200,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		// Log the error with full context
 		e.logger.Error("Deployment failed",
 			zap.String("avsAddress", avsAddress),
-			zap.String("registryUrl", req.GetImage().GetRepository()),
-			zap.String("digest", req.GetImage().GetTag()),
+			zap.String("registryUrl", req.GetImage().GetRegistry()),
+			zap.String("digest", req.GetImage().GetDigest()),
 			zap.Error(err),
 		)
 

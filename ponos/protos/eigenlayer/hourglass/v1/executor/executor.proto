@@ -54,8 +54,8 @@ message KubernetesConfig {
 }
 
 message PerformerImage {
-  string repository = 1;
-  string tag = 2;
+  string registry = 1;
+  string digest = 2;
 }
 
 // DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer
