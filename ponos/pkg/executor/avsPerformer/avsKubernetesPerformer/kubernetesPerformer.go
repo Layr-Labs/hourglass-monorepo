@@ -3,6 +3,7 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -270,12 +271,18 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		containerImage = fmt.Sprintf("%s@%s", image.Repository, image.Digest)
 	}
 
+	imagePullPolicy := "Always"
+	if os.Getenv("USE_LOCAL_IMAGES") == "true" {
+		// For testing, use local images only
+		imagePullPolicy = "Never"
+	}
+
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
 		Name:               performerID,
 		AVSAddress:         akp.config.AvsAddress,
 		Image:              containerImage,
-		ImagePullPolicy:    "Never", // Use local images only for testing
+		ImagePullPolicy:    imagePullPolicy, // Use local images only for testing
 		ImageTag:           image.Tag,
 		ImageDigest:        image.Digest,
 		GRPCPort:           defaultGRPCPort,
