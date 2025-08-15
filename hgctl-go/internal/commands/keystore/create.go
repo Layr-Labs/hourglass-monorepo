@@ -64,6 +64,25 @@ func createCommand() *cli.Command {
 				return fmt.Errorf("unsupported keystore type: %s (supported: bn254, ecdsa)", keystoreType)
 			}
 
+			// Load config first to validate name uniqueness
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Get context
+			ctx, exists := cfg.Contexts[cfg.CurrentContext]
+			if !exists {
+				return fmt.Errorf("context %s not found", cfg.CurrentContext)
+			}
+
+			// Check if keystore with same name already exists in the context
+			for _, ks := range ctx.Keystores {
+				if ks.Name == name {
+					return fmt.Errorf("keystore with name '%s' already exists in context '%s'", name, cfg.CurrentContext)
+				}
+			}
+
 			// Prompt for password if not provided
 			if password == "" {
 				var err error
@@ -73,21 +92,21 @@ func createCommand() *cli.Command {
 				}
 			}
 
-			// Create keystore directory
-			cfg, err := config.LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
+			// Create keystore directory with absolute path
 			keystoreDir := filepath.Join(config.GetConfigDir(), cfg.CurrentContext, "keystores", name)
 			if err := os.MkdirAll(keystoreDir, 0700); err != nil {
 				return fmt.Errorf("failed to create keystore directory: %w", err)
 			}
 
-			keystorePath := filepath.Join(keystoreDir, "key.json")
+			// Ensure we have an absolute path
+			keystorePath, err := filepath.Abs(filepath.Join(keystoreDir, "key.json"))
+			if err != nil {
+				return fmt.Errorf("failed to get absolute keystore path: %w", err)
+			}
 
-			// Check if keystore already exists
+			// Check if keystore file already exists on disk
 			if _, err := os.Stat(keystorePath); err == nil {
-				return fmt.Errorf("keystore already exists at %s", keystorePath)
+				return fmt.Errorf("keystore file already exists at %s", keystorePath)
 			}
 
 			log.Info("Creating keystore",
@@ -107,12 +126,6 @@ func createCommand() *cli.Command {
 				}
 			default:
 				return fmt.Errorf("unsupported keystore type: %s", keystoreType)
-			}
-
-			// Get context
-			ctx, exists := cfg.Contexts[cfg.CurrentContext]
-			if !exists {
-				return fmt.Errorf("context %s not found", cfg.Contexts[cfg.CurrentContext].Name)
 			}
 
 			// Add keystore reference

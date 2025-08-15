@@ -128,6 +128,37 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
+	// Add signer key from context as KEYSTORE_NAME if not already set
+	if d.Context.SignerKey != "" {
+		if _, exists := envVars["KEYSTORE_NAME"]; !exists {
+			envVars["KEYSTORE_NAME"] = d.Context.SignerKey
+			d.Log.Debug("Using signer key from context", zap.String("keystore", d.Context.SignerKey))
+		}
+	}
+
+	// Add L1 chain ID from context if not already set
+	if d.Context.L1ChainID != 0 {
+		if _, exists := envVars["L1_CHAIN_ID"]; !exists {
+			envVars["L1_CHAIN_ID"] = fmt.Sprintf("%d", d.Context.L1ChainID)
+			d.Log.Debug("Using L1 chain ID from context", zap.Uint64("chainId", d.Context.L1ChainID))
+		}
+	}
+
+	// Add L1 RPC URL from context if not already set
+	if d.Context.L1RPCUrl != "" {
+		if _, exists := envVars["L1_RPC_URL"]; !exists {
+			// Translate localhost URLs for Docker on macOS
+			envVars["L1_RPC_URL"] = translateLocalhostForDocker(d.Context.L1RPCUrl)
+			if envVars["L1_RPC_URL"] != d.Context.L1RPCUrl {
+				d.Log.Debug("Translated L1 RPC URL for Docker", 
+					zap.String("original", d.Context.L1RPCUrl),
+					zap.String("translated", envVars["L1_RPC_URL"]))
+			} else {
+				d.Log.Debug("Using L1 RPC URL from context", zap.String("rpcUrl", d.Context.L1RPCUrl))
+			}
+		}
+	}
+
 	// Map PRIVATE_KEY to OPERATOR_PRIVATE_KEY if PRIVATE_KEY exists and OPERATOR_PRIVATE_KEY doesn't
 	if privateKey := os.Getenv("PRIVATE_KEY"); privateKey != "" {
 		if _, exists := envVars["OPERATOR_PRIVATE_KEY"]; !exists {
@@ -164,6 +195,21 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		secretsPath := d.expandPath(d.Context.EnvSecretsPath)
 		d.Log.Info("Loading environment from secrets file")
 		d.loadEnvFile(secretsPath, envVars)
+	}
+
+	// 5. Apply Docker URL translation for RPC URLs (for macOS deployments)
+	rpcURLKeys := []string{"L1_RPC_URL", "L2_RPC_URL", "RPC_URL", "ETH_RPC_URL"}
+	for _, key := range rpcURLKeys {
+		if url, exists := envVars[key]; exists && url != "" {
+			translated := translateLocalhostForDocker(url)
+			if translated != url {
+				envVars[key] = translated
+				d.Log.Debug("Translated RPC URL for Docker",
+					zap.String("key", key),
+					zap.String("original", url),
+					zap.String("translated", translated))
+			}
+		}
 	}
 
 	return envVars
@@ -279,12 +325,24 @@ func (d *PlatformDeployer) CleanupExistingContainer(containerName string) {
 
 // MountKeystores adds keystore volume mounts to docker arguments
 func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystore *config.KeystoreReference) error {
+	// Ensure the keystore path is absolute
+	absPath, err := filepath.Abs(keystore.Path)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for keystore: %w", err)
+	}
+	
+	// Verify the keystore file exists and is readable
+	if _, err := os.Stat(absPath); err != nil {
+		return fmt.Errorf("keystore file not accessible at %s: %w", absPath, err)
+	}
+	
 	// Mount the specific keystore file
-	*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:/keystores/operator.keystore.json:ro", keystore.Path))
+	*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:/keystores/operator.keystore.json:ro", absPath))
 
 	d.Log.Debug("Mounted keystore",
-		zap.String("source", keystore.Path),
-		zap.String("target", "/keystores/operator.keystore.json"))
+		zap.String("source", absPath),
+		zap.String("target", "/keystores/operator.keystore.json"),
+		zap.String("type", keystore.Type))
 
 	return nil
 }

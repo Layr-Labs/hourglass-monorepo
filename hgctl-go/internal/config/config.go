@@ -48,7 +48,7 @@ type Context struct {
 	AVSAddress      string `yaml:"avsAddress,omitempty"`
 	OperatorAddress string `yaml:"operatorAddress,omitempty"`
 	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
-	NetworkID       uint64 `yaml:"networkId,omitempty"`
+	L1ChainID       uint64 `yaml:"l1ChainId,omitempty"`
 	L1RPCUrl        string `yaml:"rpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
@@ -60,6 +60,9 @@ type Context struct {
 	// Keystore and Web3 Signer references
 	Keystores   []KeystoreReference   `yaml:"keystores,omitempty"`
 	Web3Signers []Web3SignerReference `yaml:"web3signers,omitempty"`
+	
+	// Signer keystore name (references a keystore in Keystores)
+	SignerKey string `yaml:"signerKey,omitempty"`
 
 	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
 	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
@@ -176,8 +179,8 @@ func (c *Context) ToMap() map[string]interface{} {
 	// Always show operator-set-id since 0 is a valid value
 	result["operator-set-id"] = c.OperatorSetID
 
-	if c.NetworkID != 0 {
-		result["network-id"] = c.NetworkID
+	if c.L1ChainID != 0 {
+		result["l1-chain-id"] = c.L1ChainID
 	}
 
 	if c.L1RPCUrl != "" {
@@ -190,10 +193,6 @@ func (c *Context) ToMap() map[string]interface{} {
 
 	if c.OperatorAddress != "" {
 		result["operator-address"] = c.OperatorAddress
-	}
-
-	if c.EnvSecretsPath != "" {
-		result["env-secrets-path"] = c.EnvSecretsPath
 	}
 
 	// Add env secrets path if set
@@ -209,6 +208,11 @@ func (c *Context) ToMap() map[string]interface{} {
 	// Add web3signer references if any
 	if len(c.Web3Signers) > 0 {
 		result["web3signers"] = c.Web3Signers
+	}
+	
+	// Add signer key if set
+	if c.SignerKey != "" {
+		result["signer-key"] = c.SignerKey
 	}
 
 	// Add contract overrides if any

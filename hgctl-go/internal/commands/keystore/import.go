@@ -83,7 +83,7 @@ func importCommand() *cli.Command {
 			// Check if keystore with same name already exists
 			for _, ks := range ctx.Keystores {
 				if ks.Name == name {
-					return fmt.Errorf("keystore with name %s already exists in context %s", name, cfg.CurrentContext)
+					return fmt.Errorf("keystore with name '%s' already exists in context '%s'", name, cfg.CurrentContext)
 				}
 			}
 
