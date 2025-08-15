@@ -14,11 +14,11 @@ Simplify the Performer CRD environment variable handling by consolidating multip
 ### Phase 1: CRD Definition Updates
 **File:** `/hourglass-operator/api/v1alpha1/performerTypes.go`
 
-- [ ] Add new `Env []corev1.EnvVar` field to `PerformerConfig`
-- [ ] Add deprecation comments to existing `Environment` and `EnvironmentFrom` fields
-- [ ] Remove custom `EnvVarSource` and `EnvValueFrom` type definitions
-- [ ] Update CRD validation markers for new field
-- [ ] Run `make manifests` to regenerate CRD YAML
+- [x] Add new `Env []corev1.EnvVar` field to `PerformerConfig`
+- [x] ~~Add deprecation comments to existing `Environment` and `EnvironmentFrom` fields~~ (Removed completely)
+- [x] Remove custom `EnvVarSource` and `EnvValueFrom` type definitions
+- [x] Update CRD validation markers for new field
+- [x] Run `make manifests` to regenerate CRD YAML
 
 ### Phase 2: Ponos Type Updates
 **File:** `/ponos/pkg/kubernetesManager/types.go`
@@ -53,10 +53,10 @@ Simplify the Performer CRD environment variable handling by consolidating multip
 ### Phase 4: Controller Updates
 **File:** `/hourglass-operator/internal/controller/performerController.go`
 
-- [ ] Update `reconcilePod` to use new `Env` field directly
-- [ ] Remove separate handling for `Environment` and `EnvironmentFrom`
-- [ ] Add backward compatibility for existing CRDs
-- [ ] Simplify environment variable assignment to container
+- [x] Update `reconcilePod` to use new `Env` field directly
+- [x] Remove separate handling for `Environment` and `EnvironmentFrom`
+- [x] ~~Add backward compatibility for existing CRDs~~ (Not needed, removing old fields)
+- [x] Simplify environment variable assignment to container
 
 ### Phase 5: Test Updates
 
@@ -73,8 +73,8 @@ Simplify the Performer CRD environment variable handling by consolidating multip
 ### Phase 6: Documentation Updates
 
 - [ ] Update API documentation in `/hourglass-operator/docs/operator/api-reference.md`
-- [ ] Update examples in `/hourglass-operator/docs/operator/examples.md`
-- [ ] Add migration guide section
+- [x] Update examples in `/hourglass-operator/docs/operator/examples.md`
+- [ ] ~~Add migration guide section~~ (Not needed, no backward compatibility)
 - [ ] Update any helm chart values that reference environment variables
 
 ### Phase 7: Migration Support
@@ -158,12 +158,12 @@ spec:
 
 ## Success Criteria
 
-- [ ] Single, clear API for environment variables
-- [ ] Full compatibility with Kubernetes EnvVar specification
-- [ ] No custom type definitions for environment handling
-- [ ] Simplified codebase with fewer translation layers
-- [ ] Zero breaking changes for existing deployments (until v2.0.0)
-- [ ] Clear migration path documented
+- [x] Single, clear API for environment variables (hourglass-operator complete)
+- [x] Full compatibility with Kubernetes EnvVar specification (hourglass-operator complete)
+- [x] No custom type definitions for environment handling (hourglass-operator complete)
+- [ ] Simplified codebase with fewer translation layers (ponos still needed)
+- [ ] ~~Zero breaking changes for existing deployments (until v2.0.0)~~ (No backward compatibility)
+- [ ] Clear migration path documented (not needed without backward compatibility)
 
 ## Notes
 
