@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/version"
 	"strings"
 	"sync"
 	"time"
@@ -341,8 +342,10 @@ func (e *Executor) recoverFromStorage(ctx context.Context) error {
 
 func (e *Executor) Run(ctx context.Context) error {
 	e.logger.Info("Executor is running",
-		zap.String("version", "1.0.0"),
+		zap.String("version", version.Version),
+		zap.String("commit", version.Commit),
 		zap.String("operatorAddress", e.config.Operator.Address),
+		zap.String("deploymentMode", e.config.DeploymentMode.String()),
 	)
 	if err := e.taskRpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start task RPC server: %v", err)
