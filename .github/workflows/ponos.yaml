@@ -53,7 +53,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: 1.2.3-stable
+          version: v1.2.3
       - name: Run Forge build
         run: |
           forge build --sizes
