@@ -329,21 +329,21 @@ func (c *CRDOperations) ensureNamespaceExists(ctx context.Context) error {
 	// Check if namespace exists
 	namespace := &corev1.Namespace{}
 	err := c.client.Get(ctx, types.NamespacedName{Name: c.namespace}, namespace)
-	
+
 	if err == nil {
 		// Namespace exists
 		c.logger.Debug("Namespace already exists", zap.String("namespace", c.namespace))
 		return nil
 	}
-	
+
 	if !errors.IsNotFound(err) {
 		// Some other error occurred
 		return fmt.Errorf("failed to check namespace existence: %w", err)
 	}
-	
+
 	// Namespace doesn't exist, create it
 	c.logger.Info("Namespace does not exist, creating it", zap.String("namespace", c.namespace))
-	
+
 	newNamespace := &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -358,7 +358,7 @@ func (c *CRDOperations) ensureNamespaceExists(ctx context.Context) error {
 			},
 		},
 	}
-	
+
 	if err := c.client.Create(ctx, newNamespace); err != nil {
 		// Check if another process created it concurrently
 		if errors.IsAlreadyExists(err) {
@@ -367,7 +367,7 @@ func (c *CRDOperations) ensureNamespaceExists(ctx context.Context) error {
 		}
 		return fmt.Errorf("failed to create namespace: %w", err)
 	}
-	
+
 	c.logger.Info("Successfully created namespace", zap.String("namespace", c.namespace))
 	return nil
 }
@@ -377,7 +377,7 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 	if err := ValidateCreatePerformerRequest(req); err != nil {
 		return nil, fmt.Errorf("invalid request: %w", err)
 	}
-	
+
 	// Ensure namespace exists before creating the Performer CRD
 	if err := c.ensureNamespaceExists(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure namespace exists: %w", err)
