@@ -5,6 +5,7 @@ go 1.23.6
 replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../ponos
 
 require (
+	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Layr-Labs/crypto-libs v0.0.4
 	github.com/Layr-Labs/eigenlayer-contracts v1.7.0-rc.3.0.20250815165827-cd5612ec76e3
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
@@ -25,7 +26,6 @@ require (
 )
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.3.7 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect

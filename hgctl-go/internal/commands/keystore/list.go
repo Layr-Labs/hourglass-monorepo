@@ -32,10 +32,16 @@ func listCommand() *cli.Command {
 				Aliases: []string{"a"},
 				Usage:   "List keystores from all contexts",
 			},
+			&cli.BoolFlag{
+				Name:    "full",
+				Aliases: []string{"f"},
+				Usage:   "Show full public keys without truncation",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			log := logger.FromContext(c.Context)
 			listAll := c.Bool("all")
+			showFull := c.Bool("full")
 			cfg, err := config.LoadConfig()
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
@@ -51,12 +57,12 @@ func listCommand() *cli.Command {
 				contexts = []string{cfg.CurrentContext}
 			}
 
-			return listKeystores(c, log, contexts)
+			return listKeystores(c, log, contexts, showFull)
 		},
 	}
 }
 
-func listKeystores(c *cli.Context, log logger.Logger, contexts []string) error {
+func listKeystores(c *cli.Context, log logger.Logger, contexts []string, showFull bool) error {
 	var keystores []KeystoreInfo
 
 	// Load config
@@ -127,15 +133,28 @@ func listKeystores(c *cli.Context, log logger.Logger, contexts []string) error {
 	default:
 		// Table format
 		table := tablewriter.NewWriter(os.Stdout)
-		table.SetHeader([]string{"Name", "Type", "Context", "Address", "Pubkey"})
+		table.SetHeader([]string{"Name", "Type", "Context", "Key Info"})
+		table.SetAutoWrapText(false)
+		table.SetAutoFormatHeaders(true)
 
 		for _, ks := range keystores {
+			var keyInfo string
+			if ks.Type == "ecdsa" {
+				keyInfo = ks.Address
+			} else if ks.Type == "bn254" {
+				if showFull || len(ks.Pubkey) <= 60 {
+					keyInfo = ks.Pubkey
+				} else {
+					// Truncate long pubkeys: show first 20 + ... + last 20 chars
+					keyInfo = ks.Pubkey[:20] + "..." + ks.Pubkey[len(ks.Pubkey)-20:]
+				}
+			}
+
 			row := []string{
 				ks.Name,
 				ks.Type,
 				ks.Context,
-				ks.Address,
-				ks.Pubkey,
+				keyInfo,
 			}
 			table.Append(row)
 		}

@@ -22,7 +22,7 @@ func TestOperatorRegistration(t *testing.T) {
 		// Execute the register command
 		// TODO: use operator private key
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register-operator",
+			"eigenlayer", "register-operator",
 			"--metadata-uri", "https://example.com/operator/metadata.json",
 			"--allocation-delay", allocationDelay,
 		)
@@ -46,7 +46,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 	t.Run("Set Allocation Delay", func(t *testing.T) {
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"set-allocation-delay",
+			"eigenlayer", "set-allocation-delay",
 			"--delay", "0")
 
 		require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestOperatorRegistration(t *testing.T) {
 	t.Run("Set Invalid Allocation Delay", func(t *testing.T) {
 		// Try to set allocation delay to -1 for aggregator (should fail)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"set-allocation-delay",
+			"eigenlayer", "set-allocation-delay",
 			"--delay", "-1")
 
 		require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 		// Try to delegate executor to aggregator (executor needs to be registered first)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register-operator",
+			"eigenlayer", "register-operator",
 			"--allocation-delay", "1",
 			"--metadata-uri", "https://example.com/executor/metadata.json")
 
@@ -87,7 +87,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 			// Now delegate to aggregator
 			result, err = h.ExecuteCLIWithKeystore("executor-ecdsa",
-				"delegate", "--operator", aggregatorKeystore.Address)
+				"eigenlayer", "delegate", "--operator", aggregatorKeystore.Address)
 
 			require.NoError(t, err)
 			assert.Equal(t, 0, result.ExitCode)
@@ -101,7 +101,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 		// Register ECDSA key for operator set 0
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register-key",
+			"eigenlayer", "register-key",
 			"--operator-set-id", "0",
 			"--key-type", "ecdsa",
 			"--key-address", aggregatorKeystore.Address)
@@ -125,7 +125,7 @@ func TestOperatorRegistration(t *testing.T) {
 		assert.Equal(t, 0, contextResult.ExitCode)
 
 		result, _ := h.ExecuteCLIWithKeystore("executor-bn254",
-			"register-key",
+			"eigenlayer", "register-key",
 			"--operator-set-id", "1",
 			"--key-type", "bn254",
 			"--keystore-path", executorBN254.Path,
@@ -157,7 +157,7 @@ func TestOperatorRegistration(t *testing.T) {
 		assert.Equal(t, 0, contextResult.ExitCode)
 
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"allocate",
+			"eigenlayer", "allocate",
 			"--operator-set-id", "0",
 			"--strategy", strategyAddress,
 			"--magnitude", "1e18")
@@ -169,7 +169,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 	t.Run("Register to Single Operator Set", func(t *testing.T) {
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register-avs",
+			"eigenlayer", "register-avs",
 			"--operator-set-ids", "0",
 			"--socket", "https://operator.example.com:8080")
 
@@ -182,7 +182,7 @@ func TestOperatorRegistration(t *testing.T) {
 		// First, make sure operator set 2 exists and has keys registered
 		// Register ECDSA key for operator set 2
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"register-key",
+			"eigenlayer", "register-key",
 			"--operator-set-id", "2",
 			"--key-type", "ecdsa",
 			"--key-address", h.GetAggregatorECDSAKeystore().Address,
@@ -191,7 +191,7 @@ func TestOperatorRegistration(t *testing.T) {
 		if err == nil && result.ExitCode == 0 {
 			// Now register to multiple operator sets
 			result, err = h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-				"register-avs",
+				"eigenlayer", "register-avs",
 				"--operator-set-ids", "1,2",
 				"--socket", "wss://operator.example.com:8443",
 			)
