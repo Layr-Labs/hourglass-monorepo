@@ -50,12 +50,7 @@ contract DeployAVSL1Contracts is Script {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskAVSRegistrarImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(
-                MockTaskAVSRegistrar.initialize.selector,
-                avs,
-                deployer,
-                initialConfig
-            )
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, avs, deployer, initialConfig)
         );
         console.log("TaskAVSRegistrar proxy deployed to:", address(proxy));
 
