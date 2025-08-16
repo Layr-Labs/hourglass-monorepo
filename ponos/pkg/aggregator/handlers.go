@@ -5,11 +5,17 @@ import (
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.RegisterAvsRequest) (*aggregatorV1.RegisterAvsResponse, error) {
+	a.logger.Sugar().Infow("RegisterAvs called",
+		zap.String("avsAddress", request.AvsAddress),
+		zap.Uint32s("chainIds", request.ChainIds),
+	)
+
 	// Verify authentication
 	err := a.verifyAuth(request.Auth)
 	if err != nil {
@@ -27,6 +33,10 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 			return uint(id)
 		}),
 	})
+	if err != nil {
+		a.logger.Error("Failed to register AVS", zap.Error(err), zap.String("avsAddress", request.AvsAddress))
+		return nil, status.Errorf(codes.Internal, "failed to register AVS: %v", err)
+	}
 	return &aggregatorV1.RegisterAvsResponse{
 		Success: err == nil,
 	}, nil

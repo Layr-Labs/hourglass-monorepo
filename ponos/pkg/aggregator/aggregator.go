@@ -177,7 +177,12 @@ func (a *Aggregator) Initialize() error {
 }
 
 func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+	a.logger.Sugar().Infow("Registering AVS",
+		zap.String("avsAddress", avs.Address),
+		zap.Uints("chainIds", avs.ChainIds),
+	)
 	if _, ok := a.avsExecutionManagers[avs.Address]; ok {
+		a.logger.Sugar().Warnw("AVS Execution Manager already exists for address", zap.String("avsAddress", avs.Address))
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
 	supportedChains, err := a.getValidChainsForAvs(avs.Address)
@@ -206,9 +211,14 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		a.logger,
 	)
 	if err != nil {
+		a.logger.Error("Failed to create AVS Execution Manager", zap.String("avsAddress", avs.Address), zap.Error(err))
 		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
+	a.logger.Sugar().Infow("AVS Execution Manager created",
+		zap.String("avsAddress", avs.Address),
+		zap.Any("supportedChains", supportedChains),
+	)
 	a.avsExecutionManagers[avs.Address] = aem
 	return nil
 }
