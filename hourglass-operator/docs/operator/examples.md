@@ -150,8 +150,58 @@ spec:
   version: "v1.0.0"
   config:
     grpcPort: 9090
-    environment:
-      LOG_LEVEL: "info"
+    env:
+    - name: LOG_LEVEL
+      value: "info"
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+```
+
+### Performer with Secrets and ConfigMaps
+
+```yaml
+# Example showing environment variables from secrets and configmaps
+apiVersion: hourglass.eigenlayer.io/v1alpha1
+kind: Performer
+metadata:
+  name: secure-performer
+  namespace: my-avs-project
+spec:
+  avsAddress: "0x1234567890abcdef1234567890abcdef12345678"
+  image: "myavs/performer:v1.0.0"
+  version: "v1.0.0"
+  config:
+    grpcPort: 9090
+    env:
+    # Direct value
+    - name: LOG_LEVEL
+      value: "info"
+    # Value from secret
+    - name: API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: api-secrets
+          key: api-key
+    # Value from configmap
+    - name: CONFIG_DATA
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: config.json
+    # Field reference
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
   resources:
     requests:
       cpu: "1"
@@ -278,11 +328,15 @@ spec:
   version: "v3.0.0"
   config:
     grpcPort: 9090
-    environment:
-      CUDA_VISIBLE_DEVICES: "0,1"
-      LOG_LEVEL: "debug"
-      GPU_MEMORY_FRACTION: "0.8"
-      MODEL_PATH: "/models/transformer.pt"
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0,1"
+    - name: LOG_LEVEL
+      value: "debug"
+    - name: GPU_MEMORY_FRACTION
+      value: "0.8"
+    - name: MODEL_PATH
+      value: "/models/transformer.pt"
     args:
     - "--enable-gpu"
     - "--batch-size=32"
@@ -345,12 +399,17 @@ spec:
   version: "v2.0.0"
   config:
     grpcPort: 8080
-    environment:
-      TEE_MODE: "sgx"
-      ENCLAVE_PATH: "/opt/enclave.signed.so"
-      ATTESTATION_URL: "https://attestation.intel.com"
-      LOG_LEVEL: "info"
-      SECURITY_LEVEL: "high"
+    env:
+    - name: TEE_MODE
+      value: "sgx"
+    - name: ENCLAVE_PATH
+      value: "/opt/enclave.signed.so"
+    - name: ATTESTATION_URL
+      value: "https://attestation.intel.com"
+    - name: LOG_LEVEL
+      value: "info"
+    - name: SECURITY_LEVEL
+      value: "high"
     command:
     - "/usr/bin/tee-runner"
     args:
@@ -412,11 +471,15 @@ spec:
   version: "v1.8.0"
   config:
     grpcPort: 9090
-    environment:
-      SECURITY_LEVEL: "high"
-      LOG_LEVEL: "warn"
-      AUDIT_ENABLED: "true"
-      READONLY_ROOTFS: "true"
+    env:
+    - name: SECURITY_LEVEL
+      value: "high"
+    - name: LOG_LEVEL
+      value: "warn"
+    - name: AUDIT_ENABLED
+      value: "true"
+    - name: READONLY_ROOTFS
+      value: "true"
   resources:
     requests:
       cpu: "500m"

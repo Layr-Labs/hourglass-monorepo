@@ -30,12 +30,12 @@ func CreateDefaultContainerConfig(avsAddress, imageRepo, imageTag, imageDigest s
 
 	// Construct the image string based on whether we have a digest or tag
 	var imageStr string
-	if imageDigest != "" {
-		// Use digest notation: repository@sha256:hash
-		imageStr = fmt.Sprintf("%s@%s", imageRepo, imageDigest)
-	} else {
-		// Use tag notation: repository:tag
+	imageStr = imageRepo
+	if imageTag != "" {
 		imageStr = fmt.Sprintf("%s:%s", imageRepo, imageTag)
+	}
+	if imageDigest != "" {
+		imageStr = fmt.Sprintf("%s@%s", imageRepo, imageDigest)
 	}
 
 	return &ContainerConfig{

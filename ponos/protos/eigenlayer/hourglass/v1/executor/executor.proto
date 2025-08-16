@@ -53,14 +53,21 @@ message KubernetesConfig {
   string service_account_name = 1;
 }
 
+message PerformerImage {
+  string registry = 1;
+  string digest = 2;
+  string tag = 3;
+}
+
 // DeployArtifactRequest is the message used to deploy a new artifact to an AVS performer
 message DeployArtifactRequest {
-  string avs_address = 1;
-  string digest = 2;
-  string registry_url = 3;
-  repeated PerformerEnv env = 4;
-  KubernetesConfig kubernetes = 5;
-  eigenlayer.hourglass.v1.common.AuthSignature auth = 6;
+  PerformerImage image = 1;
+  string process_type = 2;
+  string avs_address = 3;
+  repeated PerformerEnv envs = 4;
+  string performer_network_name = 5;
+  KubernetesConfig kubernetes = 6;
+  eigenlayer.hourglass.v1.common.AuthSignature auth = 7;
 }
 
 message DeployArtifactResponse {

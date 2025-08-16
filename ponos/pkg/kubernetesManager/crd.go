@@ -8,6 +8,7 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,11 +67,8 @@ type PerformerConfig struct {
 	// GRPCPort is the port on which the performer serves gRPC requests
 	GRPCPort int32 `json:"grpcPort,omitempty"`
 
-	// Environment variables for the performer container
-	Environment map[string]string `json:"environment,omitempty"`
-
-	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
-	EnvironmentFrom []EnvVarSource `json:"environmentFrom,omitempty"`
+	// Env is the list of environment variables using standard k8s EnvVar type
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Args are additional command line arguments for the performer
 	Args []string `json:"args,omitempty"`
@@ -151,16 +149,10 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 
 	// Deep copy Config
 	out.Config = ps.Config
-	if ps.Config.Environment != nil {
-		out.Config.Environment = make(map[string]string, len(ps.Config.Environment))
-		for k, v := range ps.Config.Environment {
-			out.Config.Environment[k] = v
-		}
-	}
-	if ps.Config.EnvironmentFrom != nil {
-		out.Config.EnvironmentFrom = make([]EnvVarSource, len(ps.Config.EnvironmentFrom))
-		for i := range ps.Config.EnvironmentFrom {
-			ps.Config.EnvironmentFrom[i].DeepCopyInto(&out.Config.EnvironmentFrom[i])
+	if ps.Config.Env != nil {
+		out.Config.Env = make([]corev1.EnvVar, len(ps.Config.Env))
+		for i := range ps.Config.Env {
+			ps.Config.Env[i].DeepCopyInto(&out.Config.Env[i])
 		}
 	}
 	if ps.Config.Args != nil {
@@ -207,31 +199,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 	}
 }
 
-// DeepCopyInto for EnvVarSource
-func (evs *EnvVarSource) DeepCopyInto(out *EnvVarSource) {
-	*out = *evs
-	if evs.ValueFrom != nil {
-		out.ValueFrom = &EnvValueFrom{}
-		evs.ValueFrom.DeepCopyInto(out.ValueFrom)
-	}
-}
-
-// DeepCopyInto for EnvValueFrom
-func (evf *EnvValueFrom) DeepCopyInto(out *EnvValueFrom) {
-	*out = *evf
-	if evf.SecretKeyRef != nil {
-		out.SecretKeyRef = &KeySelector{
-			Name: evf.SecretKeyRef.Name,
-			Key:  evf.SecretKeyRef.Key,
-		}
-	}
-	if evf.ConfigMapKeyRef != nil {
-		out.ConfigMapKeyRef = &KeySelector{
-			Name: evf.ConfigMapKeyRef.Name,
-			Key:  evf.ConfigMapKeyRef.Key,
-		}
-	}
-}
+// Custom environment type DeepCopyInto methods removed - using k8s native types
 
 // DeepCopyInto for SchedulingConfig
 func (sc *SchedulingConfig) DeepCopyInto(out *SchedulingConfig) {
@@ -317,10 +285,69 @@ func NewCRDOperations(client client.Client, config *Config, l *zap.Logger) *CRDO
 	}
 }
 
+// Initialize ensures the namespace exists, creating it if necessary
+// This should be called during startup before any CRD operations
+func (c *CRDOperations) Initialize(ctx context.Context) error {
+	return c.ensureNamespaceExists(ctx)
+}
+
+// ensureNamespaceExists checks if a namespace exists and creates it if it doesn't
+func (c *CRDOperations) ensureNamespaceExists(ctx context.Context) error {
+	// Check if namespace exists
+	namespace := &corev1.Namespace{}
+	err := c.client.Get(ctx, types.NamespacedName{Name: c.namespace}, namespace)
+
+	if err == nil {
+		// Namespace exists
+		c.logger.Debug("Namespace already exists", zap.String("namespace", c.namespace))
+		return nil
+	}
+
+	if !errors.IsNotFound(err) {
+		// Some other error occurred
+		return fmt.Errorf("failed to check namespace existence: %w", err)
+	}
+
+	// Namespace doesn't exist, create it
+	c.logger.Info("Namespace does not exist, creating it", zap.String("namespace", c.namespace))
+
+	newNamespace := &corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Namespace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: c.namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "hourglass-executor",
+				"app.kubernetes.io/part-of":    "hourglass",
+				"app.kubernetes.io/managed-by": "hourglass-executor",
+			},
+		},
+	}
+
+	if err := c.client.Create(ctx, newNamespace); err != nil {
+		// Check if another process created it concurrently
+		if errors.IsAlreadyExists(err) {
+			c.logger.Debug("Namespace was created concurrently", zap.String("namespace", c.namespace))
+			return nil
+		}
+		return fmt.Errorf("failed to create namespace: %w", err)
+	}
+
+	c.logger.Info("Successfully created namespace", zap.String("namespace", c.namespace))
+	return nil
+}
+
 // CreatePerformer creates a new Performer CRD
 func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerformerRequest) (*CreatePerformerResponse, error) {
 	if err := ValidateCreatePerformerRequest(req); err != nil {
 		return nil, fmt.Errorf("invalid request: %w", err)
+	}
+
+	// Ensure namespace exists before creating the Performer CRD
+	if err := c.ensureNamespaceExists(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ensure namespace exists: %w", err)
 	}
 
 	performer := &PerformerCRD{
@@ -344,8 +371,7 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			Version:         req.ImageTag,
 			Config: PerformerConfig{
 				GRPCPort:           req.GRPCPort,
-				Environment:        req.Environment,
-				EnvironmentFrom:    req.EnvironmentFrom,
+				Env:                req.Env,
 				ServiceAccountName: req.ServiceAccountName,
 			},
 		},

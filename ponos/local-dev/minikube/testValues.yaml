@@ -63,7 +63,7 @@ executor:
         l1Chain:
           rpcUrl: "http://host.docker.internal:8545"
           chainId: 31337
-        
+        deploymentMode: "kubernetes"
         avsPerformers:
           - image:
               repository: "hello-performer"
@@ -71,9 +71,9 @@ executor:
             processType: "server"
             avsAddress: "0xCE2Ac75bE2E0951F1F7B288c7a6A9BfB6c331DC4"
             avsRegistrarAddress: "0x5897a9b8b746c78e0cae876962796949832e3357"
-            deploymentMode: "kubernetes"
         kubernetes:
           namespace: "default"
+          generateNamespace: true
           operatorNamespace: "default"
           crdGroup: "hourglass.eigenlayer.io"
           crdVersion: "v1alpha1"

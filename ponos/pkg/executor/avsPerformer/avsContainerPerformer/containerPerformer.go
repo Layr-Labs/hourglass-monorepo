@@ -619,6 +619,7 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 		zap.String("avsAddress", aps.config.AvsAddress),
 		zap.String("imageRepository", image.Repository),
 		zap.String("imageTag", image.Tag),
+		zap.String("imageDigest", image.Digest),
 	)
 
 	// Check if next container slot is already occupied

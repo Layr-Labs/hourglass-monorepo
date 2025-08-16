@@ -194,33 +194,9 @@ func (r *PerformerReconciler) buildPodSpec(performer *v1alpha1.Performer) *corev
 		},
 	}
 
-	// Set environment variables
-	if performer.Spec.Config.Environment != nil {
-		for key, value := range performer.Spec.Config.Environment {
-			container.Env = append(container.Env, corev1.EnvVar{
-				Name:  key,
-				Value: value,
-			})
-		}
-	}
-
-	// Set environment variables from references (secrets/configmaps)
-	if performer.Spec.Config.EnvironmentFrom != nil {
-		for _, envSource := range performer.Spec.Config.EnvironmentFrom {
-			envVar := corev1.EnvVar{
-				Name: envSource.Name,
-			}
-			if envSource.ValueFrom != nil {
-				envVar.ValueFrom = &corev1.EnvVarSource{}
-				if envSource.ValueFrom.SecretKeyRef != nil {
-					envVar.ValueFrom.SecretKeyRef = envSource.ValueFrom.SecretKeyRef
-				}
-				if envSource.ValueFrom.ConfigMapKeyRef != nil {
-					envVar.ValueFrom.ConfigMapKeyRef = envSource.ValueFrom.ConfigMapKeyRef
-				}
-			}
-			container.Env = append(container.Env, envVar)
-		}
+	// Set environment variables using the standard Kubernetes EnvVar type
+	if performer.Spec.Config.Env != nil {
+		container.Env = append(container.Env, performer.Spec.Config.Env...)
 	}
 
 	// Set resources

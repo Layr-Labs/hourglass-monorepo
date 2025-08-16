@@ -3,6 +3,7 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,7 +14,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -77,6 +78,11 @@ type AvsKubernetesPerformer struct {
 	activeDeploymentMu sync.Mutex
 }
 
+func generatePerformerNamespace(performerConfig *avsPerformer.AvsPerformerConfig) string {
+	shortAvsAddress := strings.ToLower(performerConfig.AvsAddress[:8])
+	return fmt.Sprintf("hg-perf-%s", shortAvsAddress)
+}
+
 // NewAvsKubernetesPerformer creates a new Kubernetes-based AVS performer
 func NewAvsKubernetesPerformer(
 	config *avsPerformer.AvsPerformerConfig,
@@ -85,7 +91,6 @@ func NewAvsKubernetesPerformer(
 	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsKubernetesPerformer, error) {
-
 	// Initialize Kubernetes client
 	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
 	if err != nil {
@@ -98,6 +103,16 @@ func NewAvsKubernetesPerformer(
 
 	if err := clientWrapper.TestConnection(ctx); err != nil {
 		logger.Warn("Failed to test Kubernetes connection, continuing anyway", zap.Error(err))
+	}
+
+	if kubernetesConfig.GenerateNamespace {
+		originalNamespace := kubernetesConfig.Namespace
+		kubernetesConfig.Namespace = generatePerformerNamespace(config)
+		logger.Sugar().Infow("Overriding Kubernetes namespace for performer",
+			zap.String("avsAddress", config.AvsAddress),
+			zap.String("originalNamespace", originalNamespace),
+			zap.String("namespace", kubernetesConfig.Namespace),
+		)
 	}
 
 	// Create CRD operations manager
@@ -120,6 +135,11 @@ func NewAvsKubernetesPerformer(
 func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 	akp.performerResourcesMu.Lock()
 	defer akp.performerResourcesMu.Unlock()
+
+	// Ensure namespace exists before any operations
+	if err := akp.kubernetesManager.Initialize(ctx); err != nil {
+		return fmt.Errorf("failed to initialize Kubernetes namespace: %w", err)
+	}
 
 	// Fetch aggregator peer information
 	aggregatorPeers, err := akp.fetchAggregatorPeerInfo(ctx)
@@ -180,17 +200,22 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 	// Use shortened address hash (6 chars) + shortened UUID (8 chars) for uniqueness
 	// This keeps the total length under Kubernetes 63-character limit for labels
 	shortUUID := strings.Replace(uuid.New().String(), "-", "", -1)[:8]
-	return fmt.Sprintf("performer-%s-%s", containerManager.HashAvsAddress(akp.config.AvsAddress), shortUUID)
+	return fmt.Sprintf("performer-%s-%s", strings.ToLower(akp.config.AvsAddress[:8]), shortUUID)
 }
 
 // buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
-func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) (map[string]string, []kubernetesManager.EnvVarSource) {
-	envMap := make(map[string]string)
-	var envVarSources []kubernetesManager.EnvVarSource
+func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
 
 	// Add default environment variables
-	envMap["AVS_ADDRESS"] = akp.config.AvsAddress
-	envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "AVS_ADDRESS",
+		Value: akp.config.AvsAddress,
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "GRPC_PORT",
+		Value: fmt.Sprintf("%d", defaultGRPCPort),
+	})
 
 	// Process environment variables from image.Envs
 	for _, env := range image.Envs {
@@ -199,37 +224,42 @@ func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.
 			continue
 		}
 
+		envVar := corev1.EnvVar{
+			Name: env.Name,
+		}
+
 		// Handle KubernetesEnv (references to secrets/configmaps)
-		if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					SecretKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
+		if env.KubernetesEnv != nil {
+			if env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
 					},
-				},
-			}
-			envVarSources = append(envVarSources, envVarSource)
-		} else if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					ConfigMapKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
+				}
+				envVars = append(envVars, envVar)
+			} else if env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
 					},
-				},
+				}
+				envVars = append(envVars, envVar)
 			}
-			envVarSources = append(envVarSources, envVarSource)
 		} else if env.Value != "" {
 			// Handle direct value
-			envMap[env.Name] = env.Value
+			envVar.Value = env.Value
+			envVars = append(envVars, envVar)
 		}
 		// Note: Ignoring ValueFromEnv for now as requested
 	}
 
-	return envMap, envVarSources
+	return envVars
 }
 
 // createPerformerResource creates a new Kubernetes performer resource
@@ -239,20 +269,34 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 ) (*PerformerResource, error) {
 	performerID := akp.generatePerformerID()
 
-	// Build environment variables and sources
-	envMap, envVarSources := akp.buildEnvironmentFromImage(image)
+	// Build environment variables
+	env := akp.buildEnvironmentFromImage(image)
+
+	containerImage := image.Repository
+	if image.Tag != "" {
+		containerImage = fmt.Sprintf("%s:%s", image.Repository, image.Tag)
+	}
+	if image.Digest != "" {
+		// If a digest is provided, use it directly
+		containerImage = fmt.Sprintf("%s@%s", image.Repository, image.Digest)
+	}
+
+	imagePullPolicy := "Always"
+	if os.Getenv("USE_LOCAL_IMAGES") == "true" {
+		// For testing, use local images only
+		imagePullPolicy = "Never"
+	}
 
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
 		Name:               performerID,
 		AVSAddress:         akp.config.AvsAddress,
-		Image:              fmt.Sprintf("%s:%s", image.Repository, image.Tag),
-		ImagePullPolicy:    "Never", // Use local images only for testing
+		Image:              containerImage,
+		ImagePullPolicy:    imagePullPolicy, // Use local images only for testing
 		ImageTag:           image.Tag,
 		ImageDigest:        image.Digest,
 		GRPCPort:           defaultGRPCPort,
-		Environment:        envMap,
-		EnvironmentFrom:    envVarSources,
+		Env:                env,
 		ServiceAccountName: image.ServiceAccountName,
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},

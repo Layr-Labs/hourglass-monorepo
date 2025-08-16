@@ -79,26 +79,6 @@ type PerformerSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
-// EnvVarSource represents a source for the value of an environment variable
-// +kubebuilder:object:generate=true
-type EnvVarSource struct {
-	// Name of the environment variable
-	Name string `json:"name"`
-
-	// ValueFrom specifies the source of the environment variable value
-	ValueFrom *EnvValueFrom `json:"valueFrom,omitempty"`
-}
-
-// EnvValueFrom describes a source for the value of an environment variable
-// +kubebuilder:object:generate=true
-type EnvValueFrom struct {
-	// SecretKeyRef selects a key of a secret in the pod's namespace
-	SecretKeyRef *corev1.SecretKeySelector `json:"secretKeyRef,omitempty"`
-
-	// ConfigMapKeyRef selects a key of a config map in the pod's namespace
-	ConfigMapKeyRef *corev1.ConfigMapKeySelector `json:"configMapKeyRef,omitempty"`
-}
-
 // PerformerConfig contains configuration for the performer
 // +kubebuilder:object:generate=true
 type PerformerConfig struct {
@@ -108,11 +88,9 @@ type PerformerConfig struct {
 	// +kubebuilder:validation:Maximum=65535
 	GRPCPort int32 `json:"grpcPort,omitempty"`
 
-	// Environment variables for the performer container
-	Environment map[string]string `json:"environment,omitempty"`
-
-	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
-	EnvironmentFrom []EnvVarSource `json:"environmentFrom,omitempty"`
+	// Env is the list of environment variables for the performer container
+	// Uses standard Kubernetes EnvVar type for consistency
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Args are additional command line arguments for the performer
 	Args []string `json:"args,omitempty"`

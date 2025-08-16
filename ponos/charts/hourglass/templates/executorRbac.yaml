@@ -43,7 +43,7 @@ rules:
 # Core resources needed by executor
 - apiGroups: [""]
   resources: ["services", "pods", "events", "configmaps", "secrets", "nodes", "namespaces"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch", "create"]
 
 ---
 # ClusterRoleBinding

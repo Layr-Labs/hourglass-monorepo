@@ -3,6 +3,7 @@ package transactionSigner
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum"
 	"math/big"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/web3signer"
@@ -59,15 +60,74 @@ func (w3s *Web3Signer) GetTransactOpts(ctx context.Context) (*bind.TransactOpts,
 
 // SignAndSendTransaction signs a transaction and sends it to the network
 func (w3s *Web3Signer) SignAndSendTransaction(ctx context.Context, tx *types.Transaction) (*types.Receipt, error) {
-	// Convert transaction to Web3Signer format
+	var FallbackGasTipCap = big.NewInt(15000000000)
+
+	// Estimate gas tip cap
+	gasTipCap, err := w3s.ethClient.SuggestGasTipCap(ctx)
+	if err != nil {
+		// If the transaction failed because the backend does not support
+		// eth_maxPriorityFeePerGas, fallback to using the default constant.
+		w3s.logger.Debug("SignAndSendTransaction: cannot get gasTipCap, using fallback",
+			zap.Error(err),
+		)
+		gasTipCap = FallbackGasTipCap
+	}
+
+	// Get the latest block header for base fee calculation
+	header, err := w3s.ethClient.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest block header: %w", err)
+	}
+
+	// Calculate gas fee cap: basefee * 3/2 + tip
+	overestimatedBasefee := new(big.Int).Div(new(big.Int).Mul(header.BaseFee, big.NewInt(3)), big.NewInt(2))
+	gasFeeCap := new(big.Int).Add(overestimatedBasefee, gasTipCap)
+
+	// Estimate gas limit with proper parameters
+	gasLimit, err := w3s.ethClient.EstimateGas(ctx, ethereum.CallMsg{
+		From:      w3s.fromAddress,
+		To:        tx.To(),
+		GasTipCap: gasTipCap,
+		GasFeeCap: gasFeeCap,
+		Value:     tx.Value(),
+		Data:      tx.Data(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate gas: %w", err)
+	}
+
+	// Add 20% buffer to gas limit
+	gasLimitWithBuffer := addGasBuffer(gasLimit)
+
+	// Get nonce if not provided
+	nonce := tx.Nonce()
+	if nonce == 0 {
+		pendingNonce, err := w3s.ethClient.PendingNonceAt(ctx, w3s.fromAddress)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce: %w", err)
+		}
+		nonce = pendingNonce
+	}
+
+	// Convert transaction to Web3Signer format with legacy transaction parameters
+	// Using legacy transaction type to avoid EIP-1559
 	txData := map[string]interface{}{
 		"to":       tx.To().Hex(),
 		"value":    hexutil.EncodeBig(tx.Value()),
-		"gas":      hexutil.EncodeUint64(tx.Gas()),
-		"gasPrice": hexutil.EncodeBig(tx.GasPrice()),
-		"nonce":    hexutil.EncodeUint64(tx.Nonce()),
+		"gas":      hexutil.EncodeUint64(gasLimitWithBuffer),
+		"gasPrice": hexutil.EncodeBig(gasFeeCap), // Use gasFeeCap as gasPrice for legacy tx
+		"nonce":    hexutil.EncodeUint64(nonce),
 		"data":     hexutil.Encode(tx.Data()),
+		"type":     "0x0", // Legacy transaction type
 	}
+
+	w3s.logger.Info("SignAndSendTransaction: sending transaction",
+		zap.String("to", tx.To().Hex()),
+		zap.String("gasTipCap", gasTipCap.String()),
+		zap.String("gasFeeCap", gasFeeCap.String()),
+		zap.Uint64("gasLimit", gasLimitWithBuffer),
+		zap.Uint64("nonce", nonce),
+	)
 
 	// Sign with Web3Signer
 	signedTxHex, err := w3s.web3SignerClient.EthSignTransaction(ctx, w3s.fromAddress.Hex(), txData)
@@ -92,14 +152,29 @@ func (w3s *Web3Signer) SignAndSendTransaction(ctx context.Context, tx *types.Tra
 	if err != nil {
 		return nil, fmt.Errorf("failed to send transaction: %w", err)
 	}
-	w3s.logger.Info("Transaction sent", zap.String("txHash", signedTx.Hash().Hex()))
 
-	// Wait for receipt
+	w3s.logger.Info("SignAndSendTransaction: transaction sent",
+		zap.String("txHash", signedTx.Hash().Hex()),
+	)
+
+	// Wait for receipt and check status
 	receipt, err := bind.WaitMined(ctx, w3s.ethClient, &signedTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to wait for transaction receipt: %w", err)
 	}
-	w3s.logger.Info("Transaction mined", zap.String("txHash", receipt.TxHash.Hex()))
+
+	// Check transaction status
+	if receipt.Status != 1 {
+		w3s.logger.Error("SignAndSendTransaction: transaction failed",
+			zap.String("txHash", receipt.TxHash.Hex()),
+			zap.Uint64("status", receipt.Status),
+		)
+		return nil, fmt.Errorf("transaction failed with status %d", receipt.Status)
+	}
+
+	w3s.logger.Info("SignAndSendTransaction: transaction succeeded",
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
 
 	return receipt, nil
 }
