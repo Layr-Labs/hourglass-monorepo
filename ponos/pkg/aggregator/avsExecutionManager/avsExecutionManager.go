@@ -381,7 +381,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 // HandleLog processes logs from the chain poller
 func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	em.logger.Sugar().Infow("Received log from chain poller",
-		zap.Any("log", lwb),
+		zap.Any("log", lwb.Log),
 	)
 	lg := lwb.Log
 
@@ -399,6 +399,13 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 			)
 			return nil
 		}
+		em.logger.Sugar().Infow("Processing TaskCreated event",
+			zap.String("eventName", lg.EventName),
+			zap.String("contractAddress", lg.Address),
+			zap.String("mailboxAddress", mailboxContract.Address),
+			zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+			zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+		)
 		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
 			return em.processTask(lwb)
 		}
@@ -843,6 +850,7 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 	em.logger.Sugar().Infow("Received TaskCreated event",
 		zap.String("eventName", lg.EventName),
 		zap.String("contractAddress", lg.Address),
+		zap.Any("log", lwb.Log),
 	)
 	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
 	if err != nil {

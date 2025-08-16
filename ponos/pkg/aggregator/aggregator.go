@@ -388,7 +388,13 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 		zap.String("eventName", lwb.Log.EventName),
 		zap.Any("lwb", lwb),
 	)
-	for _, avs := range a.avsExecutionManagers {
+	for avsAddress, avs := range a.avsExecutionManagers {
+		a.logger.Sugar().Infow("Checking AVS Execution Manager for log",
+			zap.String("avsAddress", avsAddress),
+			zap.String("eventName", lwb.Log.EventName),
+			zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+			zap.Uint64("logIndex", lwb.Log.LogIndex),
+		)
 		if err := avs.HandleLog(lwb); err != nil {
 			a.logger.Error("Error processing log in AVS Execution Manager", zap.Error(err))
 			return err
