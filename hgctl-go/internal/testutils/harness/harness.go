@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/config"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 )
 
 // CLIResult represents the result of a CLI command execution
@@ -46,7 +46,7 @@ type TestHarness struct {
 	cleanupFns []func()
 
 	// Test logger
-	logger *zap.Logger
+	logger logger.Logger
 	t      *testing.T
 
 	// Pre-generated keystores
@@ -67,11 +67,11 @@ type PreGeneratedKeystore struct {
 // NewTestHarness creates a new test harness instance
 func NewTestHarness(t *testing.T) *TestHarness {
 	// Create test logger
-	logger := zaptest.NewLogger(t)
+	l := logger.NewLogger(true)
 
 	h := &TestHarness{
 		ContextName: "test",
-		logger:      logger,
+		logger:      l,
 		t:           t,
 		cleanupFns:  []func(){},
 		keystores:   make(map[string]*PreGeneratedKeystore),
