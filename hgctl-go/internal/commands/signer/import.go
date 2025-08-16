@@ -1,4 +1,4 @@
-package web3signer
+package signer
 
 import (
 	"fmt"

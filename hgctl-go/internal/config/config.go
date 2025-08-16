@@ -42,6 +42,13 @@ type ContractOverrides struct {
 	ReleaseManager    string `yaml:"releaseManager,omitempty"`
 }
 
+type SignerConfig struct {
+	Type       string `yaml:"type"` // "keystore", "web3signer", or "privatekey"
+	Keystore   string `yaml:"keystore,omitempty"`
+	PrivateKey string `yaml:"-"` // Never save to disk
+	Web3Signer string `yaml:"web3signer,omitempty"`
+}
+
 type Context struct {
 	Name            string `yaml:"-"`
 	ExecutorAddress string `yaml:"executorAddress,omitempty"`
@@ -61,8 +68,8 @@ type Context struct {
 	Keystores   []KeystoreReference   `yaml:"keystores,omitempty"`
 	Web3Signers []Web3SignerReference `yaml:"web3signers,omitempty"`
 
-	// Signer keystore name (references a keystore in Keystores)
-	SignerKey string `yaml:"signerKey,omitempty"`
+	// Signer configuration
+	Signer *SignerConfig `yaml:"signer,omitempty"`
 
 	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
 	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
@@ -261,7 +268,7 @@ func (c *Context) ToMap() map[string]interface{} {
 	}
 
 	// Add signer key if set
-	if c.SignerKey != "" {
+	if c.Signer != nil {
 		result["signer-key"] = c.SignerKey
 	}
 

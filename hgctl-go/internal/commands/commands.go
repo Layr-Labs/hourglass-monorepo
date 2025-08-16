@@ -3,12 +3,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
 	"os"
 
 	contextcmd "github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/context"
@@ -17,8 +11,15 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/get"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/keystore"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/web3signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
+
+	"github.com/urfave/cli/v2"
+	"go.uber.org/zap"
 )
 
 func Hgctl() *cli.App {
@@ -105,7 +106,7 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			RemoveCommand(),
 			ContextCommand(),
 			KeystoreCommand(),
-			Web3SignerCommand(),
+			SignerCommand(),
 			EigenLayerCommand(),
 		},
 		ExitErrHandler: middleware.ExitErrHandler,
@@ -150,9 +151,9 @@ func KeystoreCommand() *cli.Command {
 	return keystore.Command()
 }
 
-// Web3SignerCommand returns the web3signer command
-func Web3SignerCommand() *cli.Command {
-	return web3signer.Command()
+// SignerCommand returns the web3signer command
+func SignerCommand() *cli.Command {
+	return signer.Command()
 }
 
 // EigenLayerCommand returns the eigenlayer command with all subcommands

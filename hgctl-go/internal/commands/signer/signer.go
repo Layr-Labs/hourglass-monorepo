@@ -1,4 +1,4 @@
-package web3signer
+package signer
 
 import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
@@ -7,8 +7,8 @@ import (
 
 func Command() *cli.Command {
 	return &cli.Command{
-		Name:  "web3signer",
-		Usage: "Manage web3 signer configurations (ECDSA only)",
+		Name:  "signer",
+		Usage: "Select a signer configuration",
 		Subcommands: []*cli.Command{
 			importCommand(),
 			listCommand(),

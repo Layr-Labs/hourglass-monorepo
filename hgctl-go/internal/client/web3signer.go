@@ -48,7 +48,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer/web3Signer"
 	"io"
 	"net/http"
 	"strings"
@@ -56,7 +56,10 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -313,6 +316,39 @@ func NewWeb3Signer(cfg *Config, logger logger.Logger) (*Web3Signer, error) {
 		config:     cfg,
 		requestID:  0,
 	}, nil
+}
+
+// NewSigner creates a new Web3Signer that implements the ISigner interface.
+// It only supports ECDSA curve type - attempting to use BN254 will result in errors.
+// The publicKey parameter should be the hex-encoded public key (with or without 0x prefix)
+// that corresponds to the fromAddress.
+func NewSigner(client *Web3Signer, fromAddress common.Address, publicKey string, curveType config.CurveType, logger logger.Logger) (signer.ISigner, error) {
+	if curveType != config.CurveTypeECDSA {
+		return nil, fmt.Errorf("web3signer only supports ECDSA curve type, got %s", curveType)
+	}
+
+	if client == nil {
+		return nil, fmt.Errorf("web3signer client cannot be nil")
+	}
+
+	if logger == nil {
+		return nil, fmt.Errorf("logger cannot be nil")
+	}
+
+	if publicKey == "" {
+		return nil, fmt.Errorf("publicKey cannot be empty")
+	}
+
+	// Clean up public key format - remove 0x prefix if present
+	cleanPublicKey := strings.TrimPrefix(publicKey, "0x")
+
+	logger.Sugar().Debugw("Creating new Web3Signer",
+		"fromAddress", fromAddress.Hex(),
+		"publicKey", cleanPublicKey,
+		"curveType", curveType,
+	)
+
+	return web3Signer.NewWeb3Signer(client, fromAddress, cleanPublicKey, curveType, logger)
 }
 
 // createHTTPClient creates an HTTP client with appropriate TLS configuration
