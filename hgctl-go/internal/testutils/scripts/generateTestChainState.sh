@@ -184,7 +184,16 @@ create_keystore() {
         --password "$password"
 }
 
-"$HGCTL" context create --name test
+# Get ECDSA addresses before creating context
+AGGREGATOR_ADDRESS=$(cast wallet address --private-key 0x$AGGREGATOR_ECDSA_PK)
+EXECUTOR_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_ECDSA_PK)
+
+# Create context with non-interactive flags
+echo "Creating hgctl context 'test' with L1 RPC URL and operator address..."
+"$HGCTL" context create \
+    --l1-rpc-url "$anvilL1RpcUrl" \
+    --operator-address "$AGGREGATOR_ADDRESS" \
+    test
 
 # Create BN254 keystores using hgctl
 echo "Creating BN254 keystore for aggregator..."
@@ -227,10 +236,6 @@ copy_keystore "aggregator" "$KEYS_DIR/aggregator-keystore.json"
 copy_keystore "executor" "$KEYS_DIR/executor-keystore.json"
 copy_keystore "aggregator-ecdsa" "$KEYS_DIR/aggregator-ecdsa-keystore.json"
 copy_keystore "executor-ecdsa" "$KEYS_DIR/executor-ecdsa-keystore.json"
-
-# Get ECDSA addresses for funding
-AGGREGATOR_ADDRESS=$(cast wallet address --private-key 0x$AGGREGATOR_ECDSA_PK)
-EXECUTOR_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_ECDSA_PK)
 
 echo "Generated test keys:"
 echo "  Aggregator ECDSA address (for funding): $AGGREGATOR_ADDRESS"

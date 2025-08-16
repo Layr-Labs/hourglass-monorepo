@@ -9,9 +9,12 @@ import {ITransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transp
 import {TaskMailbox} from "@eigenlayer-contracts/src/contracts/avs/task/TaskMailbox.sol";
 import {IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IKeyRegistrar.sol";
 import {ITaskMailboxTypes} from "@eigenlayer-contracts/src/contracts/interfaces/ITaskMailbox.sol";
+import {IAllocationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IAllocationManager.sol";
 
 contract DeployTaskMailbox is Script {
     function setUp() public {}
+
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
 
     function run(address bn254CertVerifier, address ecdsaCertVerifier) public {
         // Load the private key from the environment variable
@@ -27,7 +30,8 @@ contract DeployTaskMailbox is Script {
         console.log("ProxyAdmin deployed to:", address(proxyAdmin));
 
         // Deploy implementation
-        TaskMailbox taskMailboxImpl = new TaskMailbox(bn254CertVerifier, ecdsaCertVerifier, "0.0.1");
+        TaskMailbox taskMailboxImpl =
+            new TaskMailbox(bn254CertVerifier, ecdsaCertVerifier, ALLOCATION_MANAGER.DEALLOCATION_DELAY() / 2, "0.0.1");
         console.log("TaskMailbox implementation deployed to:", address(taskMailboxImpl));
 
         // Deploy proxy with initialization
