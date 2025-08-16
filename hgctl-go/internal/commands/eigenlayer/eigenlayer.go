@@ -18,12 +18,12 @@ func Command() *cli.Command {
 deposits, allocations, and AVS registration.`,
 		Subcommands: []*cli.Command{
 			allocate.Command(),
+			allocate.SetAllocationDelayCommand(),
 			delegate.Command(),
 			deposit.Command(),
 			register.RegisterAVSCommand(),
 			register.RegisterOperatorCommand(),
 			register.RegisterKeyCommand(),
-			register.SetAllocationDelayCommand(),
 		},
 	}
 }
