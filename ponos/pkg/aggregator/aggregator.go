@@ -26,6 +26,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"strings"
 	"time"
 )
 
@@ -176,27 +177,31 @@ func (a *Aggregator) Initialize() error {
 }
 
 func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+	avsAddress := strings.ToLower(avs.Address)
 	a.logger.Sugar().Infow("Registering AVS",
-		zap.String("avsAddress", avs.Address),
+		zap.String("avsAddress", avsAddress),
 		zap.Uints("chainIds", avs.ChainIds),
 	)
-	if _, ok := a.avsExecutionManagers[avs.Address]; ok {
-		a.logger.Sugar().Warnw("AVS Execution Manager already exists for address", zap.String("avsAddress", avs.Address))
-		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
+	if avsExecManager, ok := a.avsExecutionManagers[avsAddress]; ok {
+		a.logger.Sugar().Warnw("AVS Execution Manager already exists for address",
+			zap.String("avsAddress", avsAddress),
+			zap.Any("executionManager", avsExecManager),
+		)
+		return fmt.Errorf("AVS Execution Manager for %s already exists", avsAddress)
 	}
 	supportedChains, err := a.getValidChainsForAvs(avs.ChainIds)
 	if err != nil {
-		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
+		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avsAddress, err)
 	}
 
 	om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
-		AvsAddress: avs.Address,
+		AvsAddress: avsAddress,
 		ChainIds:   supportedChains,
 		L1ChainId:  a.config.L1ChainId,
 	}, a.chainContractCallers, a.peeringDataFetcher, a.logger)
 
 	aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
-		AvsAddress:               avs.Address,
+		AvsAddress:               avsAddress,
 		SupportedChainIds:        supportedChains,
 		MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
 		L1ChainId:                a.config.L1ChainId,
@@ -210,15 +215,15 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		a.logger,
 	)
 	if err != nil {
-		a.logger.Error("Failed to create AVS Execution Manager", zap.String("avsAddress", avs.Address), zap.Error(err))
-		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
+		a.logger.Error("Failed to create AVS Execution Manager", zap.String("avsAddress", avsAddress), zap.Error(err))
+		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avsAddress, err)
 	}
 
 	a.logger.Sugar().Infow("AVS Execution Manager created",
-		zap.String("avsAddress", avs.Address),
+		zap.String("avsAddress", avsAddress),
 		zap.Any("supportedChains", supportedChains),
 	)
-	a.avsExecutionManagers[avs.Address] = aem
+	a.avsExecutionManagers[avsAddress] = aem
 	return nil
 }
 
