@@ -6,7 +6,7 @@ replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../ponos
 
 require (
 	github.com/Layr-Labs/crypto-libs v0.0.4
-	github.com/Layr-Labs/eigenlayer-contracts v1.7.0-rc.3.0.20250722182636-3f6860786541
+	github.com/Layr-Labs/eigenlayer-contracts v1.7.0-rc.3.0.20250815165827-cd5612ec76e3
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/ethereum/go-ethereum v1.15.11
@@ -65,6 +65,5 @@ require (
 	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	k8s.io/apimachinery v0.32.0-alpha.3 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )

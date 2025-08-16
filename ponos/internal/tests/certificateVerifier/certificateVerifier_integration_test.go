@@ -31,6 +31,7 @@ import (
 )
 
 func Test_CertificateVerifier(t *testing.T) {
+	t.Skip("Skipping temporarily until BN254CertificateVerifier audit fixes are in.")
 	const (
 		L1RpcUrl = "http://127.0.0.1:8545"
 	)

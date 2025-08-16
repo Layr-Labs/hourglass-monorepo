@@ -43,14 +43,14 @@ contract DeployAVSL1Contracts is Script {
         console.log("ProxyAdmin deployed to:", address(proxyAdmin));
 
         // Deploy implementation
-        MockTaskAVSRegistrar taskAVSRegistrarImpl = new MockTaskAVSRegistrar(avs, ALLOCATION_MANAGER, KEY_REGISTRAR);
+        MockTaskAVSRegistrar taskAVSRegistrarImpl = new MockTaskAVSRegistrar(ALLOCATION_MANAGER, KEY_REGISTRAR);
         console.log("TaskAVSRegistrar implementation deployed to:", address(taskAVSRegistrarImpl));
 
         // Deploy proxy with initialization
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
             address(taskAVSRegistrarImpl),
             address(proxyAdmin),
-            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, avs, initialConfig)
+            abi.encodeWithSelector(MockTaskAVSRegistrar.initialize.selector, avs, deployer, initialConfig)
         );
         console.log("TaskAVSRegistrar proxy deployed to:", address(proxy));
 
