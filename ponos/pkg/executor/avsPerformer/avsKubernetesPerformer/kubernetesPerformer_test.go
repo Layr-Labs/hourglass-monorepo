@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // Mock implementations for testing - these implement the same methods as the real types
@@ -105,7 +106,7 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 	mockPeeringFetcher := &MockPeeringFetcher{}
 
 	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:  "0x123",
+		AvsAddress:  "0x1234567890",
 		ProcessType: avsPerformer.AvsProcessTypeServer,
 	}
 
@@ -133,7 +134,7 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 
 func TestNewAvsKubernetesPerformer(t *testing.T) {
 	config := &avsPerformer.AvsPerformerConfig{
-		AvsAddress:  "0x123",
+		AvsAddress:  "0x1234567890",
 		ProcessType: avsPerformer.AvsProcessTypeServer,
 	}
 
@@ -169,8 +170,8 @@ func TestAvsKubernetesPerformer_GeneratePerformerID(t *testing.T) {
 	id2 := performer.generatePerformerID()
 
 	assert.NotEqual(t, id1, id2)
-	assert.Contains(t, id1, "performer-7f8a79-")
-	assert.Contains(t, id2, "performer-7f8a79-")
+	assert.Contains(t, id1, "performer-0x123456-")
+	assert.Contains(t, id2, "performer-0x123456-")
 }
 
 func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
@@ -178,7 +179,7 @@ func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 
 	resource := &PerformerResource{
 		performerID: "test-performer",
-		avsAddress:  "0x123",
+		avsAddress:  "0x1234567890",
 		image: avsPerformer.PerformerImage{
 			Repository: "test-repo",
 			Tag:        "v1.0.0",
@@ -190,7 +191,7 @@ func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 	metadata := performer.convertPerformerResource(resource)
 
 	assert.Equal(t, "test-performer", metadata.PerformerID)
-	assert.Equal(t, "0x123", metadata.AvsAddress)
+	assert.Equal(t, "0x1234567890", metadata.AvsAddress)
 	assert.Equal(t, avsPerformer.PerformerResourceStatusInService, metadata.Status)
 	assert.Equal(t, "test-repo", metadata.ArtifactRegistry)
 	assert.Equal(t, "v1.0.0", metadata.ArtifactTag)
@@ -248,7 +249,7 @@ func TestAvsKubernetesPerformer_ListPerformers_WithPerformers(t *testing.T) {
 	// Add a current performer
 	currentPerformer := &PerformerResource{
 		performerID: "current-performer",
-		avsAddress:  "0x123",
+		avsAddress:  "0x1234567890",
 		image: avsPerformer.PerformerImage{
 			Repository: "test-repo",
 			Tag:        "v1.0.0",
@@ -260,7 +261,7 @@ func TestAvsKubernetesPerformer_ListPerformers_WithPerformers(t *testing.T) {
 	// Add a next performer
 	performer.nextPerformer = &PerformerResource{
 		performerID: "next-performer",
-		avsAddress:  "0x123",
+		avsAddress:  "0x1234567890",
 		image: avsPerformer.PerformerImage{
 			Repository: "test-repo",
 			Tag:        "v2.0.0",
@@ -379,15 +380,14 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_Empty(t *testing.T) {
 		Envs:       []config.AVSPerformerEnv{},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
 	// Should have default environment variables
-	assert.Len(t, envMap, 2)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
-
-	// Should have no environment variable sources
-	assert.Empty(t, envVarSources)
+	assert.Len(t, env, 2)
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
 }
 
 func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_DirectValues(t *testing.T) {
@@ -408,17 +408,22 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_DirectValues(t *testin
 		},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
 	// Should have default + custom environment variables
-	assert.Len(t, envMap, 4)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
-	assert.Equal(t, "postgres://localhost/db", envMap["DATABASE_URL"])
-	assert.Equal(t, "https://api.example.com", envMap["API_ENDPOINT"])
+	assert.Len(t, env, 4)
 
-	// Should have no environment variable sources
-	assert.Empty(t, envVarSources)
+	// Check defaults
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
+
+	// Check custom values
+	assert.Equal(t, "DATABASE_URL", env[2].Name)
+	assert.Equal(t, "postgres://localhost/db", env[2].Value)
+	assert.Equal(t, "API_ENDPOINT", env[3].Name)
+	assert.Equal(t, "https://api.example.com", env[3].Value)
 }
 
 func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_SecretRef(t *testing.T) {
@@ -442,21 +447,25 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_SecretRef(t *testing.T
 		},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
-	// Should have only default environment variables
-	assert.Len(t, envMap, 2)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
+	// Should have default + secret ref environment variables
+	assert.Len(t, env, 3)
 
-	// Should have one environment variable source
-	require.Len(t, envVarSources, 1)
-	assert.Equal(t, "API_KEY", envVarSources[0].Name)
-	assert.NotNil(t, envVarSources[0].ValueFrom)
-	assert.NotNil(t, envVarSources[0].ValueFrom.SecretKeyRef)
-	assert.Equal(t, "api-secrets", envVarSources[0].ValueFrom.SecretKeyRef.Name)
-	assert.Equal(t, "api-key", envVarSources[0].ValueFrom.SecretKeyRef.Key)
-	assert.Nil(t, envVarSources[0].ValueFrom.ConfigMapKeyRef)
+	// Check defaults
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
+
+	// Check secret ref
+	assert.Equal(t, "API_KEY", env[2].Name)
+	assert.Empty(t, env[2].Value)
+	assert.NotNil(t, env[2].ValueFrom)
+	assert.NotNil(t, env[2].ValueFrom.SecretKeyRef)
+	assert.Equal(t, "api-secrets", env[2].ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "api-key", env[2].ValueFrom.SecretKeyRef.Key)
+	assert.Nil(t, env[2].ValueFrom.ConfigMapKeyRef)
 }
 
 func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_ConfigMapRef(t *testing.T) {
@@ -480,21 +489,25 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_ConfigMapRef(t *testin
 		},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
-	// Should have only default environment variables
-	assert.Len(t, envMap, 2)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
+	// Should have default + configmap ref environment variables
+	assert.Len(t, env, 3)
 
-	// Should have one environment variable source
-	require.Len(t, envVarSources, 1)
-	assert.Equal(t, "APP_CONFIG", envVarSources[0].Name)
-	assert.NotNil(t, envVarSources[0].ValueFrom)
-	assert.NotNil(t, envVarSources[0].ValueFrom.ConfigMapKeyRef)
-	assert.Equal(t, "app-config", envVarSources[0].ValueFrom.ConfigMapKeyRef.Name)
-	assert.Equal(t, "config.json", envVarSources[0].ValueFrom.ConfigMapKeyRef.Key)
-	assert.Nil(t, envVarSources[0].ValueFrom.SecretKeyRef)
+	// Check defaults
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
+
+	// Check configmap ref
+	assert.Equal(t, "APP_CONFIG", env[2].Name)
+	assert.Empty(t, env[2].Value)
+	assert.NotNil(t, env[2].ValueFrom)
+	assert.NotNil(t, env[2].ValueFrom.ConfigMapKeyRef)
+	assert.Equal(t, "app-config", env[2].ValueFrom.ConfigMapKeyRef.Name)
+	assert.Equal(t, "config.json", env[2].ValueFrom.ConfigMapKeyRef.Key)
+	assert.Nil(t, env[2].ValueFrom.SecretKeyRef)
 }
 
 func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_Mixed(t *testing.T) {
@@ -537,38 +550,53 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_Mixed(t *testing.T) {
 		},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
-	// Should have default + direct value environment variables
-	assert.Len(t, envMap, 4)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
-	assert.Equal(t, "postgres://localhost/db", envMap["DATABASE_URL"])
-	assert.Equal(t, "debug", envMap["LOG_LEVEL"])
+	// Should have all environment variables
+	assert.Len(t, env, 6) // 2 defaults + 2 direct + 2 refs
 
-	// Should have two environment variable sources
-	require.Len(t, envVarSources, 2)
+	// Check defaults
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
 
-	// Find and verify secret ref
-	var secretRef *kubernetesManager.EnvVarSource
-	var configMapRef *kubernetesManager.EnvVarSource
-	for i := range envVarSources {
-		if envVarSources[i].Name == "API_KEY" {
-			secretRef = &envVarSources[i]
-		} else if envVarSources[i].Name == "APP_CONFIG" {
-			configMapRef = &envVarSources[i]
+	// Check direct values
+	assert.Equal(t, "DATABASE_URL", env[2].Name)
+	assert.Equal(t, "postgres://localhost/db", env[2].Value)
+
+	// Find and verify specific env vars
+	var apiKeyEnv, appConfigEnv, logLevelEnv *corev1.EnvVar
+	for i := range env {
+		switch env[i].Name {
+		case "API_KEY":
+			apiKeyEnv = &env[i]
+		case "APP_CONFIG":
+			appConfigEnv = &env[i]
+		case "LOG_LEVEL":
+			logLevelEnv = &env[i]
 		}
 	}
 
-	require.NotNil(t, secretRef)
-	assert.NotNil(t, secretRef.ValueFrom.SecretKeyRef)
-	assert.Equal(t, "api-secrets", secretRef.ValueFrom.SecretKeyRef.Name)
-	assert.Equal(t, "api-key", secretRef.ValueFrom.SecretKeyRef.Key)
+	// Verify secret ref
+	require.NotNil(t, apiKeyEnv)
+	assert.Empty(t, apiKeyEnv.Value)
+	assert.NotNil(t, apiKeyEnv.ValueFrom)
+	assert.NotNil(t, apiKeyEnv.ValueFrom.SecretKeyRef)
+	assert.Equal(t, "api-secrets", apiKeyEnv.ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "api-key", apiKeyEnv.ValueFrom.SecretKeyRef.Key)
 
-	require.NotNil(t, configMapRef)
-	assert.NotNil(t, configMapRef.ValueFrom.ConfigMapKeyRef)
-	assert.Equal(t, "app-config", configMapRef.ValueFrom.ConfigMapKeyRef.Name)
-	assert.Equal(t, "config.json", configMapRef.ValueFrom.ConfigMapKeyRef.Key)
+	// Verify configmap ref
+	require.NotNil(t, appConfigEnv)
+	assert.Empty(t, appConfigEnv.Value)
+	assert.NotNil(t, appConfigEnv.ValueFrom)
+	assert.NotNil(t, appConfigEnv.ValueFrom.ConfigMapKeyRef)
+	assert.Equal(t, "app-config", appConfigEnv.ValueFrom.ConfigMapKeyRef.Name)
+	assert.Equal(t, "config.json", appConfigEnv.ValueFrom.ConfigMapKeyRef.Key)
+
+	// Verify direct value
+	require.NotNil(t, logLevelEnv)
+	assert.Equal(t, "debug", logLevelEnv.Value)
 }
 
 func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_SkipEmpty(t *testing.T) {
@@ -589,15 +617,23 @@ func TestAvsKubernetesPerformer_BuildEnvironmentFromImage_SkipEmpty(t *testing.T
 		},
 	}
 
-	envMap, envVarSources := performer.buildEnvironmentFromImage(image)
+	env := performer.buildEnvironmentFromImage(image)
 
 	// Should have default + valid environment variable only
-	assert.Len(t, envMap, 3)
-	assert.Equal(t, "0x123", envMap["AVS_ADDRESS"])
-	assert.Equal(t, "8080", envMap["GRPC_PORT"])
-	assert.Equal(t, "valid-value", envMap["VALID_VAR"])
-	assert.NotContains(t, envMap, "EMPTY_VAR")
+	assert.Len(t, env, 3)
 
-	// Should have no environment variable sources
-	assert.Empty(t, envVarSources)
+	// Check defaults
+	assert.Equal(t, "AVS_ADDRESS", env[0].Name)
+	assert.Equal(t, "0x1234567890", env[0].Value)
+	assert.Equal(t, "GRPC_PORT", env[1].Name)
+	assert.Equal(t, "8080", env[1].Value)
+
+	// Check valid var
+	assert.Equal(t, "VALID_VAR", env[2].Name)
+	assert.Equal(t, "valid-value", env[2].Value)
+
+	// Ensure EMPTY_VAR is not included
+	for _, e := range env {
+		assert.NotEqual(t, "EMPTY_VAR", e.Name)
+	}
 }

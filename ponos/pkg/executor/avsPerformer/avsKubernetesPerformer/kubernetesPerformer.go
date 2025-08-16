@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -203,13 +204,18 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 }
 
 // buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
-func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) (map[string]string, []kubernetesManager.EnvVarSource) {
-	envMap := make(map[string]string)
-	var envVarSources []kubernetesManager.EnvVarSource
+func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
 
 	// Add default environment variables
-	envMap["AVS_ADDRESS"] = akp.config.AvsAddress
-	envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "AVS_ADDRESS",
+		Value: akp.config.AvsAddress,
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "GRPC_PORT",
+		Value: fmt.Sprintf("%d", defaultGRPCPort),
+	})
 
 	// Process environment variables from image.Envs
 	for _, env := range image.Envs {
@@ -218,37 +224,42 @@ func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.
 			continue
 		}
 
+		envVar := corev1.EnvVar{
+			Name: env.Name,
+		}
+
 		// Handle KubernetesEnv (references to secrets/configmaps)
-		if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					SecretKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
+		if env.KubernetesEnv != nil {
+			if env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
 					},
-				},
-			}
-			envVarSources = append(envVarSources, envVarSource)
-		} else if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					ConfigMapKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
+				}
+				envVars = append(envVars, envVar)
+			} else if env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
 					},
-				},
+				}
+				envVars = append(envVars, envVar)
 			}
-			envVarSources = append(envVarSources, envVarSource)
 		} else if env.Value != "" {
 			// Handle direct value
-			envMap[env.Name] = env.Value
+			envVar.Value = env.Value
+			envVars = append(envVars, envVar)
 		}
 		// Note: Ignoring ValueFromEnv for now as requested
 	}
 
-	return envMap, envVarSources
+	return envVars
 }
 
 // createPerformerResource creates a new Kubernetes performer resource
@@ -258,8 +269,8 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 ) (*PerformerResource, error) {
 	performerID := akp.generatePerformerID()
 
-	// Build environment variables and sources
-	envMap, envVarSources := akp.buildEnvironmentFromImage(image)
+	// Build environment variables
+	env := akp.buildEnvironmentFromImage(image)
 
 	containerImage := image.Repository
 	if image.Tag != "" {
@@ -285,8 +296,7 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 		ImageTag:           image.Tag,
 		ImageDigest:        image.Digest,
 		GRPCPort:           defaultGRPCPort,
-		Environment:        envMap,
-		EnvironmentFrom:    envVarSources,
+		Env:                env,
 		ServiceAccountName: image.ServiceAccountName,
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},

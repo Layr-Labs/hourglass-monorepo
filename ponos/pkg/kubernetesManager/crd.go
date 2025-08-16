@@ -67,11 +67,8 @@ type PerformerConfig struct {
 	// GRPCPort is the port on which the performer serves gRPC requests
 	GRPCPort int32 `json:"grpcPort,omitempty"`
 
-	// Environment variables for the performer container
-	Environment map[string]string `json:"environment,omitempty"`
-
-	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
-	EnvironmentFrom []EnvVarSource `json:"environmentFrom,omitempty"`
+	// Env is the list of environment variables using standard k8s EnvVar type
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Args are additional command line arguments for the performer
 	Args []string `json:"args,omitempty"`
@@ -152,16 +149,10 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 
 	// Deep copy Config
 	out.Config = ps.Config
-	if ps.Config.Environment != nil {
-		out.Config.Environment = make(map[string]string, len(ps.Config.Environment))
-		for k, v := range ps.Config.Environment {
-			out.Config.Environment[k] = v
-		}
-	}
-	if ps.Config.EnvironmentFrom != nil {
-		out.Config.EnvironmentFrom = make([]EnvVarSource, len(ps.Config.EnvironmentFrom))
-		for i := range ps.Config.EnvironmentFrom {
-			ps.Config.EnvironmentFrom[i].DeepCopyInto(&out.Config.EnvironmentFrom[i])
+	if ps.Config.Env != nil {
+		out.Config.Env = make([]corev1.EnvVar, len(ps.Config.Env))
+		for i := range ps.Config.Env {
+			ps.Config.Env[i].DeepCopyInto(&out.Config.Env[i])
 		}
 	}
 	if ps.Config.Args != nil {
@@ -208,31 +199,7 @@ func (ps *PerformerSpec) DeepCopyInto(out *PerformerSpec) {
 	}
 }
 
-// DeepCopyInto for EnvVarSource
-func (evs *EnvVarSource) DeepCopyInto(out *EnvVarSource) {
-	*out = *evs
-	if evs.ValueFrom != nil {
-		out.ValueFrom = &EnvValueFrom{}
-		evs.ValueFrom.DeepCopyInto(out.ValueFrom)
-	}
-}
-
-// DeepCopyInto for EnvValueFrom
-func (evf *EnvValueFrom) DeepCopyInto(out *EnvValueFrom) {
-	*out = *evf
-	if evf.SecretKeyRef != nil {
-		out.SecretKeyRef = &KeySelector{
-			Name: evf.SecretKeyRef.Name,
-			Key:  evf.SecretKeyRef.Key,
-		}
-	}
-	if evf.ConfigMapKeyRef != nil {
-		out.ConfigMapKeyRef = &KeySelector{
-			Name: evf.ConfigMapKeyRef.Name,
-			Key:  evf.ConfigMapKeyRef.Key,
-		}
-	}
-}
+// Custom environment type DeepCopyInto methods removed - using k8s native types
 
 // DeepCopyInto for SchedulingConfig
 func (sc *SchedulingConfig) DeepCopyInto(out *SchedulingConfig) {
@@ -404,8 +371,7 @@ func (c *CRDOperations) CreatePerformer(ctx context.Context, req *CreatePerforme
 			Version:         req.ImageTag,
 			Config: PerformerConfig{
 				GRPCPort:           req.GRPCPort,
-				Environment:        req.Environment,
-				EnvironmentFrom:    req.EnvironmentFrom,
+				Env:                req.Env,
 				ServiceAccountName: req.ServiceAccountName,
 			},
 		},

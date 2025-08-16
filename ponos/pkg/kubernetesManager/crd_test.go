@@ -31,66 +31,56 @@ func createTestScheme() *runtime.Scheme {
 	return scheme
 }
 
-func TestEnvVarSource_DeepCopyInto(t *testing.T) {
+func TestEnvVar_DeepCopyInto(t *testing.T) {
 	tests := []struct {
 		name     string
-		original *EnvVarSource
+		original corev1.EnvVar
 	}{
 		{
+			name: "with direct value",
+			original: corev1.EnvVar{
+				Name:  "SIMPLE_VAR",
+				Value: "simple-value",
+			},
+		},
+		{
 			name: "with secret ref",
-			original: &EnvVarSource{
+			original: corev1.EnvVar{
 				Name: "SECRET_VAR",
-				ValueFrom: &EnvValueFrom{
-					SecretKeyRef: &KeySelector{
-						Name: "my-secret",
-						Key:  "secret-key",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "my-secret",
+						},
+						Key: "secret-key",
 					},
 				},
 			},
 		},
 		{
 			name: "with configmap ref",
-			original: &EnvVarSource{
+			original: corev1.EnvVar{
 				Name: "CONFIG_VAR",
-				ValueFrom: &EnvValueFrom{
-					ConfigMapKeyRef: &KeySelector{
-						Name: "my-config",
-						Key:  "config-key",
+				ValueFrom: &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "my-config",
+						},
+						Key: "config-key",
 					},
 				},
-			},
-		},
-		{
-			name: "with both refs",
-			original: &EnvVarSource{
-				Name: "BOTH_VAR",
-				ValueFrom: &EnvValueFrom{
-					SecretKeyRef: &KeySelector{
-						Name: "my-secret",
-						Key:  "secret-key",
-					},
-					ConfigMapKeyRef: &KeySelector{
-						Name: "my-config",
-						Key:  "config-key",
-					},
-				},
-			},
-		},
-		{
-			name: "without value from",
-			original: &EnvVarSource{
-				Name: "SIMPLE_VAR",
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			copied := &EnvVarSource{}
-			tt.original.DeepCopyInto(copied)
+			copied := corev1.EnvVar{}
+			tt.original.DeepCopyInto(&copied)
 
 			// Verify the copy is equal but not the same object
 			assert.Equal(t, tt.original.Name, copied.Name)
+			assert.Equal(t, tt.original.Value, copied.Value)
 
 			if tt.original.ValueFrom != nil {
 				assert.NotNil(t, copied.ValueFrom)
@@ -141,16 +131,19 @@ func TestPerformerCRD_DeepCopy(t *testing.T) {
 			Version:    "v1.0.0",
 			Config: PerformerConfig{
 				GRPCPort: 9090,
-				Environment: map[string]string{
-					"TEST_VAR": "test-value",
-				},
-				EnvironmentFrom: []EnvVarSource{
+				Env: []corev1.EnvVar{
+					{
+						Name:  "TEST_VAR",
+						Value: "test-value",
+					},
 					{
 						Name: "SECRET_VAR",
-						ValueFrom: &EnvValueFrom{
-							SecretKeyRef: &KeySelector{
-								Name: "my-secret",
-								Key:  "secret-key",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "my-secret",
+								},
+								Key: "secret-key",
 							},
 						},
 					},
@@ -175,21 +168,23 @@ func TestPerformerCRD_DeepCopy(t *testing.T) {
 	assert.Equal(t, original.Spec.Image, copied.Spec.Image)
 	assert.Equal(t, original.Status.Phase, copied.Status.Phase)
 
-	// Verify EnvironmentFrom is copied correctly
-	assert.Len(t, copied.Spec.Config.EnvironmentFrom, 1)
-	assert.Equal(t, "SECRET_VAR", copied.Spec.Config.EnvironmentFrom[0].Name)
-	assert.NotNil(t, copied.Spec.Config.EnvironmentFrom[0].ValueFrom)
-	assert.NotNil(t, copied.Spec.Config.EnvironmentFrom[0].ValueFrom.SecretKeyRef)
-	assert.Equal(t, "my-secret", copied.Spec.Config.EnvironmentFrom[0].ValueFrom.SecretKeyRef.Name)
-	assert.Equal(t, "secret-key", copied.Spec.Config.EnvironmentFrom[0].ValueFrom.SecretKeyRef.Key)
+	// Verify Env is copied correctly
+	assert.Len(t, copied.Spec.Config.Env, 2)
+	assert.Equal(t, "TEST_VAR", copied.Spec.Config.Env[0].Name)
+	assert.Equal(t, "test-value", copied.Spec.Config.Env[0].Value)
+	assert.Equal(t, "SECRET_VAR", copied.Spec.Config.Env[1].Name)
+	assert.NotNil(t, copied.Spec.Config.Env[1].ValueFrom)
+	assert.NotNil(t, copied.Spec.Config.Env[1].ValueFrom.SecretKeyRef)
+	assert.Equal(t, "my-secret", copied.Spec.Config.Env[1].ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "secret-key", copied.Spec.Config.Env[1].ValueFrom.SecretKeyRef.Key)
 
 	// Verify modifying copy doesn't affect original
 	copied.Spec.Image = "modified-image"
 	assert.NotEqual(t, original.Spec.Image, copied.Spec.Image)
 
-	// Verify deep copy of EnvironmentFrom
-	copied.Spec.Config.EnvironmentFrom[0].Name = "MODIFIED_VAR"
-	assert.NotEqual(t, original.Spec.Config.EnvironmentFrom[0].Name, copied.Spec.Config.EnvironmentFrom[0].Name)
+	// Verify deep copy of Env
+	copied.Spec.Config.Env[1].Name = "MODIFIED_VAR"
+	assert.NotEqual(t, original.Spec.Config.Env[1].Name, copied.Spec.Config.Env[1].Name)
 }
 
 func TestNewCRDOperations(t *testing.T) {
@@ -227,8 +222,11 @@ func TestCRDOperations_CreatePerformer(t *testing.T) {
 				Image:      "test-image:latest",
 				ImageTag:   "v1.0.0",
 				GRPCPort:   9090,
-				Environment: map[string]string{
-					"TEST_VAR": "test-value",
+				Env: []corev1.EnvVar{
+					{
+						Name:  "TEST_VAR",
+						Value: "test-value",
+					},
 				},
 			},
 			expectError: false,
@@ -241,25 +239,30 @@ func TestCRDOperations_CreatePerformer(t *testing.T) {
 				Image:      "test-image:latest",
 				ImageTag:   "v1.0.0",
 				GRPCPort:   9090,
-				Environment: map[string]string{
-					"DIRECT_VAR": "direct-value",
-				},
-				EnvironmentFrom: []EnvVarSource{
+				Env: []corev1.EnvVar{
+					{
+						Name:  "DIRECT_VAR",
+						Value: "direct-value",
+					},
 					{
 						Name: "SECRET_VAR",
-						ValueFrom: &EnvValueFrom{
-							SecretKeyRef: &KeySelector{
-								Name: "my-secret",
-								Key:  "secret-key",
+						ValueFrom: &corev1.EnvVarSource{
+							SecretKeyRef: &corev1.SecretKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "my-secret",
+								},
+								Key: "secret-key",
 							},
 						},
 					},
 					{
 						Name: "CONFIG_VAR",
-						ValueFrom: &EnvValueFrom{
-							ConfigMapKeyRef: &KeySelector{
-								Name: "my-config",
-								Key:  "config-key",
+						ValueFrom: &corev1.EnvVarSource{
+							ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "my-config",
+								},
+								Key: "config-key",
 							},
 						},
 					},
