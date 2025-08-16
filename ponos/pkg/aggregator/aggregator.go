@@ -67,6 +67,8 @@ type Aggregator struct {
 	// sequentially processing them
 	chainEventsChan chan *chainPoller.LogWithBlock
 
+	startAvsExecutionManagersChan chan string // chan avsAddress
+
 	managementRpcServer *rpcServer.RpcServer
 
 	// store is the persistence layer for the aggregator
@@ -74,6 +76,10 @@ type Aggregator struct {
 
 	// authVerifier handles authentication for management APIs
 	authVerifier *auth.Verifier
+
+	startContext context.Context
+
+	startContextCancel context.CancelFunc
 }
 
 func NewAggregatorWithManagementRpcServer(
@@ -127,19 +133,20 @@ func NewAggregator(
 	}
 
 	agg := &Aggregator{
-		contractStore:        contractStore,
-		transactionLogParser: tlp,
-		config:               cfg,
-		logger:               logger,
-		signers:              signers,
-		peeringDataFetcher:   peeringDataFetcher,
-		store:                store,
-		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
-		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
-		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
-		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
-		managementRpcServer:  managementRpcServer,
-		authVerifier:         authVerifier,
+		contractStore:                 contractStore,
+		transactionLogParser:          tlp,
+		config:                        cfg,
+		logger:                        logger,
+		signers:                       signers,
+		peeringDataFetcher:            peeringDataFetcher,
+		store:                         store,
+		chainContractCallers:          make(map[config.ChainId]contractCaller.IContractCaller),
+		chainPollers:                  make(map[config.ChainId]chainPoller.IChainPoller),
+		chainEventsChan:               make(chan *chainPoller.LogWithBlock, 10000),
+		avsExecutionManagers:          make(map[string]*avsExecutionManager.AvsExecutionManager),
+		startAvsExecutionManagersChan: make(chan string, 100),
+		managementRpcServer:           managementRpcServer,
+		authVerifier:                  authVerifier,
 	}
 	return agg, nil
 }
@@ -166,7 +173,7 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
-		if err := a.registerAvs(avs); err != nil {
+		if _, err := a.registerAvs(avs); err != nil {
 			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
 		}
 	}
@@ -176,7 +183,7 @@ func (a *Aggregator) Initialize() error {
 	return nil
 }
 
-func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) (*avsExecutionManager.AvsExecutionManager, error) {
 	avsAddress := strings.ToLower(avs.Address)
 	a.logger.Sugar().Infow("Registering AVS",
 		zap.String("avsAddress", avsAddress),
@@ -187,11 +194,11 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 			zap.String("avsAddress", avsAddress),
 			zap.Any("executionManager", avsExecManager),
 		)
-		return fmt.Errorf("AVS Execution Manager for %s already exists", avsAddress)
+		return nil, fmt.Errorf("AVS Execution Manager for %s already exists", avsAddress)
 	}
 	supportedChains, err := a.getValidChainsForAvs(avs.ChainIds)
 	if err != nil {
-		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avsAddress, err)
+		return nil, fmt.Errorf("failed to get valid chains for AVS %s: %w", avsAddress, err)
 	}
 
 	om := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
@@ -216,7 +223,7 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	)
 	if err != nil {
 		a.logger.Error("Failed to create AVS Execution Manager", zap.String("avsAddress", avsAddress), zap.Error(err))
-		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avsAddress, err)
+		return nil, fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avsAddress, err)
 	}
 
 	a.logger.Sugar().Infow("AVS Execution Manager created",
@@ -224,7 +231,7 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		zap.Any("supportedChains", supportedChains),
 	)
 	a.avsExecutionManagers[avsAddress] = aem
-	return nil
+	return aem, nil
 }
 
 func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config.ChainId]string {
@@ -325,6 +332,8 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 // Start starts the aggregator and its components
 func (a *Aggregator) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
+	a.startContext = ctx
+	a.startContextCancel = cancel
 
 	// consume the events channel
 	go func() {
@@ -334,18 +343,11 @@ func (a *Aggregator) Start(ctx context.Context) error {
 		}
 	}()
 
+	go a.startAvsExecutionManagers()
+
 	// run execution managers
-	for _, avsExec := range a.avsExecutionManagers {
-		go func(avsExec *avsExecutionManager.AvsExecutionManager) {
-			if err := avsExec.Init(ctx); err != nil {
-				a.logger.Sugar().Errorw("AVS Execution Manager failed to initialize", "error", err)
-				cancel()
-			}
-			if err := avsExec.Start(ctx); err != nil {
-				a.logger.Sugar().Errorw("AVS Execution Manager failed to start", "error", err)
-				cancel()
-			}
-		}(avsExec)
+	for avsAddr := range a.avsExecutionManagers {
+		a.startAvsExecutionManagersChan <- avsAddr
 	}
 	a.logger.Sugar().Infow("Execution managers started")
 
@@ -365,6 +367,30 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	<-ctx.Done()
 	a.logger.Sugar().Infow("Aggregator context done, stopping")
 	return nil
+}
+
+// nolint:gosimple
+func (a *Aggregator) startAvsExecutionManagers() {
+	for {
+		select {
+		case avs := <-a.startAvsExecutionManagersChan:
+			avsExec, ok := a.avsExecutionManagers[avs]
+			if !ok {
+				a.logger.Sugar().Errorw("AVS Execution Manager not found for address", "avsAddress", avs)
+				continue
+			}
+			go func(avsExec *avsExecutionManager.AvsExecutionManager) {
+				if err := avsExec.Init(a.startContext); err != nil {
+					a.logger.Sugar().Errorw("AVS Execution Manager failed to initialize", "error", err)
+					a.startContextCancel()
+				}
+				if err := avsExec.Start(a.startContext); err != nil {
+					a.logger.Sugar().Errorw("AVS Execution Manager failed to start", "error", err)
+					a.startContextCancel()
+				}
+			}(avsExec)
+		}
+	}
 }
 
 func (a *Aggregator) processEventsChan(ctx context.Context) error {
@@ -387,6 +413,7 @@ func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
 	a.logger.Sugar().Debugw("Processing log",
 		zap.String("eventName", lwb.Log.EventName),
 		zap.Any("lwb", lwb),
+		zap.Int("executionManagerCount", len(a.avsExecutionManagers)),
 	)
 	for avsAddress, avs := range a.avsExecutionManagers {
 		a.logger.Sugar().Infow("Checking AVS Execution Manager for log",
