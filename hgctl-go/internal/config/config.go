@@ -60,7 +60,7 @@ type Context struct {
 	// Keystore and Web3 Signer references
 	Keystores   []KeystoreReference   `yaml:"keystores,omitempty"`
 	Web3Signers []Web3SignerReference `yaml:"web3signers,omitempty"`
-	
+
 	// Signer keystore name (references a keystore in Keystores)
 	SignerKey string `yaml:"signerKey,omitempty"`
 
@@ -71,6 +71,56 @@ type Context struct {
 type Config struct {
 	CurrentContext string              `yaml:"currentContext"`
 	Contexts       map[string]*Context `yaml:"contexts"`
+}
+
+type CurveType string
+
+func (c CurveType) String() string {
+	return string(c)
+}
+func (c CurveType) Uint8() (uint8, error) {
+	return ConvertCurveTypeToSolidityEnum(c)
+}
+
+const (
+	CurveTypeUnknown CurveType = "unknown"
+	CurveTypeECDSA   CurveType = "ecdsa"
+	CurveTypeBN254   CurveType = "bn254" // BN254 is the only supported curve type for now
+)
+
+func ConvertCurveTypeToSolidityEnum(curveType CurveType) (uint8, error) {
+	switch curveType {
+	case CurveTypeUnknown:
+		return 0, nil
+	case CurveTypeECDSA:
+		return 1, nil
+	case CurveTypeBN254:
+		return 2, nil
+	default:
+		return 0, fmt.Errorf("unsupported curve type: %s", curveType)
+	}
+}
+
+func ConvertSolidityEnumToCurveType(enumValue uint8) (CurveType, error) {
+	switch enumValue {
+	case 0:
+		return CurveTypeUnknown, nil
+	case 1:
+		return CurveTypeECDSA, nil
+	case 2:
+		return CurveTypeBN254, nil
+	default:
+		return "", fmt.Errorf("unsupported curve type enum value: %d", enumValue)
+	}
+}
+
+type RemoteSignerConfig struct {
+	Url         string `json:"url" yaml:"url"`
+	CACert      string `json:"caCert" yaml:"caCert"`
+	Cert        string `json:"cert" yaml:"cert"`
+	Key         string `json:"key" yaml:"key"`
+	FromAddress string `json:"fromAddress" yaml:"fromAddress"`
+	PublicKey   string `json:"publicKey" yaml:"publicKey"`
 }
 
 func LoadConfig() (*Config, error) {
@@ -209,7 +259,7 @@ func (c *Context) ToMap() map[string]interface{} {
 	if len(c.Web3Signers) > 0 {
 		result["web3signers"] = c.Web3Signers
 	}
-	
+
 	// Add signer key if set
 	if c.SignerKey != "" {
 		result["signer-key"] = c.SignerKey
