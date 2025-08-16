@@ -59,6 +59,19 @@ const (
 	ChainId_BaseSepoliaAnvil ChainId = 31338
 )
 
+func IsValidChain(chainId uint) bool {
+	validChainIds := []ChainId{
+		ChainId_EthereumMainnet,
+		ChainId_EthereumHolesky,
+		ChainId_EthereumHoodi,
+		ChainId_EthereumSepolia,
+		ChainId_BaseSepolia,
+		ChainId_EthereumAnvil,
+		ChainId_BaseSepoliaAnvil,
+	}
+	return slices.Contains(validChainIds, ChainId(chainId))
+}
+
 const (
 	ContractName_AllocationManager  = "AllocationManager"
 	ContractName_TaskMailbox        = "TaskMailbox"

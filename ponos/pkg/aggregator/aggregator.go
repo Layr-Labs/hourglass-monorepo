@@ -26,7 +26,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"strings"
 	"time"
 )
 
@@ -185,7 +184,7 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		a.logger.Sugar().Warnw("AVS Execution Manager already exists for address", zap.String("avsAddress", avs.Address))
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
-	supportedChains, err := a.getValidChainsForAvs(avs.Address)
+	supportedChains, err := a.getValidChainsForAvs(avs.ChainIds)
 	if err != nil {
 		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
 	}
@@ -233,18 +232,15 @@ func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config
 	}, map[config.ChainId]string{})
 }
 
-// getValidChainsForAvs returns the valid chain IDs for a given AVS address
-// for now, this is a stub for eventually calling on-chain to get the valid chains
-func (a *Aggregator) getValidChainsForAvs(avsAddress string) ([]config.ChainId, error) {
-	avs := util.Find(a.config.AVSs, func(avs *aggregatorConfig.AggregatorAvs) bool {
-		return strings.EqualFold(avs.Address, avsAddress)
-	})
-	if avs == nil {
-		return nil, fmt.Errorf("AVS with address %s not found in config", avsAddress)
-	}
-	return util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
-		return config.ChainId(id)
-	}), nil
+// getValidChainsForAvs takes the provided AVS chains and returns only those that are configured in the aggregator.
+func (a *Aggregator) getValidChainsForAvs(avsChainIds []uint) ([]config.ChainId, error) {
+	validChainIds := util.Reduce(avsChainIds, func(acc []config.ChainId, chainId uint) []config.ChainId {
+		if _, ok := a.chainPollers[config.ChainId(chainId)]; ok {
+			acc = append(acc, config.ChainId(chainId))
+		}
+		return acc
+	}, []config.ChainId{})
+	return validChainIds, nil
 }
 
 func (a *Aggregator) initializePollers() error {
