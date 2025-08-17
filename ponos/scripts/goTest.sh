@@ -50,6 +50,7 @@ runWeb3SignerContainer $web3signerL2Name $web3signerL2Port $web3signerL2ChainId
 echo "Sleeping to let web3signer containers start..."
 sleep 3
 
+export USE_LOCAL_IMAGES=true
 
 # run the tests
 # GOFLAGS="-count=1" $(GO) test -v -p 1 -parallel 1 ./...

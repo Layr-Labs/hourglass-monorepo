@@ -3,7 +3,7 @@ name: hourglass-operator
 description: A Helm chart for deploying the Hourglass Kubernetes Operator (singleton)
 type: application
 # chart version
-version: 0.1.0
+version: 0.1.2
 appVersion: "v1.0.0-rc.3"
 home: https://github.com/Layr-Labs/hourglass-monorepo
 sources:

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer/inMemorySigner"
+	"github.com/ethereum/go-ethereum/crypto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -525,6 +526,8 @@ func TestWeb3Signer_Integration(t *testing.T) {
 		// Test data to sign
 		testData := []byte("Hello from Web3Signer REST API test!")
 
+		payloadHash := crypto.Keccak256Hash(testData)
+
 		// Perform signing using REST API
 		signature, err := signer.SignMessage(testData)
 
@@ -538,6 +541,13 @@ func TestWeb3Signer_Integration(t *testing.T) {
 			}
 			t.FailNow()
 		}
+
+		typedSig, err := ecdsa.NewSignatureFromBytes(signature)
+		assert.Nil(t, err, "Failed to create ECDSA signature from bytes")
+
+		verified, err := typedSig.VerifyWithAddress(payloadHash[:], common.HexToAddress(chainConfig.OperatorAccountAddress))
+		assert.Nil(t, err, "Signature verification failed")
+		assert.True(t, verified, "Signature should be valid for the given data and address")
 
 		// Verify we got a signature
 		assert.NotNil(t, signature)

@@ -3,6 +3,8 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,7 +15,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
@@ -26,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -77,6 +79,11 @@ type AvsKubernetesPerformer struct {
 	activeDeploymentMu sync.Mutex
 }
 
+func generatePerformerNamespace(performerConfig *avsPerformer.AvsPerformerConfig) string {
+	shortAvsAddress := strings.ToLower(performerConfig.AvsAddress[:8])
+	return fmt.Sprintf("hg-perf-%s", shortAvsAddress)
+}
+
 // NewAvsKubernetesPerformer creates a new Kubernetes-based AVS performer
 func NewAvsKubernetesPerformer(
 	config *avsPerformer.AvsPerformerConfig,
@@ -85,7 +92,6 @@ func NewAvsKubernetesPerformer(
 	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsKubernetesPerformer, error) {
-
 	// Initialize Kubernetes client
 	clientWrapper, err := kubernetesManager.NewClientWrapper(kubernetesConfig, logger)
 	if err != nil {
@@ -98,6 +104,16 @@ func NewAvsKubernetesPerformer(
 
 	if err := clientWrapper.TestConnection(ctx); err != nil {
 		logger.Warn("Failed to test Kubernetes connection, continuing anyway", zap.Error(err))
+	}
+
+	if kubernetesConfig.GenerateNamespace {
+		originalNamespace := kubernetesConfig.Namespace
+		kubernetesConfig.Namespace = generatePerformerNamespace(config)
+		logger.Sugar().Infow("Overriding Kubernetes namespace for performer",
+			zap.String("avsAddress", config.AvsAddress),
+			zap.String("originalNamespace", originalNamespace),
+			zap.String("namespace", kubernetesConfig.Namespace),
+		)
 	}
 
 	// Create CRD operations manager
@@ -120,6 +136,11 @@ func NewAvsKubernetesPerformer(
 func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 	akp.performerResourcesMu.Lock()
 	defer akp.performerResourcesMu.Unlock()
+
+	// Ensure namespace exists before any operations
+	if err := akp.kubernetesManager.Initialize(ctx); err != nil {
+		return fmt.Errorf("failed to initialize Kubernetes namespace: %w", err)
+	}
 
 	// Fetch aggregator peer information
 	aggregatorPeers, err := akp.fetchAggregatorPeerInfo(ctx)
@@ -180,17 +201,22 @@ func (akp *AvsKubernetesPerformer) generatePerformerID() string {
 	// Use shortened address hash (6 chars) + shortened UUID (8 chars) for uniqueness
 	// This keeps the total length under Kubernetes 63-character limit for labels
 	shortUUID := strings.Replace(uuid.New().String(), "-", "", -1)[:8]
-	return fmt.Sprintf("performer-%s-%s", containerManager.HashAvsAddress(akp.config.AvsAddress), shortUUID)
+	return fmt.Sprintf("performer-%s-%s", strings.ToLower(akp.config.AvsAddress[:8]), shortUUID)
 }
 
 // buildEnvironmentFromImage builds environment variables from the PerformerImage configuration
-func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) (map[string]string, []kubernetesManager.EnvVarSource) {
-	envMap := make(map[string]string)
-	var envVarSources []kubernetesManager.EnvVarSource
+func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.PerformerImage) []corev1.EnvVar {
+	var envVars []corev1.EnvVar
 
 	// Add default environment variables
-	envMap["AVS_ADDRESS"] = akp.config.AvsAddress
-	envMap["GRPC_PORT"] = fmt.Sprintf("%d", defaultGRPCPort)
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "AVS_ADDRESS",
+		Value: akp.config.AvsAddress,
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "GRPC_PORT",
+		Value: fmt.Sprintf("%d", defaultGRPCPort),
+	})
 
 	// Process environment variables from image.Envs
 	for _, env := range image.Envs {
@@ -199,37 +225,42 @@ func (akp *AvsKubernetesPerformer) buildEnvironmentFromImage(image avsPerformer.
 			continue
 		}
 
+		envVar := corev1.EnvVar{
+			Name: env.Name,
+		}
+
 		// Handle KubernetesEnv (references to secrets/configmaps)
-		if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					SecretKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
+		if env.KubernetesEnv != nil {
+			if env.KubernetesEnv.ValueFrom.SecretKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.SecretKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.SecretKeyRef.Key,
 					},
-				},
-			}
-			envVarSources = append(envVarSources, envVarSource)
-		} else if env.KubernetesEnv != nil && env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
-			envVarSource := kubernetesManager.EnvVarSource{
-				Name: env.Name,
-				ValueFrom: &kubernetesManager.EnvValueFrom{
-					ConfigMapKeyRef: &kubernetesManager.KeySelector{
-						Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
-						Key:  env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
+				}
+				envVars = append(envVars, envVar)
+			} else if env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name != "" {
+				envVar.ValueFrom = &corev1.EnvVarSource{
+					ConfigMapKeyRef: &corev1.ConfigMapKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Name,
+						},
+						Key: env.KubernetesEnv.ValueFrom.ConfigMapKeyRef.Key,
 					},
-				},
+				}
+				envVars = append(envVars, envVar)
 			}
-			envVarSources = append(envVarSources, envVarSource)
 		} else if env.Value != "" {
 			// Handle direct value
-			envMap[env.Name] = env.Value
+			envVar.Value = env.Value
+			envVars = append(envVars, envVar)
 		}
 		// Note: Ignoring ValueFromEnv for now as requested
 	}
 
-	return envMap, envVarSources
+	return envVars
 }
 
 // createPerformerResource creates a new Kubernetes performer resource
@@ -239,20 +270,34 @@ func (akp *AvsKubernetesPerformer) createPerformerResource(
 ) (*PerformerResource, error) {
 	performerID := akp.generatePerformerID()
 
-	// Build environment variables and sources
-	envMap, envVarSources := akp.buildEnvironmentFromImage(image)
+	// Build environment variables
+	env := akp.buildEnvironmentFromImage(image)
+
+	containerImage := image.Repository
+	if image.Tag != "" {
+		containerImage = fmt.Sprintf("%s:%s", image.Repository, image.Tag)
+	}
+	if image.Digest != "" {
+		// If a digest is provided, use it directly
+		containerImage = fmt.Sprintf("%s@%s", image.Repository, image.Digest)
+	}
+
+	imagePullPolicy := "Always"
+	if os.Getenv("USE_LOCAL_IMAGES") == "true" {
+		// For testing, use local images only
+		imagePullPolicy = "Never"
+	}
 
 	// Create Kubernetes CRD request
 	createRequest := &kubernetesManager.CreatePerformerRequest{
 		Name:               performerID,
 		AVSAddress:         akp.config.AvsAddress,
-		Image:              fmt.Sprintf("%s:%s", image.Repository, image.Tag),
-		ImagePullPolicy:    "Never", // Use local images only for testing
+		Image:              containerImage,
+		ImagePullPolicy:    imagePullPolicy, // Use local images only for testing
 		ImageTag:           image.Tag,
 		ImageDigest:        image.Digest,
 		GRPCPort:           defaultGRPCPort,
-		Environment:        envMap,
-		EnvironmentFrom:    envVarSources,
+		Env:                env,
 		ServiceAccountName: image.ServiceAccountName,
 		// Add resource requirements if needed
 		// Resources: &kubernetesManager.ResourceRequirements{...},
@@ -577,8 +622,20 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
 	})
 	if peer == nil {
+		akp.logger.Sugar().Errorw("Failed to find peer for task",
+			zap.String("avsAddress", akp.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+		)
 		return fmt.Errorf("failed to find peer for task")
 	}
+	akp.logger.Sugar().Infow("Validating task signature",
+		zap.String("avsAddress", akp.config.AvsAddress),
+		zap.String("aggregatorAddress", t.AggregatorAddress),
+		zap.String("taskID", t.TaskID),
+		zap.String("payloadHash", crypto.Keccak256Hash(t.Payload).String()),
+		zap.String("payloadHex", hexutil.Encode(t.Payload)),
+		zap.Any("peer", peer),
+	)
 
 	isVerified := false
 
@@ -586,36 +643,59 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 		var scheme signing.SigningScheme
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
+			akp.logger.Sugar().Infow("Using BN254 scheme for signature verification")
 			scheme = bn254.NewScheme()
 		case config.CurveTypeECDSA:
+			akp.logger.Sugar().Infow("Using ECDSA scheme for signature verification")
 			scheme = ecdsa.NewScheme()
 		default:
 			return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
 		}
 
-		sig, err := scheme.NewSignatureFromBytes(t.Signature)
-		if err != nil {
-			return err
-		}
-
 		var verified bool
 		payloadHash := crypto.Keccak256Hash(t.Payload)
+		akp.logger.Sugar().Infow("Verifying signature",
+			zap.String("avsAddress", akp.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+			zap.String("curveType", opset.CurveType.String()),
+			zap.String("payloadHash", payloadHash.Hex()),
+		)
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
-		case config.CurveTypeECDSA:
-			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
+			sig, err := scheme.NewSignatureFromBytes(t.Signature)
 			if err != nil {
+				return err
+			}
+			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
+			if err != nil {
+				akp.logger.Error("Failed to verify BN254 signature",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.Error(err),
+				)
+				continue
+			}
+		case config.CurveTypeECDSA:
+			typedSig, err := ecdsa.NewSignatureFromBytes(t.Signature)
+			if err != nil {
+				akp.logger.Error("Failed to create ECDSA signature from bytes",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.String("address", opset.WrappedPublicKey.ECDSAAddress.String()),
+					zap.Error(err),
+				)
 				continue
 			}
 			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
 			if err != nil {
+				akp.logger.Error("Failed to verify ECDSA signature",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.String("address", opset.WrappedPublicKey.ECDSAAddress.String()),
+					zap.Error(err),
+				)
 				continue
 			}
-		}
-
-		if err != nil {
-			continue
 		}
 
 		if verified {

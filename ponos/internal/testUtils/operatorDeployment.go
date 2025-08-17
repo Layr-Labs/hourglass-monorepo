@@ -36,13 +36,17 @@ type OperatorDeploymentConfig struct {
 
 // DefaultOperatorDeploymentConfig returns default configuration for operator deployment
 func DefaultOperatorDeploymentConfig(projectRoot string, logger *zap.SugaredLogger) *OperatorDeploymentConfig {
+	imagePullPolicy := "Always"
+	if os.Getenv("USE_LOCAL_IMAGES") == "true" {
+		imagePullPolicy = "Never" // Use locally loaded images
+	}
 	return &OperatorDeploymentConfig{
 		Namespace:       "hourglass-system",
 		ReleaseName:     "hourglass-operator",
 		ChartPath:       filepath.Join(projectRoot, "..", "hourglass-operator", "charts", "hourglass-operator"),
 		ImageRepository: "hourglass/operator",
 		ImageTag:        "test",
-		ImagePullPolicy: "Never", // Use locally loaded images
+		ImagePullPolicy: imagePullPolicy, // Use locally loaded images
 		WaitTimeout:     3 * time.Minute,
 		Logger:          logger,
 		Values: map[string]interface{}{
@@ -50,7 +54,7 @@ func DefaultOperatorDeploymentConfig(projectRoot string, logger *zap.SugaredLogg
 			"image": map[string]interface{}{
 				"repository": "hourglass/operator",
 				"tag":        "test",
-				"pullPolicy": "Never",
+				"pullPolicy": imagePullPolicy,
 			},
 			"resources": map[string]interface{}{
 				"limits": map[string]interface{}{

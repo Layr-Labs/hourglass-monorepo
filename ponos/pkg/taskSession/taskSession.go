@@ -110,6 +110,13 @@ func NewECDSATaskSession(
 			PublicKey: opset.WrappedPublicKey.ECDSAAddress,
 		})
 	}
+	logger.Sugar().Infow("creating ECDSA task session",
+		zap.String("taskId", task.TaskId),
+		zap.String("aggregatorAddress", aggregatorAddress),
+		zap.String("operatorSetId", fmt.Sprintf("%d", task.OperatorSetId)),
+		zap.Uint16("thresholdBips", task.ThresholdBips),
+		zap.Any("operators", operators),
+	)
 
 	ta, err := aggregation.NewECDSATaskResultAggregator(
 		ctx,
@@ -211,6 +218,12 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				)
 				return
 			}
+			ts.logger.Sugar().Infow("connecting to operator",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.String("operatorAddress", peer.OperatorAddress),
+				zap.String("networkAddress", socket),
+				zap.String("avsAddress", ts.Task.AVSAddress),
+			)
 			c, err := executorClient.NewExecutorClient(socket, true)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
@@ -225,6 +238,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.String("networkAddress", socket),
+				zap.String("avsAddress", ts.Task.AVSAddress),
 			)
 
 			res, err := c.SubmitTask(ts.context, taskSubmission)

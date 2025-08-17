@@ -4,12 +4,16 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // Config represents the configuration for the Kubernetes manager
 type Config struct {
 	// Namespace is the Kubernetes namespace to operate in
 	Namespace string `json:"namespace" yaml:"namespace"`
+
+	// GenerateNamespace indicates if the namespace name should be generated to override Namespace
+	GenerateNamespace bool `json:"generateNamespace,omitempty" yaml:"generateNamespace,omitempty"`
 
 	// KubeconfigPath is the path to the kubeconfig file (optional, defaults to in-cluster)
 	KubeconfigPath string `json:"kubeconfigPath,omitempty" yaml:"kubeconfigPath,omitempty"`
@@ -36,32 +40,7 @@ type Config struct {
 	RetryBackoff time.Duration `json:"retryBackoff" yaml:"retryBackoff"`
 }
 
-// EnvVarSource represents a source for the value of an environment variable
-type EnvVarSource struct {
-	// Name of the environment variable
-	Name string `json:"name"`
-
-	// ValueFrom specifies the source of the environment variable value
-	ValueFrom *EnvValueFrom `json:"valueFrom,omitempty"`
-}
-
-// EnvValueFrom describes a source for the value of an environment variable
-type EnvValueFrom struct {
-	// SecretKeyRef selects a key of a secret in the pod's namespace
-	SecretKeyRef *KeySelector `json:"secretKeyRef,omitempty"`
-
-	// ConfigMapKeyRef selects a key of a config map in the pod's namespace
-	ConfigMapKeyRef *KeySelector `json:"configMapKeyRef,omitempty"`
-}
-
-// KeySelector selects a key from a ConfigMap or Secret
-type KeySelector struct {
-	// Name of the referent
-	Name string `json:"name"`
-
-	// Key in the referent to select from
-	Key string `json:"key"`
-}
+// Custom environment types removed - using standard k8s corev1.EnvVar instead
 
 // CreatePerformerRequest contains the parameters for creating a new performer
 type CreatePerformerRequest struct {
@@ -86,11 +65,8 @@ type CreatePerformerRequest struct {
 	// GRPCPort is the port the performer will serve gRPC on
 	GRPCPort int32
 
-	// Environment variables for the performer container
-	Environment map[string]string
-
-	// EnvironmentFrom variables for the performer container (references to secrets/configmaps)
-	EnvironmentFrom []EnvVarSource
+	// Env is the list of environment variables using standard k8s EnvVar type
+	Env []corev1.EnvVar
 
 	// Resources specifies the compute resources for the performer
 	Resources *ResourceRequirements

@@ -47,9 +47,10 @@ status:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `grpcPort` | int32 | No | gRPC server port (default: 9090, range: 1-65535) |
-| `environment` | map[string]string | No | Environment variables |
+| `env` | []corev1.EnvVar | No | Environment variables using standard k8s EnvVar type |
 | `args` | []string | No | Additional command line arguments |
 | `command` | []string | No | Override container entrypoint |
+| `serviceAccountName` | string | No | Service account for the performer pod |
 
 ### SchedulingConfig
 
@@ -204,6 +205,48 @@ spec:
   image: "myavs/performer:latest"
 ```
 
+### Performer with Environment Variables from Secrets/ConfigMaps
+
+```yaml
+apiVersion: hourglass.eigenlayer.io/v1alpha1
+kind: Performer
+metadata:
+  name: env-performer
+  namespace: my-avs-project
+spec:
+  avsAddress: "0x1234567890abcdef1234567890abcdef12345678"
+  image: "myavs/performer:latest"
+  config:
+    grpcPort: 9090
+    env:
+    # Direct value
+    - name: LOG_LEVEL
+      value: "info"
+    # From secret
+    - name: API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: api-secrets
+          key: api-key
+    # From configmap
+    - name: CONFIG_DATA
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: config.json
+    # From field reference
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    # From resource field
+    - name: MEM_LIMIT
+      valueFrom:
+        resourceFieldRef:
+          containerName: performer
+          resource: limits.memory
+```
+
 ### GPU-Enabled Performer
 
 ```yaml
@@ -218,9 +261,11 @@ spec:
   version: "v3.0.0"
   config:
     grpcPort: 9090
-    environment:
-      CUDA_VISIBLE_DEVICES: "0,1"
-      LOG_LEVEL: "info"
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0,1"
+    - name: LOG_LEVEL
+      value: "info"
   resources:
     requests:
       nvidia.com/gpu: "2"
@@ -256,9 +301,11 @@ spec:
   version: "v1.5.0"
   config:
     grpcPort: 8080
-    environment:
-      SGX_MODE: "HW"
-      SECURITY_LEVEL: "high"
+    env:
+    - name: SGX_MODE
+      value: "HW"
+    - name: SECURITY_LEVEL
+      value: "high"
   scheduling:
     nodeSelector:
       intel.feature.node.kubernetes.io/sgx: "true"
@@ -289,10 +336,13 @@ spec:
   version: "v2.1.0"
   config:
     grpcPort: 9090
-    environment:
-      LOG_LEVEL: "debug"
-      WORKER_THREADS: "8"
-      CACHE_SIZE: "1GB"
+    env:
+    - name: LOG_LEVEL
+      value: "debug"
+    - name: WORKER_THREADS
+      value: "8"
+    - name: CACHE_SIZE
+      value: "1GB"
     command: ["/usr/bin/performer"]
     args: 
       - "--config=/etc/performer/config.yaml"

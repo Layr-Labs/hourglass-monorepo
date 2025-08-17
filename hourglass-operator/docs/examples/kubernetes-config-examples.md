@@ -32,6 +32,7 @@ performer_config:
 
 kubernetes:
   namespace: "my-avs-project"
+  generateNamespace: true
   operator_namespace: "hourglass-system"
   performer_crd_group: "hourglass.eigenlayer.io"
   performer_crd_version: "v1alpha1"

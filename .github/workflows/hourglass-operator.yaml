@@ -92,4 +92,4 @@ jobs:
         run: |
           echo "Building docker image for version ${{ github.sha }}"
           cd hourglass-operator
-          docker buildx build --platform "linux/amd64,linux/arm64" -t $REGISTRY/$REPOSITORY:${{ github.sha }} -t $REGISTRY/$REPOSITORY:latest --push .
+          docker buildx build --platform "linux/amd64" -t $REGISTRY/$REPOSITORY:${{ github.sha }} -t $REGISTRY/$REPOSITORY:latest --push .

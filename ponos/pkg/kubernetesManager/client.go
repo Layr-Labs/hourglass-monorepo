@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -69,6 +70,7 @@ func NewClientWrapper(cfg *Config, l *zap.Logger) (*ClientWrapper, error) {
 
 	// Create scheme with Performer CRD types
 	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme) // Add standard Kubernetes types
 
 	// Add Performer CRD types with correct kind names
 	gv := schema.GroupVersion{Group: cfg.CRDGroup, Version: cfg.CRDVersion}

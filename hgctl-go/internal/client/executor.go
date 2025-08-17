@@ -52,10 +52,12 @@ func (c *Client) DeployPerformerWithEnv(
 	}
 
 	req := &pb.DeployArtifactRequest{
-		AvsAddress:  avsAddress,
-		Digest:      digest,
-		RegistryUrl: registryName,
-		Env:         performerEnvs,
+		AvsAddress: avsAddress,
+		Image: &pb.PerformerImage{
+			Registry: registryName,
+			Digest:   digest,
+		},
+		Envs: performerEnvs,
 	}
 
 	c.logger.Info("Deploying performer",
