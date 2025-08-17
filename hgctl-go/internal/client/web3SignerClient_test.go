@@ -17,7 +17,7 @@ func TestNewClient(t *testing.T) {
 	l := logger.NewLogger(false)
 
 	t.Run("with default config", func(t *testing.T) {
-		client, err := NewWeb3Signer(DefaultWeb3SignerConfig(), l)
+		client, err := NewWeb3SignerClient(DefaultWeb3SignerConfig(), l)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.NotNil(t, client.config)
@@ -30,7 +30,7 @@ func TestNewClient(t *testing.T) {
 			BaseURL: "http://custom:8080",
 			Timeout: 10 * time.Second,
 		}
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "http://custom:8080", client.config.BaseURL)
@@ -38,14 +38,14 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("with nil config", func(t *testing.T) {
-		client, err := NewWeb3Signer(nil, l)
+		client, err := NewWeb3SignerClient(nil, l)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "cfg cannot be nil")
 	})
 
 	t.Run("with nil logger", func(t *testing.T) {
-		client, err := NewWeb3Signer(DefaultWeb3SignerConfig(), nil)
+		client, err := NewWeb3SignerClient(DefaultWeb3SignerConfig(), nil)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "logger cannot be nil")
@@ -86,7 +86,7 @@ func TestClient_EthAccounts(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		accounts, err := client.EthAccounts(context.Background())
@@ -105,7 +105,7 @@ func TestClient_EthAccounts(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		_, err = client.EthAccounts(context.Background())
@@ -152,7 +152,7 @@ func TestClient_EthSign(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		signature, err := client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
@@ -185,7 +185,7 @@ func TestClient_EthSign(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		_, err = client.EthSign(context.Background(), "0x1234567890abcdef", "0x48656c6c6f2c20776f726c6421")
@@ -236,7 +236,7 @@ func TestClient_EthSignTransaction(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		transaction := map[string]interface{}{
@@ -259,7 +259,7 @@ func TestWeb3SignerError_Error(t *testing.T) {
 		Message: "Account not found",
 	}
 
-	expected := "Web3Signer error -32000: Account not found"
+	expected := "Web3SignerClient error -32000: Account not found"
 	assert.Equal(t, expected, err.Error())
 }
 
@@ -300,7 +300,7 @@ func TestClient_SignRaw(t *testing.T) {
 
 	t.Run("successful raw signing", func(t *testing.T) {
 		expectedSignature := "0xb3baa751d0a9132cfe93e4e3d5ff9075111100e3789dca219ade5a24d27e19d16b3353149da1833e9b691bb38634e8dc04469be7032132906c927d7e1a49b414730612877bc6b2810c8f202daf793d1ab0d6b5cb21d52f9e52e883859887a5d9"
-		testData := []byte("Hello, Web3Signer!")
+		testData := []byte("Hello, Web3SignerClient!")
 		identifier := "0x1234567890abcdef"
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +323,7 @@ func TestClient_SignRaw(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		signature, err := client.SignRaw(context.Background(), identifier, testData)
@@ -343,7 +343,7 @@ func TestClient_SignRaw(t *testing.T) {
 
 		cfg := DefaultWeb3SignerConfig()
 		cfg.BaseURL = server.URL
-		client, err := NewWeb3Signer(cfg, l)
+		client, err := NewWeb3SignerClient(cfg, l)
 		require.NoError(t, err)
 
 		_, err = client.SignRaw(context.Background(), identifier, testData)
@@ -363,7 +363,7 @@ func TestTLSClientCreation(t *testing.T) {
 			BaseURL: "http://localhost:9000",
 			Timeout: 30 * time.Second,
 		}
-		client, err := NewWeb3Signer(config, l)
+		client, err := NewWeb3SignerClient(config, l)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -373,7 +373,7 @@ func TestTLSClientCreation(t *testing.T) {
 			BaseURL: "https://localhost:9000",
 			Timeout: 30 * time.Second,
 		}
-		client, err := NewWeb3Signer(config, l)
+		client, err := NewWeb3SignerClient(config, l)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -386,7 +386,7 @@ func TestTLSClientCreation(t *testing.T) {
 				InsecureSkipVerify: true, // For testing - skip cert validation
 			},
 		}
-		client, err := NewWeb3Signer(config, l)
+		client, err := NewWeb3SignerClient(config, l)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 	})
@@ -400,7 +400,7 @@ func TestTLSClientCreation(t *testing.T) {
 				ClientKey:  "invalid-key",
 			},
 		}
-		client, err := NewWeb3Signer(config, l)
+		client, err := NewWeb3SignerClient(config, l)
 		assert.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "failed to load client certificate and key")

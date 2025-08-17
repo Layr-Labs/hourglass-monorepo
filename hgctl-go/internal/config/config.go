@@ -1,7 +1,11 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -20,33 +24,12 @@ var (
 	KeystorePassword  string     = "KEYSTORE_PASSWORD"
 )
 
-type KeystoreReference struct {
-	Name string `yaml:"name"`
-	Path string `yaml:"path"`
-	Type string `yaml:"type"`
-}
-
-type Web3SignerReference struct {
-	Name           string `yaml:"name"`
-	ConfigPath     string `yaml:"configPath,omitempty"`
-	CACertPath     string `yaml:"caCertPath,omitempty"`
-	ClientCertPath string `yaml:"clientCertPath,omitempty"`
-	ClientKeyPath  string `yaml:"clientKeyPath,omitempty"`
-}
-
 type ContractOverrides struct {
 	DelegationManager string `yaml:"delegationManager,omitempty"`
 	AllocationManager string `yaml:"allocationManager,omitempty"`
 	StrategyManager   string `yaml:"strategyManager,omitempty"`
 	KeyRegistrar      string `yaml:"keyRegistrar,omitempty"`
 	ReleaseManager    string `yaml:"releaseManager,omitempty"`
-}
-
-type SignerConfig struct {
-	Type       string `yaml:"type"` // "keystore", "web3signer", or "privatekey"
-	Keystore   string `yaml:"keystore,omitempty"`
-	PrivateKey string `yaml:"-"` // Never save to disk
-	Web3Signer string `yaml:"web3signer,omitempty"`
 }
 
 type Context struct {
@@ -65,11 +48,14 @@ type Context struct {
 	EnvSecretsPath string `yaml:"envSecretsPath"` // Remove omitempty to preserve field
 
 	// Keystore and Web3 Signer references
-	Keystores   []KeystoreReference   `yaml:"keystores,omitempty"`
-	Web3Signers []Web3SignerReference `yaml:"web3signers,omitempty"`
+	Keystores   []signer.KeystoreReference     `yaml:"keystores,omitempty"`
+	Web3Signers []signer.RemoteSignerReference `yaml:"web3signers,omitempty"`
 
-	// Signer configuration
-	Signer *SignerConfig `yaml:"signer,omitempty"`
+	// Signing keys
+	SystemSignerKeys *signer.SigningKeys `yaml:"systemSigner,omitempty"`
+
+	// Operator Keys
+	OperatorKeys *signer.ECDSAKeyConfig `yaml:"operatorSigner,omitempty"`
 
 	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
 	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
@@ -80,54 +66,64 @@ type Config struct {
 	Contexts       map[string]*Context `yaml:"contexts"`
 }
 
-type CurveType string
-
-func (c CurveType) String() string {
-	return string(c)
-}
-func (c CurveType) Uint8() (uint8, error) {
-	return ConvertCurveTypeToSolidityEnum(c)
-}
-
-const (
-	CurveTypeUnknown CurveType = "unknown"
-	CurveTypeECDSA   CurveType = "ecdsa"
-	CurveTypeBN254   CurveType = "bn254" // BN254 is the only supported curve type for now
-)
-
-func ConvertCurveTypeToSolidityEnum(curveType CurveType) (uint8, error) {
-	switch curveType {
-	case CurveTypeUnknown:
-		return 0, nil
-	case CurveTypeECDSA:
-		return 1, nil
-	case CurveTypeBN254:
-		return 2, nil
-	default:
-		return 0, fmt.Errorf("unsupported curve type: %s", curveType)
+// OperatorSignerFromContext loads the operator key signer from context
+func OperatorSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, error) {
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return nil, fmt.Errorf("no operator signing keys configured -- please use `hgctl signer` and follow the wizard to setup")
 	}
-}
 
-func ConvertSolidityEnumToCurveType(enumValue uint8) (CurveType, error) {
-	switch enumValue {
-	case 0:
-		return CurveTypeUnknown, nil
-	case 1:
-		return CurveTypeECDSA, nil
-	case 2:
-		return CurveTypeBN254, nil
-	default:
-		return "", fmt.Errorf("unsupported curve type enum value: %d", enumValue)
+	opKeys := ctx.OperatorKeys
+	if opKeys.Keystore != nil {
+		return signer.LoadKeystoreSigner(opKeys.Keystore)
 	}
+
+	if opKeys.UseRemoteSigner {
+		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)
+		}
+		return client.LoadWeb3Signer(web3SignerConfig, l)
+	}
+
+	if opKeys.PrivateKey != false {
+		return signer.LoadPrivateKeySigner()
+	}
+
+	return nil, fmt.Errorf("operator signing keys not found in context")
 }
 
-type RemoteSignerConfig struct {
-	Url         string `json:"url" yaml:"url"`
-	CACert      string `json:"caCert" yaml:"caCert"`
-	Cert        string `json:"cert" yaml:"cert"`
-	Key         string `json:"key" yaml:"key"`
-	FromAddress string `json:"fromAddress" yaml:"fromAddress"`
-	PublicKey   string `json:"publicKey" yaml:"publicKey"`
+// SystemSignerFromContext loads the operator key signer from context
+func SystemSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, error) {
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return nil, fmt.Errorf("no operator signing keys found in context")
+	}
+
+	opKeys := ctx.OperatorKeys
+	if opKeys.Keystore != nil {
+		return signer.LoadKeystoreSigner(opKeys.Keystore)
+	}
+
+	if opKeys.UseRemoteSigner {
+		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)
+		}
+		return client.LoadWeb3Signer(web3SignerConfig, l)
+	}
+
+	if opKeys.PrivateKey != false {
+		return signer.LoadPrivateKeySigner()
+	}
+
+	return nil, fmt.Errorf("operator signing keys not found in context")
+}
+
+// LoggerFromContext retrieves the logger from the context
+func LoggerFromContext(ctx context.Context) logger.Logger {
+	if l, ok := ctx.Value(LoggerKey).(logger.Logger); ok {
+		return l
+	}
+	return logger.GetLogger()
 }
 
 func LoadConfig() (*Config, error) {
@@ -203,7 +199,6 @@ func GetCurrentContext() (*Context, error) {
 }
 
 func GetConfigDir() string {
-	// Default to home directory
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".hgctl")
 }
@@ -268,8 +263,8 @@ func (c *Context) ToMap() map[string]interface{} {
 	}
 
 	// Add signer key if set
-	if c.Signer != nil {
-		result["signer-key"] = c.SignerKey
+	if c.OperatorKeys != nil {
+		result["operator-key"] = c.OperatorKeys
 	}
 
 	// Add contract overrides if any

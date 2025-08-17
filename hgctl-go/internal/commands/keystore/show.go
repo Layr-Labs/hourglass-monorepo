@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"os"
 	"path/filepath"
@@ -63,7 +64,7 @@ The keystore must have been previously added to your context using 'keystore add
 				return fmt.Errorf("current context '%s' not found", cfg.CurrentContext)
 			}
 
-			var keystoreRef *config.KeystoreReference
+			var keystoreRef *signer.KeystoreReference
 			for _, ks := range currentCtx.Keystores {
 				if ks.Name == keyName {
 					keystoreRef = &ks

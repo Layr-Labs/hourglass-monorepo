@@ -147,7 +147,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
 		}
 	} else {
-		log.Info("Private key not configured - read-only mode enabled")
+		log.Debug("Private key not configured - read-only mode enabled")
 	}
 
 	// Get chain ID

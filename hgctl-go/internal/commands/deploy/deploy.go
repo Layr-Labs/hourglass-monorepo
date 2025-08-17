@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -128,13 +129,13 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// Add signer key from context as KEYSTORE_NAME if not already set
-	if d.Context.SignerKey != "" {
-		if _, exists := envVars["KEYSTORE_NAME"]; !exists {
-			envVars["KEYSTORE_NAME"] = d.Context.SignerKey
-			d.Log.Debug("Using signer key from context", zap.String("keystore", d.Context.SignerKey))
-		}
-	}
+	//// Add signer key from context as KEYSTORE_NAME if not already set
+	//if d.Context.SignerKey != "" {
+	//	if _, exists := envVars["KEYSTORE_NAME"]; !exists {
+	//		envVars["KEYSTORE_NAME"] = d.Context.SignerKey
+	//		d.Log.Debug("Using signer key from context", zap.String("keystore", d.Context.SignerKey))
+	//	}
+	//}
 
 	// Add L1 chain ID from context if not already set
 	if d.Context.L1ChainID != 0 {
@@ -150,7 +151,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 			// Translate localhost URLs for Docker on macOS
 			envVars["L1_RPC_URL"] = translateLocalhostForDocker(d.Context.L1RPCUrl)
 			if envVars["L1_RPC_URL"] != d.Context.L1RPCUrl {
-				d.Log.Debug("Translated L1 RPC URL for Docker", 
+				d.Log.Debug("Translated L1 RPC URL for Docker",
 					zap.String("original", d.Context.L1RPCUrl),
 					zap.String("translated", envVars["L1_RPC_URL"]))
 			} else {
@@ -244,7 +245,7 @@ func (d *PlatformDeployer) CreateTempDirectories(componentType string) (*Deploym
 }
 
 // ValidateKeystore validates that a keystore exists and is accessible
-func (d *PlatformDeployer) ValidateKeystore(keystoreName string, keystorePassword string) (*config.KeystoreReference, error) {
+func (d *PlatformDeployer) ValidateKeystore(keystoreName string, keystorePassword string) (*signer.KeystoreReference, error) {
 	var missing []string
 
 	// Check for keystore configuration
@@ -259,7 +260,7 @@ func (d *PlatformDeployer) ValidateKeystore(keystoreName string, keystorePasswor
 		return nil, fmt.Errorf("missing required signer configuration:\n  - %s", strings.Join(missing, "\n  - "))
 	}
 
-	var foundKeystore *config.KeystoreReference
+	var foundKeystore *signer.KeystoreReference
 	for _, ks := range d.Context.Keystores {
 		if ks.Name == keystoreName {
 			foundKeystore = &ks
@@ -324,18 +325,18 @@ func (d *PlatformDeployer) CleanupExistingContainer(containerName string) {
 }
 
 // MountKeystores adds keystore volume mounts to docker arguments
-func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystore *config.KeystoreReference) error {
+func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystore *signer.KeystoreReference) error {
 	// Ensure the keystore path is absolute
 	absPath, err := filepath.Abs(keystore.Path)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for keystore: %w", err)
 	}
-	
+
 	// Verify the keystore file exists and is readable
 	if _, err := os.Stat(absPath); err != nil {
 		return fmt.Errorf("keystore file not accessible at %s: %w", absPath, err)
 	}
-	
+
 	// Mount the specific keystore file
 	*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:/keystores/operator.keystore.json:ro", absPath))
 

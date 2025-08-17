@@ -9,6 +9,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/output"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 )
 
 func copyCommand() *cli.Command {
@@ -40,7 +41,7 @@ func contextCopyAction(c *cli.Context) error {
 	sourceName := c.Args().Get(0)
 	copyName := c.String("copy-name")
 	setCurrent := c.Bool("use")
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	// Load existing config
 	cfg, err := config.LoadConfig()
@@ -168,7 +169,6 @@ func deepCopyContext(src *config.Context) *config.Context {
 		L1RPCUrl:        src.L1RPCUrl,
 		PrivateKey:      src.PrivateKey,
 		EnvSecretsPath:  src.EnvSecretsPath,
-		SignerKey:       src.SignerKey,
 	}
 
 	// Copy slices and nested structures
@@ -182,7 +182,7 @@ func deepCopyContext(src *config.Context) *config.Context {
 // copyKeystores deep copies the keystores slice
 func copyKeystores(src, dst *config.Context) {
 	if src.Keystores != nil {
-		dst.Keystores = make([]config.KeystoreReference, len(src.Keystores))
+		dst.Keystores = make([]signer.KeystoreReference, len(src.Keystores))
 		copy(dst.Keystores, src.Keystores)
 	}
 }
@@ -190,7 +190,7 @@ func copyKeystores(src, dst *config.Context) {
 // copyWeb3Signers deep copies the web3signers slice
 func copyWeb3Signers(src, dst *config.Context) {
 	if src.Web3Signers != nil {
-		dst.Web3Signers = make([]config.Web3SignerReference, len(src.Web3Signers))
+		dst.Web3Signers = make([]signer.RemoteSignerReference, len(src.Web3Signers))
 		copy(dst.Web3Signers, src.Web3Signers)
 	}
 }

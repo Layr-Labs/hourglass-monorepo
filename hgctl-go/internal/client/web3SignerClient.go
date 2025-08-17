@@ -1,8 +1,8 @@
-// Package web3signer provides a client for interacting with Web3Signer services.
+// Package web3signer provides a client for interacting with Web3SignerClient services.
 //
-// Web3Signer is a remote signing service that provides a JSON-RPC API for signing
+// Web3SignerClient is a remote signing service that provides a JSON-RPC API for signing
 // Ethereum transactions and messages. This client package provides a Go
-// interface for interacting with Web3Signer instances via JSON-RPC.
+// interface for interacting with Web3SignerClient instances via JSON-RPC.
 //
 // The client supports the following operations:
 //   - Signing transactions with specified keys
@@ -48,17 +48,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer/web3Signer"
 	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
-
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -121,7 +118,7 @@ type EthSignTransactionRequest struct {
 	ChainID string `json:"chainId,omitempty"`
 }
 
-// SignRequest represents a request to sign data sent to the Web3Signer service.
+// SignRequest represents a request to sign data sent to the Web3SignerClient service.
 type SignRequest struct {
 	// Data is the hex-encoded data to be signed
 	Data string `json:"data"`
@@ -133,7 +130,7 @@ type SignResponse struct {
 	Signature string `json:"signature"`
 }
 
-// HealthCheck represents the detailed health status of the Web3Signer service.
+// HealthCheck represents the detailed health status of the Web3SignerClient service.
 type HealthCheck struct {
 	// Status is the overall status of the service ("UP" or "DOWN")
 	Status string `json:"status"`
@@ -151,7 +148,7 @@ type StatusCheck struct {
 	Status string `json:"status"`
 }
 
-// Web3SignerError represents an error response from the Web3Signer service.
+// Web3SignerError represents an error response from the Web3SignerClient service.
 type Web3SignerError struct {
 	// Code is the HTTP status code associated with the error
 	Code int `json:"code"`
@@ -161,10 +158,10 @@ type Web3SignerError struct {
 
 // Error implements the error interface for Web3SignerError.
 func (e *Web3SignerError) Error() string {
-	return fmt.Sprintf("Web3Signer error %d: %s", e.Code, e.Message)
+	return fmt.Sprintf("Web3SignerClient error %d: %s", e.Code, e.Message)
 }
 
-// Web3SignerResponse represents a generic response structure from the Web3Signer service.
+// Web3SignerResponse represents a generic response structure from the Web3SignerClient service.
 type Web3SignerResponse struct {
 	// Status indicates the response status
 	Status string `json:"status,omitempty"`
@@ -179,7 +176,7 @@ func (r *Web3SignerResponse) IsError() bool {
 	return r.Error != nil
 }
 
-// PublicKeysResponse represents a list of public keys returned by the Web3Signer service.
+// PublicKeysResponse represents a list of public keys returned by the Web3SignerClient service.
 type PublicKeysResponse []string
 
 // MarshalJSON implements the json.Marshaler interface for PublicKeysResponse.
@@ -197,9 +194,9 @@ func (p *PublicKeysResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Web3Signer represents a Web3Signer JSON-RPC client that provides methods for
-// interacting with a Web3Signer service instance.
-type Web3Signer struct {
+// Web3SignerClient represents a Web3SignerClient JSON-RPC client that provides methods for
+// interacting with a Web3SignerClient service instance.
+type Web3SignerClient struct {
 	// Logger is used for logging client operations and debugging
 	Logger logger.Logger
 	// httpClient is the underlying HTTP client used for requests
@@ -210,9 +207,9 @@ type Web3Signer struct {
 	requestID int64
 }
 
-// Config holds the configuration for the Web3Signer client.
+// Config holds the configuration for the Web3SignerClient client.
 type Config struct {
-	// BaseURL is the base URL of the Web3Signer service (e.g., "http://localhost:9000")
+	// BaseURL is the base URL of the Web3SignerClient service (e.g., "http://localhost:9000")
 	BaseURL string
 	// Timeout is the maximum duration for HTTP requests
 	Timeout time.Duration
@@ -220,8 +217,8 @@ type Config struct {
 	TLS *TLSConfig
 }
 
-// TLSConfig holds TLS configuration for secure connections to Web3Signer.
-// According to the Web3Signer TLS documentation, this supports:
+// TLSConfig holds TLS configuration for secure connections to Web3SignerClient.
+// According to the Web3SignerClient TLS documentation, this supports:
 // - Server certificate verification using custom CA certificates
 // - Mutual TLS authentication using client certificates
 // - Optional certificate verification skipping for testing
@@ -236,7 +233,7 @@ type TLSConfig struct {
 	InsecureSkipVerify bool
 }
 
-// DefaultWeb3SignerConfig returns a default configuration for the Web3Signer client.
+// DefaultWeb3SignerConfig returns a default configuration for the Web3SignerClient client.
 // The default configuration uses localhost:9000 as the base URL and a 30-second timeout.
 func DefaultWeb3SignerConfig() *Config {
 	return &Config{
@@ -245,11 +242,11 @@ func DefaultWeb3SignerConfig() *Config {
 	}
 }
 
-// NewConfigWithTLS creates a Web3Signer Config with TLS configuration.
+// NewConfigWithTLS creates a Web3SignerClient Config with TLS configuration.
 // This is a convenience function to create a config with TLS settings for secure connections.
 //
 // Parameters:
-//   - baseURL: The Web3Signer service URL (e.g., "https://web3signer.example.com:9000")
+//   - baseURL: The Web3SignerClient service URL (e.g., "https://web3signer.example.com:9000")
 //   - caCert: PEM-encoded CA certificate to verify the server's certificate (optional)
 //   - clientCert: PEM-encoded client certificate for mutual TLS authentication (optional)
 //   - clientKey: PEM-encoded client private key for mutual TLS authentication (optional)
@@ -257,8 +254,8 @@ func DefaultWeb3SignerConfig() *Config {
 // TLS configuration is only applied for HTTPS URLs. For HTTP URLs, TLS settings are ignored.
 // If any TLS parameter is provided for an HTTPS URL, a TLS config will be created.
 func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Config {
-	config := DefaultWeb3SignerConfig()
-	config.BaseURL = baseURL
+	c := DefaultWeb3SignerConfig()
+	c.BaseURL = baseURL
 
 	// Only configure TLS if we have HTTPS and at least one TLS field
 	if strings.HasPrefix(baseURL, "https://") && (caCert != "" || clientCert != "" || clientKey != "") {
@@ -267,13 +264,13 @@ func NewConfigWithTLS(baseURL string, caCert, clientCert, clientKey string) *Con
 			ClientCert: clientCert,
 			ClientKey:  clientKey,
 		}
-		config.TLS = tlsConfig
+		c.TLS = tlsConfig
 	}
 
-	return config
+	return c
 }
 
-func NewWeb3SignerClientFromRemoteSignerConfig(cfg *config.RemoteSignerConfig, l logger.Logger) (*Web3Signer, error) {
+func NewWeb3SignerClientFromRemoteSignerConfig(cfg *signer.RemoteSignerConfig, l logger.Logger) (*Web3SignerClient, error) {
 	var web3SignerConfig *Config
 	if cfg != nil {
 		web3SignerConfig = NewConfigWithTLS(
@@ -285,12 +282,12 @@ func NewWeb3SignerClientFromRemoteSignerConfig(cfg *config.RemoteSignerConfig, l
 	} else {
 		web3SignerConfig = DefaultWeb3SignerConfig()
 	}
-	return NewWeb3Signer(web3SignerConfig, l)
+	return NewWeb3SignerClient(web3SignerConfig, l)
 }
 
-// NewWeb3Signer creates a new Web3Signer client with the given configuration and logger.
+// NewWeb3Signer creates a new Web3SignerClient client with the given configuration and logger.
 // Both cfg and logger must be non-nil. Use DefaultWeb3SignerConfig() if you want default configuration.
-func NewWeb3Signer(cfg *Config, logger logger.Logger) (*Web3Signer, error) {
+func NewWeb3SignerClient(cfg *Config, logger logger.Logger) (*Web3SignerClient, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("cfg cannot be nil")
 	}
@@ -304,13 +301,13 @@ func NewWeb3Signer(cfg *Config, logger logger.Logger) (*Web3Signer, error) {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	logger.Sugar().Debugw("Creating new Web3Signer client",
+	logger.Sugar().Debugw("Creating new Web3SignerClient client",
 		zap.String("baseURL", cfg.BaseURL),
 		zap.Duration("timeout", cfg.Timeout),
 		zap.Bool("tlsEnabled", cfg.TLS != nil),
 	)
 
-	return &Web3Signer{
+	return &Web3SignerClient{
 		Logger:     logger,
 		httpClient: httpClient,
 		config:     cfg,
@@ -318,12 +315,12 @@ func NewWeb3Signer(cfg *Config, logger logger.Logger) (*Web3Signer, error) {
 	}, nil
 }
 
-// NewSigner creates a new Web3Signer that implements the ISigner interface.
+// NewSigner creates a new Web3SignerClient that implements the ISigner interface.
 // It only supports ECDSA curve type - attempting to use BN254 will result in errors.
 // The publicKey parameter should be the hex-encoded public key (with or without 0x prefix)
 // that corresponds to the fromAddress.
-func NewSigner(client *Web3Signer, fromAddress common.Address, publicKey string, curveType config.CurveType, logger logger.Logger) (signer.ISigner, error) {
-	if curveType != config.CurveTypeECDSA {
+func NewSigner(client *Web3SignerClient, fromAddress common.Address, publicKey string, curveType signer.CurveType, logger logger.Logger) (signer.ISigner, error) {
+	if curveType != signer.CurveTypeECDSA {
 		return nil, fmt.Errorf("web3signer only supports ECDSA curve type, got %s", curveType)
 	}
 
@@ -342,13 +339,13 @@ func NewSigner(client *Web3Signer, fromAddress common.Address, publicKey string,
 	// Clean up public key format - remove 0x prefix if present
 	cleanPublicKey := strings.TrimPrefix(publicKey, "0x")
 
-	logger.Sugar().Debugw("Creating new Web3Signer",
+	logger.Sugar().Debugw("Creating new Web3SignerClient",
 		"fromAddress", fromAddress.Hex(),
 		"publicKey", cleanPublicKey,
 		"curveType", curveType,
 	)
 
-	return web3Signer.NewWeb3Signer(client, fromAddress, cleanPublicKey, curveType, logger)
+	return NewWeb3Signer(client, fromAddress, cleanPublicKey, curveType, logger)
 }
 
 // createHTTPClient creates an HTTP client with appropriate TLS configuration
@@ -362,7 +359,7 @@ func createHTTPClient(cfg *Config, logger logger.Logger) (*http.Client, error) {
 			return nil, fmt.Errorf("failed to build TLS config: %w", err)
 		}
 		transport.TLSClientConfig = tlsConfig
-		logger.Sugar().Debugw("Configured TLS for Web3Signer client")
+		logger.Sugar().Debugw("Configured TLS for Web3SignerClient client")
 	} else if strings.HasPrefix(cfg.BaseURL, "https://") {
 		// HTTPS without custom TLS config - use default TLS
 		transport.TLSClientConfig = &tls.Config{}
@@ -380,7 +377,7 @@ func createHTTPClient(cfg *Config, logger logger.Logger) (*http.Client, error) {
 
 // buildTLSConfig creates a TLS configuration from the provided TLS config
 func buildTLSConfig(tlsConfig *TLSConfig, logger logger.Logger) (*tls.Config, error) {
-	config := &tls.Config{
+	c := &tls.Config{
 		InsecureSkipVerify: tlsConfig.InsecureSkipVerify,
 	}
 
@@ -390,7 +387,7 @@ func buildTLSConfig(tlsConfig *TLSConfig, logger logger.Logger) (*tls.Config, er
 		if !caCertPool.AppendCertsFromPEM([]byte(tlsConfig.CACert)) {
 			return nil, fmt.Errorf("failed to parse CA certificate")
 		}
-		config.RootCAs = caCertPool
+		c.RootCAs = caCertPool
 		logger.Debug("Configured custom CA certificate")
 	}
 
@@ -400,24 +397,24 @@ func buildTLSConfig(tlsConfig *TLSConfig, logger logger.Logger) (*tls.Config, er
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate and key: %w", err)
 		}
-		config.Certificates = []tls.Certificate{clientCert}
+		c.Certificates = []tls.Certificate{clientCert}
 		logger.Sugar().Debugw("Configured client certificate for mutual TLS")
 	} else if tlsConfig.ClientCert != "" || tlsConfig.ClientKey != "" {
 		return nil, fmt.Errorf("both client certificate and key must be provided for mutual TLS")
 	}
 
-	return config, nil
+	return c, nil
 }
 
-// SetHttpClient allows setting a custom HTTP client for the Web3Signer client.
+// SetHttpClient allows setting a custom HTTP client for the Web3SignerClient client.
 // This is useful for testing or when custom HTTP client configuration is needed.
-func (c *Web3Signer) SetHttpClient(client *http.Client) {
+func (c *Web3SignerClient) SetHttpClient(client *http.Client) {
 	c.httpClient = client
 }
 
 // EthAccounts returns a list of accounts available for signing.
 // This corresponds to the eth_accounts JSON-RPC method.
-func (c *Web3Signer) EthAccounts(ctx context.Context) ([]string, error) {
+func (c *Web3SignerClient) EthAccounts(ctx context.Context) ([]string, error) {
 	var result []string
 	err := c.makeJSONRPCRequest(ctx, "eth_accounts", nil, &result)
 	if err != nil {
@@ -428,7 +425,7 @@ func (c *Web3Signer) EthAccounts(ctx context.Context) ([]string, error) {
 
 // EthSignTransaction signs a transaction and returns the signature.
 // This corresponds to the eth_signTransaction JSON-RPC method.
-func (c *Web3Signer) EthSignTransaction(ctx context.Context, from string, transaction map[string]interface{}) (string, error) {
+func (c *Web3SignerClient) EthSignTransaction(ctx context.Context, from string, transaction map[string]interface{}) (string, error) {
 	// Add the from field to the transaction object
 	transaction["from"] = from
 	params := []interface{}{transaction}
@@ -442,7 +439,7 @@ func (c *Web3Signer) EthSignTransaction(ctx context.Context, from string, transa
 
 // EthSign signs data with the specified account.
 // This corresponds to the eth_sign JSON-RPC method.
-func (c *Web3Signer) EthSign(ctx context.Context, account string, data string) (string, error) {
+func (c *Web3SignerClient) EthSign(ctx context.Context, account string, data string) (string, error) {
 	params := []interface{}{account, data}
 	var result string
 	err := c.makeJSONRPCRequest(ctx, "eth_sign", params, &result)
@@ -454,7 +451,7 @@ func (c *Web3Signer) EthSign(ctx context.Context, account string, data string) (
 
 // EthSignTypedData signs typed data with the specified account.
 // This corresponds to the eth_signTypedData JSON-RPC method.
-func (c *Web3Signer) EthSignTypedData(ctx context.Context, account string, typedData interface{}) (string, error) {
+func (c *Web3SignerClient) EthSignTypedData(ctx context.Context, account string, typedData interface{}) (string, error) {
 	params := []interface{}{account, typedData}
 	var result string
 	err := c.makeJSONRPCRequest(ctx, "eth_signTypedData", params, &result)
@@ -464,15 +461,15 @@ func (c *Web3Signer) EthSignTypedData(ctx context.Context, account string, typed
 	return result, nil
 }
 
-// ListPublicKeys retrieves all available public keys from the Web3Signer service.
+// ListPublicKeys retrieves all available public keys from the Web3SignerClient service.
 // This is a convenience method that calls EthAccounts.
-func (c *Web3Signer) ListPublicKeys(ctx context.Context) ([]string, error) {
+func (c *Web3SignerClient) ListPublicKeys(ctx context.Context) ([]string, error) {
 	return c.EthAccounts(ctx)
 }
 
 // Sign signs data with the specified account using eth_sign.
 // This is a convenience method that calls EthSign.
-func (c *Web3Signer) Sign(ctx context.Context, account string, data string) (string, error) {
+func (c *Web3SignerClient) Sign(ctx context.Context, account string, data string) (string, error) {
 	return c.EthSign(ctx, account, data)
 }
 
@@ -480,7 +477,7 @@ func (c *Web3Signer) Sign(ctx context.Context, account string, data string) (str
 // This method signs raw data without Ethereum message prefixes, making it
 // compatible with generic ECDSA libraries like crypto-libs.
 // The identifier parameter is the signing key identifier (typically an address).
-func (c *Web3Signer) SignRaw(ctx context.Context, identifier string, data []byte) (string, error) {
+func (c *Web3SignerClient) SignRaw(ctx context.Context, identifier string, data []byte) (string, error) {
 	// Convert data to hex format
 	dataHex := "0x" + hex.EncodeToString(data)
 
@@ -507,7 +504,7 @@ func (c *Web3Signer) SignRaw(ctx context.Context, identifier string, data []byte
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	c.Logger.Sugar().Debugw("Making Web3Signer REST API sign request",
+	c.Logger.Sugar().Debugw("Making Web3SignerClient REST API sign request",
 		zap.String("identifier", identifier),
 		zap.String("url", url),
 		zap.Int("dataLength", len(data)),
@@ -527,7 +524,7 @@ func (c *Web3Signer) SignRaw(ctx context.Context, identifier string, data []byte
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	c.Logger.Sugar().Debugw("Web3Signer REST API response received",
+	c.Logger.Sugar().Debugw("Web3SignerClient REST API response received",
 		zap.Int("status_code", resp.StatusCode),
 		zap.String("response", string(responseData)),
 	)
@@ -537,7 +534,7 @@ func (c *Web3Signer) SignRaw(ctx context.Context, identifier string, data []byte
 		return "", c.handleHTTPError(resp.StatusCode, responseData)
 	}
 
-	// Parse the response - Web3Signer REST API returns just the signature as plain text
+	// Parse the response - Web3SignerClient REST API returns just the signature as plain text
 	signature := strings.TrimSpace(string(responseData))
 
 	// Remove any quotes if present (some implementations might return quoted strings)
@@ -546,8 +543,8 @@ func (c *Web3Signer) SignRaw(ctx context.Context, identifier string, data []byte
 	return signature, nil
 }
 
-// makeJSONRPCRequest performs a JSON-RPC request to the Web3Signer service.
-func (c *Web3Signer) makeJSONRPCRequest(ctx context.Context, method string, params interface{}, result interface{}) error {
+// makeJSONRPCRequest performs a JSON-RPC request to the Web3SignerClient service.
+func (c *Web3SignerClient) makeJSONRPCRequest(ctx context.Context, method string, params interface{}, result interface{}) error {
 	// Generate unique request ID
 	id := atomic.AddInt64(&c.requestID, 1)
 
@@ -575,7 +572,7 @@ func (c *Web3Signer) makeJSONRPCRequest(ctx context.Context, method string, para
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	c.Logger.Sugar().Debugw("Making Web3Signer JSON-RPC request",
+	c.Logger.Sugar().Debugw("Making Web3SignerClient JSON-RPC request",
 		zap.String("method", method),
 		zap.String("url", url),
 		zap.Any("params", params),
@@ -594,7 +591,7 @@ func (c *Web3Signer) makeJSONRPCRequest(ctx context.Context, method string, para
 		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	c.Logger.Sugar().Debugw("Web3Signer JSON-RPC response received",
+	c.Logger.Sugar().Debugw("Web3SignerClient JSON-RPC response received",
 		zap.Int("status_code", resp.StatusCode),
 		zap.String("response", string(responseData)),
 	)
@@ -634,11 +631,26 @@ func (c *Web3Signer) makeJSONRPCRequest(ctx context.Context, method string, para
 }
 
 // handleHTTPError converts HTTP error responses into appropriate Web3SignerError instances.
-func (c *Web3Signer) handleHTTPError(statusCode int, responseData []byte) error {
+func (c *Web3SignerClient) handleHTTPError(statusCode int, responseData []byte) error {
 	errorMsg := string(responseData)
 
 	return &Web3SignerError{
 		Code:    statusCode,
 		Message: fmt.Sprintf("HTTP error %d: %s", statusCode, errorMsg),
 	}
+}
+
+func LoadWeb3Signer(signerConfig *signer.RemoteSignerConfig, l logger.Logger) (signer.ISigner, error) {
+	c, err := NewWeb3SignerClientFromRemoteSignerConfig(signerConfig, l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create web3signer client: %w", err)
+	}
+
+	return NewWeb3Signer(
+		c,
+		common.HexToAddress(signerConfig.FromAddress),
+		signerConfig.PublicKey,
+		signer.CurveTypeECDSA,
+		l,
+	)
 }

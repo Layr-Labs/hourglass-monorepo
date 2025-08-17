@@ -3,11 +3,11 @@ package keystore
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"path/filepath"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 )
@@ -29,7 +29,7 @@ func importCommand() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			log := logger.FromContext(c.Context)
+			log := config.LoggerFromContext(c.Context)
 
 			name := c.String("name")
 			path := c.String("path")
@@ -88,7 +88,7 @@ func importCommand() *cli.Command {
 			}
 
 			// Add keystore reference
-			ctx.Keystores = append(ctx.Keystores, config.KeystoreReference{
+			ctx.Keystores = append(ctx.Keystores, signer.KeystoreReference{
 				Name: name,
 				Path: absPath,
 				Type: keystoreType,

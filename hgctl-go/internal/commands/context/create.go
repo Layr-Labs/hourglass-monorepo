@@ -42,7 +42,7 @@ func createCommand() *cli.Command {
 }
 
 func contextCreateAction(c *cli.Context) error {
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	name := c.Args().Get(0)
 	if name == "" {

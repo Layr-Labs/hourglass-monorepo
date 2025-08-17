@@ -3,7 +3,6 @@ package context
 import (
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/urfave/cli/v2"
 )
 
@@ -79,7 +78,7 @@ Examples:
 }
 
 func contextRemoveAction(c *cli.Context) error {
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	cfg, err := config.LoadConfig()
 	if err != nil {

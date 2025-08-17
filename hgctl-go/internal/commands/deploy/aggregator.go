@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"path/filepath"
 
@@ -11,7 +12,6 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/templates"
 )
@@ -60,7 +60,7 @@ type AggregatorDeployer struct {
 
 func deployAggregatorAction(c *cli.Context) error {
 	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	if currentCtx == nil {
 		return fmt.Errorf("no context configured")
@@ -117,7 +117,7 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 
 	keystoreName := cfg.Env[config.KeystoreName]
 	keystorePassword := cfg.Env[config.KeystorePassword]
-	var keystore *config.KeystoreReference
+	var keystore *signer.KeystoreReference
 	if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
 		return fmt.Errorf("signer validation failed: %w", err)
 	}
@@ -168,7 +168,7 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 // deployContainer handles the aggregator-specific container deployment
 func (d *AggregatorDeployer) deployContainer(
 	component *runtime.ComponentSpec,
-	keystore *config.KeystoreReference,
+	keystore *signer.KeystoreReference,
 	cfg *DeploymentConfig,
 ) error {
 

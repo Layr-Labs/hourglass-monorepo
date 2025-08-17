@@ -18,23 +18,23 @@ import (
 )
 
 const (
-	// Web3Signer L1 port (matches goTest.sh configuration)
+	// Web3SignerClient L1 port (matches goTest.sh configuration)
 	web3signerL1Port = "9100"
 )
 
-// TestWeb3SignerIntegration tests the Web3Signer client against a real Web3Signer service
-// This test expects that Web3Signer containers are already running via goTest.sh
+// TestWeb3SignerIntegration tests the Web3SignerClient client against a real Web3SignerClient service
+// This test expects that Web3SignerClient containers are already running via goTest.sh
 func TestWeb3SignerIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Create client for the L1 Web3Signer service (started by goTest.sh)
+	// Create client for the L1 Web3SignerClient service (started by goTest.sh)
 	client := createTestClient(t)
 
 	// Wait for service to be ready
 	err := waitForService(client, 30*time.Second)
-	require.NoError(t, err, "Web3Signer service failed to start")
+	require.NoError(t, err, "Web3SignerClient service failed to start")
 
 	// Get the available accounts for use in tests
 	ctx := context.Background()
@@ -57,8 +57,8 @@ func TestWeb3SignerIntegration(t *testing.T) {
 
 }
 
-// testEthAccountsIntegration tests listing accounts from the Web3Signer service
-func testEthAccountsIntegration(t *testing.T, client *client.Web3Signer) {
+// testEthAccountsIntegration tests listing accounts from the Web3SignerClient service
+func testEthAccountsIntegration(t *testing.T, client *client.Web3SignerClient) {
 	ctx := context.Background()
 
 	accounts, err := client.EthAccounts(ctx)
@@ -80,16 +80,16 @@ func testEthAccountsIntegration(t *testing.T, client *client.Web3Signer) {
 	t.Logf("Found %d accounts: %v", len(accounts), accounts)
 }
 
-// testEthSignIntegration tests signing a message with the Web3Signer service
-func testEthSignIntegration(t *testing.T, client *client.Web3Signer, account string) {
+// testEthSignIntegration tests signing a message with the Web3SignerClient service
+func testEthSignIntegration(t *testing.T, client *client.Web3SignerClient, account string) {
 	ctx := context.Background()
 
 	// Test message to sign
-	message := "Hello, Web3Signer!"
+	message := "Hello, Web3SignerClient!"
 	messageHash := crypto.Keccak256Hash([]byte(message))
 	dataToSign := hex.EncodeToString(messageHash[:])
 
-	// Add 0x prefix as expected by Web3Signer
+	// Add 0x prefix as expected by Web3SignerClient
 	dataToSign = "0x" + dataToSign
 
 	// Sign with the account
@@ -113,8 +113,8 @@ func testEthSignIntegration(t *testing.T, client *client.Web3Signer, account str
 	t.Logf("Signature: %s", signature)
 }
 
-// testEthSignTransactionIntegration tests signing a transaction with the Web3Signer service
-func testEthSignTransactionIntegration(t *testing.T, client *client.Web3Signer, account string) {
+// testEthSignTransactionIntegration tests signing a transaction with the Web3SignerClient service
+func testEthSignTransactionIntegration(t *testing.T, client *client.Web3SignerClient, account string) {
 	ctx := context.Background()
 
 	// Create a simple transaction with proper formatting
@@ -149,8 +149,8 @@ func testEthSignTransactionIntegration(t *testing.T, client *client.Web3Signer, 
 
 // Helper functions
 
-// createTestClient creates a Web3Signer client configured for testing
-func createTestClient(t *testing.T) *client.Web3Signer {
+// createTestClient creates a Web3SignerClient client configured for testing
+func createTestClient(t *testing.T) *client.Web3SignerClient {
 	l := logger.NewLogger(false)
 
 	config := client.DefaultWeb3SignerConfig()
@@ -162,8 +162,8 @@ func createTestClient(t *testing.T) *client.Web3Signer {
 	return c
 }
 
-// waitForService waits for the Web3Signer service to be ready
-func waitForService(c *client.Web3Signer, timeout time.Duration) error {
+// waitForService waits for the Web3SignerClient service to be ready
+func waitForService(c *client.Web3SignerClient, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -173,7 +173,7 @@ func waitForService(c *client.Web3Signer, timeout time.Duration) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for Web3Signer service")
+			return fmt.Errorf("timeout waiting for Web3SignerClient service")
 		case <-ticker.C:
 			// Try to list accounts as a health check
 			_, err := c.EthAccounts(ctx)

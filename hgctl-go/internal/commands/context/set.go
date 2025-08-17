@@ -6,7 +6,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 )
 
 func setCommand() *cli.Command {
@@ -72,7 +71,7 @@ func setCommand() *cli.Command {
 }
 
 func contextSetAction(c *cli.Context) error {
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -174,22 +173,22 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated env secrets path", zap.String("path", path))
 	}
 
-	if signerKey := c.String("signer-key"); signerKey != "" {
-		// Validate that the signer key exists in the context's keystores
-		found := false
-		for _, ks := range ctx.Keystores {
-			if ks.Name == signerKey {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("keystore '%s' not found in context '%s'", signerKey, cfg.CurrentContext)
-		}
-		ctx.SignerKey = signerKey
-		updated = true
-		log.Info("Updated signer key", zap.String("signerKey", signerKey))
-	}
+	//if signerKey := c.String("signer-key"); signerKey != "" {
+	//	// Validate that the signer key exists in the context's keystores
+	//	found := false
+	//	for _, ks := range ctx.Keystores {
+	//		if ks.Name == signerKey {
+	//			found = true
+	//			break
+	//		}
+	//	}
+	//	if !found {
+	//		return fmt.Errorf("keystore '%s' not found in context '%s'", signerKey, cfg.CurrentContext)
+	//	}
+	//	ctx.SignerKey = signerKey
+	//	updated = true
+	//	log.Info("Updated signer key", zap.String("signerKey", signerKey))
+	//}
 
 	if !updated {
 		return fmt.Errorf("no values provided to update")

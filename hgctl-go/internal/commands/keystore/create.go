@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,7 +52,7 @@ func createCommand() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			log := logger.FromContext(c.Context)
+			log := config.LoggerFromContext(c.Context)
 
 			name := c.String("name")
 			keystoreType := c.String("type")
@@ -129,7 +130,7 @@ func createCommand() *cli.Command {
 			}
 
 			// Add keystore reference
-			ctx.Keystores = append(ctx.Keystores, config.KeystoreReference{
+			ctx.Keystores = append(ctx.Keystores, signer.KeystoreReference{
 				Name: name,
 				Path: keystorePath,
 				Type: keystoreType,

@@ -39,7 +39,7 @@ func listCommand() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			log := logger.FromContext(c.Context)
+			log := config.LoggerFromContext(c.Context)
 			listAll := c.Bool("all")
 			showFull := c.Bool("full")
 			cfg, err := config.LoadConfig()
