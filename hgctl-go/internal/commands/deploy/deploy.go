@@ -430,11 +430,11 @@ func (d *PlatformDeployer) expandPath(path string) string {
 // injectFileContentsAsEnvVars reads keystore and certificate files and injects them as environment variables
 func injectFileContentsAsEnvVars(dockerArgs []string, contextDir string, log logger.Logger) []string {
 	fileEnvMappings := map[string]string{
-		// BLS keystore
+		// BN254 keystore
 		"operator.bls.keystore.json": "BLS_KEYSTORE_CONTENT",
 		// ECDSA keystore
 		"operator.ecdsa.keystore.json": "ECDSA_KEYSTORE_CONTENT",
-		// Web3 signer certificates for BLS
+		// Web3 signer certificates for BN254
 		"web3signer-bls-ca.crt":     "WEB3_SIGNER_BLS_CA_CERT_CONTENT",
 		"web3signer-bls-client.crt": "WEB3_SIGNER_BLS_CLIENT_CERT_CONTENT",
 		"web3signer-bls-client.key": "WEB3_SIGNER_BLS_CLIENT_KEY_CONTENT",

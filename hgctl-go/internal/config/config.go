@@ -77,7 +77,7 @@ func OperatorSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, e
 		return signer.LoadKeystoreSigner(opKeys.Keystore)
 	}
 
-	if opKeys.UseRemoteSigner {
+	if opKeys.RemoteSignerConfig != nil {
 		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)
@@ -103,7 +103,7 @@ func SystemSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, err
 		return signer.LoadKeystoreSigner(opKeys.Keystore)
 	}
 
-	if opKeys.UseRemoteSigner {
+	if opKeys.RemoteSignerConfig != nil {
 		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)

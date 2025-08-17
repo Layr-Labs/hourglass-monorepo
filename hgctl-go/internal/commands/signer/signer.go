@@ -64,8 +64,13 @@ func signerWizard(c *cli.Context) error {
 		return fmt.Errorf("error running wizard: %w", err)
 	}
 
-	if m, ok := result.(wizardModel); ok && m.completed {
-		return saveConfig(m)
+	if m, ok := result.(wizardModel); ok {
+		if m.err != nil {
+			return m.err
+		}
+		if m.completed {
+			return saveConfig(m)
+		}
 	}
 
 	return nil
@@ -83,10 +88,16 @@ type wizardModel struct {
 	filepicker filepicker.Model
 
 	// User selections
-	signerType        string
-	keystorePath      string
-	web3SignerURL     string
-	web3SignerAddress string
+	signerType               string
+	keystoreChoiceType       string // "existing" or "file"
+	keystoreName             string
+	keystorePath             string
+	web3SignerURL            string
+	web3SignerAddress        string
+	web3SignerUseTLS         bool
+	web3SignerCACertPath     string
+	web3SignerClientCertPath string
+	web3SignerClientKeyPath  string
 
 	// State
 	err       error
@@ -98,9 +109,15 @@ type stage int
 
 const (
 	stageSelectType stage = iota
+	stageKeystoreChoice
+	stageKeystoreSelect
 	stageKeystorePath
 	stageWeb3SignerURL
 	stageWeb3SignerAddress
+	stageWeb3SignerTLSChoice
+	stageWeb3SignerCACert
+	stageWeb3SignerClientCert
+	stageWeb3SignerClientKey
 	stagePrivateKeyInfo
 	stageConfirm
 )
@@ -115,6 +132,38 @@ type signerItem struct {
 func (i signerItem) Title() string       { return i.title }
 func (i signerItem) Description() string { return i.description }
 func (i signerItem) FilterValue() string { return i.title }
+
+// TLS choice item for list
+type tlsChoiceItem struct {
+	title       string
+	description string
+	useTLS      bool
+}
+
+func (i tlsChoiceItem) Title() string       { return i.title }
+func (i tlsChoiceItem) Description() string { return i.description }
+func (i tlsChoiceItem) FilterValue() string { return i.title }
+
+// Keystore choice item for list
+type keystoreChoiceItem struct {
+	title       string
+	description string
+	choiceType  string
+}
+
+func (i keystoreChoiceItem) Title() string       { return i.title }
+func (i keystoreChoiceItem) Description() string { return i.description }
+func (i keystoreChoiceItem) FilterValue() string { return i.title }
+
+// Keystore item for existing keystore selection
+type keystoreItem struct {
+	name string
+	path string
+}
+
+func (i keystoreItem) Title() string       { return i.name }
+func (i keystoreItem) Description() string { return i.path }
+func (i keystoreItem) FilterValue() string { return i.name }
 
 func newWizardModel(contextName string) wizardModel {
 	items := []list.Item{
@@ -183,7 +232,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update components based on current stage
 	var cmd tea.Cmd
 	switch m.stage {
-	case stageSelectType:
+	case stageSelectType, stageWeb3SignerTLSChoice, stageKeystoreChoice, stageKeystoreSelect:
 		m.list, cmd = m.list.Update(msg)
 
 	case stageKeystorePath:
@@ -193,7 +242,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stage = stageConfirm
 		}
 
-	case stageWeb3SignerURL, stageWeb3SignerAddress:
+	case stageWeb3SignerURL, stageWeb3SignerAddress, stageWeb3SignerCACert, stageWeb3SignerClientCert, stageWeb3SignerClientKey:
 		m.textInput, cmd = m.textInput.Update(msg)
 	}
 
@@ -211,6 +260,22 @@ func (m wizardModel) View() string {
 	case stageSelectType:
 		content = m.list.View()
 		help = helpStyle.Render("↑/↓: navigate • enter: select • q: quit")
+
+	case stageKeystoreChoice:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s",
+			"How would you like to configure the keystore?",
+			m.list.View(),
+			helpStyle.Render("↑/↓: navigate • enter: select • q: quit"),
+		)
+
+	case stageKeystoreSelect:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s",
+			"Select a keystore:",
+			m.list.View(),
+			helpStyle.Render("↑/↓: navigate • enter: select • q: quit"),
+		)
 
 	case stageKeystorePath:
 		content = fmt.Sprintf(
@@ -231,9 +296,44 @@ func (m wizardModel) View() string {
 	case stageWeb3SignerAddress:
 		content = fmt.Sprintf(
 			"%s\n\n%s\n\n%s",
-			"Enter signing address (0x...):",
+			"Enter remote signing hex address (0x...):",
 			m.textInput.View(),
 			helpStyle.Render("enter: continue • ctrl+c: quit"),
+		)
+
+	case stageWeb3SignerTLSChoice:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s",
+			"Configure TLS certificates for Web3Signer?",
+			m.list.View(),
+			helpStyle.Render("↑/↓: navigate • enter: select • q: quit"),
+		)
+
+	case stageWeb3SignerCACert:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s\n\n%s",
+			"Enter CA certificate path (optional):",
+			"Leave empty to skip. Used to verify the Web3Signer server's certificate.",
+			m.textInput.View(),
+			helpStyle.Render("enter: continue (empty to skip) • ctrl+c: quit"),
+		)
+
+	case stageWeb3SignerClientCert:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s\n\n%s",
+			"Enter client certificate path (optional):",
+			"Leave empty to skip. Required for mutual TLS authentication.",
+			m.textInput.View(),
+			helpStyle.Render("enter: continue (empty to skip) • ctrl+c: quit"),
+		)
+
+	case stageWeb3SignerClientKey:
+		content = fmt.Sprintf(
+			"%s\n\n%s\n\n%s\n\n%s",
+			"Enter client key path (optional):",
+			"Leave empty to skip. Private key for the client certificate.",
+			m.textInput.View(),
+			helpStyle.Render("enter: continue (empty to skip) • ctrl+c: quit"),
 		)
 
 	case stagePrivateKeyInfo:
@@ -270,6 +370,37 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 
 		switch m.signerType {
 		case "keystore":
+			// Check if there are existing keystores
+			cfg, err := config.LoadConfig()
+			if err == nil {
+				ctx, ok := cfg.Contexts[m.contextName]
+				if ok && len(ctx.Keystores) > 0 {
+					// Show choice between existing and new keystore
+					items := []list.Item{
+						keystoreChoiceItem{
+							title:       "Use existing keystore",
+							description: "Select from available keystores",
+							choiceType:  "existing",
+						},
+						keystoreChoiceItem{
+							title:       "Provide keystore file",
+							description: "Browse for a keystore file",
+							choiceType:  "file",
+						},
+					}
+					l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+					l.Title = "Keystore Configuration"
+					l.SetShowStatusBar(false)
+					l.SetFilteringEnabled(false)
+					if m.width > 0 && m.height > 0 {
+						l.SetSize(m.width-4, m.height-8)
+					}
+					m.list = l
+					m.stage = stageKeystoreChoice
+					return m, nil
+				}
+			}
+			// No existing keystores, go directly to file picker
 			fp := filepicker.New()
 			fp.CurrentDirectory, _ = os.UserHomeDir()
 			fp.AllowedTypes = []string{".json", ".keystore"}
@@ -300,6 +431,116 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 
 	case stageWeb3SignerAddress:
 		m.web3SignerAddress = m.textInput.Value()
+		// Ask about TLS configuration
+		items := []list.Item{
+			tlsChoiceItem{
+				title:       "Configure TLS certificates",
+				description: "Set up CA cert and client certificates",
+				useTLS:      true,
+			},
+			tlsChoiceItem{
+				title:       "Skip TLS configuration",
+				description: "Continue without certificates",
+				useTLS:      false,
+			},
+		}
+		l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+		l.Title = "TLS Configuration"
+		l.SetShowStatusBar(false)
+		l.SetFilteringEnabled(false)
+		// Set the size based on current window dimensions
+		if m.width > 0 && m.height > 0 {
+			l.SetSize(m.width-4, m.height-8)
+		}
+		m.list = l
+		m.stage = stageWeb3SignerTLSChoice
+
+	case stageWeb3SignerTLSChoice:
+		selected := m.list.SelectedItem().(tlsChoiceItem)
+		m.web3SignerUseTLS = selected.useTLS
+		if m.web3SignerUseTLS {
+			// Start TLS certificate configuration
+			m.textInput = textinput.New()
+			m.textInput.Placeholder = "/path/to/ca-cert.pem (leave empty to skip)"
+			m.textInput.Focus()
+			m.textInput.CharLimit = 500
+			m.stage = stageWeb3SignerCACert
+			return m, textinput.Blink
+		} else {
+			m.stage = stageConfirm
+		}
+
+	case stageWeb3SignerCACert:
+		m.web3SignerCACertPath = m.textInput.Value()
+		m.textInput = textinput.New()
+		m.textInput.Placeholder = "/path/to/client-cert.pem (leave empty to skip)"
+		m.textInput.Focus()
+		m.textInput.CharLimit = 500
+		m.stage = stageWeb3SignerClientCert
+		return m, textinput.Blink
+
+	case stageWeb3SignerClientCert:
+		m.web3SignerClientCertPath = m.textInput.Value()
+		m.textInput = textinput.New()
+		m.textInput.Placeholder = "/path/to/client-key.pem (leave empty to skip)"
+		m.textInput.Focus()
+		m.textInput.CharLimit = 500
+		m.stage = stageWeb3SignerClientKey
+		return m, textinput.Blink
+
+	case stageWeb3SignerClientKey:
+		m.web3SignerClientKeyPath = m.textInput.Value()
+		m.stage = stageConfirm
+
+	case stageKeystoreChoice:
+		selected := m.list.SelectedItem().(keystoreChoiceItem)
+		m.keystoreChoiceType = selected.choiceType
+
+		if m.keystoreChoiceType == "existing" {
+			// Load existing keystores and show selection
+			cfg, _ := config.LoadConfig()
+			ctx, _ := cfg.Contexts[m.contextName]
+
+			var items []list.Item
+			for _, ks := range ctx.Keystores {
+				// Only show ECDSA keystores for operator keys
+				if ks.Type == "ecdsa" || ks.Type == "keystore" {
+					items = append(items, keystoreItem{
+						name: ks.Name,
+						path: ks.Path,
+					})
+				}
+			}
+
+			if len(items) == 0 {
+				// No ECDSA keystores available
+				m.err = fmt.Errorf("no ECDSA keystores found in context '%s'. Please create an ECDSA keystore first or provide a keystore file", m.contextName)
+				return m, tea.Quit
+			}
+
+			l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+			l.Title = "Select ECDSA Keystore"
+			l.SetShowStatusBar(false)
+			l.SetFilteringEnabled(true)
+			if m.width > 0 && m.height > 0 {
+				l.SetSize(m.width-4, m.height-8)
+			}
+			m.list = l
+			m.stage = stageKeystoreSelect
+		} else {
+			// Go to file picker
+			fp := filepicker.New()
+			fp.CurrentDirectory, _ = os.UserHomeDir()
+			fp.AllowedTypes = []string{".json", ".keystore"}
+			m.filepicker = fp
+			m.stage = stageKeystorePath
+			return m, fp.Init()
+		}
+
+	case stageKeystoreSelect:
+		selected := m.list.SelectedItem().(keystoreItem)
+		m.keystoreName = selected.name
+		m.keystorePath = selected.path
 		m.stage = stageConfirm
 
 	case stagePrivateKeyInfo:
@@ -318,11 +559,28 @@ func (m wizardModel) buildSummary() string {
 
 	switch m.signerType {
 	case "keystore":
-		lines = append(lines, fmt.Sprintf("  Path: %s", m.keystorePath))
+		if m.keystoreName != "" {
+			lines = append(lines, fmt.Sprintf("  Keystore: %s", m.keystoreName))
+			lines = append(lines, fmt.Sprintf("  Path: %s", m.keystorePath))
+		} else {
+			lines = append(lines, fmt.Sprintf("  Path: %s", m.keystorePath))
+		}
+		lines = append(lines, "")
+		lines = append(lines, helpStyle.Render("  Note: You must set KEYSTORE_PASSWORD environment"))
+		lines = append(lines, helpStyle.Render("  variable before running commands that require signing."))
 
 	case "web3signer":
 		lines = append(lines, fmt.Sprintf("  URL: %s", m.web3SignerURL))
 		lines = append(lines, fmt.Sprintf("  Address: %s", m.web3SignerAddress))
+		if m.web3SignerCACertPath != "" {
+			lines = append(lines, fmt.Sprintf("  CA Cert: %s", m.web3SignerCACertPath))
+		}
+		if m.web3SignerClientCertPath != "" {
+			lines = append(lines, fmt.Sprintf("  Client Cert: %s", m.web3SignerClientCertPath))
+		}
+		if m.web3SignerClientKeyPath != "" {
+			lines = append(lines, fmt.Sprintf("  Client Key: %s", m.web3SignerClientKeyPath))
+		}
 
 	case "privatekey":
 		lines = append(lines, "  Key source: PRIVATE_KEY environment variable")
@@ -344,36 +602,96 @@ func saveConfig(m wizardModel) error {
 
 	switch m.signerType {
 	case "keystore":
-		keystorePath := m.keystorePath
-		configDir := config.GetConfigDir()
-		if strings.HasPrefix(keystorePath, configDir) {
-			keystorePath, _ = filepath.Rel(configDir, keystorePath)
-		}
+		var ks *signer.KeystoreReference
 
-		ks := &signer.KeystoreReference{
-			Name: m.contextName,
-			Type: m.signerType,
-			Path: keystorePath,
+		if m.keystoreName != "" {
+			// User selected an existing keystore by name
+			// Find the keystore in the context to validate its type
+			var foundKeystore *signer.KeystoreReference
+			for i := range ctx.Keystores {
+				if ctx.Keystores[i].Name == m.keystoreName {
+					foundKeystore = &ctx.Keystores[i]
+					break
+				}
+			}
+
+			if foundKeystore == nil {
+				return fmt.Errorf("keystore '%s' not found in context", m.keystoreName)
+			}
+
+			// Validate that it's an ECDSA keystore
+			if foundKeystore.Type != "ecdsa" && foundKeystore.Type != "keystore" {
+				return fmt.Errorf("keystore '%s' is of type '%s', but operator keys require ECDSA type",
+					m.keystoreName, foundKeystore.Type)
+			}
+
+			ks = foundKeystore
+		} else {
+			// User provided a file path
+			keystorePath := m.keystorePath
+			configDir := config.GetConfigDir()
+			if strings.HasPrefix(keystorePath, configDir) {
+				keystorePath, _ = filepath.Rel(configDir, keystorePath)
+			}
+
+			ks = &signer.KeystoreReference{
+				Name: m.contextName,
+				Type: "ecdsa", // Default to ECDSA for operator keys
+				Path: keystorePath,
+			}
 		}
 
 		ctx.OperatorKeys = &signer.ECDSAKeyConfig{
-			UseRemoteSigner:    false,
 			RemoteSignerConfig: nil,
 			Keystore:           ks,
 			PrivateKey:         false,
 		}
 
 	case "web3signer":
+		// Handle path expansion and relative paths for certificates
+		caCertPath := m.web3SignerCACertPath
+		clientCertPath := m.web3SignerClientCertPath
+		clientKeyPath := m.web3SignerClientKeyPath
+
+		// Expand tilde in paths if present
+		if strings.HasPrefix(caCertPath, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				caCertPath = filepath.Join(home, caCertPath[2:])
+			}
+		}
+		if strings.HasPrefix(clientCertPath, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				clientCertPath = filepath.Join(home, clientCertPath[2:])
+			}
+		}
+		if strings.HasPrefix(clientKeyPath, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				clientKeyPath = filepath.Join(home, clientKeyPath[2:])
+			}
+		}
+
+		// Convert to relative paths if within config directory
+		configDir := config.GetConfigDir()
+		if caCertPath != "" && strings.HasPrefix(caCertPath, configDir) {
+			caCertPath, _ = filepath.Rel(configDir, caCertPath)
+		}
+		if clientCertPath != "" && strings.HasPrefix(clientCertPath, configDir) {
+			clientCertPath, _ = filepath.Rel(configDir, clientCertPath)
+		}
+		if clientKeyPath != "" && strings.HasPrefix(clientKeyPath, configDir) {
+			clientKeyPath, _ = filepath.Rel(configDir, clientKeyPath)
+		}
+
 		rsr := &signer.RemoteSignerReference{
 			Name:           m.contextName,
+			Url:            m.web3SignerURL,
 			ConfigPath:     "",
-			CACertPath:     "",
-			ClientCertPath: "",
-			ClientKeyPath:  "",
+			CACertPath:     caCertPath,
+			ClientCertPath: clientCertPath,
+			ClientKeyPath:  clientKeyPath,
 		}
 
 		ctx.OperatorKeys = &signer.ECDSAKeyConfig{
-			UseRemoteSigner:    true,
 			RemoteSignerConfig: rsr,
 			Keystore:           nil,
 			PrivateKey:         false,
@@ -381,14 +699,27 @@ func saveConfig(m wizardModel) error {
 
 	case "privatekey":
 		ctx.OperatorKeys = &signer.ECDSAKeyConfig{
-			UseRemoteSigner:    false,
 			RemoteSignerConfig: nil,
 			Keystore:           nil,
 			PrivateKey:         true,
 		}
 	}
 
-	return config.SaveConfig(cfg)
+	if err := config.SaveConfig(cfg); err != nil {
+		return err
+	}
+
+	// Show success message with appropriate reminder
+	fmt.Println(successStyle.Render("✓ Signer configuration saved"))
+
+	if m.signerType == "keystore" {
+		fmt.Println()
+		fmt.Println(helpStyle.Render("Remember to set the KEYSTORE_PASSWORD environment variable:"))
+		fmt.Println(helpStyle.Render("  specify this value in your configured secrets env file"))
+		fmt.Println(helpStyle.Render("  or export KEYSTORE_PASSWORD=<your-password>"))
+	}
+
+	return nil
 }
 
 func removeSignerConfig(_ *cli.Context) error {

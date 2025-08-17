@@ -8,7 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type ISigner interface {
@@ -22,12 +21,11 @@ type Signers struct {
 }
 
 type SigningKeys struct {
-	BLS   *SigningKey     `json:"bls"`
-	ECDSA *ECDSAKeyConfig `json:"ecdsa"`
+	BN254 *KeystoreReference `json:"bn254"`
+	ECDSA *ECDSAKeyConfig    `json:"ecdsa"`
 }
 
 type ECDSAKeyConfig struct {
-	UseRemoteSigner    bool                   `json:"remoteSigner" yaml:"remoteSigner,omitempty"`
 	RemoteSignerConfig *RemoteSignerReference `json:"remoteSignerConfig" yaml:"remoteSignerConfig,omitempty"`
 	Keystore           *KeystoreReference     `json:"keystore" yaml:"keystore,omitempty"`
 	PrivateKey         bool                   `json:"privateKey" yaml:"privateKey,omitempty"`
@@ -57,6 +55,7 @@ type KeystoreReference struct {
 type RemoteSignerReference struct {
 	Name           string `yaml:"name"`
 	ConfigPath     string `yaml:"configPath,omitempty"`
+	Url            string `yaml:"url,omitempty"`
 	CACertPath     string `yaml:"caCertPath,omitempty"`
 	ClientCertPath string `yaml:"clientCertPath,omitempty"`
 	ClientKeyPath  string `yaml:"clientKeyPath,omitempty"`
@@ -145,6 +144,12 @@ func LoadWeb3SignerConfig(keys *RemoteSignerReference) (*RemoteSignerConfig, err
 	}
 
 	var signerConfig *RemoteSignerConfig
+
+	if keys.Url == "" {
+		return nil, fmt.Errorf("url is required for remote signer")
+	}
+	signerConfig.Url = keys.Url
+
 	if keys.ConfigPath != "" {
 		configPath := keys.ConfigPath
 		data, err := os.ReadFile(configPath)
@@ -156,13 +161,7 @@ func LoadWeb3SignerConfig(keys *RemoteSignerReference) (*RemoteSignerConfig, err
 		if err := yaml.Unmarshal(data, signerConfig); err != nil {
 			return nil, fmt.Errorf("failed to parse web3signer config: %w", err)
 		}
-	} else {
-		signerConfig = &RemoteSignerConfig{
-			Url: os.Getenv(fmt.Sprintf("WEB3SIGNER_URL_%s", strings.ToUpper(keys.Name))),
-		}
-		if signerConfig.Url == "" {
-			return nil, fmt.Errorf("web3signer URL not found for '%s'", keys.Name)
-		}
+		return signerConfig, nil
 	}
 
 	if keys.CACertPath != "" {
@@ -188,6 +187,7 @@ func LoadWeb3SignerConfig(keys *RemoteSignerReference) (*RemoteSignerConfig, err
 		}
 		signerConfig.Key = clientKey
 	}
+
 	return signerConfig, nil
 }
 

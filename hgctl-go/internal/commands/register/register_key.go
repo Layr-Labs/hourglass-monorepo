@@ -379,12 +379,12 @@ func (h *BN254KeyHandler) GenerateSignature(
 
 // deccryptBn254Keystore decrypts a keystore file to get the private key
 func deccryptBn254Keystore(keystoreData []byte, password string) ([]byte, error) {
-	// Check if it's a BLS keystore
+	// Check if it's a BN254 keystore
 	var testKeystore map[string]interface{}
 	if err := json.Unmarshal(keystoreData, &testKeystore); err == nil {
 		var keystoreFile blskeystore.EIP2335Keystore
 		if err := json.Unmarshal(keystoreData, &keystoreFile); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal BLS keystore: %w", err)
+			return nil, fmt.Errorf("failed to unmarshal BN254 keystore: %w", err)
 		}
 		scheme, err := blskeystore.GetSigningSchemeForCurveType("bn254")
 		if err != nil {
@@ -392,7 +392,7 @@ func deccryptBn254Keystore(keystoreData []byte, password string) ([]byte, error)
 		}
 		privateKey, err := keystoreFile.GetPrivateKey(password, scheme)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt BLS private key: %w", err)
+			return nil, fmt.Errorf("failed to decrypt BN254 private key: %w", err)
 		}
 
 		return privateKey.Bytes(), nil

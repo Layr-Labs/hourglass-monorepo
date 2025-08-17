@@ -2,22 +2,22 @@ package signerUtils
 
 //func FromContext(ctx *config.Context, l logger.Logger) (signer.Signers, error) {
 //	signers := signer.Signers{}
-//	if ctx.SystemSignerKeys.BLS != nil {
+//	if ctx.SystemSignerKeys.BN254 != nil {
 //		var err error
 //		var storedKeys *keystore.EIP2335Keystore
-//		if ctx.SystemSignerKeys.BLS.Keystore != "" {
-//			storedKeys, err = keystore.ParseKeystoreJSON(ctx.SystemSignerKeys.BLS.Keystore)
+//		if ctx.SystemSignerKeys.BN254.Keystore != "" {
+//			storedKeys, err = keystore.ParseKeystoreJSON(ctx.SystemSignerKeys.BN254.Keystore)
 //			if err != nil {
 //				return signers, fmt.Errorf("failed to parse keystore JSON: %w", err)
 //			}
 //		} else {
-//			storedKeys, err = keystore.LoadKeystoreFile(ctx.SystemSignerKeys.BLS.KeystoreFile)
+//			storedKeys, err = keystore.LoadKeystoreFile(ctx.SystemSignerKeys.BN254.KeystoreFile)
 //			if err != nil {
-//				return signers, fmt.Errorf("failed to load keystore file: '%s' %w", ctx.SystemSignerKeys.BLS.KeystoreFile, err)
+//				return signers, fmt.Errorf("failed to load keystore file: '%s' %w", ctx.SystemSignerKeys.BN254.KeystoreFile, err)
 //			}
 //		}
 //
-//		privateSigningKey, err := storedKeys.GetBN254PrivateKey(ctx.SystemSignerKeys.BLS.Password)
+//		privateSigningKey, err := storedKeys.GetBN254PrivateKey(ctx.SystemSignerKeys.BN254.Password)
 //		if err != nil {
 //			return signers, fmt.Errorf("failed to get private key: %w", err)
 //		}

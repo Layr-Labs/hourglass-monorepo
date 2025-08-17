@@ -29,7 +29,7 @@ import (
 func createCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "create",
-		Usage: "Create a new BLS or ECDSA keystore",
+		Usage: "Create a new BN254 or ECDSA keystore",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "name",
@@ -38,12 +38,12 @@ func createCommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:     "type",
-				Usage:    "Keystore type (bn254 for BLS or ecdsa)",
+				Usage:    "Keystore type (bn254 for BN254 or ecdsa)",
 				Required: true,
 			},
 			&cli.StringFlag{
 				Name:  "key",
-				Usage: "Private key (BLS in large number format or ECDSA in hex format). If not provided, a new key will be generated",
+				Usage: "Private key (BN254 in large number format or ECDSA in hex format). If not provided, a new key will be generated",
 			},
 			&cli.StringFlag{
 				Name:  "password",
@@ -158,10 +158,10 @@ func createBLSKeystore(log logger.Logger, privateKey, path, password string) err
 
 	if privateKey == "" {
 		// Generate new key
-		log.Info("Generating new BLS private key")
+		log.Info("Generating new BN254 private key")
 		privKey, _, err = scheme.GenerateKeyPair()
 		if err != nil {
-			return fmt.Errorf("failed to generate BLS private key: %w", err)
+			return fmt.Errorf("failed to generate BN254 private key: %w", err)
 		}
 	} else {
 		// Use provided key
@@ -194,9 +194,9 @@ func createBLSKeystore(log logger.Logger, privateKey, path, password string) err
 		return errors.New("failed to extract the private key from the keystore file")
 	}
 
-	log.Info("✅ BLS keystore created successfully",
+	log.Info("✅ BN254 keystore created successfully",
 		zap.String("path", path))
-	log.Info("🔑 Save this BLS private key in a secure location:",
+	log.Info("🔑 Save this BN254 private key in a secure location:",
 		zap.String("privateKey", string(privateKeyData.Bytes())))
 
 	return nil
