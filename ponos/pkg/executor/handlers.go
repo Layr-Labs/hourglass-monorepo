@@ -263,8 +263,10 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsConfig *execu
 
 func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
 	e.logger.Sugar().Infow("Received task from AVS avsPerf",
-		"taskId", task.TaskId,
-		"avsAddress", task.AvsAddress,
+		zap.String("taskId", task.TaskId),
+		zap.String("avsAddress", task.AvsAddress),
+		zap.String("operatorAddress", e.config.Operator.Address),
+		zap.String("aggregatorAddress", task.GetAggregatorAddress()),
 	)
 	avsAddress := strings.ToLower(task.GetAvsAddress())
 	if avsAddress == "" {

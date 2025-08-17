@@ -3,6 +3,7 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"os"
 	"strings"
 	"sync"
@@ -621,8 +622,20 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
 	})
 	if peer == nil {
+		akp.logger.Sugar().Errorw("Failed to find peer for task",
+			zap.String("avsAddress", akp.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+		)
 		return fmt.Errorf("failed to find peer for task")
 	}
+	akp.logger.Sugar().Infow("Validating task signature",
+		zap.String("avsAddress", akp.config.AvsAddress),
+		zap.String("aggregatorAddress", t.AggregatorAddress),
+		zap.String("taskID", t.TaskID),
+		zap.String("payloadHash", crypto.Keccak256Hash(t.Payload).String()),
+		zap.String("payloadHex", hexutil.Encode(t.Payload)),
+		zap.Any("peer", peer),
+	)
 
 	isVerified := false
 
@@ -630,36 +643,59 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 		var scheme signing.SigningScheme
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
+			akp.logger.Sugar().Infow("Using BN254 scheme for signature verification")
 			scheme = bn254.NewScheme()
 		case config.CurveTypeECDSA:
+			akp.logger.Sugar().Infow("Using ECDSA scheme for signature verification")
 			scheme = ecdsa.NewScheme()
 		default:
 			return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
 		}
 
-		sig, err := scheme.NewSignatureFromBytes(t.Signature)
-		if err != nil {
-			return err
-		}
-
 		var verified bool
 		payloadHash := crypto.Keccak256Hash(t.Payload)
+		akp.logger.Sugar().Infow("Verifying signature",
+			zap.String("avsAddress", akp.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+			zap.String("curveType", opset.CurveType.String()),
+			zap.String("payloadHash", payloadHash.Hex()),
+		)
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
-		case config.CurveTypeECDSA:
-			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
+			sig, err := scheme.NewSignatureFromBytes(t.Signature)
 			if err != nil {
+				return err
+			}
+			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
+			if err != nil {
+				akp.logger.Error("Failed to verify BN254 signature",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.Error(err),
+				)
+				continue
+			}
+		case config.CurveTypeECDSA:
+			typedSig, err := ecdsa.NewSignatureFromBytes(t.Signature)
+			if err != nil {
+				akp.logger.Error("Failed to create ECDSA signature from bytes",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.String("address", opset.WrappedPublicKey.ECDSAAddress.String()),
+					zap.Error(err),
+				)
 				continue
 			}
 			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
 			if err != nil {
+				akp.logger.Error("Failed to verify ECDSA signature",
+					zap.String("avsAddress", akp.config.AvsAddress),
+					zap.String("aggregatorAddress", t.AggregatorAddress),
+					zap.String("address", opset.WrappedPublicKey.ECDSAAddress.String()),
+					zap.Error(err),
+				)
 				continue
 			}
-		}
-
-		if err != nil {
-			continue
 		}
 
 		if verified {

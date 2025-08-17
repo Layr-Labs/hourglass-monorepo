@@ -374,6 +374,7 @@ func (a *Aggregator) startAvsExecutionManagers() {
 	for {
 		select {
 		case avs := <-a.startAvsExecutionManagersChan:
+			a.logger.Sugar().Infow("Starting AVS Execution Manager for address", "avsAddress", avs)
 			avsExec, ok := a.avsExecutionManagers[avs]
 			if !ok {
 				a.logger.Sugar().Errorw("AVS Execution Manager not found for address", "avsAddress", avs)
@@ -383,11 +384,11 @@ func (a *Aggregator) startAvsExecutionManagers() {
 				if err := avsExec.Init(a.startContext); err != nil {
 					a.logger.Sugar().Errorw("AVS Execution Manager failed to initialize", "error", err)
 					a.startContextCancel()
+					return
 				}
-				if err := avsExec.Start(a.startContext); err != nil {
-					a.logger.Sugar().Errorw("AVS Execution Manager failed to start", "error", err)
-					a.startContextCancel()
-				}
+				a.logger.Sugar().Infow("AVS Execution Manager initialized")
+				go avsExec.Start(a.startContext)
+				a.logger.Sugar().Infow("AVS Execution Manager started")
 			}(avsExec)
 		}
 	}

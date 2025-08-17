@@ -246,7 +246,7 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 }
 
 // Start starts the AvsExecutionManager
-func (em *AvsExecutionManager) Start(ctx context.Context) error {
+func (em *AvsExecutionManager) Start(ctx context.Context) {
 	em.logger.Sugar().Infow("Starting AvsExecutionManager",
 		zap.String("contractAddress", em.config.AvsAddress),
 		zap.Any("supportedChainIds", em.config.SupportedChainIds),
@@ -266,7 +266,7 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			}
 		case <-ctx.Done():
 			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
-			return ctx.Err()
+			return
 		}
 	}
 }
@@ -883,7 +883,11 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 	}
 
 	em.taskQueue <- task
-	em.logger.Sugar().Infow("Added task to queue")
+	em.logger.Sugar().Infow("Added task to queue",
+		zap.String("taskId", task.TaskId),
+		zap.String("avsAddress", task.AVSAddress),
+		zap.Uint32("operatorSetId", task.OperatorSetId),
+	)
 	return nil
 }
 

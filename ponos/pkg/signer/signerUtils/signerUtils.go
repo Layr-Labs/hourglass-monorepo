@@ -55,6 +55,10 @@ func ParseSignersFromOperatorConfig(opConfig *config.OperatorConfig, l *zap.Logg
 			if err != nil {
 				return signers, fmt.Errorf("failed to create web3 signer: %w", err)
 			}
+			l.Sugar().Infow("Using remote ECDSA signer",
+				zap.String("fromAddress", opConfig.SigningKeys.ECDSA.RemoteSignerConfig.FromAddress),
+				zap.String("publicKey", opConfig.SigningKeys.ECDSA.RemoteSignerConfig.PublicKey),
+			)
 			signers.ECDSASigner = sig
 		} else if opConfig.SigningKeys.ECDSA.PrivateKey != "" {
 			ecdsaPk, err := ecdsa.NewPrivateKeyFromHexString(opConfig.SigningKeys.ECDSA.PrivateKey)
