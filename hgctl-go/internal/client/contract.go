@@ -156,6 +156,18 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
+	// Get default addresses for this chain if not provided in config
+	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
+	}
+
+	config.DelegationManager = defaultAddresses.DelegationManager
+	config.ReleaseManager = defaultAddresses.ReleaseManager
+	config.StrategyManager = defaultAddresses.StrategyManager
+	config.KeyRegistrar = defaultAddresses.KeyRegistrar
+	config.AllocationManager = defaultAddresses.AllocationManager
+
 	contractClient := &ContractClient{
 		ethClient:       client,
 		logger:          log,
@@ -164,12 +176,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		avsAddress:      common.HexToAddress(config.AVSAddress),
 		operatorAddress: common.HexToAddress(config.OperatorAddress),
 		contractConfig:  config,
-	}
-
-	// Get default addresses for this chain if not provided in config
-	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
 	}
 
 	// Delegation Manager
