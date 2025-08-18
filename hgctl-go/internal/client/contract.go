@@ -469,29 +469,67 @@ func (c *ContractClient) DepositIntoStrategy(
 		return fmt.Errorf("strategy manager not initialized")
 	}
 
-	opts, err := c.buildTxOpts(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Convert strategy address
+	// Convert addresses
 	stratAddr := common.HexToAddress(strategyAddress)
 	tokenAddr := common.HexToAddress(tokenAddress)
+
+	// Get ERC20 contract
 	erc20, err := c.getERC20(tokenAddr)
 	if err != nil {
 		return err
 	}
-	approveTx, err := erc20.Transact(opts, "approve", stratAddr, amount)
+
+	// Check balance first
+	balanceOpts := &bind.CallOpts{Context: ctx}
+	var balance *big.Int
+	results := erc20.Call(balanceOpts, &[]interface{}{&balance}, "balanceOf", c.operatorAddress)
+	if results != nil {
+		return fmt.Errorf("failed to get token balance: %w", results)
+	}
+
+	if balance.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient token balance: have %s, need %s", balance.String(), amount.String())
+	}
+
+	// Build transaction options for approval
+	approveOpts, err := c.buildTxOpts(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = bind.WaitMined(ctx, c.ethClient, approveTx)
+
+	// Approve the strategy manager to spend tokens
+	c.logger.Debug("Approving token spend",
+		zap.String("token", tokenAddress),
+		zap.String("spender", c.contractConfig.StrategyManager),
+		zap.String("amount", amount.String()),
+	)
+
+	approveTx, err := erc20.Transact(approveOpts, "approve", common.HexToAddress(c.contractConfig.StrategyManager), amount)
+	if err != nil {
+		return fmt.Errorf("failed to approve token spend: %w", err)
+	}
+
+	approveReceipt, err := bind.WaitMined(ctx, c.ethClient, approveTx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for approval transaction: %w", err)
+	}
+
+	if approveReceipt.Status == 0 {
+		return fmt.Errorf("approval transaction reverted")
+	}
+
+	c.logger.Debug("Token approval successful",
+		zap.String("txHash", approveReceipt.TxHash.Hex()),
+	)
+
+	// Build new transaction options for deposit (important: new nonce)
+	depositOpts, err := c.buildTxOpts(ctx)
 	if err != nil {
 		return err
 	}
 
 	// Deposit into strategy
-	depositTx, err := c.strategyManager.DepositIntoStrategy(opts, stratAddr, tokenAddr, amount)
+	depositTx, err := c.strategyManager.DepositIntoStrategy(depositOpts, stratAddr, tokenAddr, amount)
 	if err != nil {
 		return fmt.Errorf("failed to deposit into strategy: %w", err)
 	}
@@ -499,15 +537,16 @@ func (c *ContractClient) DepositIntoStrategy(
 	// Wait for transaction
 	depositReceipt, err := bind.WaitMined(ctx, c.ethClient, depositTx)
 	if err != nil {
-		return fmt.Errorf("failed to wait for transaction: %w", err)
+		return fmt.Errorf("failed to wait for deposit transaction: %w", err)
 	}
 
 	if depositReceipt.Status == 0 {
-		return fmt.Errorf("transaction reverted")
+		return fmt.Errorf("deposit transaction reverted")
 	}
 
 	c.logger.Info("Successfully deposited into strategy",
 		zap.String("strategy", strategyAddress),
+		zap.String("token", tokenAddress),
 		zap.String("amount", amount.String()),
 		zap.String("txHash", depositReceipt.TxHash.Hex()),
 	)
