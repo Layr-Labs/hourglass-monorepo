@@ -104,6 +104,8 @@ type IContractCaller interface {
 
 	CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
 
+	CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
+
 	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*TaskMailboxExecutorOperatorSetConfig, error)
 
 	// ------------------------------------------------------------------------

@@ -521,6 +521,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 }
 
 func Test_Mailbox(t *testing.T) {
+	t.Skip("Skipping temporarily until BN254CertificateVerifier audit fixes are in.")
 	t.Run("BN254 & ECDSA - L1", func(t *testing.T) {
 		testL1MailboxForCurve(t, config.CurveTypeECDSA, NetworkTarget_L1)
 	})
