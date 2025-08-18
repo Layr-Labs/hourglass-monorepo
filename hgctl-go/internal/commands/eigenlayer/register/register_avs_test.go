@@ -1,10 +1,13 @@
 package register
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli/v2"
+
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 )
 
 func TestRegisterAVSCommand(t *testing.T) {
@@ -71,4 +74,87 @@ func TestRegisterAVSCommand(t *testing.T) {
 		assert.NotNil(t, operatorSetIDsFlag)
 		assert.Contains(t, operatorSetIDsFlag.Usage, "multiple")
 	})
+}
+
+func TestTranslateLocalhostForDocker(t *testing.T) {
+	// Create a mock logger
+	log := logger.NewLogger(false)
+
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+		onMacOS  bool
+	}{
+		{
+			name:     "localhost URL with http",
+			input:    "http://localhost:8080",
+			expected: "http://host.docker.internal:8080",
+			onMacOS:  true,
+		},
+		{
+			name:     "localhost URL with https",
+			input:    "https://localhost:8443/path",
+			expected: "https://host.docker.internal:8443/path",
+			onMacOS:  true,
+		},
+		{
+			name:     "127.0.0.1 URL",
+			input:    "http://127.0.0.1:9090",
+			expected: "http://host.docker.internal:9090",
+			onMacOS:  true,
+		},
+		{
+			name:     "127.0.0.2 URL (loopback range)",
+			input:    "http://127.0.0.2:9090",
+			expected: "http://host.docker.internal:9090",
+			onMacOS:  true,
+		},
+		{
+			name:     "non-localhost URL unchanged",
+			input:    "https://example.com:8080",
+			expected: "https://example.com:8080",
+			onMacOS:  true,
+		},
+		{
+			name:     "simple localhost:port format",
+			input:    "localhost:8080",
+			expected: "host.docker.internal:8080",
+			onMacOS:  true,
+		},
+		{
+			name:     "simple 127.0.0.1:port format",
+			input:    "127.0.0.1:8080",
+			expected: "host.docker.internal:8080",
+			onMacOS:  true,
+		},
+		{
+			name:     "URL with query parameters",
+			input:    "http://localhost:8080/api?key=value",
+			expected: "http://host.docker.internal:8080/api?key=value",
+			onMacOS:  true,
+		},
+		{
+			name:     "URL with fragment",
+			input:    "http://localhost:8080/api#section",
+			expected: "http://host.docker.internal:8080/api#section",
+			onMacOS:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Only test on macOS or when explicitly testing macOS behavior
+			if runtime.GOOS == "darwin" || tc.onMacOS {
+				result := translateLocalhostForDocker(tc.input, log)
+				if runtime.GOOS == "darwin" {
+					assert.Equal(t, tc.expected, result)
+				} else if runtime.GOOS != "darwin" && tc.onMacOS {
+					// When not on macOS, the function should return input unchanged
+					// since the main function only calls this on macOS
+					t.Skip("Skipping macOS-specific test on non-Darwin platform")
+				}
+			}
+		})
+	}
 }

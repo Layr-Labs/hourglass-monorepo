@@ -2,12 +2,16 @@ package register
 
 import (
 	"fmt"
+	"net/url"
+	"runtime"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 )
 
 // RegisterAVSCommand returns the command for registering an operator with an AVS
@@ -60,6 +64,18 @@ func registerAVSAction(c *cli.Context) error {
 		operatorSetIDs[i] = uint32(id)
 	}
 
+	// Check if running on macOS and socket is localhost, translate to host.docker.internal
+	if runtime.GOOS == "darwin" {
+		socketToUse := translateLocalhostForDocker(socket, log)
+		if socketToUse != socket {
+			log.Debug("Translated localhost to host.docker.internal for Docker on macOS",
+				zap.String("originalSocket", socket),
+				zap.String("translatedSocket", socketToUse),
+			)
+			socket = socketToUse
+		}
+	}
+
 	// ABI encode the socket string
 	stringType, err := abi.NewType("string", "", nil)
 	if err != nil {
@@ -82,4 +98,44 @@ func registerAVSAction(c *cli.Context) error {
 
 	log.Info("Successfully registered operator with AVS")
 	return nil
+}
+
+// translateLocalhostForDocker translates localhost URLs to host.docker.internal for Docker on macOS
+func translateLocalhostForDocker(socket string, log logger.Logger) string {
+	// First check if it's a simple host:port format (not a URL)
+	if !strings.Contains(socket, "://") {
+		// Simple host:port format - do direct replacement
+		if strings.Contains(socket, "localhost") || strings.Contains(socket, "127.0.0.1") {
+			replaced := strings.ReplaceAll(socket, "localhost", "host.docker.internal")
+			replaced = strings.ReplaceAll(replaced, "127.0.0.1", "host.docker.internal")
+			// Also handle 127.x.x.x range
+			if strings.HasPrefix(replaced, "127.") {
+				parts := strings.SplitN(replaced, ":", 2)
+				if len(parts) > 0 && strings.HasPrefix(parts[0], "127.") {
+					parts[0] = "host.docker.internal"
+					replaced = strings.Join(parts, ":")
+				}
+			}
+			return replaced
+		}
+		return socket
+	}
+
+	// Parse as URL
+	u, err := url.Parse(socket)
+	if err != nil {
+		// If we can't parse it as URL, return as-is
+		log.Debug("Could not parse socket as URL, using as-is", zap.String("socket", socket))
+		return socket
+	}
+
+	// Check if the host is localhost or 127.0.0.1
+	if u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || strings.HasPrefix(u.Hostname(), "127.") {
+		// Replace with host.docker.internal
+		u.Host = strings.Replace(u.Host, u.Hostname(), "host.docker.internal", 1)
+		return u.String()
+	}
+
+	// Return original if not localhost
+	return socket
 }
