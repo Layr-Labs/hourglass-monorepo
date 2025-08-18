@@ -5,11 +5,19 @@ import (
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.RegisterAvsRequest) (*aggregatorV1.RegisterAvsResponse, error) {
+	a.logger.Sugar().Infow("RegisterAvs called",
+		zap.String("avsAddress", request.AvsAddress),
+		zap.Any("chainIds", request.ChainIds),
+		zap.Bool("hasAuth", request.Auth != nil),
+		zap.Bool("authEnabled", a.authVerifier != nil),
+	)
+
 	// Verify authentication
 	err := a.verifyAuth(request.Auth)
 	if err != nil {
@@ -50,6 +58,7 @@ func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.De
 // GetChallengeToken generates a challenge token for authentication
 func (a *Aggregator) GetChallengeToken(ctx context.Context, request *aggregatorV1.AggregatorGetChallengeTokenRequest) (*aggregatorV1.AggregatorGetChallengeTokenResponse, error) {
 	if a.authVerifier == nil {
+		a.logger.Sugar().Warnw("GetChallengeToken called but authentication is not configured")
 		return nil, status.Error(codes.Unimplemented, "authentication is not configured")
 	}
 
