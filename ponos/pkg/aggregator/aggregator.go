@@ -26,7 +26,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
-	"strings"
 	"time"
 )
 
@@ -115,15 +114,37 @@ func NewAggregator(
 
 	// Initialize auth verifier for management APIs
 	var authVerifier *auth.Verifier
-	if cfg.Authentication != nil && cfg.Authentication.IsEnabled {
-		var authSigner signer.ISigner
-		if signers.ECDSASigner != nil {
-			authSigner = signers.ECDSASigner
-		} else if signers.BLSSigner != nil {
-			authSigner = signers.BLSSigner
+	if cfg.Authentication != nil {
+		logger.Sugar().Infow("Authentication configuration loaded",
+			zap.Bool("enabled", cfg.Authentication.IsEnabled),
+		)
+		if cfg.Authentication.IsEnabled {
+			logger.Sugar().Infow("Authentication is enabled, initializing verifier")
+			var authSigner signer.ISigner
+			if signers.ECDSASigner != nil {
+				authSigner = signers.ECDSASigner
+				logger.Sugar().Infow("Using ECDSA signer for authentication")
+			} else if signers.BLSSigner != nil {
+				authSigner = signers.BLSSigner
+				logger.Sugar().Infow("Using BLS signer for authentication")
+			} else {
+				logger.Sugar().Warnw("Authentication enabled but no signer available")
+			}
+
+			if authSigner != nil {
+				logger.Sugar().Infow("Creating authentication verifier",
+					zap.String("address", cfg.Address),
+					zap.Duration("tokenExpiry", 5*time.Minute),
+				)
+				tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
+				authVerifier = auth.NewVerifier(tokenManager, authSigner)
+				logger.Sugar().Infow("Authentication verifier created successfully")
+			}
+		} else {
+			logger.Sugar().Infow("Authentication is disabled via configuration")
 		}
-		tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
-		authVerifier = auth.NewVerifier(tokenManager, authSigner)
+	} else {
+		logger.Sugar().Infow("No authentication configuration provided, authentication disabled")
 	}
 
 	agg := &Aggregator{
@@ -146,6 +167,13 @@ func NewAggregator(
 
 // Initialize sets up chain pollers and AVSExecutionManagers
 func (a *Aggregator) Initialize() error {
+	a.logger.Sugar().Infow("Starting aggregator initialization",
+		zap.String("address", a.config.Address),
+		zap.Int("numAVSs", len(a.config.AVSs)),
+		zap.Int("numChains", len(a.config.Chains)),
+		zap.Bool("authEnabled", a.authVerifier != nil),
+	)
+
 	if err := a.initializePollers(); err != nil {
 		return fmt.Errorf("failed to initialize pollers: %w", err)
 	}
@@ -166,12 +194,25 @@ func (a *Aggregator) Initialize() error {
 	}
 
 	for _, avs := range a.config.AVSs {
+		a.logger.Sugar().Infow("Registering AVS",
+			zap.String("address", avs.Address),
+			zap.Any("chainIds", avs.ChainIds),
+		)
 		if err := a.registerAvs(avs); err != nil {
 			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
 		}
+		a.logger.Sugar().Infow("AVS registered successfully",
+			zap.String("address", avs.Address),
+		)
 	}
 
 	a.registerHandlers()
+
+	a.logger.Sugar().Infow("Aggregator initialization completed successfully",
+		zap.Int("numAVSsRegistered", len(a.avsExecutionManagers)),
+		zap.Int("numChainPollers", len(a.chainPollers)),
+		zap.Bool("managementServerReady", a.managementRpcServer != nil),
+	)
 
 	return nil
 }
@@ -180,7 +221,7 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	if _, ok := a.avsExecutionManagers[avs.Address]; ok {
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
-	supportedChains, err := a.getValidChainsForAvs(avs.Address)
+	supportedChains, err := a.getValidChainsForAvs(avs.ChainIds)
 	if err != nil {
 		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
 	}
@@ -223,16 +264,23 @@ func getMailboxAddressesForChains(allContracts []*contracts.Contract) map[config
 	}, map[config.ChainId]string{})
 }
 
-// getValidChainsForAvs returns the valid chain IDs for a given AVS address
+// getValidChainsForAvs returns the valid chain IDs of the aggregator
 // for now, this is a stub for eventually calling on-chain to get the valid chains
-func (a *Aggregator) getValidChainsForAvs(avsAddress string) ([]config.ChainId, error) {
-	avs := util.Find(a.config.AVSs, func(avs *aggregatorConfig.AggregatorAvs) bool {
-		return strings.EqualFold(avs.Address, avsAddress)
-	})
-	if avs == nil {
-		return nil, fmt.Errorf("AVS with address %s not found in config", avsAddress)
+func (a *Aggregator) getValidChainsForAvs(chainIds []uint) ([]config.ChainId, error) {
+	validChainMap := make(map[uint]bool)
+	for _, chain := range a.config.Chains {
+		validChainMap[uint(chain.ChainId)] = true
 	}
-	return util.Map(avs.ChainIds, func(id uint, i uint64) config.ChainId {
+
+	validChainIds := util.Filter(chainIds, func(id uint) bool {
+		return validChainMap[id]
+	})
+
+	if len(validChainIds) != len(chainIds) {
+		return nil, fmt.Errorf("not all chainIds provided are valid")
+	}
+
+	return util.Map(validChainIds, func(id uint, i uint64) config.ChainId {
 		return config.ChainId(id)
 	}), nil
 }
@@ -350,6 +398,11 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	if err := a.managementRpcServer.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start management RPC server: %v", err)
 	}
+	a.logger.Sugar().Infow("Management RPC server started successfully")
+
+	a.logger.Sugar().Infow("Aggregator fully started and running",
+		zap.Bool("authEnabled", a.authVerifier != nil),
+	)
 
 	<-ctx.Done()
 	a.logger.Sugar().Infow("Aggregator context done, stopping")
@@ -393,8 +446,14 @@ func (a *Aggregator) registerHandlers() {
 func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
 	if a.authVerifier != nil {
 		if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
+			a.logger.Sugar().Warnw("Authentication verification failed",
+				zap.Error(err),
+			)
 			return err
 		}
+		a.logger.Sugar().Debugw("Authentication verification successful")
+	} else {
+		a.logger.Sugar().Debugw("Authentication verifier not configured, skipping verification")
 	}
 	return nil
 }

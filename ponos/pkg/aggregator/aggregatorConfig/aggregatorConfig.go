@@ -2,6 +2,7 @@ package aggregatorConfig
 
 import (
 	"encoding/json"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
@@ -126,6 +127,9 @@ type AggregatorConfig struct {
 
 	// Storage configuration for persistence
 	Storage *StorageConfig `json:"storage,omitempty" yaml:"storage,omitempty"`
+
+	// Authentication configuration for mgmt apis
+	Authentication auth.Config `json:"authentication,omitempty" yaml:"authentication,omitempty"`
 }
 
 func (arc *AggregatorConfig) Validate() error {

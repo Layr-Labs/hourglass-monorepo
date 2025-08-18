@@ -8,6 +8,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
@@ -74,6 +75,9 @@ var runCmd = &cobra.Command{
 		tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 
 		sugar.Infof("Aggregator config: %+v\n", Config)
+		sugar.Infow("Authentication configuration loaded from config file",
+			"enabled", Config.Authentication.IsEnabled,
+		)
 		sugar.Infow("Building aggregator components...")
 
 		l1Chain := util.Find(Config.Chains, func(c *aggregatorConfig.Chain) bool {
@@ -120,6 +124,11 @@ var runCmd = &cobra.Command{
 			store = memory.NewInMemoryAggregatorStore()
 		}
 
+		authConfig := &auth.Config{IsEnabled: Config.Authentication.IsEnabled}
+		sugar.Infow("Passing authentication config to aggregator",
+			"enabled", authConfig.IsEnabled,
+		)
+
 		agg, err := aggregator.NewAggregatorWithManagementRpcServer(
 			Config.ManagementServerGrpcPort,
 			&aggregator.AggregatorConfig{
@@ -128,6 +137,7 @@ var runCmd = &cobra.Command{
 				Address:          Config.Operator.Address,
 				PrivateKeyConfig: Config.Operator.OperatorPrivateKey,
 				L1ChainId:        Config.L1ChainId,
+				Authentication:   authConfig,
 			},
 			imContractStore,
 			tlp,
