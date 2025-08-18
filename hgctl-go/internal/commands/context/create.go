@@ -30,7 +30,11 @@ func createCommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "l1-rpc-url",
-				Usage: "Set the l1 rpc url for the context",
+				Usage: "Set the L1 RPC URL for the context",
+			},
+			&cli.StringFlag{
+				Name:  "l2-rpc-url",
+				Usage: "Set the L2 RPC URL for the context",
 			},
 			&cli.StringFlag{
 				Name:  "operator-address",
@@ -74,6 +78,18 @@ func contextCreateAction(c *cli.Context) error {
 		return err
 	}
 
+	// Get L2 RPC URL
+	l2RPCURL, err := getL2RPCURL(c)
+	if err != nil {
+		return err
+	}
+
+	// Get chain ID from L2 RPC
+	l2ChainID, err := getChainIDFromRPC(l2RPCURL, log)
+	if err != nil {
+		return err
+	}
+
 	// Get operator address
 	operatorAddress, err := getOperatorAddress(c)
 	if err != nil {
@@ -81,7 +97,7 @@ func contextCreateAction(c *cli.Context) error {
 	}
 
 	// Create and save the context
-	ctx := createContext(chainID.Uint64(), l1RPCURL, operatorAddress)
+	ctx := createContext(chainID.Uint64(), l1RPCURL, operatorAddress, l2ChainID.Uint64(), l2RPCURL)
 	if err := saveContext(cfg, name, ctx, c.Bool("use")); err != nil {
 		return err
 	}
@@ -130,11 +146,16 @@ func getL1RPCURL(c *cli.Context) (string, error) {
 
 // getChainID connects to the RPC and retrieves the chain ID
 func getChainID(rpcURL string, log logger.Logger) (*big.Int, error) {
-	log.Info("Retrieving Chain ID from L1 RPC.")
+	return getChainIDFromRPC(rpcURL, log)
+}
+
+// getChainIDFromRPC connects to the RPC and retrieves the chain ID with a label
+func getChainIDFromRPC(rpcURL string, log logger.Logger) (*big.Int, error) {
+	log.Info(fmt.Sprintf("Retrieving Chain ID from RPC."))
 
 	ethClient, err := ethclient.Dial(rpcURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to L1 RPC: %w", err)
+		return nil, fmt.Errorf("failed to connect to RPC: %w", err)
 	}
 	defer ethClient.Close()
 
@@ -143,8 +164,32 @@ func getChainID(rpcURL string, log logger.Logger) (*big.Int, error) {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
-	log.Info("Connected! L1 Chain ID:", zap.String("ChainID", chainID.String()))
+	log.Info(fmt.Sprintf("Connected! Chain ID:"), zap.String("ChainID", chainID.String()))
 	return chainID, nil
+}
+
+// getL2RPCURL gets the L2 RPC URL from flag or prompts for it
+func getL2RPCURL(c *cli.Context) (string, error) {
+	l2RPCURL := c.String("l2-rpc-url")
+	if l2RPCURL == "" {
+		// Prompt for L2 RPC URL if not provided via flag
+		url, err := output.InputString(
+			"Enter L2 RPC URL",
+			"The RPC endpoint URL for the L2 network (e.g., http://localhost:9545)",
+			"",
+			validateRPCURL,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to get L2 RPC URL: %w", err)
+		}
+		return url, nil
+	}
+
+	// Validate the provided L2 RPC URL
+	if err := validateRPCURL(l2RPCURL); err != nil {
+		return "", fmt.Errorf("invalid L2 RPC URL: %w", err)
+	}
+	return l2RPCURL, nil
 }
 
 // getOperatorAddress gets the operator address from flag or prompts for it
@@ -172,10 +217,12 @@ func getOperatorAddress(c *cli.Context) (string, error) {
 }
 
 // createContext creates a new context with the provided information
-func createContext(chainID uint64, rpcURL, operatorAddress string) *config.Context {
+func createContext(l1ChainID uint64, l1RPCURL, operatorAddress string, l2ChainID uint64, l2RPCURL string) *config.Context {
 	return &config.Context{
-		L1ChainID:       chainID,
-		L1RPCUrl:        rpcURL,
+		L1ChainID:       l1ChainID,
+		L1RPCUrl:        l1RPCURL,
+		L2ChainID:       l2ChainID,
+		L2RPCUrl:        l2RPCURL,
 		OperatorAddress: operatorAddress,
 	}
 }
@@ -204,13 +251,16 @@ func logContextCreated(log logger.Logger, name string, ctx *config.Context, setC
 	log.Info("Context created",
 		zap.String("name", name),
 		zap.Uint64("l1ChainId", ctx.L1ChainID),
+		zap.Uint64("l2ChainId", ctx.L2ChainID),
 		zap.String("operatorAddress", ctx.OperatorAddress),
 		zap.Bool("current", setCurrent))
 
 	log.Info("Context created successfully", zap.String("ContextName", name))
 	log.Info("Saved L1 RPC URL", zap.String("L1RPCUrl", ctx.L1RPCUrl))
+	log.Info("Retrieved L1 ChainID", zap.Uint64("L1ChainID", ctx.L1ChainID))
+	log.Info("Saved L2 RPC URL", zap.String("L2RPCUrl", ctx.L2RPCUrl))
+	log.Info("Retrieved L2 ChainID", zap.Uint64("L2ChainID", ctx.L2ChainID))
 	log.Info("Saved Operator Address", zap.String("OperatorAddress", ctx.OperatorAddress))
-	log.Info("Retrieved L1 ChainID", zap.Uint64("ChainID", ctx.L1ChainID))
 }
 
 // validateRPCURL validates that the provided string is a valid RPC URL

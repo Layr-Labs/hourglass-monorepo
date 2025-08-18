@@ -39,7 +39,9 @@ type Context struct {
 	OperatorAddress string `yaml:"operatorAddress,omitempty"`
 	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
 	L1ChainID       uint64 `yaml:"l1ChainId,omitempty"`
-	L1RPCUrl        string `yaml:"rpcUrl,omitempty"`
+	L1RPCUrl        string `yaml:"l1RpcUrl,omitempty"`
+	L2ChainID       uint64 `yaml:"l2ChainId,omitempty"`
+	L2RPCUrl        string `yaml:"l2RpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
 	PrivateKey string `yaml:"-"`
@@ -235,7 +237,15 @@ func (c *Context) ToMap() map[string]interface{} {
 	}
 
 	if c.L1RPCUrl != "" {
-		result["rpc-url"] = c.L1RPCUrl
+		result["l1-rpc-url"] = c.L1RPCUrl
+	}
+
+	if c.L2ChainID != 0 {
+		result["l2-chain-id"] = c.L2ChainID
+	}
+
+	if c.L2RPCUrl != "" {
+		result["l2-rpc-url"] = c.L2RPCUrl
 	}
 
 	if c.ExecutorAddress != "" {

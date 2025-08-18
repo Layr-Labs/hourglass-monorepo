@@ -29,8 +29,7 @@ func MiddlewareBeforeFunc(c *cli.Context) error {
 
 	// Initialize contract client
 	if err := ContractBeforeFunc(c); err != nil {
-		l.Error("Failed to initialize contract client", zap.Error(err))
-		return err
+		l.Debug("Failed to initialize contract client", zap.Error(err))
 	}
 
 	return nil
