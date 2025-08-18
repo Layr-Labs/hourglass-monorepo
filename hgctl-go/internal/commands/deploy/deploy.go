@@ -129,13 +129,92 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	//// Add signer key from context as KEYSTORE_NAME if not already set
-	//if d.Context.SignerKey != "" {
-	//	if _, exists := envVars["KEYSTORE_NAME"]; !exists {
-	//		envVars["KEYSTORE_NAME"] = d.Context.SignerKey
-	//		d.Log.Debug("Using signer key from context", zap.String("keystore", d.Context.SignerKey))
-	//	}
-	//}
+	// Populate OperatorKeys configuration into environment variables
+	if d.Context.OperatorKeys != nil {
+		if d.Context.OperatorKeys.Keystore != nil {
+			// Find the actual keystore path
+			for _, ks := range d.Context.Keystores {
+				if ks.Name == d.Context.OperatorKeys.Keystore.Name {
+					envVars["OPERATOR_KEYSTORE_PATH"] = ks.Path
+					envVars["OPERATOR_KEYSTORE_NAME"] = ks.Name
+					d.Log.Debug("Using operator keystore from context", 
+						zap.String("keystore", ks.Name),
+						zap.String("path", ks.Path))
+					break
+				}
+			}
+		} else if d.Context.OperatorKeys.RemoteSignerConfig != nil {
+			envVars["OPERATOR_WEB3SIGNER_URL"] = d.Context.OperatorKeys.RemoteSignerConfig.Url
+			if d.Context.OperatorKeys.RemoteSignerConfig.CACertPath != "" {
+				envVars["OPERATOR_WEB3SIGNER_CA_CERT_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.CACertPath
+			}
+			if d.Context.OperatorKeys.RemoteSignerConfig.ClientCertPath != "" {
+				envVars["OPERATOR_WEB3SIGNER_CLIENT_CERT_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.ClientCertPath
+			}
+			if d.Context.OperatorKeys.RemoteSignerConfig.ClientKeyPath != "" {
+				envVars["OPERATOR_WEB3SIGNER_CLIENT_KEY_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.ClientKeyPath
+			}
+			d.Log.Debug("Using operator web3signer from context", zap.String("url", d.Context.OperatorKeys.RemoteSignerConfig.Url))
+		} else if d.Context.OperatorKeys.PrivateKey {
+			// PrivateKey flag indicates to use OPERATOR_PRIVATE_KEY env var
+			d.Log.Debug("Operator configured to use OPERATOR_PRIVATE_KEY environment variable")
+		}
+	}
+
+	// Populate SystemSignerKeys configuration into environment variables
+	if d.Context.SystemSignerKeys != nil {
+		// Handle BN254 keystore configuration
+		if d.Context.SystemSignerKeys.BN254 != nil {
+			// Find the actual keystore path
+			for _, ks := range d.Context.Keystores {
+				if ks.Name == d.Context.SystemSignerKeys.BN254.Name {
+					envVars["SYSTEM_BLS_KEYSTORE_PATH"] = ks.Path
+					d.Log.Debug("Using system BN254 keystore from context", 
+						zap.String("keystore", ks.Name),
+						zap.String("path", ks.Path))
+					break
+				}
+			}
+		}
+		
+		// Handle ECDSA configuration
+		if d.Context.SystemSignerKeys.ECDSA != nil {
+			if d.Context.SystemSignerKeys.ECDSA.Keystore != nil {
+				// Find the actual keystore path
+				for _, ks := range d.Context.Keystores {
+					if ks.Name == d.Context.SystemSignerKeys.ECDSA.Keystore.Name {
+						envVars["SYSTEM_ECDSA_KEYSTORE_PATH"] = ks.Path
+						d.Log.Debug("Using system ECDSA keystore from context", 
+							zap.String("keystore", ks.Name),
+							zap.String("path", ks.Path))
+						break
+					}
+				}
+			} else if d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig != nil {
+				envVars["SYSTEM_ECDSA_WEB3SIGNER_URL"] = d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.Url
+				// Load cert contents if paths are provided
+				if d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.CACertPath != "" {
+					if certData, err := os.ReadFile(d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.CACertPath); err == nil {
+						envVars["SYSTEM_WEB3SIGNER_CA_CERT"] = string(certData)
+					}
+				}
+				if d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.ClientCertPath != "" {
+					if certData, err := os.ReadFile(d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.ClientCertPath); err == nil {
+						envVars["SYSTEM_WEB3SIGNER_CLIENT_CERT"] = string(certData)
+					}
+				}
+				if d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.ClientKeyPath != "" {
+					if keyData, err := os.ReadFile(d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.ClientKeyPath); err == nil {
+						envVars["SYSTEM_WEB3SIGNER_CLIENT_KEY"] = string(keyData)
+					}
+				}
+				d.Log.Debug("Using system ECDSA web3signer from context", zap.String("url", d.Context.SystemSignerKeys.ECDSA.RemoteSignerConfig.Url))
+			} else if d.Context.SystemSignerKeys.ECDSA.PrivateKey {
+				// PrivateKey flag indicates to use SYSTEM_PRIVATE_KEY env var
+				d.Log.Debug("System ECDSA configured to use SYSTEM_PRIVATE_KEY environment variable")
+			}
+		}
+	}
 
 	// Add L1 chain ID from context if not already set
 	if d.Context.L1ChainID != 0 {

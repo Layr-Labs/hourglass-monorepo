@@ -173,7 +173,7 @@ func (c *ChainManager) startAnvilL1() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func logPipe(name string, pipe io.ReadCloser, logger *zap.Logger) {
+func logPipe(name string, pipe io.ReadCloser, logger logger.Logger) {
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		logger.Info(name, zap.String("line", scanner.Text()))

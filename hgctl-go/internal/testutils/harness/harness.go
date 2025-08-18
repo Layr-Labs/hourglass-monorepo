@@ -237,31 +237,26 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 
 	// If keystore specified, set up the environment and args
 	if keystoreName != "" {
-		keystore, exists := h.keystores[keystoreName]
+		_, exists := h.keystores[keystoreName]
 		if !exists {
 			return nil, fmt.Errorf("unknown keystore: %s", keystoreName)
 		}
 
-		// For ECDSA keystores, set the private key
-		if keystore.Type == "ecdsa" {
-			var privateKey string
-			if keystoreName == "aggregator-ecdsa" {
-				privateKey = h.ChainConfig.OperatorAccountPk
-			} else if keystoreName == "executor-ecdsa" {
-				privateKey = h.ChainConfig.ExecOperatorAccountPk
-			} else if keystoreName == "executor-bn254" {
-				privateKey = h.ChainConfig.ExecOperatorAccountPk
-			}
+		// Set private key for both ECDSA and BN254 keystores that need transaction signing
+		var privateKey string
+		switch keystoreName {
+		case "aggregator-ecdsa", "aggregator-bn254":
+			privateKey = h.ChainConfig.OperatorAccountPk
+		case "executor-ecdsa", "executor-bn254":
+			privateKey = h.ChainConfig.ExecOperatorAccountPk
+		}
 
-			if privateKey != "" {
-				if !strings.HasPrefix(privateKey, "0x") {
-					privateKey = "0x" + privateKey
-				}
-				originalEnv["PRIVATE_KEY"] = os.Getenv("PRIVATE_KEY")
-				os.Setenv("PRIVATE_KEY", privateKey)
+		if privateKey != "" {
+			if !strings.HasPrefix(privateKey, "0x") {
+				privateKey = "0x" + privateKey
 			}
-		} else {
-
+			originalEnv["PRIVATE_KEY"] = os.Getenv("PRIVATE_KEY")
+			os.Setenv("PRIVATE_KEY", privateKey)
 		}
 	}
 

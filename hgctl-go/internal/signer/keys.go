@@ -21,8 +21,8 @@ type Signers struct {
 }
 
 type SigningKeys struct {
-	BN254 *KeystoreReference `json:"bn254"`
-	ECDSA *ECDSAKeyConfig    `json:"ecdsa"`
+	BN254 *KeystoreReference `json:"bn254" yaml:"bn254,omitempty"`
+	ECDSA *ECDSAKeyConfig    `json:"ecdsa," yaml:"ecdsa,omitempty"`
 }
 
 type ECDSAKeyConfig struct {
@@ -59,6 +59,8 @@ type RemoteSignerReference struct {
 	CACertPath     string `yaml:"caCertPath,omitempty"`
 	ClientCertPath string `yaml:"clientCertPath,omitempty"`
 	ClientKeyPath  string `yaml:"clientKeyPath,omitempty"`
+	FromAddress    string `yaml:"fromAddress,omitempty"`
+	PublicKey      string `yaml:"publicKey,omitempty"`
 }
 
 type CurveType string
@@ -149,6 +151,16 @@ func LoadWeb3SignerConfig(keys *RemoteSignerReference) (*RemoteSignerConfig, err
 		return nil, fmt.Errorf("url is required for remote signer")
 	}
 	signerConfig.Url = keys.Url
+
+	if keys.FromAddress == "" {
+		return nil, fmt.Errorf("from address is required for remote signer")
+	}
+	signerConfig.FromAddress = keys.FromAddress
+
+	if keys.PublicKey == "" {
+		return nil, fmt.Errorf("public key is required for remote signer")
+	}
+	signerConfig.PublicKey = keys.PublicKey
 
 	if keys.ConfigPath != "" {
 		configPath := keys.ConfigPath

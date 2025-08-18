@@ -48,8 +48,7 @@ type Context struct {
 	EnvSecretsPath string `yaml:"envSecretsPath"` // Remove omitempty to preserve field
 
 	// Keystore and Web3 Signer references
-	Keystores   []signer.KeystoreReference     `yaml:"keystores,omitempty"`
-	Web3Signers []signer.RemoteSignerReference `yaml:"web3signers,omitempty"`
+	Keystores []signer.KeystoreReference `yaml:"keystores,omitempty"`
 
 	// Signing keys
 	SystemSignerKeys *signer.SigningKeys `yaml:"systemSigner,omitempty"`
@@ -257,14 +256,14 @@ func (c *Context) ToMap() map[string]interface{} {
 		result["keystores"] = c.Keystores
 	}
 
-	// Add web3signer references if any
-	if len(c.Web3Signers) > 0 {
-		result["web3signers"] = c.Web3Signers
-	}
-
 	// Add signer key if set
 	if c.OperatorKeys != nil {
 		result["operator-key"] = c.OperatorKeys
+	}
+
+	// Add signer key if set
+	if c.SystemSignerKeys != nil {
+		result["system-key"] = c.SystemSignerKeys
 	}
 
 	// Add contract overrides if any

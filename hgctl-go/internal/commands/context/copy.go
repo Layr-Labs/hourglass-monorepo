@@ -173,7 +173,6 @@ func deepCopyContext(src *config.Context) *config.Context {
 
 	// Copy slices and nested structures
 	copyKeystores(src, dst)
-	copyWeb3Signers(src, dst)
 	copyContractOverrides(src, dst)
 
 	return dst
@@ -184,14 +183,6 @@ func copyKeystores(src, dst *config.Context) {
 	if src.Keystores != nil {
 		dst.Keystores = make([]signer.KeystoreReference, len(src.Keystores))
 		copy(dst.Keystores, src.Keystores)
-	}
-}
-
-// copyWeb3Signers deep copies the web3signers slice
-func copyWeb3Signers(src, dst *config.Context) {
-	if src.Web3Signers != nil {
-		dst.Web3Signers = make([]signer.RemoteSignerReference, len(src.Web3Signers))
-		copy(dst.Web3Signers, src.Web3Signers)
 	}
 }
 

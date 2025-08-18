@@ -3,7 +3,6 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"path/filepath"
 
@@ -115,11 +114,17 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	keystoreName := cfg.Env[config.KeystoreName]
-	keystorePassword := cfg.Env[config.KeystorePassword]
-	var keystore *signer.KeystoreReference
-	if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
-		return fmt.Errorf("signer validation failed: %w", err)
+	// Validate that required passwords are set for keystores
+	if cfg.Env["SYSTEM_BLS_KEYSTORE_PATH"] != "" || cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"] != "" {
+		if cfg.Env["SYSTEM_KEYSTORE_PASSWORD"] == "" {
+			return fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system keystores")
+		}
+	}
+	
+	if cfg.Env["OPERATOR_KEYSTORE_PATH"] != "" {
+		if cfg.Env["OPERATOR_KEYSTORE_PASSWORD"] == "" {
+			return fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable required for operator keystore")
+		}
 	}
 
 	if d.dryRun {
@@ -139,7 +144,7 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	return d.deployContainer(component, keystore, cfg)
+	return d.deployContainer(component, cfg)
 }
 
 // generateConfiguration generates aggregator configuration files
@@ -168,7 +173,6 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 // deployContainer handles the aggregator-specific container deployment
 func (d *AggregatorDeployer) deployContainer(
 	component *runtime.ComponentSpec,
-	keystore *signer.KeystoreReference,
 	cfg *DeploymentConfig,
 ) error {
 
@@ -194,8 +198,26 @@ func (d *AggregatorDeployer) deployContainer(
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
 	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
 
-	if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
-		return err
+	// Mount keystore files directly if they exist
+	if operatorKeystorePath := cfg.Env["OPERATOR_KEYSTORE_PATH"]; operatorKeystorePath != "" {
+		if _, err := os.Stat(operatorKeystorePath); err == nil {
+			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", operatorKeystorePath, operatorKeystorePath))
+			d.Log.Info("Mounting operator keystore", zap.String("path", operatorKeystorePath))
+		}
+	}
+	
+	if systemBLSPath := cfg.Env["SYSTEM_BLS_KEYSTORE_PATH"]; systemBLSPath != "" {
+		if _, err := os.Stat(systemBLSPath); err == nil {
+			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemBLSPath, systemBLSPath))
+			d.Log.Info("Mounting system BLS keystore", zap.String("path", systemBLSPath))
+		}
+	}
+	
+	if systemECDSAPath := cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"]; systemECDSAPath != "" {
+		if _, err := os.Stat(systemECDSAPath); err == nil {
+			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemECDSAPath, systemECDSAPath))
+			d.Log.Info("Mounting system ECDSA keystore", zap.String("path", systemECDSAPath))
+		}
 	}
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
