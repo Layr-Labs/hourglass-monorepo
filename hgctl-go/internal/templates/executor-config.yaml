@@ -5,7 +5,7 @@ managementServerGrpcPort: {{envDefault "EXECUTOR_MGMT_PORT" "9091"}}
 performerNetworkName: "{{envDefault "PERFORMER_NETWORK_NAME" "hgctl-performer-network"}}"
 
 # Disable authentication for management API
-auth:
+authentication:
   enabled: false
 
 storage:

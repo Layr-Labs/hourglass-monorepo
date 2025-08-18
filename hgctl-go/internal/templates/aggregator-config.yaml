@@ -2,7 +2,7 @@ debug: {{envDefault "DEBUG" "true"}}
 managementServerGrpcPort: {{envDefault "AGGREGATOR_MGMT_PORT" "9010"}}
 
 # Disable authentication for management API
-auth:
+authentication:
   enabled: false
 
 storage:

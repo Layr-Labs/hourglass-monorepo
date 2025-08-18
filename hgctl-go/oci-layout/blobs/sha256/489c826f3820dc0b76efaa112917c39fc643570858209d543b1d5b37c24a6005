@@ -1,0 +1,12 @@
+{
+  "avsName": "boop",
+  "eigenRuntimeAPIVersion": "v1",
+  "formatVersion": "1.0",
+  "kind": "Hourglass",
+  "metadata": {
+    "createdAt": "2025-08-14T21:02:29Z",
+    "devkitVersion": "v0.0.10",
+    "releaseVersion": "opset-1-v0"
+  },
+  "validationSchema": "https://eigenruntime.io/schemas/hourglass/v1/manifest.json"
+}
