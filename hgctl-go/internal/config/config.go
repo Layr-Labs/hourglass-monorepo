@@ -38,9 +38,9 @@ type Context struct {
 	AVSAddress      string `yaml:"avsAddress,omitempty"`
 	OperatorAddress string `yaml:"operatorAddress,omitempty"`
 	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
-	L1ChainID       uint64 `yaml:"l1ChainId,omitempty"`
+	L1ChainID       uint32 `yaml:"l1ChainId,omitempty"`
 	L1RPCUrl        string `yaml:"l1RpcUrl,omitempty"`
-	L2ChainID       uint64 `yaml:"l2ChainId,omitempty"`
+	L2ChainID       uint32 `yaml:"l2ChainId,omitempty"`
 	L2RPCUrl        string `yaml:"l2RpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
@@ -60,6 +60,9 @@ type Context struct {
 
 	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
 	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
+
+	// Experimental features flag
+	Experimental bool `yaml:"experimental,omitempty"`
 }
 
 type Config struct {

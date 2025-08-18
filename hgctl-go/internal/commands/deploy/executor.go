@@ -184,6 +184,21 @@ func (d *ExecutorDeployer) deployContainer(
 
 	dockerArgs := d.BuildDockerArgs(containerName, component, cfg)
 
+	// Add port mappings for executor service and management ports
+	servicePort := cfg.Env["EXECUTOR_SERVICE_PORT"]
+	if servicePort == "" {
+		servicePort = "9090"
+	}
+	mgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
+	if mgmtPort == "" {
+		mgmtPort = "9091"
+	}
+	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", servicePort, servicePort))
+	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
+	d.Log.Info("Exposing executor ports", 
+		zap.String("servicePort", servicePort),
+		zap.String("managementPort", mgmtPort))
+
 	if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
 		return err
 	}
@@ -202,6 +217,13 @@ func (d *ExecutorDeployer) deployContainer(
 	}
 
 	d.printSuccessMessage(containerName, containerID, cfg)
+	
+	// Save the executor address to the context
+	if err := d.saveExecutorAddress(cfg); err != nil {
+		d.Log.Warn("Failed to save executor address to context", zap.Error(err))
+		// Don't fail the deployment, just warn
+	}
+	
 	return nil
 }
 
@@ -220,6 +242,40 @@ func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, 
 	return nil
 }
 
+// saveExecutorAddress saves the executor management gRPC address to the context configuration
+func (d *ExecutorDeployer) saveExecutorAddress(cfg *DeploymentConfig) error {
+	// Get the executor management port from config
+	executorMgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
+	if executorMgmtPort == "" {
+		executorMgmtPort = "9091"
+	}
+	
+	// Build the executor address (using localhost since it's exposed on the host)
+	executorAddress := fmt.Sprintf("localhost:%s", executorMgmtPort)
+	
+	// Load current config
+	configData, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	
+	// Update the executor address in the current context
+	if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
+		ctx.ExecutorAddress = executorAddress
+		
+		// Save the updated config
+		if err := config.SaveConfig(configData); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+		
+		d.Log.Info("Saved executor management address to context", 
+			zap.String("address", executorAddress),
+			zap.String("context", configData.CurrentContext))
+	}
+	
+	return nil
+}
+
 // printSuccessMessage prints a user-friendly success message
 func (d *ExecutorDeployer) printSuccessMessage(containerName, containerID string, cfg *DeploymentConfig) {
 	d.Log.Info("✅ Executor deployed successfully",
@@ -228,10 +284,18 @@ func (d *ExecutorDeployer) printSuccessMessage(containerName, containerID string
 		zap.String("config", cfg.ConfigDir),
 		zap.String("tempDir", cfg.TempDir))
 
+	// Get the management port for display
+	mgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
+	if mgmtPort == "" {
+		mgmtPort = "9091"
+	}
+	
 	fmt.Printf("\n✅ Executor deployed successfully\n")
 	fmt.Printf("Container Name: %s\n", containerName)
 	fmt.Printf("Container ID: %s\n", containerID[:12])
+	fmt.Printf("Management Port: %s\n", mgmtPort)
 	fmt.Printf("Config Path: %s\n", cfg.ConfigPath)
+	fmt.Printf("\nThe executor management address (localhost:%s) has been saved to the context.\n", mgmtPort)
 	fmt.Printf("\nUseful commands:\n")
 	fmt.Printf("  View logs:    docker logs -f %s\n", containerName)
 	fmt.Printf("  Stop:         docker stop %s\n", containerName)

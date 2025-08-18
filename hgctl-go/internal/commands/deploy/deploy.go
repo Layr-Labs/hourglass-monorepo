@@ -137,7 +137,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 				if ks.Name == d.Context.OperatorKeys.Keystore.Name {
 					envVars["OPERATOR_KEYSTORE_PATH"] = ks.Path
 					envVars["OPERATOR_KEYSTORE_NAME"] = ks.Name
-					d.Log.Debug("Using operator keystore from context", 
+					d.Log.Debug("Using operator keystore from context",
 						zap.String("keystore", ks.Name),
 						zap.String("path", ks.Path))
 					break
@@ -169,14 +169,14 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 			for _, ks := range d.Context.Keystores {
 				if ks.Name == d.Context.SystemSignerKeys.BN254.Name {
 					envVars["SYSTEM_BLS_KEYSTORE_PATH"] = ks.Path
-					d.Log.Debug("Using system BN254 keystore from context", 
+					d.Log.Debug("Using system BN254 keystore from context",
 						zap.String("keystore", ks.Name),
 						zap.String("path", ks.Path))
 					break
 				}
 			}
 		}
-		
+
 		// Handle ECDSA configuration
 		if d.Context.SystemSignerKeys.ECDSA != nil {
 			if d.Context.SystemSignerKeys.ECDSA.Keystore != nil {
@@ -184,7 +184,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 				for _, ks := range d.Context.Keystores {
 					if ks.Name == d.Context.SystemSignerKeys.ECDSA.Keystore.Name {
 						envVars["SYSTEM_ECDSA_KEYSTORE_PATH"] = ks.Path
-						d.Log.Debug("Using system ECDSA keystore from context", 
+						d.Log.Debug("Using system ECDSA keystore from context",
 							zap.String("keystore", ks.Name),
 							zap.String("path", ks.Path))
 						break
@@ -220,7 +220,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 	if d.Context.L1ChainID != 0 {
 		if _, exists := envVars["L1_CHAIN_ID"]; !exists {
 			envVars["L1_CHAIN_ID"] = fmt.Sprintf("%d", d.Context.L1ChainID)
-			d.Log.Debug("Using L1 chain ID from context", zap.Uint64("chainId", d.Context.L1ChainID))
+			d.Log.Debug("Using L1 chain ID from context", zap.Uint32("chainId", d.Context.L1ChainID))
 		}
 	}
 
@@ -235,6 +235,29 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 					zap.String("translated", envVars["L1_RPC_URL"]))
 			} else {
 				d.Log.Debug("Using L1 RPC URL from context", zap.String("rpcUrl", d.Context.L1RPCUrl))
+			}
+		}
+	}
+
+	// Add L2 chain ID from context if not already set
+	if d.Context.L2ChainID != 0 {
+		if _, exists := envVars["L2_CHAIN_ID"]; !exists {
+			envVars["L2_CHAIN_ID"] = fmt.Sprintf("%d", d.Context.L2ChainID)
+			d.Log.Debug("Using L2 chain ID from context", zap.Uint32("chainId", d.Context.L2ChainID))
+		}
+	}
+
+	// Add L2 RPC URL from context if not already set
+	if d.Context.L2RPCUrl != "" {
+		if _, exists := envVars["L2_RPC_URL"]; !exists {
+			// Translate localhost URLs for Docker on macOS
+			envVars["L2_RPC_URL"] = translateLocalhostForDocker(d.Context.L2RPCUrl)
+			if envVars["L2_RPC_URL"] != d.Context.L2RPCUrl {
+				d.Log.Debug("Translated L2 RPC URL for Docker",
+					zap.String("original", d.Context.L2RPCUrl),
+					zap.String("translated", envVars["L2_RPC_URL"]))
+			} else {
+				d.Log.Debug("Using L2 RPC URL from context", zap.String("rpcUrl", d.Context.L2RPCUrl))
 			}
 		}
 	}
@@ -379,6 +402,60 @@ func (d *PlatformDeployer) PullDockerImage(imageRef string, componentType string
 
 	d.Log.Info(fmt.Sprintf("Successfully pulled %s image", componentType))
 	return nil
+}
+
+// CheckContainerRunning checks if a container exists and is running
+func (d *PlatformDeployer) CheckContainerRunning(containerName string) (bool, string, error) {
+	// Check if container exists
+	checkCmd := exec.Command("docker", "ps", "-q", "-f", fmt.Sprintf("name=%s", containerName))
+	var checkStdout bytes.Buffer
+	checkCmd.Stdout = &checkStdout
+
+	if err := checkCmd.Run(); err != nil {
+		return false, "", nil // Container doesn't exist
+	}
+
+	containerID := strings.TrimSpace(checkStdout.String())
+	if containerID == "" {
+		return false, "", nil // Container doesn't exist or is not running
+	}
+
+	// Get container details to verify it's running
+	inspectCmd := exec.Command("docker", "inspect", "--format", "{{.State.Running}}", containerID)
+	var inspectStdout bytes.Buffer
+	inspectCmd.Stdout = &inspectStdout
+
+	if err := inspectCmd.Run(); err != nil {
+		return false, "", fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	isRunning := strings.TrimSpace(inspectStdout.String()) == "true"
+	return isRunning, containerID, nil
+}
+
+// GetContainerPort retrieves the exposed port for a running container
+func (d *PlatformDeployer) GetContainerPort(containerName string, internalPort string) (string, error) {
+	cmd := exec.Command("docker", "port", containerName, internalPort)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to get container port: %w", err)
+	}
+
+	// Output format is "0.0.0.0:9010" or "[::]:9010"
+	output := strings.TrimSpace(stdout.String())
+	if output == "" {
+		return "", fmt.Errorf("no port mapping found for %s", internalPort)
+	}
+
+	// Extract just the port number
+	parts := strings.Split(output, ":")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("unexpected port format: %s", output)
+	}
+
+	return parts[len(parts)-1], nil
 }
 
 // CleanupExistingContainer stops and removes existing container if it exists

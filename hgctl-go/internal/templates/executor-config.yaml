@@ -1,25 +1,45 @@
-debug: {{envDefault "DEBUG" "false"}}
+debug: {{envDefault "DEBUG" "true"}}
 
 grpcPort: {{envDefault "EXECUTOR_SERVICE_PORT" "9090"}}
 managementServerGrpcPort: {{envDefault "EXECUTOR_MGMT_PORT" "9091"}}
 performerNetworkName: "{{envDefault "PERFORMER_NETWORK_NAME" "hgctl-performer-network"}}"
 
+# Disable authentication for management API
+auth:
+  enabled: false
+
 storage:
   type: "memory"
 
 l1Chain:
-  chainId: "{{env "L1_CHAIN_ID"}}"
+  chainId: {{env "L1_CHAIN_ID"}}
   rpcUrl: "{{env "L1_RPC_URL"}}"
 
 operator:
   address: "{{env "OPERATOR_ADDRESS"}}"
   operatorPrivateKey:
+    {{if env "OPERATOR_KEYSTORE_PATH"}}
+    keystore:
+      keystoreFile: "{{env "OPERATOR_KEYSTORE_PATH"}}"
+      password: "{{env "OPERATOR_KEYSTORE_PASSWORD"}}"
+    {{else}}
     privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
+    {{end}}
   signingKeys:
-    # Keystore configuration is determined by KEYSTORE_NAME environment variable
-    # The keystore type (bn254/bls or ecdsa) will determine which section is configured
+    {{if env "SYSTEM_BLS_KEYSTORE_PATH"}}
     bls:
-      keystoreFile: "/keystores/operator.keystore.json"
-      password: "{{env "KEYSTORE_PASSWORD"}}"
+      keystoreFile: "{{env "SYSTEM_BLS_KEYSTORE_PATH"}}"
+      password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
+    {{end}}
+    {{if env "SYSTEM_ECDSA_KEYSTORE_PATH"}}
+    ecdsa:
+      keystore:
+        keystoreFile: "{{env "SYSTEM_ECDSA_KEYSTORE_PATH"}}"
+        password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
+    {{else if env "SYSTEM_PRIVATE_KEY"}}
+    ecdsa:
+      privateKey: "{{env "SYSTEM_PRIVATE_KEY"}}"
+    {{end}}
 
+# AVS performers will be managed dynamically via the management API
 avsPerformers:

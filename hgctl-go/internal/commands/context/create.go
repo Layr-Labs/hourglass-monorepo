@@ -97,7 +97,8 @@ func contextCreateAction(c *cli.Context) error {
 	}
 
 	// Create and save the context
-	ctx := createContext(chainID.Uint64(), l1RPCURL, operatorAddress, l2ChainID.Uint64(), l2RPCURL)
+	// TODO: check for overflow
+	ctx := createContext(uint32(chainID.Uint64()), l1RPCURL, operatorAddress, uint32(l2ChainID.Uint64()), l2RPCURL)
 	if err := saveContext(cfg, name, ctx, c.Bool("use")); err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func getOperatorAddress(c *cli.Context) (string, error) {
 }
 
 // createContext creates a new context with the provided information
-func createContext(l1ChainID uint64, l1RPCURL, operatorAddress string, l2ChainID uint64, l2RPCURL string) *config.Context {
+func createContext(l1ChainID uint32, l1RPCURL, operatorAddress string, l2ChainID uint32, l2RPCURL string) *config.Context {
 	return &config.Context{
 		L1ChainID:       l1ChainID,
 		L1RPCUrl:        l1RPCURL,
@@ -250,16 +251,16 @@ func saveContext(cfg *config.Config, name string, ctx *config.Context, setCurren
 func logContextCreated(log logger.Logger, name string, ctx *config.Context, setCurrent bool) {
 	log.Info("Context created",
 		zap.String("name", name),
-		zap.Uint64("l1ChainId", ctx.L1ChainID),
-		zap.Uint64("l2ChainId", ctx.L2ChainID),
+		zap.Uint32("l1ChainId", ctx.L1ChainID),
+		zap.Uint32("l2ChainId", ctx.L2ChainID),
 		zap.String("operatorAddress", ctx.OperatorAddress),
 		zap.Bool("current", setCurrent))
 
 	log.Info("Context created successfully", zap.String("ContextName", name))
 	log.Info("Saved L1 RPC URL", zap.String("L1RPCUrl", ctx.L1RPCUrl))
-	log.Info("Retrieved L1 ChainID", zap.Uint64("L1ChainID", ctx.L1ChainID))
+	log.Info("Retrieved L1 ChainID", zap.Uint32("L1ChainID", ctx.L1ChainID))
 	log.Info("Saved L2 RPC URL", zap.String("L2RPCUrl", ctx.L2RPCUrl))
-	log.Info("Retrieved L2 ChainID", zap.Uint64("L2ChainID", ctx.L2ChainID))
+	log.Info("Retrieved L2 ChainID", zap.Uint32("L2ChainID", ctx.L2ChainID))
 	log.Info("Saved Operator Address", zap.String("OperatorAddress", ctx.OperatorAddress))
 }
 

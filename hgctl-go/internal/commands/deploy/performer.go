@@ -63,7 +63,7 @@ func deployPerformerAction(c *cli.Context) error {
 	}
 
 	if currentCtx.ExecutorAddress == "" {
-		return fmt.Errorf("executor address not configured. Run 'hgctl context set --executor-address <address>' first")
+		return fmt.Errorf("no executor address found in context. Please deploy an executor first using 'hgctl deploy executor' or set manually with 'hgctl context set --executor-address <address>'")
 	}
 
 	contractClient, err := middleware.GetContractClient(c)
@@ -189,4 +189,7 @@ func (d *PerformerDeployer) printSuccessMessage(deploymentID string, component *
 	fmt.Printf("Executor: %s\n", d.Context.ExecutorAddress)
 	fmt.Printf("Image: %s@%s\n", component.Registry, component.Digest)
 	fmt.Printf("\nThe performer is now running on the executor.\n")
+	fmt.Printf("\nUseful commands:\n")
+	fmt.Printf("  List performers:  hgctl get performer\n")
+	fmt.Printf("  Remove performer: hgctl remove performer %s\n", deploymentID)
 }

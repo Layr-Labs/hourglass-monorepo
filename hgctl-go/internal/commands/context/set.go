@@ -65,6 +65,10 @@ func setCommand() *cli.Command {
 				Name:  "signer-key",
 				Usage: "Set the signer keystore name (must be a keystore in this context)",
 			},
+			&cli.BoolFlag{
+				Name:  "experimental",
+				Usage: "Enable experimental features",
+			},
 		},
 		Action: contextSetAction,
 	}
@@ -84,12 +88,6 @@ func contextSetAction(c *cli.Context) error {
 	}
 
 	updated := false
-
-	if addr := c.String("executor-address"); addr != "" {
-		ctx.ExecutorAddress = addr
-		updated = true
-		log.Info("Updated executor address", zap.String("address", addr))
-	}
 
 	if addr := c.String("avs-address"); addr != "" {
 		ctx.AVSAddress = addr
@@ -173,22 +171,15 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated env secrets path", zap.String("path", path))
 	}
 
-	//if signerKey := c.String("signer-key"); signerKey != "" {
-	//	// Validate that the signer key exists in the context's keystores
-	//	found := false
-	//	for _, ks := range ctx.Keystores {
-	//		if ks.Name == signerKey {
-	//			found = true
-	//			break
-	//		}
-	//	}
-	//	if !found {
-	//		return fmt.Errorf("keystore '%s' not found in context '%s'", signerKey, cfg.CurrentContext)
-	//	}
-	//	ctx.SignerKey = signerKey
-	//	updated = true
-	//	log.Info("Updated signer key", zap.String("signerKey", signerKey))
-	//}
+	if c.IsSet("experimental") {
+		ctx.Experimental = c.Bool("experimental")
+		updated = true
+		if ctx.Experimental {
+			log.Info("Enabled experimental features")
+		} else {
+			log.Info("Disabled experimental features")
+		}
+	}
 
 	if !updated {
 		return fmt.Errorf("no values provided to update")

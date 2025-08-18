@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -27,9 +28,15 @@ func MiddlewareBeforeFunc(c *cli.Context) error {
 		return err
 	}
 
-	// Initialize contract client
-	if err := ContractBeforeFunc(c); err != nil {
-		l.Debug("Failed to initialize contract client", zap.Error(err))
+	ctxConfig, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if ctxConfig != nil {
+		// Initialize contract client
+		if err := ContractBeforeFunc(c); err != nil {
+			l.Debug("Failed to initialize contract client", zap.Error(err))
+		}
 	}
 
 	return nil
