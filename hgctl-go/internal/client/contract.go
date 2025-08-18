@@ -175,6 +175,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	// Delegation Manager
 	delegationAddr := config.DelegationManager
 	if delegationAddr == "" && defaultAddresses != nil {
+		contractClient.contractConfig.DelegationManager = delegationAddr
 		delegationAddr = defaultAddresses.DelegationManager
 	}
 	if delegationAddr != "" {
@@ -191,6 +192,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	// Allocation Manager
 	allocationAddr := config.AllocationManager
 	if allocationAddr == "" && defaultAddresses != nil {
+		contractClient.contractConfig.AllocationManager = allocationAddr
 		allocationAddr = defaultAddresses.AllocationManager
 	}
 	if allocationAddr != "" {
@@ -207,6 +209,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	// Strategy Manager
 	strategyAddr := config.StrategyManager
 	if strategyAddr == "" && defaultAddresses != nil {
+		contractClient.contractConfig.StrategyManager = strategyAddr
 		strategyAddr = defaultAddresses.StrategyManager
 	}
 	if strategyAddr != "" {
@@ -223,6 +226,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	// Key Registrar
 	keyRegistrarAddr := config.KeyRegistrar
 	if keyRegistrarAddr == "" && defaultAddresses != nil {
+		contractClient.contractConfig.KeyRegistrar = keyRegistrarAddr
 		keyRegistrarAddr = defaultAddresses.KeyRegistrar
 	}
 	if keyRegistrarAddr != "" {
@@ -239,6 +243,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	// Release Manager
 	releaseManagerAddr := config.ReleaseManager
 	if releaseManagerAddr == "" && defaultAddresses != nil {
+		contractClient.contractConfig.ReleaseManager = releaseManagerAddr
 		releaseManagerAddr = defaultAddresses.ReleaseManager
 	}
 	if releaseManagerAddr != "" {
@@ -487,7 +492,7 @@ func (c *ContractClient) DepositIntoStrategy(
 		return fmt.Errorf("failed to get token balance: %w", results)
 	}
 
-	if balance.Cmp(amount) < 0 {
+	if balance.Cmp(amount) <= 0 {
 		return fmt.Errorf("insufficient token balance: have %s, need %s", balance.String(), amount.String())
 	}
 
