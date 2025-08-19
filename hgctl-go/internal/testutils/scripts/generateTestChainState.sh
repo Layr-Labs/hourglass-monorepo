@@ -192,6 +192,7 @@ EXECUTOR_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_ECDSA_PK)
 echo "Creating hgctl context 'test' with L1 RPC URL and operator address..."
 "$HGCTL" context create \
     --l1-rpc-url "$anvilL1RpcUrl" \
+    --l2-rpc-url "$anvilL2RpcUrl" \
     --operator-address "$AGGREGATOR_ADDRESS" \
     test
 

@@ -167,13 +167,14 @@ func deepCopyContext(src *config.Context) *config.Context {
 		OperatorSetID:   src.OperatorSetID,
 		L1ChainID:       src.L1ChainID,
 		L1RPCUrl:        src.L1RPCUrl,
+		L2ChainID:       src.L2ChainID,
+		L2RPCUrl:        src.L2RPCUrl,
 		PrivateKey:      src.PrivateKey,
 		EnvSecretsPath:  src.EnvSecretsPath,
 	}
 
 	// Copy slices and nested structures
 	copyKeystores(src, dst)
-	copyContractOverrides(src, dst)
 
 	return dst
 }
@@ -183,18 +184,5 @@ func copyKeystores(src, dst *config.Context) {
 	if src.Keystores != nil {
 		dst.Keystores = make([]signer.KeystoreReference, len(src.Keystores))
 		copy(dst.Keystores, src.Keystores)
-	}
-}
-
-// copyContractOverrides deep copies the contract overrides
-func copyContractOverrides(src, dst *config.Context) {
-	if src.ContractOverrides != nil {
-		dst.ContractOverrides = &config.ContractOverrides{
-			DelegationManager: src.ContractOverrides.DelegationManager,
-			AllocationManager: src.ContractOverrides.AllocationManager,
-			StrategyManager:   src.ContractOverrides.StrategyManager,
-			KeyRegistrar:      src.ContractOverrides.KeyRegistrar,
-			ReleaseManager:    src.ContractOverrides.ReleaseManager,
-		}
 	}
 }

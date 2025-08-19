@@ -30,28 +30,12 @@ func setCommand() *cli.Command {
 				Usage: "Set the operator set ID",
 			},
 			&cli.StringFlag{
-				Name:  "rpc-url",
-				Usage: "Set the Ethereum RPC URL",
+				Name:  "l1-rpc-url",
+				Usage: "Set the L1 RPC URL",
 			},
 			&cli.StringFlag{
-				Name:  "release-manager",
-				Usage: "Set the release manager contract address",
-			},
-			&cli.StringFlag{
-				Name:  "delegation-manager",
-				Usage: "Set the delegation manager contract address",
-			},
-			&cli.StringFlag{
-				Name:  "allocation-manager",
-				Usage: "Set the allocation manager contract address",
-			},
-			&cli.StringFlag{
-				Name:  "strategy-manager",
-				Usage: "Set the strategy manager contract address",
-			},
-			&cli.StringFlag{
-				Name:  "key-registrar",
-				Usage: "Set the key registrar contract address",
+				Name:  "l2-rpc-url",
+				Usage: "Set the L2 RPC URL",
 			},
 			&cli.StringSliceFlag{
 				Name:  "env",
@@ -95,6 +79,12 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated AVS address", zap.String("address", addr))
 	}
 
+	if addr := c.String("executor-address"); addr != "" {
+		ctx.AVSAddress = addr
+		updated = true
+		log.Info("Updated Executor address", zap.String("address", addr))
+	}
+
 	if addr := c.String("operator-address"); addr != "" {
 		ctx.OperatorAddress = addr
 		updated = true
@@ -107,62 +97,16 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated operator set ID", zap.Uint32("id", uint32(id)))
 	}
 
-	if url := c.String("rpc-url"); url != "" {
+	if url := c.String("l1-rpc-url"); url != "" {
 		ctx.L1RPCUrl = url
 		updated = true
-		log.Info("Updated RPC URL", zap.String("url", url))
+		log.Info("Updated L1 RPC URL", zap.String("url", url))
 	}
 
-	// Handle contract addresses
-	contractsUpdated := false
-
-	if addr := c.String("delegation-manager"); addr != "" {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &config.ContractOverrides{}
-		}
-		ctx.ContractOverrides.DelegationManager = addr
-		contractsUpdated = true
-		log.Debug("Updated delegation manager address", zap.String("address", addr))
-	}
-
-	if addr := c.String("allocation-manager"); addr != "" {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &config.ContractOverrides{}
-		}
-		ctx.ContractOverrides.AllocationManager = addr
-		contractsUpdated = true
-		log.Debug("Updated allocation manager address", zap.String("address", addr))
-	}
-
-	if addr := c.String("strategy-manager"); addr != "" {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &config.ContractOverrides{}
-		}
-		ctx.ContractOverrides.StrategyManager = addr
-		contractsUpdated = true
-		log.Debug("Updated strategy manager address", zap.String("address", addr))
-	}
-
-	if addr := c.String("key-registrar"); addr != "" {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &config.ContractOverrides{}
-		}
-		ctx.ContractOverrides.KeyRegistrar = addr
-		contractsUpdated = true
-		log.Debug("Updated key registrar override address", zap.String("address", addr))
-	}
-
-	if addr := c.String("release-manager"); addr != "" {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &config.ContractOverrides{}
-		}
-		ctx.ContractOverrides.ReleaseManager = addr
-		contractsUpdated = true
-		log.Debug("Updated release manager address", zap.String("address", addr))
-	}
-
-	if contractsUpdated {
+	if url := c.String("l2-rpc-url"); url != "" {
+		ctx.L1RPCUrl = url
 		updated = true
+		log.Info("Updated L2 RPC URL", zap.String("url", url))
 	}
 
 	if path := c.String("env-secrets-path"); path != "" {

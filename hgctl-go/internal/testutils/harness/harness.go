@@ -369,11 +369,6 @@ func (h *TestHarness) useTestContext() error {
 	// Set each configuration value using separate context set calls
 	contextSetCalls := [][]string{
 		{"hgctl", "context", "set", "--executor-address", "127.0.0.1:9090"},
-		{"hgctl", "context", "set", "--delegation-manager", h.ChainConfig.DelegationManagerAddress},
-		{"hgctl", "context", "set", "--allocation-manager", h.ChainConfig.AllocationManagerAddress},
-		{"hgctl", "context", "set", "--strategy-manager", h.ChainConfig.StrategyManagerAddress},
-		{"hgctl", "context", "set", "--release-manager", h.ChainConfig.ReleaseManagerAddress},
-		{"hgctl", "context", "set", "--key-registrar", h.ChainConfig.KeyRegistrarAddress},
 		{"hgctl", "context", "set", "--avs-address", h.ChainConfig.AVSAccountAddress},
 		{"hgctl", "context", "set", "--operator-address", h.ChainConfig.OperatorAccountAddress},
 		{"hgctl", "context", "show"},

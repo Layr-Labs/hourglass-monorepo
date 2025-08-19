@@ -57,15 +57,6 @@ func ContractBeforeFunc(c *cli.Context) error {
 		OperatorAddress: operatorAddress,
 	}
 
-	// Apply contract overrides from context if available
-	if currentCtx.ContractOverrides != nil {
-		contractConfig.DelegationManager = currentCtx.ContractOverrides.DelegationManager
-		contractConfig.AllocationManager = currentCtx.ContractOverrides.AllocationManager
-		contractConfig.StrategyManager = currentCtx.ContractOverrides.StrategyManager
-		contractConfig.KeyRegistrar = currentCtx.ContractOverrides.KeyRegistrar
-		contractConfig.ReleaseManager = currentCtx.ContractOverrides.ReleaseManager
-	}
-
 	// Create contract client
 	contractClient, err := client.NewContractClient(rpcURL, privateKey, log, contractConfig)
 	if err != nil {

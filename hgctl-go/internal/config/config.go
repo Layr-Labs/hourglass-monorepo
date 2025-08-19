@@ -58,9 +58,6 @@ type Context struct {
 	// Operator Keys
 	OperatorKeys *signer.ECDSAKeyConfig `yaml:"operatorSigner,omitempty"`
 
-	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
-	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
-
 	// Experimental features flag
 	Experimental bool `yaml:"experimental,omitempty"`
 }
@@ -150,11 +147,6 @@ func LoadConfig() (*Config, error) {
 	// Set context names and initialize nil pointers
 	for name, ctx := range config.Contexts {
 		ctx.Name = name
-
-		// Initialize ContractOverrides if nil to prevent loss during save
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &ContractOverrides{}
-		}
 	}
 
 	return &config, nil
@@ -167,13 +159,6 @@ func SaveConfig(config *Config) error {
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Ensure all contexts have initialized ContractOverrides before saving
-	for _, ctx := range config.Contexts {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &ContractOverrides{}
-		}
 	}
 
 	data, err := yaml.Marshal(config)
@@ -277,29 +262,6 @@ func (c *Context) ToMap() map[string]interface{} {
 	// Add signer key if set
 	if c.SystemSignerKeys != nil {
 		result["system-key"] = c.SystemSignerKeys
-	}
-
-	// Add contract overrides if any
-	if c.ContractOverrides != nil {
-		overrides := make(map[string]string)
-		if c.ContractOverrides.DelegationManager != "" {
-			overrides["delegation-manager"] = c.ContractOverrides.DelegationManager
-		}
-		if c.ContractOverrides.AllocationManager != "" {
-			overrides["allocation-manager"] = c.ContractOverrides.AllocationManager
-		}
-		if c.ContractOverrides.StrategyManager != "" {
-			overrides["strategy-manager"] = c.ContractOverrides.StrategyManager
-		}
-		if c.ContractOverrides.KeyRegistrar != "" {
-			overrides["key-registrar"] = c.ContractOverrides.KeyRegistrar
-		}
-		if c.ContractOverrides.ReleaseManager != "" {
-			overrides["release-manager"] = c.ContractOverrides.ReleaseManager
-		}
-		if len(overrides) > 0 {
-			result["contract-overrides"] = overrides
-		}
 	}
 
 	return result

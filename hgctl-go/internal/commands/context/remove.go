@@ -40,26 +40,6 @@ Examples:
 				Name:  "rpc-url",
 				Usage: "Remove the Ethereum RPC URL",
 			},
-			&cli.BoolFlag{
-				Name:  "release-manager",
-				Usage: "Remove the release manager contract address",
-			},
-			&cli.BoolFlag{
-				Name:  "delegation-manager",
-				Usage: "Remove the delegation manager contract address",
-			},
-			&cli.BoolFlag{
-				Name:  "allocation-manager",
-				Usage: "Remove the allocation manager contract address",
-			},
-			&cli.BoolFlag{
-				Name:  "strategy-manager",
-				Usage: "Remove the strategy manager contract address",
-			},
-			&cli.BoolFlag{
-				Name:  "key-registrar",
-				Usage: "Remove the key registrar contract address",
-			},
 			&cli.StringSliceFlag{
 				Name:  "env",
 				Usage: "Remove environment variables (specify keys)",
@@ -67,10 +47,6 @@ Examples:
 			&cli.BoolFlag{
 				Name:  "env-secrets-path",
 				Usage: "Remove the path to environment secrets file",
-			},
-			&cli.BoolFlag{
-				Name:  "all-contracts",
-				Usage: "Remove all contract overrides",
 			},
 		},
 		Action: contextRemoveAction,
@@ -138,60 +114,6 @@ func contextRemoveAction(c *cli.Context) error {
 			ctx.EnvSecretsPath = ""
 			removed = true
 			log.Info("Removed env secrets path")
-		}
-	}
-
-	// Handle contract overrides removal
-	if c.Bool("all-contracts") {
-		if ctx.ContractOverrides != nil {
-			ctx.ContractOverrides = nil
-			removed = true
-			log.Info("Removed all contract overrides")
-		}
-	} else if ctx.ContractOverrides != nil {
-		contractsRemoved := false
-
-		if c.Bool("delegation-manager") && ctx.ContractOverrides.DelegationManager != "" {
-			ctx.ContractOverrides.DelegationManager = ""
-			contractsRemoved = true
-			log.Info("Removed delegation manager address")
-		}
-
-		if c.Bool("allocation-manager") && ctx.ContractOverrides.AllocationManager != "" {
-			ctx.ContractOverrides.AllocationManager = ""
-			contractsRemoved = true
-			log.Info("Removed allocation manager address")
-		}
-
-		if c.Bool("strategy-manager") && ctx.ContractOverrides.StrategyManager != "" {
-			ctx.ContractOverrides.StrategyManager = ""
-			contractsRemoved = true
-			log.Info("Removed strategy manager address")
-		}
-
-		if c.Bool("key-registrar") && ctx.ContractOverrides.KeyRegistrar != "" {
-			ctx.ContractOverrides.KeyRegistrar = ""
-			contractsRemoved = true
-			log.Info("Removed key registrar address")
-		}
-
-		if c.Bool("release-manager") && ctx.ContractOverrides.ReleaseManager != "" {
-			ctx.ContractOverrides.ReleaseManager = ""
-			contractsRemoved = true
-			log.Info("Removed release manager address")
-		}
-
-		if contractsRemoved {
-			removed = true
-			// Clean up empty contract overrides struct
-			if ctx.ContractOverrides.DelegationManager == "" &&
-				ctx.ContractOverrides.AllocationManager == "" &&
-				ctx.ContractOverrides.StrategyManager == "" &&
-				ctx.ContractOverrides.KeyRegistrar == "" &&
-				ctx.ContractOverrides.ReleaseManager == "" {
-				ctx.ContractOverrides = nil
-				log.Debug("Cleaned up empty contract overrides")
-			}
 		}
 	}
 
