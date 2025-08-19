@@ -123,22 +123,30 @@ func isConfigCommand(c *cli.Context) bool {
 
 // GetCommand returns the get command
 func GetCommand() *cli.Command {
-	return get.Command()
+	cmd := get.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // DescribeCommand returns the describe command
 func DescribeCommand() *cli.Command {
-	return describe.Command()
+	cmd := describe.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // DeployCommand returns the deploy command
 func DeployCommand() *cli.Command {
-	return deploy.Command()
+	cmd := deploy.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // RemoveCommand returns the remove command
 func RemoveCommand() *cli.Command {
-	return remove.Command()
+	cmd := remove.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // ContextCommand returns the context command
@@ -148,15 +156,21 @@ func ContextCommand() *cli.Command {
 
 // KeystoreCommand returns the keystore command
 func KeystoreCommand() *cli.Command {
-	return keystore.Command()
+	cmd := keystore.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // SignerCommand returns the web3signer command
 func SignerCommand() *cli.Command {
-	return signer.Command()
+	cmd := signer.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }
 
 // EigenLayerCommand returns the eigenlayer command with all subcommands
 func EigenLayerCommand() *cli.Command {
-	return eigenlayer.Command()
+	cmd := eigenlayer.Command()
+	cmd.Before = middleware.RequireContext
+	return cmd
 }

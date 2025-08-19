@@ -118,6 +118,7 @@ func getPrivateKey(keyType string, filePath string, password string) (string, er
 		if err != nil {
 			return "", err
 		}
+		fmt.Println("Address:", key.Address.Hex())
 		return hex.EncodeToString(key.PrivateKey.D.Bytes()), nil
 
 	case KeyTypeBN254:
