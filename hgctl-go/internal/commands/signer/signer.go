@@ -35,6 +35,10 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#999999"))
 
+	warningStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFF00")).
+			Bold(true)
+
 	errorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FF0000")).
 			Bold(true)
@@ -325,6 +329,11 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	case stageWelcome:
 		// Move to appropriate next stage
 		if m.wizardType == wizardTypeSystem {
+			// Load config to check experimental flag
+			cfg, _ := config.LoadConfig()
+			ctx, _ := cfg.Contexts[m.contextName]
+			isExperimental := ctx != nil && ctx.Experimental
+			
 			// System signer starts with key type selection
 			items := []list.Item{
 				keyTypeItem{
@@ -332,21 +341,37 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 					description: "For Ethereum-compatible signing",
 					keyType:     "ecdsa",
 				},
-				keyTypeItem{
-					title:       "BN254 Keys",
-					description: "For BLS signatures",
+			}
+			
+			// Only show BN254 if experimental is enabled
+			if isExperimental {
+				items = append(items, keyTypeItem{
+					title:       "BN254 Keys (Experimental)",
+					description: "For BLS signatures - under development",
 					keyType:     "bn254",
-				},
+				})
 			}
-			l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-			l.Title = "Select Key Type"
-			l.SetShowStatusBar(false)
-			l.SetFilteringEnabled(false)
-			if m.width > 0 && m.height > 0 {
-				l.SetSize(m.width-4, m.height-8)
+			
+			// If only ECDSA is available and experimental is off, skip key type selection
+			if len(items) == 1 && !isExperimental {
+				// Skip directly to ECDSA signer type selection
+				m.keyType = "ecdsa"
+				m.stage = stageSelectSignerType
+				signerItems := m.getSignerTypeItems()
+				m.list = list.New(signerItems, list.NewDefaultDelegate(), m.width-4, m.height-8)
+				m.list.Title = "Select System Signer Type"
+			} else {
+				// Show key type selection
+				l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+				l.Title = "Select Key Type"
+				l.SetShowStatusBar(false)
+				l.SetFilteringEnabled(false)
+				if m.width > 0 && m.height > 0 {
+					l.SetSize(m.width-4, m.height-8)
+				}
+				m.list = l
+				m.stage = stageSelectKeyType
 			}
-			m.list = l
-			m.stage = stageSelectKeyType
 		} else {
 			// Operator key goes straight to signer type (ECDSA only)
 			m.keyType = "ecdsa"
@@ -563,24 +588,40 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 
 // Helper methods for the unified wizard
 func (m signerWizardModel) getSignerTypeItems() []list.Item {
+	// Load config to check experimental flag
+	cfg, _ := config.LoadConfig()
+	ctx, _ := cfg.Contexts[m.contextName]
+	isExperimental := ctx != nil && ctx.Experimental
+
 	if m.wizardType == wizardTypeOperator {
-		return []list.Item{
+		items := []list.Item{
 			signerItem{"Private Key", "Use OPERATOR_PRIVATE_KEY environment variable", "private_key"},
-			signerItem{"Keystore", "Use local encrypted keystore file (ECDSA only)", "keystore"},
-			signerItem{"Web3Signer", "Use remote signing service", "web3signer"},
 		}
+		// Only show experimental options if flag is enabled
+		if isExperimental {
+			items = append(items,
+				signerItem{"Keystore (Experimental)", "Use local encrypted keystore file", "keystore"},
+				signerItem{"Web3Signer (Experimental)", "Use remote signing service", "web3signer"},
+			)
+		}
+		return items
 	}
 
 	// System signer
 	if m.keyType == "ecdsa" {
-		return []list.Item{
+		items := []list.Item{
 			signerItem{"Private Key", "From environment variable", "privatekey"},
-			signerItem{"Keystore", "Local encrypted key file", "keystore"},
-			signerItem{"Web3Signer", "Remote signing service", "web3signer"},
 		}
+		if isExperimental {
+			items = append(items,
+				signerItem{"Keystore (Experimental)", "Local encrypted key file", "keystore"},
+				signerItem{"Web3Signer (Experimental)", "Remote signing service", "web3signer"},
+			)
+		}
+		return items
 	}
 
-	// BN254 only supports keystore
+	// BN254 only supports keystore (and only in experimental mode)
 	return []list.Item{
 		signerItem{"Keystore", "Local encrypted BN254 key file", "keystore"},
 	}
@@ -781,8 +822,25 @@ func (m signerWizardModel) View() string {
 func (m signerWizardModel) buildSummary() string {
 	var lines []string
 
+	// Check if using experimental features
+	cfg, _ := config.LoadConfig()
+	ctx, _ := cfg.Contexts[m.contextName]
+	isExperimental := ctx != nil && ctx.Experimental
+	
+	// Show warning if using experimental features
+	if isExperimental && (m.signerType == "keystore" || m.signerType == "web3signer" || m.keyType == "bn254") {
+		lines = append(lines,
+			errorStyle.Render("⚠️  WARNING: You are using experimental features"),
+			helpStyle.Render("  These features are incomplete and may not work correctly"),
+			"")
+	}
+
 	if m.wizardType == wizardTypeSystem && m.keyType != "" {
-		lines = append(lines, fmt.Sprintf("  Key Type: %s", selectedStyle.Render(strings.ToUpper(m.keyType))))
+		keyTypeDisplay := strings.ToUpper(m.keyType)
+		if m.keyType == "bn254" && isExperimental {
+			keyTypeDisplay += " (Experimental)"
+		}
+		lines = append(lines, fmt.Sprintf("  Key Type: %s", selectedStyle.Render(keyTypeDisplay)))
 	}
 
 	// Get the display type for signer
@@ -792,8 +850,14 @@ func (m signerWizardModel) buildSummary() string {
 		signerTypeDisplay = "Private Key"
 	case "keystore":
 		signerTypeDisplay = "Keystore"
+		if isExperimental {
+			signerTypeDisplay += " (Experimental)"
+		}
 	case "web3signer":
 		signerTypeDisplay = "Web3Signer"
+		if isExperimental {
+			signerTypeDisplay += " (Experimental)"
+		}
 	}
 	lines = append(lines, fmt.Sprintf("  Signer Type: %s", selectedStyle.Render(signerTypeDisplay)))
 
@@ -1007,22 +1071,22 @@ func showEnvVarReminders(m signerWizardModel) {
 		if m.wizardType == wizardTypeOperator {
 			envVar = "OPERATOR_PRIVATE_KEY"
 		}
-		fmt.Println(helpStyle.Render(fmt.Sprintf("Remember to set the %s environment variable:", envVar)))
-		fmt.Println(helpStyle.Render(fmt.Sprintf("  export %s=<your-private-key>", envVar)))
-		fmt.Println(helpStyle.Render("  or configure it in your secrets environment file"))
+		fmt.Println(warningStyle.Render(fmt.Sprintf("Remember to set the %s environment variable:", envVar)))
+		fmt.Println(warningStyle.Render(fmt.Sprintf("  export %s=<your-private-key>", envVar)))
+		fmt.Println(warningStyle.Render("  or configure it in your secrets environment file"))
 
 	case "keystore":
 		envVar := "SYSTEM_KEYSTORE_PASSWORD"
 		if m.wizardType == wizardTypeOperator {
 			envVar = "OPERATOR_KEYSTORE_PASSWORD"
 		}
-		fmt.Println(helpStyle.Render(fmt.Sprintf("Remember to set the %s environment variable:", envVar)))
-		fmt.Println(helpStyle.Render(fmt.Sprintf("  export %s=<your-keystore-password>", envVar)))
-		fmt.Println(helpStyle.Render("  or configure it in your secrets environment file"))
+		fmt.Println(warningStyle.Render(fmt.Sprintf("Remember to set the %s environment variable:", envVar)))
+		fmt.Println(warningStyle.Render(fmt.Sprintf("  export %s=<your-keystore-password>", envVar)))
+		fmt.Println(warningStyle.Render("  or configure it in your secrets environment file"))
 
 	case "web3signer":
-		fmt.Println(helpStyle.Render("Web3Signer configuration saved."))
-		fmt.Println(helpStyle.Render("Ensure your Web3Signer is running and accessible at: " + m.web3SignerURL))
+		fmt.Println(warningStyle.Render("Web3Signer configuration saved."))
+		fmt.Println(warningStyle.Render("Ensure your Web3Signer is running and accessible at: " + m.web3SignerURL))
 	}
 }
 
