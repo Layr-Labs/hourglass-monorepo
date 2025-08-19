@@ -8,6 +8,8 @@ import (
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"time"
 )
 
@@ -55,6 +57,27 @@ func NewPonosPerformerWithRpcServer(
 		return nil, fmt.Errorf("failed to create RPC server: %w", err)
 	}
 	return NewPonosPerformer(cfg, rpc, worker, logger), nil
+}
+
+func NewPonosPerformerWithRpcServerHealthCheck(
+	cfg *PonosPerformerConfig,
+	worker worker.IWorker,
+	logger *zap.Logger,
+) (*PonosPerformer, error) {
+	rpc, err := rpcServer.NewRpcServer(&rpcServer.RpcServerConfig{
+		GrpcPort: cfg.Port,
+	}, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RPC server: %w", err)
+	}
+	pp := NewPonosPerformer(cfg, rpc, worker, logger)
+
+	grpcServer := rpc.GetGrpcServer()
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	return pp, nil
 }
 
 func (pp *PonosPerformer) registerHandlers() {
