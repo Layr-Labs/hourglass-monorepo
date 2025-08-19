@@ -179,89 +179,54 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 
 	// Delegation Manager
-	delegationAddr := config.DelegationManager
-	if delegationAddr == "" && defaultAddresses != nil {
-		contractClient.contractConfig.DelegationManager = delegationAddr
-		delegationAddr = defaultAddresses.DelegationManager
+	contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
+		common.HexToAddress(config.DelegationManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create delegation manager at %s: %w", config.DelegationManager, err)
 	}
-	if delegationAddr != "" {
-		contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
-			common.HexToAddress(delegationAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create delegation manager at %s: %w", delegationAddr, err)
-		}
-		log.Debug("Initialized delegation manager", zap.String("address", delegationAddr))
-	}
+	log.Debug("Initialized delegation manager", zap.String("address", config.DelegationManager))
 
 	// Allocation Manager
-	allocationAddr := config.AllocationManager
-	if allocationAddr == "" && defaultAddresses != nil {
-		contractClient.contractConfig.AllocationManager = allocationAddr
-		allocationAddr = defaultAddresses.AllocationManager
+	contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
+		common.HexToAddress(config.AllocationManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create allocation manager at %s: %w", config.AllocationManager, err)
 	}
-	if allocationAddr != "" {
-		contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
-			common.HexToAddress(allocationAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create allocation manager at %s: %w", allocationAddr, err)
-		}
-		log.Debug("Initialized allocation manager", zap.String("address", allocationAddr))
-	}
+	log.Debug("Initialized allocation manager", zap.String("address", config.AllocationManager))
 
 	// Strategy Manager
-	strategyAddr := config.StrategyManager
-	if strategyAddr == "" && defaultAddresses != nil {
-		contractClient.contractConfig.StrategyManager = strategyAddr
-		strategyAddr = defaultAddresses.StrategyManager
+	contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
+		common.HexToAddress(config.StrategyManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create strategy manager at %s: %w", config.StrategyManager, err)
 	}
-	if strategyAddr != "" {
-		contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
-			common.HexToAddress(strategyAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create strategy manager at %s: %w", strategyAddr, err)
-		}
-		log.Debug("Initialized strategy manager", zap.String("address", strategyAddr))
-	}
+	log.Debug("Initialized strategy manager", zap.String("address", config.StrategyManager))
 
 	// Key Registrar
-	keyRegistrarAddr := config.KeyRegistrar
-	if keyRegistrarAddr == "" && defaultAddresses != nil {
-		contractClient.contractConfig.KeyRegistrar = keyRegistrarAddr
-		keyRegistrarAddr = defaultAddresses.KeyRegistrar
+	contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
+		common.HexToAddress(config.KeyRegistrar),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create key registrar at %s: %w", config.KeyRegistrar, err)
 	}
-	if keyRegistrarAddr != "" {
-		contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
-			common.HexToAddress(keyRegistrarAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create key registrar at %s: %w", keyRegistrarAddr, err)
-		}
-		log.Debug("Initialized key registrar", zap.String("address", keyRegistrarAddr))
-	}
+	log.Debug("Initialized key registrar", zap.String("address", config.KeyRegistrar))
 
 	// Release Manager
-	releaseManagerAddr := config.ReleaseManager
-	if releaseManagerAddr == "" && defaultAddresses != nil {
-		contractClient.contractConfig.ReleaseManager = releaseManagerAddr
-		releaseManagerAddr = defaultAddresses.ReleaseManager
+	contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
+		common.HexToAddress(config.ReleaseManager),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create release manager at %s: %w", config.ReleaseManager, err)
 	}
-	if releaseManagerAddr != "" {
-		contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
-			common.HexToAddress(releaseManagerAddr),
-			client,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create release manager at %s: %w", releaseManagerAddr, err)
-		}
-		log.Debug("Initialized release manager", zap.String("address", releaseManagerAddr))
-	}
+	log.Debug("Initialized release manager", zap.String("address", config.ReleaseManager))
 
 	return contractClient, nil
 }
