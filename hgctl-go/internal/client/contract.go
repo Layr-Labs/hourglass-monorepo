@@ -454,7 +454,6 @@ func (c *ContractClient) DepositIntoStrategy(
 	if err != nil {
 		return err
 	}
-
 	// Check balance first
 	balanceOpts := &bind.CallOpts{Context: ctx}
 	var balance *big.Int

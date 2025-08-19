@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
@@ -99,6 +100,28 @@ func deployExecutorAction(c *cli.Context) error {
 
 // Deploy executes the executor deployment
 func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
+	containerName := fmt.Sprintf("hgctl-executor-%s-%s", d.Context.Name, d.Context.AVSAddress)
+
+	// Check if an executor container is already running
+	isRunning, containerID, err := d.CheckContainerRunning(containerName)
+	if err != nil {
+		d.Log.Warn("Error checking container status, proceeding with deployment", zap.Error(err))
+		// Continue with normal deployment
+	}
+
+	if isRunning {
+		d.Log.Info("Found existing running executor container",
+			zap.String("container", containerName),
+			zap.String("containerID", containerID[:12]))
+
+		// Deploy performer to the existing executor
+		if err = d.deployPerformerToExistingExecutor(ctx, containerName, containerID); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// No existing container, proceed with normal deployment
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
@@ -120,8 +143,18 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	keystoreName := cfg.Env[config.KeystoreName]
 	keystorePassword := cfg.Env[config.KeystorePassword]
 	var keystore *signer.KeystoreReference
-	if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
-		return err
+
+	if keystoreName != "" {
+		if keystore, err = d.ValidateKeystore(keystoreName, keystorePassword); err != nil {
+			return err
+		}
+		d.Log.Info("Using keystore configuration",
+			zap.String("keystoreName", keystoreName))
+	} else {
+		if cfg.Env["OPERATOR_PRIVATE_KEY"] == "" {
+			return fmt.Errorf("neither keystore nor OPERATOR_PRIVATE_KEY is configured")
+		}
+		d.Log.Info("Using private key configuration")
 	}
 
 	if d.dryRun {
@@ -184,7 +217,14 @@ func (d *ExecutorDeployer) deployContainer(
 
 	dockerArgs := d.BuildDockerArgs(containerName, component, cfg)
 
-	// Add port mappings for executor service and management ports
+	// Mount Docker socket so the executor can create performer containers
+	dockerArgs = append(dockerArgs, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+	d.Log.Info("Mounting Docker socket for performer container management")
+	
+	// Connect to the hourglass-local network
+	dockerArgs = append(dockerArgs, "--network", "hourglass-local_hourglass-network")
+	d.Log.Info("Connecting to hourglass-local network")
+
 	servicePort := cfg.Env["EXECUTOR_SERVICE_PORT"]
 	if servicePort == "" {
 		servicePort = "9090"
@@ -195,12 +235,14 @@ func (d *ExecutorDeployer) deployContainer(
 	}
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", servicePort, servicePort))
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
-	d.Log.Info("Exposing executor ports", 
+	d.Log.Info("Exposing executor ports",
 		zap.String("servicePort", servicePort),
 		zap.String("managementPort", mgmtPort))
 
-	if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
-		return err
+	if keystore != nil {
+		if err := d.MountKeystores(&dockerArgs, keystore); err != nil {
+			return err
+		}
 	}
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
@@ -217,13 +259,11 @@ func (d *ExecutorDeployer) deployContainer(
 	}
 
 	d.printSuccessMessage(containerName, containerID, cfg)
-	
-	// Save the executor address to the context
+
 	if err := d.saveExecutorAddress(cfg); err != nil {
 		d.Log.Warn("Failed to save executor address to context", zap.Error(err))
-		// Don't fail the deployment, just warn
 	}
-	
+
 	return nil
 }
 
@@ -231,12 +271,18 @@ func (d *ExecutorDeployer) deployContainer(
 func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
 	d.Log.Info("✅ Dry run successful - executor configuration is valid")
 
-	d.Log.Info("Configuration:",
-		zap.String("keystoreName", cfg.Env["KEYSTORE_NAME"]),
+	configInfo := []zap.Field{
 		zap.String("operatorAddress", d.Context.OperatorAddress),
 		zap.String("avsAddress", d.Context.AVSAddress),
 		zap.String("registry", registry),
-		zap.String("digest", digest))
+		zap.String("digest", digest),
+	}
+	if cfg.Env["KEYSTORE_NAME"] != "" {
+		configInfo = append(configInfo, zap.String("keystoreName", cfg.Env["KEYSTORE_NAME"]))
+	} else {
+		configInfo = append(configInfo, zap.String("signerType", "privateKey"))
+	}
+	d.Log.Info("Configuration:", configInfo...)
 
 	fmt.Println("\n✅ Configuration is valid. Run without --dry-run to deploy.")
 	return nil
@@ -244,35 +290,114 @@ func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, 
 
 // saveExecutorAddress saves the executor management gRPC address to the context configuration
 func (d *ExecutorDeployer) saveExecutorAddress(cfg *DeploymentConfig) error {
-	// Get the executor management port from config
 	executorMgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
 	if executorMgmtPort == "" {
 		executorMgmtPort = "9091"
 	}
-	
-	// Build the executor address (using localhost since it's exposed on the host)
+
 	executorAddress := fmt.Sprintf("localhost:%s", executorMgmtPort)
-	
-	// Load current config
+
 	configData, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	
-	// Update the executor address in the current context
+
 	if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
 		ctx.ExecutorAddress = executorAddress
-		
-		// Save the updated config
+
 		if err := config.SaveConfig(configData); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		
-		d.Log.Info("Saved executor management address to context", 
+
+		d.Log.Info("Saved executor management address to context",
 			zap.String("address", executorAddress),
 			zap.String("context", configData.CurrentContext))
 	}
-	
+
+	return nil
+}
+
+// deployPerformerToExistingExecutor deploys a performer to an existing executor container via gRPC
+func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context, containerName string, containerID string) error {
+	// Try to get the management port from the running container
+	mgmtPort, err := d.GetContainerPort(containerName, "9091")
+	if err != nil {
+		// Try default port if we can't get it from Docker
+		mgmtPort = "9091"
+		d.Log.Warn("Could not get management port from container, using default",
+			zap.String("port", mgmtPort),
+			zap.Error(err))
+	}
+
+	// Create executor client
+	executorAddr := fmt.Sprintf("localhost:%s", mgmtPort)
+	executorClient, err := client.NewExecutorClient(executorAddr, d.Log)
+	if err != nil {
+		return fmt.Errorf("failed to create executor client: %w", err)
+	}
+	defer executorClient.Close()
+
+	// Fetch the performer spec from the runtime spec
+	spec, err := d.FetchRuntimeSpec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch runtime spec: %w", err)
+	}
+
+	performerComponent, err := d.ExtractComponent(spec, "performer")
+	if err != nil {
+		return fmt.Errorf("failed to extract performer component: %w", err)
+	}
+
+	// Load environment variables for the performer
+	envVars := d.LoadEnvironmentVariables()
+
+	// Deploy the performer via gRPC
+	d.Log.Info("Deploying performer to existing executor via gRPC",
+		zap.String("executor", executorAddr),
+		zap.String("avsAddress", d.Context.AVSAddress),
+		zap.String("image", performerComponent.Registry),
+		zap.String("digest", performerComponent.Digest))
+
+	deploymentID, err := executorClient.DeployPerformerWithEnv(
+		ctx,
+		d.Context.AVSAddress,
+		performerComponent.Digest,
+		performerComponent.Registry,
+		envVars,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to deploy performer via gRPC: %w", err)
+	}
+
+	// Update executor address in context if needed
+	if d.Context.ExecutorAddress != executorAddr {
+		configData, err := config.LoadConfig()
+		if err == nil {
+			if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
+				ctx.ExecutorAddress = executorAddr
+				if err := config.SaveConfig(configData); err == nil {
+					d.Log.Info("Updated executor address in context",
+						zap.String("address", executorAddr))
+				}
+			}
+		}
+	}
+
+	// Success - print confirmation
+	d.Log.Info("Successfully deployed performer to existing executor")
+	fmt.Printf("\n✅ Performer deployed to existing executor via gRPC\n")
+	fmt.Printf("Container Name: %s\n", containerName)
+	fmt.Printf("Container ID: %s\n", containerID[:12])
+	fmt.Printf("Management Port: %s\n", mgmtPort)
+	fmt.Printf("Deployment ID: %s\n", deploymentID)
+	fmt.Printf("AVS Address: %s\n", d.Context.AVSAddress)
+	fmt.Printf("Performer Image: %s@%s\n", performerComponent.Registry, performerComponent.Digest)
+	fmt.Printf("\nThe performer is now running on the executor.\n")
+	fmt.Printf("\nUseful commands:\n")
+	fmt.Printf("  View executor logs:  docker logs -f %s\n", containerName)
+	fmt.Printf("  List performers:     hgctl get performer\n")
+	fmt.Printf("  Remove performer:    hgctl remove performer %s\n", deploymentID)
+
 	return nil
 }
 
@@ -284,12 +409,11 @@ func (d *ExecutorDeployer) printSuccessMessage(containerName, containerID string
 		zap.String("config", cfg.ConfigDir),
 		zap.String("tempDir", cfg.TempDir))
 
-	// Get the management port for display
 	mgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
 	if mgmtPort == "" {
 		mgmtPort = "9091"
 	}
-	
+
 	fmt.Printf("\n✅ Executor deployed successfully\n")
 	fmt.Printf("Container Name: %s\n", containerName)
 	fmt.Printf("Container ID: %s\n", containerID[:12])

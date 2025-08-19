@@ -2,7 +2,7 @@ debug: {{envDefault "DEBUG" "true"}}
 
 grpcPort: {{envDefault "EXECUTOR_SERVICE_PORT" "9090"}}
 managementServerGrpcPort: {{envDefault "EXECUTOR_MGMT_PORT" "9091"}}
-performerNetworkName: "{{envDefault "PERFORMER_NETWORK_NAME" "hgctl-performer-network"}}"
+performerNetworkName: "hourglass-local_hourglass-network"
 
 # Disable authentication for management API
 authentication:
