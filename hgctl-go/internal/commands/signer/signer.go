@@ -532,7 +532,6 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	}
 }
 
-
 func (m signerWizardModel) getExistingKeystores() []list.Item {
 	var items []list.Item
 	cfg, _ := config.LoadConfig()
