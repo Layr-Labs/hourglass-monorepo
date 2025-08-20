@@ -88,7 +88,7 @@ func OperatorSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, e
 		return client.LoadWeb3Signer(web3SignerConfig, l)
 	}
 
-	if opKeys.PrivateKey != false {
+	if opKeys.PrivateKey {
 		return signer.LoadPrivateKeySigner()
 	}
 
@@ -114,7 +114,7 @@ func SystemSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, err
 		return client.LoadWeb3Signer(web3SignerConfig, l)
 	}
 
-	if opKeys.PrivateKey != false {
+	if opKeys.PrivateKey {
 		return signer.LoadPrivateKeySigner()
 	}
 

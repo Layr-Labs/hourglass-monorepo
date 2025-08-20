@@ -23,7 +23,7 @@ func ContractBeforeFunc(c *cli.Context) error {
 		log.Debug("No context configured, contract client will not be initialized")
 		return nil
 	}
-	
+
 	log.Debug("Context found, initializing contract client",
 		zap.String("avsAddress", currentCtx.AVSAddress),
 		zap.String("operatorAddress", currentCtx.OperatorAddress),

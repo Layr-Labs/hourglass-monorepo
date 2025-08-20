@@ -494,7 +494,7 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	// Load config to check experimental flag
 	cfg, _ := config.LoadConfig()
-	ctx, _ := cfg.Contexts[m.contextName]
+	ctx := cfg.Contexts[m.contextName]
 	isExperimental := ctx != nil && ctx.Experimental
 
 	if m.wizardType == wizardTypeOperator {
@@ -532,32 +532,11 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	}
 }
 
-func (m signerWizardModel) hasExistingKeystores() bool {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		return false
-	}
-	ctx, ok := cfg.Contexts[m.contextName]
-	if !ok || len(ctx.Keystores) == 0 {
-		return false
-	}
-
-	// Check if there are keystores of the appropriate type
-	for _, ks := range ctx.Keystores {
-		if m.keyType == "ecdsa" && (ks.Type == "ecdsa" || ks.Type == "keystore") {
-			return true
-		}
-		if m.keyType == "bn254" && ks.Type == "bn254" {
-			return true
-		}
-	}
-	return false
-}
 
 func (m signerWizardModel) getExistingKeystores() []list.Item {
 	var items []list.Item
 	cfg, _ := config.LoadConfig()
-	ctx, _ := cfg.Contexts[m.contextName]
+	ctx := cfg.Contexts[m.contextName]
 
 	for _, ks := range ctx.Keystores {
 		if m.keyType == "ecdsa" && (ks.Type == "ecdsa" || ks.Type == "keystore") {
@@ -672,7 +651,7 @@ func (m signerWizardModel) buildSummary() string {
 
 	// Check if using experimental features
 	cfg, _ := config.LoadConfig()
-	ctx, _ := cfg.Contexts[m.contextName]
+	ctx := cfg.Contexts[m.contextName]
 	isExperimental := ctx != nil && ctx.Experimental
 
 	// Show warning only if using Web3Signer (the only experimental feature now)

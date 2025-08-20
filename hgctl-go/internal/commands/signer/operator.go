@@ -117,7 +117,7 @@ func operatorKeystoreCommand() *cli.Command {
 
 			// Validate keystore type (operator must be ECDSA)
 			if foundKeystore.Type != "ecdsa" {
-				return fmt.Errorf("operator keys must be ECDSA type, but keystore '%s' is type '%s'", 
+				return fmt.Errorf("operator keys must be ECDSA type, but keystore '%s' is type '%s'",
 					keystoreName, foundKeystore.Type)
 			}
 
@@ -135,7 +135,7 @@ func operatorKeystoreCommand() *cli.Command {
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
-			fmt.Printf("✅ Operator configured with keystore '%s' for context '%s'\n", 
+			fmt.Printf("✅ Operator configured with keystore '%s' for context '%s'\n",
 				keystoreName, contextName)
 			return nil
 		},

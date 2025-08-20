@@ -3,6 +3,7 @@ package middleware
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,7 +82,7 @@ func TestExpandPath(t *testing.T) {
 			if tt.input == "~/test/file.env" {
 				// For home directory test, just verify it starts with home
 				homeDir, _ := os.UserHomeDir()
-				assert.True(t, filepath.HasPrefix(result, homeDir))
+				assert.True(t, strings.HasPrefix(result, homeDir))
 			} else {
 				assert.Equal(t, tt.expected, result)
 			}

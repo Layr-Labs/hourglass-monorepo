@@ -137,16 +137,16 @@ func systemKeystoreCommand() *cli.Command {
 					}
 				}
 				if len(available) > 0 {
-					return fmt.Errorf("keystore '%s' not found. Available %s keystores: %v", 
+					return fmt.Errorf("keystore '%s' not found. Available %s keystores: %v",
 						keystoreName, strings.ToUpper(keyType), available)
 				}
-				return fmt.Errorf("keystore '%s' not found. No %s keystores available in context", 
+				return fmt.Errorf("keystore '%s' not found. No %s keystores available in context",
 					keystoreName, strings.ToUpper(keyType))
 			}
 
 			// Validate keystore type matches requested type
 			if foundKeystore.Type != keyType {
-				return fmt.Errorf("keystore '%s' is type '%s', but requested type '%s'", 
+				return fmt.Errorf("keystore '%s' is type '%s', but requested type '%s'",
 					keystoreName, foundKeystore.Type, keyType)
 			}
 
@@ -166,11 +166,11 @@ func systemKeystoreCommand() *cli.Command {
 				ctx.SystemSignerKeys.ECDSA = &signer.ECDSAKeyConfig{
 					Keystore: keystoreRef,
 				}
-				fmt.Printf("✅ System ECDSA configured with keystore '%s' for context '%s'\n", 
+				fmt.Printf("✅ System ECDSA configured with keystore '%s' for context '%s'\n",
 					keystoreName, contextName)
 			} else { // bn254
 				ctx.SystemSignerKeys.BN254 = keystoreRef
-				fmt.Printf("✅ System BN254 configured with keystore '%s' for context '%s'\n", 
+				fmt.Printf("✅ System BN254 configured with keystore '%s' for context '%s'\n",
 					keystoreName, contextName)
 			}
 

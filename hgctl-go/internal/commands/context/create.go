@@ -140,7 +140,7 @@ func getChainID(rpcURL string, log logger.Logger) (*big.Int, error) {
 
 // getChainIDFromRPC connects to the RPC and retrieves the chain ID with a label
 func getChainIDFromRPC(rpcURL string, log logger.Logger) (*big.Int, error) {
-	log.Info(fmt.Sprintf("Retrieving Chain ID from RPC."))
+	log.Info("Retrieving Chain ID from RPC.")
 
 	ethClient, err := ethclient.Dial(rpcURL)
 	if err != nil {
@@ -153,7 +153,7 @@ func getChainIDFromRPC(rpcURL string, log logger.Logger) (*big.Int, error) {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
-	log.Info(fmt.Sprintf("Connected! Chain ID:"), zap.String("ChainID", chainID.String()))
+	log.Info("Connected! Chain ID:", zap.String("ChainID", chainID.String()))
 	return chainID, nil
 }
 
@@ -181,14 +181,13 @@ func getL2RPCURL(c *cli.Context) (string, error) {
 	return l2RPCURL, nil
 }
 
-
 // createContext creates a new context with the provided information
 func createContext(l1ChainID uint32, l1RPCURL string, l2ChainID uint32, l2RPCURL string) *config.Context {
 	return &config.Context{
-		L1ChainID:       l1ChainID,
-		L1RPCUrl:        l1RPCURL,
-		L2ChainID:       l2ChainID,
-		L2RPCUrl:        l2RPCURL,
+		L1ChainID: l1ChainID,
+		L1RPCUrl:  l1RPCURL,
+		L2ChainID: l2ChainID,
+		L2RPCUrl:  l2RPCURL,
 	}
 }
 
@@ -240,4 +239,3 @@ func validateRPCURL(input string) error {
 
 	return nil
 }
-

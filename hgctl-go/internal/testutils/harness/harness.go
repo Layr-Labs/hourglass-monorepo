@@ -255,7 +255,7 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 			envToRestore = append(envToRestore, struct{ key, value string }{"OPERATOR_PRIVATE_KEY", originalValue})
 			os.Setenv("OPERATOR_PRIVATE_KEY", operatorPrivateKey)
 		}
-		
+
 		// Also set keystore passwords if needed for system signers
 		if strings.Contains(keystoreName, "aggregator") {
 			originalPwd := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
@@ -364,8 +364,8 @@ func (h *TestHarness) useTestContext() error {
 		{"--executor-address", "127.0.0.1:9090"},
 		{"--avs-address", h.ChainConfig.AVSAccountAddress},
 		{"--operator-address", h.ChainConfig.OperatorAccountAddress},
-		{"--l1-rpc-url", h.ChainConfig.L1RPC},  // Critical: contract middleware needs this
-		{"--l2-rpc-url", h.ChainConfig.L2RPC},  // Include L2 RPC for completeness
+		{"--l1-rpc-url", h.ChainConfig.L1RPC}, // Critical: contract middleware needs this
+		{"--l2-rpc-url", h.ChainConfig.L2RPC}, // Include L2 RPC for completeness
 	}
 
 	for _, cfg := range contextConfig {

@@ -220,7 +220,7 @@ func (d *ExecutorDeployer) deployContainer(
 	// Mount Docker socket so the executor can create performer containers
 	dockerArgs = append(dockerArgs, "-v", "/var/run/docker.sock:/var/run/docker.sock")
 	d.Log.Info("Mounting Docker socket for performer container management")
-	
+
 	// Connect to the hourglass-local network
 	dockerArgs = append(dockerArgs, "--network", "hourglass-local_hourglass-network")
 	d.Log.Info("Connecting to hourglass-local network")
