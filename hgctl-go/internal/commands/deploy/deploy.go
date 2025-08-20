@@ -466,6 +466,29 @@ func (d *PlatformDeployer) MountKeystores(dockerArgs *[]string, keystore *signer
 	return nil
 }
 
+// MountSystemKeystores adds system keystore volume mounts to docker arguments
+func (d *PlatformDeployer) MountSystemKeystores(dockerArgs *[]string, cfg *DeploymentConfig) {
+	// Mount system BN254 keystore if configured
+	if systemBN254Path := cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"]; systemBN254Path != "" {
+		if _, err := os.Stat(systemBN254Path); err == nil {
+			*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemBN254Path, systemBN254Path))
+			d.Log.Info("Mounting system BN254 keystore", zap.String("path", systemBN254Path))
+		} else {
+			d.Log.Warn("System BN254 keystore path not accessible", zap.String("path", systemBN254Path), zap.Error(err))
+		}
+	}
+	
+	// Mount system ECDSA keystore if configured
+	if systemECDSAPath := cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"]; systemECDSAPath != "" {
+		if _, err := os.Stat(systemECDSAPath); err == nil {
+			*dockerArgs = append(*dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemECDSAPath, systemECDSAPath))
+			d.Log.Info("Mounting system ECDSA keystore", zap.String("path", systemECDSAPath))
+		} else {
+			d.Log.Warn("System ECDSA keystore path not accessible", zap.String("path", systemECDSAPath), zap.Error(err))
+		}
+	}
+}
+
 // BuildDockerArgs builds common docker run arguments
 func (d *PlatformDeployer) BuildDockerArgs(containerName string, component *runtime.ComponentSpec, cfg *DeploymentConfig) []string {
 	dockerArgs := []string{"run", "-d", "--name", containerName}

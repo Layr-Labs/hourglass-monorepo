@@ -142,6 +142,13 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
+	// Validate that required passwords are set for system keystores
+	if cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"] != "" || cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"] != "" {
+		if cfg.Env["SYSTEM_KEYSTORE_PASSWORD"] == "" {
+			return fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system keystores")
+		}
+	}
+
 	keystoreName := cfg.Env[config.KeystoreName]
 	keystorePassword := cfg.Env[config.KeystorePassword]
 	var keystore *signer.KeystoreReference
@@ -277,6 +284,9 @@ func (d *ExecutorDeployer) deployContainer(
 			return err
 		}
 	}
+
+	// Mount system keystores if configured
+	d.MountSystemKeystores(&dockerArgs, cfg)
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
 

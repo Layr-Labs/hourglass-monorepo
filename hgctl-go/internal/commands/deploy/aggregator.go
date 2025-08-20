@@ -272,20 +272,8 @@ func (d *AggregatorDeployer) deployContainer(
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
 	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
 
-	// Mount system keystore files directly if they exist (operator keystores are converted to private keys)
-	if systemBN254Path := cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"]; systemBN254Path != "" {
-		if _, err := os.Stat(systemBN254Path); err == nil {
-			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemBN254Path, systemBN254Path))
-			d.Log.Info("Mounting system BN254 keystore", zap.String("path", systemBN254Path))
-		}
-	}
-
-	if systemECDSAPath := cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"]; systemECDSAPath != "" {
-		if _, err := os.Stat(systemECDSAPath); err == nil {
-			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemECDSAPath, systemECDSAPath))
-			d.Log.Info("Mounting system ECDSA keystore", zap.String("path", systemECDSAPath))
-		}
-	}
+	// Mount system keystores if configured (operator keystores are converted to private keys)
+	d.MountSystemKeystores(&dockerArgs, cfg)
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
 
