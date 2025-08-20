@@ -39,14 +39,12 @@ For BN254 keys:
   hgctl register-key --operator-set-id 0 --key-type bn254 --key-data <hex-encoded-key>`,
 		Flags: []cli.Flag{
 			&cli.Uint64Flag{
-				Name:     "operator-set-id",
-				Usage:    "Operator set ID to register key for",
-				Required: true,
+				Name:  "operator-set-id",
+				Usage: "Operator set ID to register key for",
 			},
 			&cli.StringFlag{
-				Name:     "key-type",
-				Usage:    "Key type (ecdsa or bn254)",
-				Required: true,
+				Name:  "key-type",
+				Usage: "Key type (ecdsa or bn254)",
 			},
 			&cli.StringFlag{
 				Name:  "key-address",

@@ -63,6 +63,8 @@ func Command() *cli.Command {
 		Usage:  "Configure signer for the current context",
 		Action: signerWizard,
 		Subcommands: []*cli.Command{
+			operatorCommand(),
+			systemCommand(),
 			{
 				Name:   "remove",
 				Usage:  "Remove signer configuration from current context",

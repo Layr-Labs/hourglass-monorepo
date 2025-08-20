@@ -28,6 +28,12 @@ func TestOperatorRegistration(t *testing.T) {
 		)
 
 		// Check execution succeeded
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
 		require.NoError(t, err, "Register command should not return an error")
 		require.Equal(t, 0, result.ExitCode, "Command should exit with code 0")
 

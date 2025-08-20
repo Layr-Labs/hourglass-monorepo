@@ -1,9 +1,9 @@
 package eigenlayer
 
 import (
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/deposit"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/allocate"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/delegate"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/deposit"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/register"
 	"github.com/urfave/cli/v2"
 )

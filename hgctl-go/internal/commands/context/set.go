@@ -80,7 +80,7 @@ func contextSetAction(c *cli.Context) error {
 	}
 
 	if addr := c.String("executor-address"); addr != "" {
-		ctx.AVSAddress = addr
+		ctx.ExecutorAddress = addr
 		updated = true
 		log.Info("Updated Executor address", zap.String("address", addr))
 	}
@@ -104,7 +104,7 @@ func contextSetAction(c *cli.Context) error {
 	}
 
 	if url := c.String("l2-rpc-url"); url != "" {
-		ctx.L1RPCUrl = url
+		ctx.L2RPCUrl = url
 		updated = true
 		log.Info("Updated L2 RPC URL", zap.String("url", url))
 	}

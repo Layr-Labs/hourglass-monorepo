@@ -218,81 +218,76 @@ func (h *TestHarness) ExecuteCLI(args ...string) (*CLIResult, error) {
 
 // ExecuteCLIWithKeystore runs hgctl with a specific keystore
 func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string) (*CLIResult, error) {
-	// Set up environment variables
-	originalEnv := make(map[string]string)
+	// Simple environment restoration using defer
+	var envToRestore []struct{ key, value string }
 	defer func() {
-		// Restore original environment
-		for k, v := range originalEnv {
-			if v == "" {
-				os.Unsetenv(k)
+		for _, env := range envToRestore {
+			if env.value == "" {
+				os.Unsetenv(env.key)
 			} else {
-				os.Setenv(k, v)
+				os.Setenv(env.key, env.value)
 			}
 		}
 	}()
 
-	// Set ETH_RPC_URL
-	originalEnv["ETH_RPC_URL"] = os.Getenv("ETH_RPC_URL")
-	os.Setenv("ETH_RPC_URL", h.ChainConfig.L1RPC)
-
-	// If keystore specified, set up the environment and args
+	// Set OPERATOR_PRIVATE_KEY for operations that need it
+	// The operator signer is configured with privateKey: true, so it needs this env var
 	if keystoreName != "" {
-		_, exists := h.keystores[keystoreName]
-		if !exists {
+		if _, exists := h.keystores[keystoreName]; !exists {
 			return nil, fmt.Errorf("unknown keystore: %s", keystoreName)
 		}
 
-		// Set private key for both ECDSA and BN254 keystores that need transaction signing
-		var privateKey string
+		// Determine which private key to use based on keystore name
+		var operatorPrivateKey string
 		switch keystoreName {
 		case "aggregator-ecdsa", "aggregator-bn254":
-			privateKey = h.ChainConfig.OperatorAccountPk
+			operatorPrivateKey = h.ChainConfig.OperatorAccountPk
 		case "executor-ecdsa", "executor-bn254":
-			privateKey = h.ChainConfig.ExecOperatorAccountPk
+			operatorPrivateKey = h.ChainConfig.ExecOperatorAccountPk
 		}
 
-		if privateKey != "" {
-			if !strings.HasPrefix(privateKey, "0x") {
-				privateKey = "0x" + privateKey
+		if operatorPrivateKey != "" {
+			if !strings.HasPrefix(operatorPrivateKey, "0x") {
+				operatorPrivateKey = "0x" + operatorPrivateKey
 			}
-			originalEnv["PRIVATE_KEY"] = os.Getenv("PRIVATE_KEY")
-			os.Setenv("PRIVATE_KEY", privateKey)
+			// Set OPERATOR_PRIVATE_KEY for the operator signer configuration
+			originalValue := os.Getenv("OPERATOR_PRIVATE_KEY")
+			envToRestore = append(envToRestore, struct{ key, value string }{"OPERATOR_PRIVATE_KEY", originalValue})
+			os.Setenv("OPERATOR_PRIVATE_KEY", operatorPrivateKey)
+		}
+		
+		// Also set keystore passwords if needed for system signers
+		if strings.Contains(keystoreName, "aggregator") {
+			originalPwd := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
+			envToRestore = append(envToRestore, struct{ key, value string }{"SYSTEM_KEYSTORE_PASSWORD", originalPwd})
+			os.Setenv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.OperatorKeystorePassword)
+		} else if strings.Contains(keystoreName, "executor") {
+			originalPwd := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
+			envToRestore = append(envToRestore, struct{ key, value string }{"SYSTEM_KEYSTORE_PASSWORD", originalPwd})
+			os.Setenv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.ExecOperatorKeystorePassword)
 		}
 	}
 
-	// Capture stdout and stderr in a single buffer
-	// This is important because the logger might write to either
+	// Simple output capture
 	outputBuf := &bytes.Buffer{}
 
-	// Create a fresh app instance to avoid state pollution
+	// Create fresh app instance
 	app := commands.Hgctl()
-
-	// CRITICAL: Set both Writer and ErrWriter to the same buffer
-	// This ensures all output (including logger output) is captured
 	app.Writer = outputBuf
 	app.ErrWriter = outputBuf
 
-	// Prepend app name to args
+	// Run the command
 	allArgs := append([]string{"hgctl"}, args...)
+	err := app.RunContext(context.Background(), allArgs)
 
-	// Run the app with a fresh context
-	ctx := context.Background()
-	err := app.RunContext(ctx, allArgs)
-
-	// Get the complete output
-	output := outputBuf.String()
-
+	// Build result
 	result := &CLIResult{
-		Stdout: output, // All output goes here
-		Stderr: "",     // Empty since we're capturing everything in one buffer
+		Stdout: outputBuf.String(),
+		Stderr: "",
 		Error:  err,
 	}
 
-	// You might want to split stdout/stderr based on log levels
-	// For now, everything goes to Stdout for simplicity
-
 	if err != nil {
-		// Check if it's a cli error with exit code
 		if exitErr, ok := err.(cli.ExitCoder); ok {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
@@ -316,14 +311,6 @@ func (h *TestHarness) AssertCLIOutput(t *testing.T, result *CLIResult, expectedS
 		assert.Contains(t, allOutput, expected,
 			"Expected to find '%s' in output:\n%s", expected, allOutput)
 	}
-}
-
-// ExecuteCLIWithInput runs hgctl with stdin input
-func (h *TestHarness) ExecuteCLIWithInput(input string, args ...string) (*CLIResult, error) {
-	// For now, since we're using the CLI directly, we need to handle input differently
-	// This might require modifying commands to accept passwords via flags or env vars
-	// For the test harness, we'll use password flags instead of stdin
-	return h.ExecuteCLI(args...)
 }
 
 // WaitForTransaction waits for a transaction to be mined
@@ -360,30 +347,104 @@ func (h *TestHarness) waitForTransactionOnChain(ctx context.Context, client *eth
 	}
 }
 
-// useTestContext creates a minimal context config file for testing
+// useTestContext creates and configures the test context
 func (h *TestHarness) useTestContext() error {
-	// Create the context first
-	if err := h.app.Run([]string{"hgctl", "context", "use", h.ContextName}); err != nil {
-		return fmt.Errorf("failed to create context: %w", err)
-	}
-	// Set each configuration value using separate context set calls
-	contextSetCalls := [][]string{
-		{"hgctl", "context", "set", "--executor-address", "127.0.0.1:9090"},
-		{"hgctl", "context", "set", "--avs-address", h.ChainConfig.AVSAccountAddress},
-		{"hgctl", "context", "set", "--operator-address", h.ChainConfig.OperatorAccountAddress},
-		{"hgctl", "context", "show"},
+	// Step 1: Create/switch to test context
+	result, err := h.ExecuteCLI("context", "use", h.ContextName)
+	if err != nil && result.ExitCode != 0 {
+		return fmt.Errorf("failed to create/use context: %w", err)
 	}
 
-	// Execute each context set call
-	for _, args := range contextSetCalls {
-		if err := h.app.Run(args); err != nil {
-			return fmt.Errorf("failed to set context property %v: %w", args, err)
+	// Step 2: Configure all required context values in one batch
+	// The context needs these for contract client initialization
+	contextConfig := []struct {
+		flag  string
+		value string
+	}{
+		{"--executor-address", "127.0.0.1:9090"},
+		{"--avs-address", h.ChainConfig.AVSAccountAddress},
+		{"--operator-address", h.ChainConfig.OperatorAccountAddress},
+		{"--l1-rpc-url", h.ChainConfig.L1RPC},  // Critical: contract middleware needs this
+		{"--l2-rpc-url", h.ChainConfig.L2RPC},  // Include L2 RPC for completeness
+	}
+
+	for _, cfg := range contextConfig {
+		result, err := h.ExecuteCLI("context", "set", cfg.flag, cfg.value)
+		if err != nil && result.ExitCode != 0 {
+			return fmt.Errorf("failed to set %s: %w", cfg.flag, err)
 		}
 	}
 
-	h.logger.Debug("Populated test context config", zap.String("context", h.ContextName))
+	// Step 3: Configure signers (simplified environment handling)
+	if err := h.configureSigners(); err != nil {
+		return fmt.Errorf("failed to configure signers: %w", err)
+	}
+
+	// Step 4: Verify context is properly configured
+	result, err = h.ExecuteCLI("context", "show")
+	if err != nil && result.ExitCode != 0 {
+		return fmt.Errorf("failed to show context: %w", err)
+	}
+	h.logger.Debug("Context configured", zap.String("output", result.Stdout))
 
 	return nil
+}
+
+// configureSigners sets up operator and system signers
+func (h *TestHarness) configureSigners() error {
+	// Configure operator signer
+	operatorPK := h.ChainConfig.OperatorAccountPk
+	if !strings.HasPrefix(operatorPK, "0x") {
+		operatorPK = "0x" + operatorPK
+	}
+
+	// Use helper to temporarily set environment variable
+	if err := h.withEnv("OPERATOR_PRIVATE_KEY", operatorPK, func() error {
+		result, err := h.ExecuteCLI("signer", "operator", "privatekey")
+		if err != nil && result.ExitCode != 0 {
+			return fmt.Errorf("failed to configure operator signer: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	// Configure system signers
+	if err := h.withEnv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.OperatorKeystorePassword, func() error {
+		// ECDSA signer
+		result, err := h.ExecuteCLI("signer", "system", "keystore",
+			"--name", "aggregator-ecdsa", "--type", "ecdsa")
+		if err != nil && result.ExitCode != 0 {
+			return fmt.Errorf("failed to configure ECDSA signer: %w", err)
+		}
+
+		// BN254 signer
+		result, err = h.ExecuteCLI("signer", "system", "keystore",
+			"--name", "aggregator", "--type", "bn254")
+		if err != nil && result.ExitCode != 0 {
+			return fmt.Errorf("failed to configure BN254 signer: %w", err)
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// withEnv temporarily sets an environment variable for the duration of fn
+func (h *TestHarness) withEnv(key, value string, fn func() error) error {
+	original := os.Getenv(key)
+	os.Setenv(key, value)
+	defer func() {
+		if original == "" {
+			os.Unsetenv(key)
+		} else {
+			os.Setenv(key, original)
+		}
+	}()
+	return fn()
 }
 
 // GetBeaconETHStrategy returns the address of the BeaconETH strategy

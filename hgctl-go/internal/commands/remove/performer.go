@@ -14,7 +14,7 @@ func performerCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "performer",
 		Usage:     "Remove a performer",
-		ArgsUsage: "<performer-id>",
+		ArgsUsage: "[performer-id]",
 		Action:    removePerformerAction,
 	}
 }

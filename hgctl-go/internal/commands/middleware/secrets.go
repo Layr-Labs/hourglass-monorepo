@@ -32,10 +32,10 @@ func SecretsBeforeFunc(c *cli.Context) error {
 
 	// Expand the path (handle ~/ for home directory)
 	secretsPath := expandPath(currentCtx.EnvSecretsPath)
-	
+
 	// Check if file exists
 	if _, err := os.Stat(secretsPath); os.IsNotExist(err) {
-		log.Warn("Secrets file does not exist", 
+		log.Warn("Secrets file does not exist",
 			zap.String("path", secretsPath),
 			zap.String("originalPath", currentCtx.EnvSecretsPath))
 		return nil // Don't fail, just warn
@@ -43,7 +43,7 @@ func SecretsBeforeFunc(c *cli.Context) error {
 
 	// Load the secrets file
 	log.Debug("Loading secrets from file", zap.String("path", secretsPath))
-	
+
 	envVars, err := loadEnvFile(secretsPath)
 	if err != nil {
 		return fmt.Errorf("failed to load secrets from %s: %w", secretsPath, err)
@@ -68,7 +68,7 @@ func SecretsBeforeFunc(c *cli.Context) error {
 		}
 	}
 
-	log.Info("Loaded secrets from file",
+	log.Debug("Loaded secrets from file",
 		zap.String("path", secretsPath),
 		zap.Int("count", len(envVars)))
 
@@ -90,7 +90,7 @@ func loadEnvFile(path string) (map[string]string, error) {
 	for scanner.Scan() {
 		lineNum++
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -105,10 +105,10 @@ func loadEnvFile(path string) (map[string]string, error) {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-		
+
 		// Remove surrounding quotes if present
 		value = strings.Trim(value, `"'`)
-		
+
 		// Validate key
 		if key == "" {
 			continue

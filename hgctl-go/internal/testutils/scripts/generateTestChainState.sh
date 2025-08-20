@@ -193,8 +193,8 @@ echo "Creating hgctl context 'test' with L1 RPC URL and operator address..."
 "$HGCTL" context create \
     --l1-rpc-url "$anvilL1RpcUrl" \
     --l2-rpc-url "$anvilL2RpcUrl" \
-    --operator-address "$AGGREGATOR_ADDRESS" \
     test
+"$HGCTL" context set --operator-address "$AGGREGATOR_ADDRESS"
 
 # Create BN254 keystores using hgctl
 echo "Creating BN254 keystore for aggregator..."

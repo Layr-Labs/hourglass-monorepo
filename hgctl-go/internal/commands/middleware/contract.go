@@ -20,9 +20,14 @@ func ContractBeforeFunc(c *cli.Context) error {
 	// Get current context
 	currentCtx, ok := c.Context.Value(config.ContextKey).(*config.Context)
 	if !ok || currentCtx == nil {
-		log.Info("No context configured, contract client will not be initialized")
+		log.Debug("No context configured, contract client will not be initialized")
 		return nil
 	}
+	
+	log.Debug("Context found, initializing contract client",
+		zap.String("avsAddress", currentCtx.AVSAddress),
+		zap.String("operatorAddress", currentCtx.OperatorAddress),
+		zap.String("l1RpcUrl", currentCtx.L1RPCUrl))
 
 	// Get AVS address from context or environment
 	avsAddress := currentCtx.AVSAddress
@@ -39,10 +44,7 @@ func ContractBeforeFunc(c *cli.Context) error {
 	// Get RPC URL
 	rpcURL := currentCtx.L1RPCUrl
 	if rpcURL == "" {
-		rpcURL = os.Getenv("ETH_RPC_URL")
-	}
-	if rpcURL == "" {
-		return fmt.Errorf("RPC URL not configured")
+		return fmt.Errorf("l1 RPC URL not configured")
 	}
 
 	// Get operator private key from configured source (env var or keystore)
@@ -80,7 +82,7 @@ func ContractBeforeFunc(c *cli.Context) error {
 func GetContractClient(c *cli.Context) (*client.ContractClient, error) {
 	contractClient, ok := c.Context.Value(config.ContractClientKey).(*client.ContractClient)
 	if !ok || contractClient == nil {
-		return nil, fmt.Errorf("contract client not initialized. Please configure AVS address, operator address, and RPC URL using `hgctl context set`")
+		return nil, fmt.Errorf("contract client not initialized. Please configure AVS address, operator address and l1 RPC URL using `hgctl context set`")
 	}
 	return contractClient, nil
 }
