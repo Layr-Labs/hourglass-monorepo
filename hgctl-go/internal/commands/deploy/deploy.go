@@ -168,7 +168,7 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 			// Find the actual keystore path
 			for _, ks := range d.Context.Keystores {
 				if ks.Name == d.Context.SystemSignerKeys.BN254.Name {
-					envVars["SYSTEM_BLS_KEYSTORE_PATH"] = ks.Path
+					envVars["SYSTEM_BN254_KEYSTORE_PATH"] = ks.Path
 					d.Log.Debug("Using system BN254 keystore from context",
 						zap.String("keystore", ks.Name),
 						zap.String("path", ks.Path))
@@ -550,6 +550,38 @@ func (d *PlatformDeployer) InjectFileContentsAsEnvVars(dockerArgs []string) []st
 
 	// This assumes the injectFileContentsAsEnvVars function exists in the package
 	return injectFileContentsAsEnvVars(dockerArgs, contextDir, d.Log)
+}
+
+// ConvertOperatorKeystoreIfNeeded converts operator keystore to private key if configured
+func (d *PlatformDeployer) ConvertOperatorKeystoreIfNeeded(envVars map[string]string) error {
+	// Only convert if we have keystore path but no private key
+	if envVars["OPERATOR_KEYSTORE_PATH"] != "" && envVars["OPERATOR_PRIVATE_KEY"] == "" {
+		keystorePath := envVars["OPERATOR_KEYSTORE_PATH"]
+		keystoreName := envVars["OPERATOR_KEYSTORE_NAME"]
+		password := envVars["OPERATOR_KEYSTORE_PASSWORD"]
+		
+		// Require password - no prompting
+		if password == "" {
+			return fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable is required when using keystore '%s'", keystoreName)
+		}
+		
+		// Convert keystore to private key
+		privateKey, err := signer.ConvertKeystoreToPrivateKey(keystorePath, password)
+		if err != nil {
+			return fmt.Errorf("failed to convert operator keystore '%s': %w", keystoreName, err)
+		}
+		
+		// Set the private key and clean up keystore env vars
+		envVars["OPERATOR_PRIVATE_KEY"] = privateKey
+		delete(envVars, "OPERATOR_KEYSTORE_PATH")
+		delete(envVars, "OPERATOR_KEYSTORE_NAME")
+		delete(envVars, "OPERATOR_KEYSTORE_PASSWORD")
+		
+		d.Log.Info("Converted operator keystore to private key",
+			zap.String("keystore", keystoreName))
+	}
+	
+	return nil
 }
 
 // Helper methods

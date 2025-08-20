@@ -129,20 +129,19 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		Env: d.LoadEnvironmentVariables(),
 	}
 
+	// Convert operator keystore to private key if needed
+	if err := d.ConvertOperatorKeystoreIfNeeded(cfg.Env); err != nil {
+		return fmt.Errorf("failed to process operator keystore: %w", err)
+	}
+
 	if err := ValidateComponentSpec(component, cfg.Env); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Validate that required passwords are set for keystores
-	if cfg.Env["SYSTEM_BLS_KEYSTORE_PATH"] != "" || cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"] != "" {
+	// Validate that required passwords are set for system keystores
+	if cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"] != "" || cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"] != "" {
 		if cfg.Env["SYSTEM_KEYSTORE_PASSWORD"] == "" {
 			return fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system keystores")
-		}
-	}
-
-	if cfg.Env["OPERATOR_KEYSTORE_PATH"] != "" {
-		if cfg.Env["OPERATOR_KEYSTORE_PASSWORD"] == "" {
-			return fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable required for operator keystore")
 		}
 	}
 
@@ -278,18 +277,11 @@ func (d *AggregatorDeployer) deployContainer(
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
 	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
 
-	// Mount keystore files directly if they exist
-	if operatorKeystorePath := cfg.Env["OPERATOR_KEYSTORE_PATH"]; operatorKeystorePath != "" {
-		if _, err := os.Stat(operatorKeystorePath); err == nil {
-			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", operatorKeystorePath, operatorKeystorePath))
-			d.Log.Info("Mounting operator keystore", zap.String("path", operatorKeystorePath))
-		}
-	}
-
-	if systemBLSPath := cfg.Env["SYSTEM_BLS_KEYSTORE_PATH"]; systemBLSPath != "" {
-		if _, err := os.Stat(systemBLSPath); err == nil {
-			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemBLSPath, systemBLSPath))
-			d.Log.Info("Mounting system BLS keystore", zap.String("path", systemBLSPath))
+	// Mount system keystore files directly if they exist (operator keystores are converted to private keys)
+	if systemBN254Path := cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"]; systemBN254Path != "" {
+		if _, err := os.Stat(systemBN254Path); err == nil {
+			dockerArgs = append(dockerArgs, "-v", fmt.Sprintf("%s:%s:ro", systemBN254Path, systemBN254Path))
+			d.Log.Info("Mounting system BN254 keystore", zap.String("path", systemBN254Path))
 		}
 	}
 
