@@ -269,66 +269,74 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	}
 
 	// iterate over results until we meet the signing threshold
-	for taskResult := range resultsChan {
-		ts.logger.Sugar().Infow("received task result on channel",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-		)
-		if ts.thresholdMet.Load() {
-			ts.logger.Sugar().Infow("task completion threshold already met",
+	for {
+		select {
+		case taskResult := <-resultsChan:
+			ts.logger.Sugar().Infow("received task result on channel",
 				zap.String("taskId", taskResult.TaskId),
 				zap.String("operatorAddress", taskResult.OperatorAddress),
 			)
-			continue
-		}
-		if ts.Task.TaskId != taskResult.TaskId {
-			ts.logger.Sugar().Errorw("task ID mismatch: expected",
-				zap.String("expected", ts.Task.TaskId),
-				zap.String("received", taskResult.TaskId),
-			)
-			continue
-		}
-		if err := ts.taskAggregator.ProcessNewSignature(ts.context, ts.Task.TaskId, taskResult); err != nil {
-			ts.logger.Sugar().Errorw("Failed to process task result",
+			if ts.thresholdMet.Load() {
+				ts.logger.Sugar().Infow("task completion threshold already met",
+					zap.String("taskId", taskResult.TaskId),
+					zap.String("operatorAddress", taskResult.OperatorAddress),
+				)
+				continue
+			}
+			if ts.Task.TaskId != taskResult.TaskId {
+				ts.logger.Sugar().Errorw("task ID mismatch: expected",
+					zap.String("expected", ts.Task.TaskId),
+					zap.String("received", taskResult.TaskId),
+				)
+				continue
+			}
+			if err := ts.taskAggregator.ProcessNewSignature(ts.context, ts.Task.TaskId, taskResult); err != nil {
+				ts.logger.Sugar().Errorw("Failed to process task result",
+					zap.String("taskId", taskResult.TaskId),
+					zap.String("operatorAddress", taskResult.OperatorAddress),
+					zap.Error(err),
+				)
+				continue
+			}
+			ts.logger.Sugar().Infow("task result processed, checking signing threshold",
 				zap.String("taskId", taskResult.TaskId),
 				zap.String("operatorAddress", taskResult.OperatorAddress),
-				zap.Error(err),
 			)
-			continue
-		}
-		ts.logger.Sugar().Infow("task result processed, checking signing threshold",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-		)
 
-		if !ts.taskAggregator.SigningThresholdMet() {
-			ts.logger.Sugar().Infow("task completion threshold not met yet",
+			if !ts.taskAggregator.SigningThresholdMet() {
+				ts.logger.Sugar().Infow("task completion threshold not met yet",
+					zap.String("taskId", taskResult.TaskId),
+					zap.String("operatorAddress", taskResult.OperatorAddress),
+				)
+				continue
+			}
+			ts.thresholdMet.Store(true)
+
+			// Signal producers to stop before closing results channel
+			close(doneChan)
+
+			ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
 				zap.String("taskId", taskResult.TaskId),
 				zap.String("operatorAddress", taskResult.OperatorAddress),
 			)
-			continue
-		}
-		ts.thresholdMet.Store(true)
 
-		// Signal producers to stop before closing results channel
-		close(doneChan)
-
-		ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
-			zap.String("taskId", taskResult.TaskId),
-			zap.String("operatorAddress", taskResult.OperatorAddress),
-		)
-
-		cert, err := ts.taskAggregator.GenerateFinalCertificate()
-		if err != nil {
-			ts.logger.Sugar().Errorw("Failed to generate final certificate",
-				zap.String("taskId", taskResult.TaskId),
-				zap.String("operatorAddress", taskResult.OperatorAddress),
-				zap.Error(err),
+			cert, err := ts.taskAggregator.GenerateFinalCertificate()
+			if err != nil {
+				ts.logger.Sugar().Errorw("Failed to generate final certificate",
+					zap.String("taskId", taskResult.TaskId),
+					zap.String("operatorAddress", taskResult.OperatorAddress),
+					zap.Error(err),
+				)
+				return nil, fmt.Errorf("failed to generate final certificate: %w", err)
+			}
+			return cert, nil
+		case <-ts.context.Done():
+			ts.logger.Sugar().Errorw("task session context cancelled while waiting for results",
+				zap.String("taskId", ts.Task.TaskId),
+				zap.Error(ts.context.Err()),
 			)
-			return nil, fmt.Errorf("failed to generate final certificate: %w", err)
+			close(doneChan)
+			return nil, fmt.Errorf("task session context done while waiting for results: %w", ts.context.Err())
 		}
-		return cert, nil
 	}
-
-	return nil, fmt.Errorf("failed to meet signing threshold")
 }
