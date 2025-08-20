@@ -18,6 +18,7 @@ func systemCommand() *cli.Command {
 		Subcommands: []*cli.Command{
 			systemPrivateKeyCommand(),
 			systemKeystoreCommand(),
+			systemRemoveCommand(),
 		},
 	}
 }
@@ -179,6 +180,46 @@ func systemKeystoreCommand() *cli.Command {
 				return fmt.Errorf("failed to save config: %w", err)
 			}
 
+			return nil
+		},
+	}
+}
+
+// systemRemoveCommand removes system signer configuration from context
+func systemRemoveCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "remove",
+		Usage: "Remove system signer configuration from current context",
+		Action: func(c *cli.Context) error {
+			// Get context name
+			contextName := getContextName()
+
+			// Load config
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			ctx, ok := cfg.Contexts[contextName]
+			if !ok {
+				return fmt.Errorf("context '%s' not found", contextName)
+			}
+
+			// Check if system signer is configured
+			if ctx.SystemSignerKeys == nil {
+				fmt.Println("No system signer configuration found for this context")
+				return nil
+			}
+
+			// Remove system signer configuration
+			ctx.SystemSignerKeys = nil
+
+			// Save config
+			if err := config.SaveConfig(cfg); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
+			}
+
+			fmt.Printf("✅ System signer configuration removed from context '%s'\n", contextName)
 			return nil
 		},
 	}
