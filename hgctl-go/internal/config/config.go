@@ -2,10 +2,12 @@ package config
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -117,6 +119,74 @@ func SystemSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, err
 	}
 
 	return nil, fmt.Errorf("operator signing keys not found in context")
+}
+
+// ConvertKeystoreToPrivateKey converts an ECDSA keystore to a hex-encoded private key
+func convertKeystoreToPrivateKey(keystorePath, password string) (string, error) {
+	// Clean and validate the path
+	keystorePath = filepath.Clean(keystorePath)
+
+	// Read the keystore file
+	keyStoreContents, err := os.ReadFile(keystorePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read keystore at %s: %w", keystorePath, err)
+	}
+
+	// Decrypt the keystore
+	key, err := keystore.DecryptKey(keyStoreContents, password)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt keystore: %w", err)
+	}
+
+	// Convert to hex string with 0x prefix
+	privateKeyHex := hex.EncodeToString(key.PrivateKey.D.Bytes())
+	return "0x" + privateKeyHex, nil
+}
+
+// GetOperatorPrivateKey retrieves the operator private key from the configured source
+// Returns an error if no operator signer is configured or if required values are missing
+func GetOperatorPrivateKey(ctx *Context) (string, error) {
+	// Ensure context and operator keys are configured
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return "", fmt.Errorf("no operator signer configured in context")
+	}
+
+	// Handle private key configuration
+	if ctx.OperatorKeys.PrivateKey {
+		privateKey := os.Getenv("OPERATOR_PRIVATE_KEY")
+		if privateKey == "" {
+			return "", fmt.Errorf("operator configured to use private key but OPERATOR_PRIVATE_KEY environment variable is not set")
+		}
+		return privateKey, nil
+	}
+
+	// Handle keystore configuration
+	if ctx.OperatorKeys.Keystore != nil {
+		password := os.Getenv("OPERATOR_KEYSTORE_PASSWORD")
+		if password == "" {
+			return "", fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable required for operator keystore '%s'",
+				ctx.OperatorKeys.Keystore.Name)
+		}
+
+		// Find keystore path from context
+		for _, ks := range ctx.Keystores {
+			if ks.Name == ctx.OperatorKeys.Keystore.Name {
+				privateKey, err := convertKeystoreToPrivateKey(ks.Path, password)
+				if err != nil {
+					return "", fmt.Errorf("failed to decrypt operator keystore '%s': %w", ks.Name, err)
+				}
+				return privateKey, nil
+			}
+		}
+		return "", fmt.Errorf("operator keystore '%s' not found in context", ctx.OperatorKeys.Keystore.Name)
+	}
+
+	// Handle Web3Signer configuration (not supported for contract client)
+	if ctx.OperatorKeys.RemoteSignerConfig != nil {
+		return "", fmt.Errorf("Web3Signer not supported for contract client operations")
+	}
+
+	return "", fmt.Errorf("operator signer configuration is invalid")
 }
 
 // LoggerFromContext retrieves the logger from the context

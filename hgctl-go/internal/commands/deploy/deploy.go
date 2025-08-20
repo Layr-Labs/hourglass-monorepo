@@ -129,36 +129,11 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// Populate OperatorKeys configuration into environment variables
-	if d.Context.OperatorKeys != nil {
-		if d.Context.OperatorKeys.Keystore != nil {
-			// Find the actual keystore path
-			for _, ks := range d.Context.Keystores {
-				if ks.Name == d.Context.OperatorKeys.Keystore.Name {
-					envVars["OPERATOR_KEYSTORE_PATH"] = ks.Path
-					envVars["OPERATOR_KEYSTORE_NAME"] = ks.Name
-					d.Log.Debug("Using operator keystore from context",
-						zap.String("keystore", ks.Name),
-						zap.String("path", ks.Path))
-					break
-				}
-			}
-		} else if d.Context.OperatorKeys.RemoteSignerConfig != nil {
-			envVars["OPERATOR_WEB3SIGNER_URL"] = d.Context.OperatorKeys.RemoteSignerConfig.Url
-			if d.Context.OperatorKeys.RemoteSignerConfig.CACertPath != "" {
-				envVars["OPERATOR_WEB3SIGNER_CA_CERT_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.CACertPath
-			}
-			if d.Context.OperatorKeys.RemoteSignerConfig.ClientCertPath != "" {
-				envVars["OPERATOR_WEB3SIGNER_CLIENT_CERT_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.ClientCertPath
-			}
-			if d.Context.OperatorKeys.RemoteSignerConfig.ClientKeyPath != "" {
-				envVars["OPERATOR_WEB3SIGNER_CLIENT_KEY_PATH"] = d.Context.OperatorKeys.RemoteSignerConfig.ClientKeyPath
-			}
-			d.Log.Debug("Using operator web3signer from context", zap.String("url", d.Context.OperatorKeys.RemoteSignerConfig.Url))
-		} else if d.Context.OperatorKeys.PrivateKey {
-			// PrivateKey flag indicates to use OPERATOR_PRIVATE_KEY env var
-			d.Log.Debug("Operator configured to use OPERATOR_PRIVATE_KEY environment variable")
-		}
+	if operatorKey, err := config.GetOperatorPrivateKey(d.Context); err == nil {
+		envVars["OPERATOR_PRIVATE_KEY"] = operatorKey
+		d.Log.Debug("Loaded operator private key")
+	} else {
+		d.Log.Error("Operator private key not available", zap.Error(err))
 	}
 
 	// Populate SystemSignerKeys configuration into environment variables
@@ -262,20 +237,10 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// Map PRIVATE_KEY to OPERATOR_PRIVATE_KEY if PRIVATE_KEY exists and OPERATOR_PRIVATE_KEY doesn't
-	if privateKey := os.Getenv("PRIVATE_KEY"); privateKey != "" {
-		if _, exists := envVars["OPERATOR_PRIVATE_KEY"]; !exists {
-			envVars["OPERATOR_PRIVATE_KEY"] = privateKey
-			d.Log.Debug("Using PRIVATE_KEY environment variable as OPERATOR_PRIVATE_KEY")
-		}
-	}
-
-	// 1. Load from env file if specified
 	if d.EnvFile != "" {
 		d.loadEnvFile(d.EnvFile, envVars)
 	}
 
-	// 2. Apply command-line env overrides
 	for _, env := range d.EnvFlags {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
@@ -283,7 +248,6 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// 3. Add system environment variables as fallback
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
@@ -293,14 +257,12 @@ func (d *PlatformDeployer) LoadEnvironmentVariables() map[string]string {
 		}
 	}
 
-	// 4. Load from env secrets file if configured (highest priority)
 	if d.Context.EnvSecretsPath != "" {
 		secretsPath := d.expandPath(d.Context.EnvSecretsPath)
 		d.Log.Info("Loading environment from secrets file")
 		d.loadEnvFile(secretsPath, envVars)
 	}
 
-	// 5. Apply Docker URL translation for RPC URLs (for macOS deployments)
 	rpcURLKeys := []string{"L1_RPC_URL", "L2_RPC_URL", "RPC_URL", "ETH_RPC_URL"}
 	for _, key := range rpcURLKeys {
 		if url, exists := envVars[key]; exists && url != "" {
@@ -550,38 +512,6 @@ func (d *PlatformDeployer) InjectFileContentsAsEnvVars(dockerArgs []string) []st
 
 	// This assumes the injectFileContentsAsEnvVars function exists in the package
 	return injectFileContentsAsEnvVars(dockerArgs, contextDir, d.Log)
-}
-
-// ConvertOperatorKeystoreIfNeeded converts operator keystore to private key if configured
-func (d *PlatformDeployer) ConvertOperatorKeystoreIfNeeded(envVars map[string]string) error {
-	// Only convert if we have keystore path but no private key
-	if envVars["OPERATOR_KEYSTORE_PATH"] != "" && envVars["OPERATOR_PRIVATE_KEY"] == "" {
-		keystorePath := envVars["OPERATOR_KEYSTORE_PATH"]
-		keystoreName := envVars["OPERATOR_KEYSTORE_NAME"]
-		password := envVars["OPERATOR_KEYSTORE_PASSWORD"]
-		
-		// Require password - no prompting
-		if password == "" {
-			return fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable is required when using keystore '%s'", keystoreName)
-		}
-		
-		// Convert keystore to private key
-		privateKey, err := signer.ConvertKeystoreToPrivateKey(keystorePath, password)
-		if err != nil {
-			return fmt.Errorf("failed to convert operator keystore '%s': %w", keystoreName, err)
-		}
-		
-		// Set the private key and clean up keystore env vars
-		envVars["OPERATOR_PRIVATE_KEY"] = privateKey
-		delete(envVars, "OPERATOR_KEYSTORE_PATH")
-		delete(envVars, "OPERATOR_KEYSTORE_NAME")
-		delete(envVars, "OPERATOR_KEYSTORE_PASSWORD")
-		
-		d.Log.Info("Converted operator keystore to private key",
-			zap.String("keystore", keystoreName))
-	}
-	
-	return nil
 }
 
 // Helper methods

@@ -45,10 +45,10 @@ func ContractBeforeFunc(c *cli.Context) error {
 		return fmt.Errorf("RPC URL not configured")
 	}
 
-	// Get private key (only from environment for security)
-	privateKey := os.Getenv("PRIVATE_KEY")
-	if privateKey == "" {
-		privateKey = os.Getenv("OPERATOR_PRIVATE_KEY")
+	// Get operator private key from configured source (env var or keystore)
+	privateKey, err := config.GetOperatorPrivateKey(currentCtx)
+	if err != nil {
+		return fmt.Errorf("failed to get operator private key: %w", err)
 	}
 
 	// Build contract configuration

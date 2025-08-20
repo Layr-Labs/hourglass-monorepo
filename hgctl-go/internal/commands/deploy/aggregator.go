@@ -129,11 +129,6 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		Env: d.LoadEnvironmentVariables(),
 	}
 
-	// Convert operator keystore to private key if needed
-	if err := d.ConvertOperatorKeystoreIfNeeded(cfg.Env); err != nil {
-		return fmt.Errorf("failed to process operator keystore: %w", err)
-	}
-
 	if err := ValidateComponentSpec(component, cfg.Env); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
