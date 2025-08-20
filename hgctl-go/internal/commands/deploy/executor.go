@@ -1,10 +1,12 @@
 package deploy
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/urfave/cli/v2"
@@ -200,6 +202,33 @@ func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	return nil
 }
 
+// ensureDockerNetwork checks if a Docker network exists and creates it if it doesn't
+func (d *ExecutorDeployer) ensureDockerNetwork(networkName string) error {
+	// Check if network exists
+	cmd := exec.Command("docker", "network", "inspect", networkName)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	
+	if err := cmd.Run(); err != nil {
+		// Network doesn't exist, create it
+		d.Log.Info("Docker network not found, creating it", zap.String("network", networkName))
+		
+		createCmd := exec.Command("docker", "network", "create", networkName)
+		var createStderr bytes.Buffer
+		createCmd.Stderr = &createStderr
+		
+		if err := createCmd.Run(); err != nil {
+			return fmt.Errorf("failed to create Docker network %s: %w\nstderr: %s", networkName, err, createStderr.String())
+		}
+		
+		d.Log.Info("Docker network created successfully", zap.String("network", networkName))
+	} else {
+		d.Log.Info("Docker network already exists", zap.String("network", networkName))
+	}
+	
+	return nil
+}
+
 // deployContainer handles the executor-specific container deployment
 func (d *ExecutorDeployer) deployContainer(
 	component *runtime.ComponentSpec,
@@ -221,9 +250,13 @@ func (d *ExecutorDeployer) deployContainer(
 	dockerArgs = append(dockerArgs, "-v", "/var/run/docker.sock:/var/run/docker.sock")
 	d.Log.Info("Mounting Docker socket for performer container management")
 
-	// Connect to the hourglass-local network
-	dockerArgs = append(dockerArgs, "--network", "hourglass-local_hourglass-network")
-	d.Log.Info("Connecting to hourglass-local network")
+	// Ensure the hourglass-local network exists and connect to it
+	networkName := "hourglass-local_hourglass-network"
+	if err := d.ensureDockerNetwork(networkName); err != nil {
+		return fmt.Errorf("failed to ensure Docker network: %w", err)
+	}
+	dockerArgs = append(dockerArgs, "--network", networkName)
+	d.Log.Info("Connecting to Docker network", zap.String("network", networkName))
 
 	servicePort := cfg.Env["EXECUTOR_SERVICE_PORT"]
 	if servicePort == "" {
