@@ -46,12 +46,7 @@ func delegateAction(c *cli.Context) error {
 
 	// If no operator address specified, use the configured operator address for self-delegation
 	if operatorAddress == "" {
-		// Get the operator address from the private key to derive the actual address
-		// This requires having the private key configured
-		privateKeyHex := os.Getenv("PRIVATE_KEY")
-		if privateKeyHex == "" {
-			privateKeyHex = os.Getenv("OPERATOR_PRIVATE_KEY")
-		}
+		privateKeyHex := os.Getenv("OPERATOR_PRIVATE_KEY")
 		if privateKeyHex != "" {
 			// Derive address from private key
 			privateKey, err := crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))

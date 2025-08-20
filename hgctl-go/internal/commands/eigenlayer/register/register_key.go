@@ -7,6 +7,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -213,10 +214,15 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClien
 func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error) {
 	h.log.Info("Generating signature for ECDSA key registration")
 
-	// Get the private key from environment
-	privateKeyHex := os.Getenv("PRIVATE_KEY")
-	if privateKeyHex == "" {
-		return nil, fmt.Errorf("PRIVATE_KEY environment variable required to generate signature")
+	// Get the private key from context
+	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
+	if currentCtx == nil {
+		return nil, fmt.Errorf("no context configured")
+	}
+
+	privateKeyHex, err := config.GetOperatorPrivateKey(currentCtx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator private key: %w", err)
 	}
 
 	privateKey, err := ecdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(privateKeyHex, "0x"))
