@@ -44,7 +44,6 @@ The keystore must have been previously added to your context using 'keystore add
 			},
 		},
 		Action: func(c *cli.Context) error {
-			// Get key name from flag or positional argument
 			keyName := c.String("name")
 			if keyName == "" && c.NArg() > 0 {
 				keyName = c.Args().Get(0)
@@ -122,13 +121,11 @@ func getPrivateKey(keyType string, filePath string, password string) (string, er
 		return hex.EncodeToString(key.PrivateKey.D.Bytes()), nil
 
 	case KeyTypeBN254:
-		// Read the keystore file
 		keystoreData, err := os.ReadFile(filePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read keystore file: %w", err)
 		}
 
-		// Check if it's a BN254 keystore
 		var testKeystore map[string]interface{}
 		if err := json.Unmarshal(keystoreData, &testKeystore); err == nil {
 			var keystoreFile blskeystore.EIP2335Keystore
@@ -149,7 +146,6 @@ func getPrivateKey(keyType string, filePath string, password string) (string, er
 			return hex.EncodeToString(privateKey.Bytes()), nil
 		}
 
-		// Try as a bn254 private key directly
 		privateKeyBytes, err := decryptBn254Keystore(keystoreData, password)
 		if err != nil {
 			return "", fmt.Errorf("failed to decrypt BN254 keystore: %w", err)
@@ -164,7 +160,6 @@ func getPrivateKey(keyType string, filePath string, password string) (string, er
 
 // decryptBn254Keystore decrypts a keystore file to get the private key
 func decryptBn254Keystore(keystoreData []byte, password string) ([]byte, error) {
-	// Check if it's a BN254 keystore
 	var testKeystore map[string]interface{}
 	if err := json.Unmarshal(keystoreData, &testKeystore); err == nil {
 		var keystoreFile blskeystore.EIP2335Keystore
@@ -183,7 +178,6 @@ func decryptBn254Keystore(keystoreData []byte, password string) ([]byte, error) 
 		return privateKey.Bytes(), nil
 	}
 
-	// Try standard Ethereum keystore
 	key, err := keystore.DecryptKey(keystoreData, password)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt keystore: %w", err)

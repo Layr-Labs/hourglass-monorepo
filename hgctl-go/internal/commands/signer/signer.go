@@ -10,7 +10,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -143,16 +142,14 @@ type signerWizardModel struct {
 	height      int
 
 	// UI components
-	list       list.Model
-	textInput  textinput.Model
-	filepicker filepicker.Model
+	list      list.Model
+	textInput textinput.Model
 
 	// Common configuration
-	keyType            string // "ecdsa" or "bn254" (system signer only)
-	signerType         string // "private_key", "keystore", "web3signer"
-	keystoreChoiceType string // "existing" or "file"
-	keystoreName       string // Name of selected keystore
-	keystorePath       string // Path to keystore file
+	keyType      string // "ecdsa" or "bn254" (system signer only)
+	signerType   string // "private_key", "keystore", "web3signer"
+	keystoreName string // Name of selected keystore
+	keystorePath string // Path to keystore file
 
 	// Web3Signer configuration
 	web3SignerURL            string
@@ -173,12 +170,9 @@ type signerWizardModel struct {
 type stage int
 
 const (
-	stageWelcome       stage = iota
-	stageSelectKeyType       // System signer only
+	stageSelectKeyType stage = iota // System signer only
 	stageSelectSignerType
-	stageKeystoreChoice
 	stageKeystoreSelect
-	stageKeystorePath
 	stageWeb3SignerURL
 	stageWeb3SignerAddress
 	stageWeb3SignerTLSChoice
@@ -187,7 +181,6 @@ const (
 	stageWeb3SignerClientKey
 	stageWeb3SignerPublicKey
 	stageWeb3SignerFromAddress
-	stagePrivateKeyInfo
 	stageConfirm
 )
 
@@ -212,17 +205,6 @@ type tlsChoiceItem struct {
 func (i tlsChoiceItem) Title() string       { return i.title }
 func (i tlsChoiceItem) Description() string { return i.description }
 func (i tlsChoiceItem) FilterValue() string { return i.title }
-
-// Keystore choice item for list
-type keystoreChoiceItem struct {
-	title       string
-	description string
-	choiceType  string
-}
-
-func (i keystoreChoiceItem) Title() string       { return i.title }
-func (i keystoreChoiceItem) Description() string { return i.description }
-func (i keystoreChoiceItem) FilterValue() string { return i.title }
 
 // Keystore item for existing keystore selection
 type keystoreItem struct {
@@ -250,13 +232,45 @@ func newSignerWizardModel(contextName string, wType wizardType) signerWizardMode
 	ti.Focus()
 	ti.CharLimit = 0
 
-	return signerWizardModel{
+	m := signerWizardModel{
 		contextName: contextName,
 		wizardType:  wType,
-		stage:       stageWelcome,
 		textInput:   ti,
 		list:        list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0),
 	}
+
+	// Start with appropriate stage based on wizard type
+	if wType == wizardTypeSystem {
+		m.stage = stageSelectKeyType
+		// Initialize key type selection list
+		keyTypeItems := []list.Item{
+			keyTypeItem{
+				title:       "ECDSA Keys",
+				description: "For Ethereum-compatible signing",
+				keyType:     "ecdsa",
+			},
+			keyTypeItem{
+				title:       "BN254 Keys",
+				description: "For BLS signatures",
+				keyType:     "bn254",
+			},
+		}
+		m.list.SetItems(keyTypeItems)
+		m.list.Title = "Select Key Type"
+		m.list.SetShowStatusBar(false)
+		m.list.SetFilteringEnabled(false)
+	} else {
+		m.stage = stageSelectSignerType
+		m.keyType = "ecdsa" // Operator keys are always ECDSA
+		// Initialize signer type list for operator
+		items := m.getSignerTypeItems()
+		m.list.SetItems(items)
+		m.list.Title = "Select Operator Signer Type"
+		m.list.SetShowStatusBar(false)
+		m.list.SetFilteringEnabled(false)
+	}
+
+	return m
 }
 
 // Unified wizard methods
@@ -304,18 +318,8 @@ func (m signerWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update components based on current stage
 	var cmd tea.Cmd
 	switch m.stage {
-	case stageWelcome:
-		// Welcome stage doesn't need component updates
-
-	case stageSelectKeyType, stageSelectSignerType, stageWeb3SignerTLSChoice, stageKeystoreChoice, stageKeystoreSelect:
+	case stageSelectKeyType, stageSelectSignerType, stageWeb3SignerTLSChoice, stageKeystoreSelect:
 		m.list, cmd = m.list.Update(msg)
-
-	case stageKeystorePath:
-		m.filepicker, cmd = m.filepicker.Update(msg)
-		if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-			m.keystorePath = path
-			m.stage = stageConfirm
-		}
 
 	case stageWeb3SignerURL, stageWeb3SignerAddress, stageWeb3SignerCACert, stageWeb3SignerClientCert, stageWeb3SignerClientKey, stageWeb3SignerPublicKey, stageWeb3SignerFromAddress:
 		m.textInput, cmd = m.textInput.Update(msg)
@@ -326,62 +330,6 @@ func (m signerWizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.stage {
-	case stageWelcome:
-		// Move to appropriate next stage
-		if m.wizardType == wizardTypeSystem {
-			// Load config to check experimental flag
-			cfg, _ := config.LoadConfig()
-			ctx, _ := cfg.Contexts[m.contextName]
-			isExperimental := ctx != nil && ctx.Experimental
-			
-			// System signer starts with key type selection
-			items := []list.Item{
-				keyTypeItem{
-					title:       "ECDSA Keys",
-					description: "For Ethereum-compatible signing",
-					keyType:     "ecdsa",
-				},
-			}
-			
-			// Only show BN254 if experimental is enabled
-			if isExperimental {
-				items = append(items, keyTypeItem{
-					title:       "BN254 Keys (Experimental)",
-					description: "For BLS signatures - under development",
-					keyType:     "bn254",
-				})
-			}
-			
-			// If only ECDSA is available and experimental is off, skip key type selection
-			if len(items) == 1 && !isExperimental {
-				// Skip directly to ECDSA signer type selection
-				m.keyType = "ecdsa"
-				m.stage = stageSelectSignerType
-				signerItems := m.getSignerTypeItems()
-				m.list = list.New(signerItems, list.NewDefaultDelegate(), m.width-4, m.height-8)
-				m.list.Title = "Select System Signer Type"
-			} else {
-				// Show key type selection
-				l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-				l.Title = "Select Key Type"
-				l.SetShowStatusBar(false)
-				l.SetFilteringEnabled(false)
-				if m.width > 0 && m.height > 0 {
-					l.SetSize(m.width-4, m.height-8)
-				}
-				m.list = l
-				m.stage = stageSelectKeyType
-			}
-		} else {
-			// Operator key goes straight to signer type (ECDSA only)
-			m.keyType = "ecdsa"
-			m.stage = stageSelectSignerType
-			items := m.getSignerTypeItems()
-			m.list = list.New(items, list.NewDefaultDelegate(), m.width-4, m.height-8)
-			m.list.Title = "Select Operator Signer Type"
-		}
-		return m, nil
-
 	case stageSelectKeyType:
 		selected := m.list.SelectedItem().(keyTypeItem)
 		m.keyType = selected.keyType
@@ -404,53 +352,24 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 			m.signerType = i.signerType
 			switch i.signerType {
 			case "private_key", "privatekey":
-				m.stage = stagePrivateKeyInfo
+				// Go straight to confirmation for private key
+				m.stage = stageConfirm
 			case "keystore":
-				// Check if there are existing keystores
-				if m.hasExistingKeystores() {
-					m.stage = stageKeystoreChoice
-					items := []list.Item{
-						keystoreChoiceItem{"Use Existing Keystore", "Select from existing keystores in context", "existing"},
-						keystoreChoiceItem{"Add New Keystore", "Add a new keystore file", "file"},
-					}
-					m.list = list.New(items, list.NewDefaultDelegate(), m.width-4, m.height-8)
-					m.list.Title = "Keystore Selection"
-				} else {
-					// No existing keystores, go directly to file picker
-					fp := filepicker.New()
-					fp.CurrentDirectory, _ = os.UserHomeDir()
-					fp.AllowedTypes = []string{".json", ".keystore"}
-					m.filepicker = fp
-					m.stage = stageKeystorePath
-					return m, fp.Init()
-				}
-			case "web3signer":
-				m.stage = stageWeb3SignerURL
-				m.textInput.Placeholder = "https://web3signer.example.com:9000"
-				m.textInput.SetValue("")
-				m.textInput.Focus()
-			}
-		}
-		return m, nil
-
-	case stageKeystoreChoice:
-		if i, ok := m.list.SelectedItem().(keystoreChoiceItem); ok {
-			m.keystoreChoiceType = i.choiceType
-			if i.choiceType == "existing" {
-				// Load existing keystores of appropriate type
+				// Check if there are existing keystores of the right type
 				items := m.getExistingKeystores()
 				if len(items) == 0 {
-					// No keystores found
-					m.err = fmt.Errorf("no %s keystores found in context", strings.ToUpper(m.keyType))
+					// No keystores found, show error and exit
+					curveType := strings.ToUpper(m.keyType)
+					m.err = fmt.Errorf("No %s keystores found in context. Use 'hgctl keystore create' to add one first.", curveType)
 					return m, tea.Quit
 				}
+				// Show list of existing keystores
 				m.list = list.New(items, list.NewDefaultDelegate(), m.width-4, m.height-8)
 				m.list.Title = fmt.Sprintf("Select %s Keystore", strings.ToUpper(m.keyType))
 				m.stage = stageKeystoreSelect
-			} else {
-				// File input for new keystore
-				m.stage = stageKeystorePath
-				m.textInput.Placeholder = "/path/to/keystore.json"
+			case "web3signer":
+				m.stage = stageWeb3SignerURL
+				m.textInput.Placeholder = "https://web3signer.example.com:9000"
 				m.textInput.SetValue("")
 				m.textInput.Focus()
 			}
@@ -461,19 +380,6 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		if i, ok := m.list.SelectedItem().(keystoreItem); ok {
 			m.keystoreName = i.name
 			m.keystorePath = i.path
-			m.stage = stageConfirm
-		}
-		return m, nil
-
-	case stageKeystorePath:
-		path := m.textInput.Value()
-		if path != "" {
-			m.keystorePath = expandPath(path)
-			if _, err := os.Stat(m.keystorePath); err != nil {
-				m.textInput.SetValue("")
-				m.textInput.Placeholder = "File not found. Enter valid path:"
-				return m, nil
-			}
 			m.stage = stageConfirm
 		}
 		return m, nil
@@ -574,10 +480,6 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		m.stage = stageConfirm
 		return m, nil
 
-	case stagePrivateKeyInfo:
-		m.stage = stageConfirm
-		return m, nil
-
 	case stageConfirm:
 		m.completed = true
 		return m, tea.Quit
@@ -596,11 +498,11 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	if m.wizardType == wizardTypeOperator {
 		items := []list.Item{
 			signerItem{"Private Key", "Use OPERATOR_PRIVATE_KEY environment variable", "private_key"},
+			signerItem{"Keystore", "Use local encrypted keystore file", "keystore"},
 		}
-		// Only show experimental options if flag is enabled
+		// Only Web3Signer is experimental
 		if isExperimental {
 			items = append(items,
-				signerItem{"Keystore (Experimental)", "Use local encrypted keystore file", "keystore"},
 				signerItem{"Web3Signer (Experimental)", "Use remote signing service", "web3signer"},
 			)
 		}
@@ -610,18 +512,19 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	// System signer
 	if m.keyType == "ecdsa" {
 		items := []list.Item{
-			signerItem{"Private Key", "From environment variable", "privatekey"},
+			signerItem{"Private Key", "Use SYSTEM_PRIVATE_KEY environment variable", "privatekey"},
+			signerItem{"Keystore", "Local encrypted key file", "keystore"},
 		}
+		// Only Web3Signer is experimental
 		if isExperimental {
 			items = append(items,
-				signerItem{"Keystore (Experimental)", "Local encrypted key file", "keystore"},
 				signerItem{"Web3Signer (Experimental)", "Remote signing service", "web3signer"},
 			)
 		}
 		return items
 	}
 
-	// BN254 only supports keystore (and only in experimental mode)
+	// BN254 only supports keystore
 	return []list.Item{
 		signerItem{"Keystore", "Local encrypted BN254 key file", "keystore"},
 	}
@@ -678,28 +581,6 @@ func (m signerWizardModel) View() string {
 	var help string
 
 	switch m.stage {
-	case stageWelcome:
-		if m.wizardType == wizardTypeOperator {
-			content = fmt.Sprintf(
-				"%s\n\n%s\n\n%s\n\n%s\n\n%s",
-				selectedStyle.Render("Welcome to the Signer Configuration Wizard"),
-				"This wizard will help you set up signing keys for your Hourglass operations.",
-				"",
-				"First, we'll configure your "+selectedStyle.Render("Operator Keys")+" for operator identity.",
-				helpStyle.Render("Press enter to continue"),
-			)
-		} else {
-			content = fmt.Sprintf(
-				"%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n%s",
-				selectedStyle.Render("Welcome to the System Signer Configuration"),
-				"Now we'll configure your "+selectedStyle.Render("System Signer Keys")+" for signing operations.",
-				"",
-				"System signer keys are used for:",
-				"  • Signing transactions and messages\n  • Resource Management API Authentication\n  • AVS-specific signing requirements",
-				helpStyle.Render("Press enter to continue"),
-			)
-		}
-
 	case stageSelectKeyType:
 		content = m.list.View()
 		help = helpStyle.Render("↑/↓: navigate • enter: select • q: quit")
@@ -712,10 +593,6 @@ func (m signerWizardModel) View() string {
 			help = helpStyle.Render("↑/↓: navigate • enter: select • q: quit")
 		}
 
-	case stageKeystoreChoice:
-		content = m.list.View()
-		help = "Choose how to configure your keystore"
-
 	case stageKeystoreSelect:
 		if len(m.list.Items()) == 0 {
 			content = errorStyle.Render(fmt.Sprintf("No %s keystores found in context.\n\nPlease add a keystore first or choose a different signer type.", strings.ToUpper(m.keyType)))
@@ -723,23 +600,6 @@ func (m signerWizardModel) View() string {
 		} else {
 			content = m.list.View()
 			help = fmt.Sprintf("Select a %s keystore", strings.ToUpper(m.keyType))
-		}
-
-	case stageKeystorePath:
-		if m.wizardType == wizardTypeSystem {
-			content = fmt.Sprintf(
-				"%s\n\n%s\n\n%s",
-				"Select your keystore file:",
-				m.filepicker.View(),
-				helpStyle.Render("tab: toggle • enter: select • q: quit"),
-			)
-		} else {
-			content = fmt.Sprintf(
-				"Enter path to %s keystore file:\n\n%s\n\n%s",
-				strings.ToUpper(m.keyType),
-				m.textInput.View(),
-				helpStyle.Render(fmt.Sprintf("The keystore must be a %s type keystore", strings.ToUpper(m.keyType))),
-			)
 		}
 
 	case stageWeb3SignerURL:
@@ -788,20 +648,6 @@ func (m signerWizardModel) View() string {
 			m.textInput.View(),
 		)
 
-	case stagePrivateKeyInfo:
-		envVar := "SYSTEM_PRIVATE_KEY"
-		if m.wizardType == wizardTypeOperator {
-			envVar = "OPERATOR_PRIVATE_KEY"
-		}
-		content = fmt.Sprintf(
-			"%s\n\n%s\n\n%s\n\n%s\n\n%s",
-			"Private key configuration.",
-			"",
-			"You must provide the "+selectedStyle.Render(envVar)+" environment variable.",
-			"This should be an ECDSA private key (with or without 0x prefix).",
-			helpStyle.Render("Press enter to continue"),
-		)
-
 	case stageConfirm:
 		summary := m.buildSummary()
 		content = fmt.Sprintf(
@@ -826,20 +672,17 @@ func (m signerWizardModel) buildSummary() string {
 	cfg, _ := config.LoadConfig()
 	ctx, _ := cfg.Contexts[m.contextName]
 	isExperimental := ctx != nil && ctx.Experimental
-	
-	// Show warning if using experimental features
-	if isExperimental && (m.signerType == "keystore" || m.signerType == "web3signer" || m.keyType == "bn254") {
+
+	// Show warning only if using Web3Signer (the only experimental feature now)
+	if isExperimental && m.signerType == "web3signer" {
 		lines = append(lines,
 			errorStyle.Render("⚠️  WARNING: You are using experimental features"),
-			helpStyle.Render("  These features are incomplete and may not work correctly"),
+			helpStyle.Render("  Web3Signer support is experimental and may not work correctly"),
 			"")
 	}
 
 	if m.wizardType == wizardTypeSystem && m.keyType != "" {
 		keyTypeDisplay := strings.ToUpper(m.keyType)
-		if m.keyType == "bn254" && isExperimental {
-			keyTypeDisplay += " (Experimental)"
-		}
 		lines = append(lines, fmt.Sprintf("  Key Type: %s", selectedStyle.Render(keyTypeDisplay)))
 	}
 
@@ -850,9 +693,6 @@ func (m signerWizardModel) buildSummary() string {
 		signerTypeDisplay = "Private Key"
 	case "keystore":
 		signerTypeDisplay = "Keystore"
-		if isExperimental {
-			signerTypeDisplay += " (Experimental)"
-		}
 	case "web3signer":
 		signerTypeDisplay = "Web3Signer"
 		if isExperimental {

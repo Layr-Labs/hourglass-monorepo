@@ -11,43 +11,23 @@ storage:
 operator:
   address: "{{env "OPERATOR_ADDRESS"}}"
   operatorPrivateKey:
-    {{if env "OPERATOR_KEYSTORE_PATH"}}
-    keystore:
-      keystoreFile: "{{env "OPERATOR_KEYSTORE_PATH"}}"
-      password: "{{env "OPERATOR_KEYSTORE_PASSWORD"}}"
-    {{else if env "OPERATOR_WEB3SIGNER_URL"}}
-    remoteSignerConfig:
-      url: "{{env "OPERATOR_WEB3SIGNER_URL"}}"
-      {{if env "OPERATOR_WEB3SIGNER_CA_CERT"}}caCert: "{{env "OPERATOR_WEB3SIGNER_CA_CERT"}}"{{end}}
-      {{if env "OPERATOR_WEB3SIGNER_CLIENT_CERT"}}cert: "{{env "OPERATOR_WEB3SIGNER_CLIENT_CERT"}}"{{end}}
-      {{if env "OPERATOR_WEB3SIGNER_CLIENT_KEY"}}key: "{{env "OPERATOR_WEB3SIGNER_CLIENT_KEY"}}"{{end}}
-      fromAddress: "{{env "OPERATOR_ADDRESS"}}"
-      publicKey: "{{env "OPERATOR_PUBLIC_KEY"}}"
-    {{else}}
+    # Operator key is always provided as a private key
+    # (keystores are converted to private keys during deployment)
     privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
-    {{end}}
   signingKeys:
-    {{if env "SYSTEM_BLS_KEYSTORE_PATH"}}
-    # BLS/BN254 keystore configuration
+    {{if env "SYSTEM_BN254_KEYSTORE_PATH"}}
+    # BN254 keystore configuration
     bls:
-      keystoreFile: "{{env "SYSTEM_BLS_KEYSTORE_PATH"}}"
+      keystoreFile: "{{env "SYSTEM_BN254_KEYSTORE_PATH"}}"
       password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
     {{end}}
-    {{if or (env "SYSTEM_ECDSA_KEYSTORE_PATH") (env "SYSTEM_ECDSA_WEB3SIGNER_URL") (env "SYSTEM_PRIVATE_KEY")}}
+    {{if or (env "SYSTEM_ECDSA_KEYSTORE_PATH") (env "SYSTEM_PRIVATE_KEY")}}
     # ECDSA configuration
     ecdsa:
       {{if env "SYSTEM_ECDSA_KEYSTORE_PATH"}}
       keystore:
         keystoreFile: "{{env "SYSTEM_ECDSA_KEYSTORE_PATH"}}"
         password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
-      {{else if env "SYSTEM_ECDSA_WEB3SIGNER_URL"}}
-      remoteSignerConfig:
-        url: "{{env "SYSTEM_ECDSA_WEB3SIGNER_URL"}}"
-        {{if env "SYSTEM_WEB3SIGNER_CA_CERT"}}caCert: "{{env "SYSTEM_WEB3SIGNER_CA_CERT"}}"{{end}}
-        {{if env "SYSTEM_WEB3SIGNER_CLIENT_CERT"}}cert: "{{env "SYSTEM_WEB3SIGNER_CLIENT_CERT"}}"{{end}}
-        {{if env "SYSTEM_WEB3SIGNER_CLIENT_KEY"}}key: "{{env "SYSTEM_WEB3SIGNER_CLIENT_KEY"}}"{{end}}
-        fromAddress: "{{env "OPERATOR_ADDRESS"}}"
-        publicKey: "{{env "SYSTEM_PUBLIC_KEY"}}"
       {{else}}
       privateKey: "{{env "SYSTEM_PRIVATE_KEY"}}"
       {{end}}

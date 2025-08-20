@@ -18,27 +18,26 @@ l1Chain:
 operator:
   address: "{{env "OPERATOR_ADDRESS"}}"
   operatorPrivateKey:
-    {{if env "OPERATOR_KEYSTORE_PATH"}}
-    keystore:
-      keystoreFile: "{{env "OPERATOR_KEYSTORE_PATH"}}"
-      password: "{{env "OPERATOR_KEYSTORE_PASSWORD"}}"
-    {{else}}
+    # Operator key is always provided as a private key
+    # (keystores are converted to private keys during deployment)
     privateKey: "{{env "OPERATOR_PRIVATE_KEY"}}"
-    {{end}}
   signingKeys:
-    {{if env "SYSTEM_BLS_KEYSTORE_PATH"}}
+    {{if env "SYSTEM_BN254_KEYSTORE_PATH"}}
+    # BN254 keystore configuration
     bls:
-      keystoreFile: "{{env "SYSTEM_BLS_KEYSTORE_PATH"}}"
+      keystoreFile: "{{env "SYSTEM_BN254_KEYSTORE_PATH"}}"
       password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
     {{end}}
-    {{if env "SYSTEM_ECDSA_KEYSTORE_PATH"}}
+    {{if or (env "SYSTEM_ECDSA_KEYSTORE_PATH") (env "SYSTEM_PRIVATE_KEY")}}
+    # ECDSA configuration
     ecdsa:
+      {{if env "SYSTEM_ECDSA_KEYSTORE_PATH"}}
       keystore:
         keystoreFile: "{{env "SYSTEM_ECDSA_KEYSTORE_PATH"}}"
         password: "{{env "SYSTEM_KEYSTORE_PASSWORD"}}"
-    {{else if env "SYSTEM_PRIVATE_KEY"}}
-    ecdsa:
+      {{else}}
       privateKey: "{{env "SYSTEM_PRIVATE_KEY"}}"
+      {{end}}
     {{end}}
 
 # AVS performers will be managed dynamically via the management API
