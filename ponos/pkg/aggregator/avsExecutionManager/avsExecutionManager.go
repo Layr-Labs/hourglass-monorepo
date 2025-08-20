@@ -3,6 +3,11 @@ package avsExecutionManager
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
@@ -19,10 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"go.uber.org/zap"
-	"math/big"
-	"strings"
-	"sync"
-	"time"
 )
 
 type AvsExecutionManagerConfig struct {
@@ -659,7 +660,7 @@ func (em *AvsExecutionManager) processBN254Task(
 		}
 		em.logger.Sugar().Infow("Received task response and certificate",
 			zap.String("taskId", task.TaskId),
-			zap.String("taskResponseDigest", string(cert.TaskResponseDigest)),
+			zap.String("taskResponseDigest", hexutil.Encode(cert.TaskResponseDigest[:])),
 		)
 
 		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)

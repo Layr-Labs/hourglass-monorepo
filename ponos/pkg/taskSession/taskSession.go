@@ -47,7 +47,7 @@ func NewBN254TaskSession(
 	operatorPeersWeight *operatorManager.PeerWeight,
 	logger *zap.Logger,
 ) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey], error) {
-	operators := []*aggregation.Operator[signing.PublicKey]{}
+	operators := make([]*aggregation.Operator[signing.PublicKey], 0)
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
@@ -99,7 +99,7 @@ func NewECDSATaskSession(
 	operatorPeersWeight *operatorManager.PeerWeight,
 	logger *zap.Logger,
 ) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address], error) {
-	operators := []*aggregation.Operator[common.Address]{}
+	operators := make([]*aggregation.Operator[common.Address], 0)
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
