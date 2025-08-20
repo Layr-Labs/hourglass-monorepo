@@ -477,7 +477,7 @@ func (d *PlatformDeployer) MountSystemKeystores(dockerArgs *[]string, cfg *Deplo
 			d.Log.Warn("System BN254 keystore path not accessible", zap.String("path", systemBN254Path), zap.Error(err))
 		}
 	}
-	
+
 	// Mount system ECDSA keystore if configured
 	if systemECDSAPath := cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"]; systemECDSAPath != "" {
 		if _, err := os.Stat(systemECDSAPath); err == nil {

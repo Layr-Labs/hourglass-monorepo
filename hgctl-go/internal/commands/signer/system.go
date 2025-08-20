@@ -14,7 +14,7 @@ import (
 func systemCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "system",
-		Usage: "Configure system signing keys (non-interactive)",
+		Usage: "Configure system signing keys",
 		Subcommands: []*cli.Command{
 			systemPrivateKeyCommand(),
 			systemKeystoreCommand(),

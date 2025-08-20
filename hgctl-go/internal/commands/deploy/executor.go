@@ -215,24 +215,24 @@ func (d *ExecutorDeployer) ensureDockerNetwork(networkName string) error {
 	cmd := exec.Command("docker", "network", "inspect", networkName)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		// Network doesn't exist, create it
 		d.Log.Info("Docker network not found, creating it", zap.String("network", networkName))
-		
+
 		createCmd := exec.Command("docker", "network", "create", networkName)
 		var createStderr bytes.Buffer
 		createCmd.Stderr = &createStderr
-		
+
 		if err := createCmd.Run(); err != nil {
 			return fmt.Errorf("failed to create Docker network %s: %w\nstderr: %s", networkName, err, createStderr.String())
 		}
-		
+
 		d.Log.Info("Docker network created successfully", zap.String("network", networkName))
 	} else {
 		d.Log.Info("Docker network already exists", zap.String("network", networkName))
 	}
-	
+
 	return nil
 }
 
