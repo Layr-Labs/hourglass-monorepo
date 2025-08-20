@@ -16,6 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
 
 	"github.com/urfave/cli/v2"
@@ -95,9 +96,16 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 				return nil
 			},
 			middleware.MiddlewareBeforeFunc,
+			middleware.InitTelemetry, // Initialize telemetry client
 		),
 		After: func(c *cli.Context) error {
-			return middleware.CleanupContractClient(c)
+			// Cleanup contract client
+			if err := middleware.CleanupContractClient(c); err != nil {
+				return err
+			}
+			// Close telemetry client
+			telemetry.Close()
+			return nil
 		},
 		Commands: []*cli.Command{
 			GetCommand(),
@@ -121,10 +129,28 @@ func isConfigCommand(c *cli.Context) bool {
 	return cmd == "context"
 }
 
+// wrapCommandWithTelemetry recursively wraps command actions with telemetry
+func wrapCommandWithTelemetry(cmd *cli.Command) {
+	if cmd == nil {
+		return
+	}
+
+	// Wrap the action if it exists
+	if cmd.Action != nil {
+		cmd.Action = middleware.WithTelemetry(cmd.Action)
+	}
+
+	// Recursively wrap subcommands
+	for _, subCmd := range cmd.Subcommands {
+		wrapCommandWithTelemetry(subCmd)
+	}
+}
+
 // GetCommand returns the get command
 func GetCommand() *cli.Command {
 	cmd := get.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
@@ -132,6 +158,7 @@ func GetCommand() *cli.Command {
 func DescribeCommand() *cli.Command {
 	cmd := describe.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
@@ -139,6 +166,7 @@ func DescribeCommand() *cli.Command {
 func DeployCommand() *cli.Command {
 	cmd := deploy.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
@@ -146,18 +174,22 @@ func DeployCommand() *cli.Command {
 func RemoveCommand() *cli.Command {
 	cmd := remove.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
 // ContextCommand returns the context command
 func ContextCommand() *cli.Command {
-	return contextcmd.Command()
+	cmd := contextcmd.Command()
+	wrapCommandWithTelemetry(cmd)
+	return cmd
 }
 
 // KeystoreCommand returns the keystore command
 func KeystoreCommand() *cli.Command {
 	cmd := keystore.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
@@ -165,6 +197,7 @@ func KeystoreCommand() *cli.Command {
 func SignerCommand() *cli.Command {
 	cmd := signer.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }
 
@@ -172,5 +205,6 @@ func SignerCommand() *cli.Command {
 func EigenLayerCommand() *cli.Command {
 	cmd := eigenlayer.Command()
 	cmd.Before = middleware.RequireContext
+	wrapCommandWithTelemetry(cmd)
 	return cmd
 }

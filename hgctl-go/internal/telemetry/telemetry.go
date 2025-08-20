@@ -8,31 +8,40 @@ import (
 	"time"
 
 	"github.com/denisbrodbeck/machineid"
-	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 )
 
-//nolint:unused
+// TelemetryClient interface for telemetry operations
+type TelemetryClient interface {
+	TrackCommand(c *cli.Context, duration time.Duration, success bool, err error)
+	Close() error
+}
+
 var (
 	embeddedTelemetryApiKey string // Set by build flags
-	client                  *Client
+	client                  TelemetryClient
 )
 
-type Client struct {
-	enabled bool
-	//nolint:unused
-	distinct string
-}
-
+// Init initializes the telemetry client
 func Init() {
-	// For now, telemetry is disabled
-	// TODO: Implement proper telemetry
-	client = &Client{enabled: false}
+	// Try to create PostHog client
+	phClient, err := NewPostHogClient()
+	if err != nil || phClient == nil || !phClient.enabled {
+		// Fall back to noop client
+		client = NewNoopClient()
+		return
+	}
+
+	client = phClient
 }
 
-//nolint:unused
-func TrackCommand(cmd *cobra.Command, startTime time.Time) func() {
-	// Return a no-op cleanup function
-	return func() {}
+// TrackCommand tracks a command execution with timing and success/failure
+func TrackCommand(c *cli.Context, duration time.Duration, success bool, err error) {
+	if client == nil {
+		return
+	}
+	
+	client.TrackCommand(c, duration, success, err)
 }
 
 //nolint:unused
@@ -45,20 +54,25 @@ func TrackError(err error, context map[string]interface{}) {
 	// No-op for now
 }
 
+// Close closes the telemetry client
 func Close() {
-	// No-op for now
+	if client != nil {
+		_ = client.Close()
+	}
 }
 
-//nolint:unused
-func getCommandPath(cmd *cobra.Command) string {
-	if cmd == nil {
+// getCommandPath returns the full command path from cli.Context
+func getCommandPath(c *cli.Context) string {
+	if c == nil || c.Command == nil {
 		return "root"
 	}
 
-	path := cmd.CommandPath()
-	if path == "" {
-		path = "root"
+	// Build command path from context
+	path := c.Command.Name
+	if c.Command.Category != "" {
+		path = c.Command.Category + " " + path
 	}
+	
 	return path
 }
 
@@ -77,7 +91,3 @@ func getAnonymousID() string {
 	return fmt.Sprintf("%x", hash[:8])
 }
 
-//nolint:unused
-func getVersion() string {
-	return "dev"
-}

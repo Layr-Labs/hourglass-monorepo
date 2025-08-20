@@ -65,8 +65,15 @@ type Context struct {
 }
 
 type Config struct {
-	CurrentContext string              `yaml:"currentContext"`
+	CurrentContext string           `yaml:"currentContext"`
 	Contexts       map[string]*Context `yaml:"contexts"`
+	Telemetry      *TelemetryConfig    `yaml:"telemetry,omitempty"`
+}
+
+// TelemetryConfig holds telemetry settings
+type TelemetryConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// API key is never saved to file, only from environment
 }
 
 // OperatorSignerFromContext loads the operator key signer from context
@@ -255,6 +262,22 @@ func GetCurrentContext() (*Context, error) {
 	}
 
 	return ctx, nil
+}
+
+// IsTelemetryEnabled checks if telemetry is enabled via config or environment
+func IsTelemetryEnabled() bool {
+	// Check environment variable first (highest priority)
+	if env := os.Getenv("HGCTL_TELEMETRY_ENABLED"); env != "" {
+		return env == "true" || env == "1"
+	}
+
+	// Check config file
+	cfg, err := LoadConfig()
+	if err != nil || cfg == nil || cfg.Telemetry == nil {
+		return false
+	}
+
+	return cfg.Telemetry.Enabled
 }
 
 func GetConfigDir() string {
