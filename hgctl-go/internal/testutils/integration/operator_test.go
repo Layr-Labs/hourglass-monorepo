@@ -118,6 +118,7 @@ func TestOperatorRegistration(t *testing.T) {
 		_, err = h.ExecuteCLI(
 			"signer", "system", "privatekey",
 		)
+		require.NoError(t, err)
 		// Set the system ECDSA address environment variable
 		t.Setenv("SYSTEM_ECDSA_ADDRESS", aggregatorKeystore.Address)
 
@@ -152,7 +153,7 @@ func TestOperatorRegistration(t *testing.T) {
 			"--name", "executor-bn254",
 			"--type", "bn254",
 		)
-
+		require.NoError(t, err)
 		// Set the system keystore password
 		t.Setenv("SYSTEM_KEYSTORE_PASSWORD", executorBN254.Password)
 

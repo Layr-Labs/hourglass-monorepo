@@ -35,7 +35,7 @@ func TestRegisterAVSCommand(t *testing.T) {
 		}
 
 		assert.True(t, requiredFlags["socket"], "socket flag should be required")
-		
+
 		// Verify operator-set-ids flag no longer exists
 		for _, flag := range cmd.Flags {
 			switch f := flag.(type) {
@@ -80,13 +80,13 @@ func TestRegisterAVSCommand(t *testing.T) {
 
 func TestRegisterAVSContextUsage(t *testing.T) {
 	cmd := RegisterAVSCommand()
-	
+
 	t.Run("Description Mentions Single Operator Set", func(t *testing.T) {
 		// Verify that description clarifies single operator set registration
 		assert.Contains(t, cmd.Description, "registers the operator to the operator set",
 			"Description should clarify single operator set registration")
 	})
-	
+
 	t.Run("No Operator Set IDs in Flags", func(t *testing.T) {
 		// Ensure no operator-set-ids related flags exist
 		for _, flag := range cmd.Flags {
@@ -103,7 +103,7 @@ func TestRegisterAVSContextUsage(t *testing.T) {
 				"No flags should contain 'operator-set' in their name")
 		}
 	})
-	
+
 	t.Run("Socket Flag Still Required", func(t *testing.T) {
 		var socketFlag *cli.StringFlag
 		for _, flag := range cmd.Flags {
@@ -112,7 +112,7 @@ func TestRegisterAVSContextUsage(t *testing.T) {
 				break
 			}
 		}
-		
+
 		assert.NotNil(t, socketFlag, "socket flag should exist")
 		assert.True(t, socketFlag.Required, "socket flag should be required")
 	})
