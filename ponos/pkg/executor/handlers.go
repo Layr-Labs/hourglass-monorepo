@@ -297,6 +297,11 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		return nil, fmt.Errorf("AVS avsPerf not found for address %s", task.AvsAddress)
 	}
 
+	// Validate that the executor is a member of the required operator set
+	if err := e.validateOperatorSetMembership(avsAddress, task.OperatorSetId); err != nil {
+		return nil, fmt.Errorf("operator set membership validation failed: %w", err)
+	}
+
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
 
 	if err := avsPerf.ValidateTaskSignature(pt); err != nil {
@@ -366,6 +371,36 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		AvsAddress:      task.AvsAddress,
 		OutputDigest:    digest[:],
 	}, nil
+}
+
+// validateOperatorSetMembership checks if the executor is a member of the specified operator set for the given AVS
+func (e *Executor) validateOperatorSetMembership(avsAddress string, operatorSetId uint32) error {
+	// Get AVS configuration to check which operator sets the executor belongs to
+	avsConfig, err := e.l1ContractCaller.GetAVSConfig(avsAddress)
+	if err != nil {
+		return fmt.Errorf("failed to get AVS config: %w", err)
+	}
+
+	// Check if the executor is a member of the required operator set
+	isMember := false
+	for _, executorOpSetId := range avsConfig.ExecutorOperatorSetIds {
+		if executorOpSetId == operatorSetId {
+			isMember = true
+			break
+		}
+	}
+
+	if !isMember {
+		return fmt.Errorf("executor is not a member of operator set %d for AVS %s", operatorSetId, avsAddress)
+	}
+
+	e.logger.Sugar().Infow("Operator set membership validated",
+		"avsAddress", avsAddress,
+		"operatorSetId", operatorSetId,
+		"executorAddress", e.config.Operator.Address,
+	)
+
+	return nil
 }
 
 // signResult signs the result of a task and returns the signature and the digest.
