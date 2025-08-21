@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 )
 
 // Command returns the command for modifying operator allocations
@@ -15,19 +16,17 @@ func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "allocate",
 		Usage: "Modify operator allocations to AVS operator sets",
-		Description: `Modify operator allocations to specific operator sets within an AVS.
+		Description: `Modify operator allocations to the operator set configured in the context.
 This command allows operators to allocate their stake to AVS operator sets.
 
-The operator address and AVS address must be configured in the context before running this command.
+Prerequisites:
+- AVS address must be configured: hgctl context set --avs-address <address>
+- Operator set ID must be configured: hgctl context set --operator-set-id <id>
+- Operator address must be configured: hgctl context set --operator-address <address>
 
 Example:
-  hgctl allocate --operator-set-id 0 --strategy 0x789... --magnitude 1e18`,
+  hgctl allocate --strategy 0x789... --magnitude 1e18`,
 		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:     "operator-set-id",
-				Usage:    "Operator set ID to allocate to",
-				Required: true,
-			},
 			&cli.StringFlag{
 				Name:     "strategy",
 				Usage:    "Strategy contract address",
@@ -46,14 +45,25 @@ Example:
 func allocateAction(c *cli.Context) error {
 	log := middleware.GetLogger(c)
 
+	// Get context
+	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
+	if currentCtx == nil {
+		return fmt.Errorf("no context configured. Run: hgctl context use <name>")
+	}
+
+	// Validate required context fields
+	if currentCtx.OperatorSetID == 0 {
+		return fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
+	}
+
 	// Get contract client from middleware
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Get parameters
-	operatorSetID := uint32(c.Uint64("operator-set-id"))
+	// Get operator set ID from context
+	operatorSetID := currentCtx.OperatorSetID
 	strategyAddress := c.String("strategy")
 	magnitudeStr := c.String("magnitude")
 
@@ -80,6 +90,8 @@ func allocateAction(c *cli.Context) error {
 		zap.Uint32("operatorSetId", operatorSetID),
 		zap.String("strategy", strategyAddress),
 		zap.Uint64("magnitude", magnitudeUint64),
+		zap.String("avsAddress", currentCtx.AVSAddress),
+		zap.String("operatorAddress", currentCtx.OperatorAddress),
 	)
 
 	// Modify allocations
