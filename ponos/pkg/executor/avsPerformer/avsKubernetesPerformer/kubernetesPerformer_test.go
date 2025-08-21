@@ -2,7 +2,6 @@ package avsKubernetesPerformer
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -120,12 +119,11 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 	logger := zaptest.NewLogger(t)
 
 	performer := &AvsKubernetesPerformer{
-		config:             config,
-		kubernetesConfig:   kubernetesConfig,
-		logger:             logger,
-		peeringFetcher:     mockPeeringFetcher,
-		taskWaitGroups:     make(map[string]*sync.WaitGroup),
-		drainingPerformers: make(map[string]struct{}),
+		config:              config,
+		kubernetesConfig:    kubernetesConfig,
+		logger:              logger,
+		peeringFetcher:      mockPeeringFetcher,
+		performerTaskStates: make(map[string]*PerformerTaskState),
 	}
 
 	return performer, mockCRDOps, mockClientWrapper, mockPeeringFetcher
@@ -202,36 +200,57 @@ func TestAvsKubernetesPerformer_ConvertPerformerResource(t *testing.T) {
 	assert.Equal(t, "test-performer", metadata.ResourceID)
 }
 
-func TestAvsKubernetesPerformer_GetOrCreateTaskWaitGroup(t *testing.T) {
+func TestAvsKubernetesPerformer_TryAddTask(t *testing.T) {
 	performer, _, _, _ := createTestKubernetesPerformer(t)
 
-	// Test creating new wait group
-	wg1 := performer.getOrCreateTaskWaitGroup("performer-1")
-	assert.NotNil(t, wg1)
+	// Test adding task for new performer (should succeed and create active state)
+	success := performer.tryAddTask("performer-1")
+	assert.True(t, success)
 
-	// Test getting existing wait group
-	wg2 := performer.getOrCreateTaskWaitGroup("performer-1")
-	assert.Same(t, wg1, wg2) // Should be the same instance
+	// Verify state was created
+	performer.performerStatesMu.Lock()
+	state, exists := performer.performerTaskStates["performer-1"]
+	assert.True(t, exists)
+	assert.Equal(t, PerformerStateActive, state.state)
+	performer.performerStatesMu.Unlock()
 
-	// Test creating different wait group
-	wg3 := performer.getOrCreateTaskWaitGroup("performer-2")
-	assert.NotNil(t, wg3)
-	assert.NotSame(t, wg1, wg3)
+	// Test adding another task for same performer (should succeed)
+	success = performer.tryAddTask("performer-1")
+	assert.True(t, success)
+
+	// Test adding task for different performer
+	success = performer.tryAddTask("performer-2")
+	assert.True(t, success)
 }
 
-func TestAvsKubernetesPerformer_CleanupTaskWaitGroup(t *testing.T) {
+func TestAvsKubernetesPerformer_TaskStateLifecycle(t *testing.T) {
 	performer, _, _, _ := createTestKubernetesPerformer(t)
 
-	// Create a wait group
-	wg := performer.getOrCreateTaskWaitGroup("performer-1")
-	assert.NotNil(t, wg)
+	// Add a task to create state
+	success := performer.tryAddTask("performer-1")
+	assert.True(t, success)
 
-	// Cleanup
+	// Mark as draining - should prevent new tasks
+	performer.performerStatesMu.Lock()
+	state := performer.performerTaskStates["performer-1"]
+	state.state = PerformerStateDraining
+	performer.performerStatesMu.Unlock()
+
+	// Try to add task to draining performer (should fail)
+	success = performer.tryAddTask("performer-1")
+	assert.False(t, success)
+
+	// Complete the task
+	performer.taskCompleted("performer-1")
+
+	// Cleanup the performer state
 	performer.cleanupTaskWaitGroup("performer-1")
 
-	// Verify it's cleaned up by creating a new one
-	wg2 := performer.getOrCreateTaskWaitGroup("performer-1")
-	assert.NotSame(t, wg, wg2) // Should be a new instance
+	// Verify it's cleaned up
+	performer.performerStatesMu.Lock()
+	_, exists := performer.performerTaskStates["performer-1"]
+	assert.False(t, exists)
+	performer.performerStatesMu.Unlock()
 }
 
 func TestAvsKubernetesPerformer_ListPerformers_Empty(t *testing.T) {

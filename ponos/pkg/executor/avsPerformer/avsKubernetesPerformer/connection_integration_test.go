@@ -3,7 +3,6 @@ package avsKubernetesPerformer
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -113,9 +112,9 @@ func TestAvsKubernetesPerformer_TaskExecutionWithRetry(t *testing.T) {
 
 	// Create AvsKubernetesPerformer
 	akp := &AvsKubernetesPerformer{
-		config:         &avsPerformer.AvsPerformerConfig{},
-		logger:         logger,
-		taskWaitGroups: make(map[string]*sync.WaitGroup),
+		config:              &avsPerformer.AvsPerformerConfig{},
+		logger:              logger,
+		performerTaskStates: make(map[string]*PerformerTaskState),
 	}
 	akp.currentPerformer.Store(performer)
 
@@ -169,9 +168,9 @@ func TestAvsKubernetesPerformer_CircuitBreakerIntegration(t *testing.T) {
 
 	// Create AvsKubernetesPerformer
 	akp := &AvsKubernetesPerformer{
-		config:         &avsPerformer.AvsPerformerConfig{},
-		logger:         logger,
-		taskWaitGroups: make(map[string]*sync.WaitGroup),
+		config:              &avsPerformer.AvsPerformerConfig{},
+		logger:              logger,
+		performerTaskStates: make(map[string]*PerformerTaskState),
 	}
 	akp.currentPerformer.Store(performer)
 
