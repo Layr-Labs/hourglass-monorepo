@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"strings"
 	"time"
 
@@ -310,6 +311,18 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		"taskId", task.TaskId,
 		"avsAddress", task.AvsAddress,
 	)
+	opSet, err := e.l1ContractCaller.GetOperatorSetDetailsForOperator(
+		common.HexToAddress(e.config.Operator.Address),
+		task.GetAvsAddress(),
+		task.OperatorSetId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if opSet == nil || opSet.OperatorSetID == 0 {
+		return nil, fmt.Errorf("invalid task operator set")
+	}
+
 	avsAddress := strings.ToLower(task.GetAvsAddress())
 	if avsAddress == "" {
 		return nil, fmt.Errorf("AVS address is empty")

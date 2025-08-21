@@ -1,0 +1,331 @@
+package executor
+
+import (
+	"context"
+	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"sync"
+	"testing"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+type mockContractCaller struct {
+	mock.Mock
+	contractCaller.IContractCaller
+}
+
+func (m *mockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
+	args := m.Called(operatorAddress, avsAddress, operatorSetId)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*peering.OperatorSet), args.Error(1)
+}
+
+func (m *mockContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
+	args := m.Called(avsAddress, operatorSetId)
+	return args.Get(0).(config.CurveType), args.Error(1)
+}
+
+func (m *mockContractCaller) CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+	args := m.Called(ctx, referenceTimestamp, messageHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func (m *mockContractCaller) CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+	args := m.Called(ctx, referenceTimestamp, messageHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
+	tests := []struct {
+		name          string
+		operatorAddr  string
+		task          *executor.TaskSubmission
+		operatorSet   *peering.OperatorSet
+		setupMock     func(*mockContractCaller, string, *executor.TaskSubmission, *peering.OperatorSet)
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:         "valid operator in operator set",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-1",
+				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: &peering.OperatorSet{
+				OperatorSetID: 1,
+				WrappedPublicKey: peering.WrappedPublicKey{
+					PublicKey: common.HexToAddress(""),
+				},
+				NetworkAddress: "127.0.0.1:8080",
+				CurveType:      config.CurveTypeBN254,
+			},
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(opSet, nil)
+				m.On("GetOperatorSetCurveType", task.GetAvsAddress(), task.OperatorSetId).Return(config.CurveTypeBN254, nil)
+				m.On("CalculateBN254CertificateDigestBytes", mock.Anything, mock.Anything, mock.Anything).Return([]byte("mock-digest"), nil)
+			},
+			expectError: false,
+		},
+		{
+			name:         "operator not in operator set - nil response",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-2",
+				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: nil,
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(nil, nil)
+			},
+			expectError:   true,
+			errorContains: "invalid task operator set",
+		},
+		{
+			name:         "operator not in operator set - zero ID",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-3",
+				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: &peering.OperatorSet{
+				OperatorSetID: 0,
+				WrappedPublicKey: peering.WrappedPublicKey{
+					PublicKey: common.HexToAddress(""),
+				},
+				NetworkAddress: "127.0.0.1:8080",
+				CurveType:      config.CurveTypeBN254,
+			},
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(opSet, nil)
+			},
+			expectError:   true,
+			errorContains: "invalid task operator set",
+		},
+		{
+			name:         "contract caller error",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-4",
+				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: nil,
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(nil, fmt.Errorf("contract call failed"))
+			},
+			expectError:   true,
+			errorContains: "contract call failed",
+		},
+		{
+			name:         "empty AVS address",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-5",
+				AvsAddress:    "",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: &peering.OperatorSet{
+				OperatorSetID: 1,
+			},
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(opSet, nil).Maybe()
+			},
+			expectError:   true,
+			errorContains: "AVS address is empty",
+		},
+		{
+			name:         "mixed case AVS address normalization",
+			operatorAddr: "0x1234567890123456789012345678901234567890",
+			task: &executor.TaskSubmission{
+				TaskId:        "task-6",
+				AvsAddress:    "0xAbCdEf1234567890123456789012345678901234",
+				OperatorSetId: 1,
+				Payload:       []byte("test payload"),
+			},
+			operatorSet: &peering.OperatorSet{
+				OperatorSetID: 1,
+				WrappedPublicKey: peering.WrappedPublicKey{
+					PublicKey: common.HexToAddress(""),
+				},
+				NetworkAddress: "127.0.0.1:8080",
+				CurveType:      config.CurveTypeBN254,
+			},
+			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
+				m.On("GetOperatorSetDetailsForOperator",
+					common.HexToAddress(operatorAddr),
+					task.GetAvsAddress(),
+					task.OperatorSetId,
+				).Return(opSet, nil)
+				m.On("GetOperatorSetCurveType", task.GetAvsAddress(), task.OperatorSetId).Return(config.CurveTypeBN254, nil)
+				m.On("CalculateBN254CertificateDigestBytes", mock.Anything, mock.Anything, mock.Anything).Return([]byte("mock-digest"), nil)
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCaller := new(mockContractCaller)
+			tt.setupMock(mockCaller, tt.operatorAddr, tt.task, tt.operatorSet)
+
+			l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+			assert.NoError(t, err)
+
+			execConfig := &executorConfig.ExecutorConfig{
+				Operator: &config.OperatorConfig{
+					Address: tt.operatorAddr,
+				},
+				AvsPerformers: []*executorConfig.AvsPerformerConfig{
+					{
+						AvsAddress: tt.task.GetAvsAddress(),
+					},
+				},
+			}
+
+			e := &Executor{
+				config:           execConfig,
+				l1ContractCaller: mockCaller,
+				logger:           l,
+				avsPerformers:    make(map[string]avsPerformer.IAvsPerformer),
+				store:            memory.NewInMemoryExecutorStore(),
+				inflightTasks:    &sync.Map{},
+				ecdsaSigner:      &MockSigner{},
+				bn254Signer:      &MockSigner{},
+			}
+
+			if tt.task.AvsAddress != "" {
+				e.avsPerformers[tt.task.AvsAddress] = &MockPerformer{}
+			}
+
+			result, err := e.handleReceivedTask(context.Background(), tt.task)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+
+			mockCaller.AssertExpectations(t)
+		})
+	}
+}
+
+type MockSigner struct{}
+
+func (m *MockSigner) SignMessage(data []byte) ([]byte, error) {
+	return []byte("mock-signature"), nil
+}
+
+func (m *MockSigner) SignMessageForSolidity(data []byte) ([]byte, error) {
+	return []byte("mock-signature-solidity"), nil
+}
+
+var _ signer.ISigner = (*MockSigner)(nil)
+
+type MockPerformer struct{}
+
+func (m *MockPerformer) Initialize(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockPerformer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
+	return &performerTask.PerformerTaskResult{
+		TaskID: task.TaskID,
+		Result: []byte("mock result"),
+	}, nil
+}
+
+func (m *MockPerformer) ValidateTaskSignature(task *performerTask.PerformerTask) error {
+	return nil
+}
+
+func (m *MockPerformer) Deploy(ctx context.Context, image avsPerformer.PerformerImage) (*avsPerformer.DeploymentResult, error) {
+	return &avsPerformer.DeploymentResult{}, nil
+}
+
+func (m *MockPerformer) CreatePerformer(ctx context.Context, image avsPerformer.PerformerImage) (*avsPerformer.PerformerCreationResult, error) {
+	return &avsPerformer.PerformerCreationResult{}, nil
+}
+
+func (m *MockPerformer) PromotePerformer(ctx context.Context, performerID string) error {
+	return nil
+}
+
+func (m *MockPerformer) RemovePerformer(ctx context.Context, performerID string) error {
+	return nil
+}
+
+func (m *MockPerformer) ListPerformers() []avsPerformer.PerformerMetadata {
+	return []avsPerformer.PerformerMetadata{}
+}
+
+func (m *MockPerformer) Shutdown() error {
+	return nil
+}
+
+func (m *MockPerformer) ExecuteWorkflow(task *executor.TaskSubmission) (*executor.TaskResult, error) {
+	return &executor.TaskResult{
+		TaskId: task.TaskId,
+		Output: []byte("mock result"),
+	}, nil
+}
+
+func (m *MockPerformer) ExecutorConfig() *executorConfig.AvsPerformerConfig {
+	return &executorConfig.AvsPerformerConfig{
+		AvsAddress: "0xtest",
+	}
+}
