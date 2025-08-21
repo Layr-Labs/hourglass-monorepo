@@ -2,9 +2,10 @@ package clients
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"testing"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -312,7 +313,9 @@ func TestConnectionManager_ConcurrentAccess(t *testing.T) {
 	// Goroutine 1: Read circuit state
 	go func() {
 		for i := 0; i < 100; i++ {
+			cm.mu.Lock()
 			_ = cm.IsCircuitOpen()
+			cm.mu.Unlock()
 		}
 		done <- true
 	}()
@@ -320,7 +323,9 @@ func TestConnectionManager_ConcurrentAccess(t *testing.T) {
 	// Goroutine 2: Update failure count
 	go func() {
 		for i := 0; i < 100; i++ {
+			cm.mu.Lock()
 			cm.unhealthyCount = i % 10
+			cm.mu.Unlock()
 		}
 		done <- true
 	}()
@@ -328,7 +333,9 @@ func TestConnectionManager_ConcurrentAccess(t *testing.T) {
 	// Goroutine 3: Update last healthy time
 	go func() {
 		for i := 0; i < 100; i++ {
+			cm.mu.Lock()
 			cm.lastHealthy = time.Now().Add(-time.Duration(i) * time.Second)
+			cm.mu.Unlock()
 		}
 		done <- true
 	}()
