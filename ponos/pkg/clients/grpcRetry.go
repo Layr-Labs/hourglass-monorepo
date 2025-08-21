@@ -63,11 +63,14 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 		grpc.WithUnaryInterceptor(retryUnaryInterceptor(retryConfig)),
 	}
 
-	// Simply create the lazy connection - don't test it
+	// Create the connection
 	conn, err := grpc.NewClient(url, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
+
+	// Force connection establishment to avoid lazy connection timeout issues
+	conn.Connect()
 
 	return conn, nil
 }
