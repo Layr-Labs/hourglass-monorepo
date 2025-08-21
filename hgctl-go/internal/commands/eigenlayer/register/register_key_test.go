@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/urfave/cli/v2"
 )
 
 func TestRegisterKeyCommand(t *testing.T) {
@@ -12,59 +11,37 @@ func TestRegisterKeyCommand(t *testing.T) {
 
 	t.Run("Command Structure", func(t *testing.T) {
 		assert.Equal(t, "register-key", cmd.Name)
-		assert.Equal(t, "Register operator signing key with AVS", cmd.Usage)
+		assert.Equal(t, "Register system signing key with AVS", cmd.Usage)
 		assert.NotNil(t, cmd.Action)
 		assert.Contains(t, cmd.Description, "ECDSA")
 		assert.Contains(t, cmd.Description, "BN254")
 	})
 
-	t.Run("Required Flags", func(t *testing.T) {
-		requiredFlags := map[string]bool{
-			"operator-set-id": false,
-			"key-type":        false,
-		}
-
-		for _, flag := range cmd.Flags {
-			switch f := flag.(type) {
-			case *cli.StringFlag:
-				if _, exists := requiredFlags[f.Name]; exists {
-					requiredFlags[f.Name] = f.Required
-				}
-			case *cli.Uint64Flag:
-				if _, exists := requiredFlags[f.Name]; exists {
-					requiredFlags[f.Name] = f.Required
-				}
-			}
-		}
-
-		assert.True(t, requiredFlags["operator-set-id"], "operator-set-id flag should be required")
-		assert.True(t, requiredFlags["key-type"], "key-type flag should be required")
+	t.Run("No Flags Required", func(t *testing.T) {
+		// The refactored command uses context instead of flags
+		assert.Empty(t, cmd.Flags, "Command should have no flags as everything comes from context")
 	})
 
-	t.Run("Conditional Flags", func(t *testing.T) {
-		var keyAddressFlag, keyDataFlag *cli.StringFlag
-		for _, flag := range cmd.Flags {
-			if sf, ok := flag.(*cli.StringFlag); ok {
-				switch sf.Name {
-				case "key-address":
-					keyAddressFlag = sf
-				case "key-data":
-					keyDataFlag = sf
-				}
-			}
-		}
-
-		assert.NotNil(t, keyAddressFlag)
-		assert.NotNil(t, keyDataFlag)
-		assert.Contains(t, keyAddressFlag.Usage, "ecdsa")
-		assert.Contains(t, keyDataFlag.Usage, "bn254")
-		assert.False(t, keyAddressFlag.Required, "key-address should be optional")
-		assert.False(t, keyDataFlag.Required, "key-data should be optional")
+	t.Run("Context Prerequisites in Description", func(t *testing.T) {
+		// Verify the description mentions context prerequisites
+		assert.Contains(t, cmd.Description, "Prerequisites:")
+		assert.Contains(t, cmd.Description, "AVS address must be configured")
+		assert.Contains(t, cmd.Description, "Operator set ID must be configured")
+		assert.Contains(t, cmd.Description, "Operator signer must be configured")
+		assert.Contains(t, cmd.Description, "System signer must be configured")
+		assert.Contains(t, cmd.Description, "hgctl context set")
+		assert.Contains(t, cmd.Description, "hgctl signer")
 	})
 
-	t.Run("Examples in Description", func(t *testing.T) {
-		assert.Contains(t, cmd.Description, "For ECDSA keys:")
-		assert.Contains(t, cmd.Description, "For BN254 keys:")
+	t.Run("Environment Variables in Description", func(t *testing.T) {
+		// Verify the description mentions required environment variables
+		assert.Contains(t, cmd.Description, "SYSTEM_KEYSTORE_PASSWORD")
+		assert.Contains(t, cmd.Description, "environment variable must be set")
+	})
+
+	t.Run("Usage Examples in Description", func(t *testing.T) {
+		// Verify usage example is present
+		assert.Contains(t, cmd.Description, "Usage:")
 		assert.Contains(t, cmd.Description, "hgctl register-key")
 	})
 }

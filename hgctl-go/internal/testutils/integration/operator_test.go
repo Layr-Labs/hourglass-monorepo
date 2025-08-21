@@ -105,12 +105,25 @@ func TestOperatorRegistration(t *testing.T) {
 		// Get the aggregator ECDSA keystore
 		aggregatorKeystore := h.GetAggregatorECDSAKeystore()
 
-		// Register ECDSA key for operator set 0
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"eigenlayer", "register-key",
+		// Set operator-set-id in context first
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
 			"--operator-set-id", "0",
-			"--key-type", "ecdsa",
-			"--key-address", aggregatorKeystore.Address)
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
+		// Configure system signer with ECDSA
+		_, err = h.ExecuteCLI(
+			"signer", "system", "privatekey",
+		)
+		// Set the system ECDSA address environment variable
+		t.Setenv("SYSTEM_ECDSA_ADDRESS", aggregatorKeystore.Address)
+
+		// Register ECDSA key (no flags needed - uses context)
+		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+			"eigenlayer", "register-key")
 
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.ExitCode)
@@ -121,21 +134,31 @@ func TestOperatorRegistration(t *testing.T) {
 		// Register executor's BN254 key to a different operator set
 		executorBN254 := h.GetExecutorKeystore()
 
+		// Set context for operator set 1
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
 			"--operator-address",
 			h.ChainConfig.ExecOperatorAccountAddress,
+			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
+		// Configure system signer with BN254 keystore
+		// This assumes the keystore name has been configured
+		_, err = h.ExecuteCLI(
+			"signer", "system", "keystore",
+			"--name", "executor-bn254",
+			"--type", "bn254",
+		)
+
+		// Set the system keystore password
+		t.Setenv("SYSTEM_KEYSTORE_PASSWORD", executorBN254.Password)
+
+		// Register BN254 key (no flags needed - uses context)
 		result, _ := h.ExecuteCLIWithKeystore("executor-bn254",
-			"eigenlayer", "register-key",
-			"--operator-set-id", "1",
-			"--key-type", "bn254",
-			"--keystore-path", executorBN254.Path,
-			"--password", executorBN254.Password)
+			"eigenlayer", "register-key")
 
 		// This might fail if executor is not registered as operator
 		// but we're testing the BN254 key registration flow
@@ -153,18 +176,21 @@ func TestOperatorRegistration(t *testing.T) {
 		// Ensure we have passed the allocation delay.
 		err := h.MineBlocks(activateAllocationDelayBlocks)
 		require.NoError(t, err)
+
+		// Set context with operator-set-id
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
 			"--operator-address",
 			h.ChainConfig.OperatorAccountAddress,
+			"--operator-set-id", "0",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
+		// Allocate (no operator-set-id flag needed - uses context)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
 			"eigenlayer", "allocate",
-			"--operator-set-id", "0",
 			"--strategy", strategyAddress,
 			"--magnitude", "1e18")
 
@@ -174,38 +200,23 @@ func TestOperatorRegistration(t *testing.T) {
 	})
 
 	t.Run("Register to Single Operator Set", func(t *testing.T) {
+		// Set operator-set-id in context (should already be 0 from previous test)
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
+			"--operator-set-id", "0",
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
+		// Register AVS (no operator-set-ids flag needed - uses context)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
 			"eigenlayer", "register-avs",
-			"--operator-set-ids", "0",
 			"--socket", "https://operator.example.com:8080")
 
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.ExitCode)
 		assert.Contains(t, result.Stdout, "Successfully registered operator with AVS")
-	})
-
-	t.Run("Register to Multiple Operator Sets", func(t *testing.T) {
-		// First, make sure operator set 2 exists and has keys registered
-		// Register ECDSA key for operator set 2
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-			"eigenlayer", "register-key",
-			"--operator-set-id", "2",
-			"--key-type", "ecdsa",
-			"--key-address", h.GetAggregatorECDSAKeystore().Address,
-		)
-
-		if err == nil && result.ExitCode == 0 {
-			// Now register to multiple operator sets
-			result, err = h.ExecuteCLIWithKeystore("aggregator-ecdsa",
-				"eigenlayer", "register-avs",
-				"--operator-set-ids", "1,2",
-				"--socket", "wss://operator.example.com:8443",
-			)
-
-			require.NoError(t, err)
-			assert.Equal(t, 0, result.ExitCode)
-			assert.Contains(t, result.Stdout, "Successfully registered operator with AVS")
-		}
 	})
 }
 

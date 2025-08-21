@@ -22,8 +22,7 @@ func TestRegisterAVSCommand(t *testing.T) {
 
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"operator-set-ids": false,
-			"socket":           false,
+			"socket": false,
 		}
 
 		for _, flag := range cmd.Flags {
@@ -32,15 +31,18 @@ func TestRegisterAVSCommand(t *testing.T) {
 				if _, exists := requiredFlags[f.Name]; exists {
 					requiredFlags[f.Name] = f.Required
 				}
-			case *cli.Uint64SliceFlag:
-				if _, exists := requiredFlags[f.Name]; exists {
-					requiredFlags[f.Name] = f.Required
-				}
 			}
 		}
 
-		assert.True(t, requiredFlags["operator-set-ids"], "operator-set-ids flag should be required")
 		assert.True(t, requiredFlags["socket"], "socket flag should be required")
+		
+		// Verify operator-set-ids flag no longer exists
+		for _, flag := range cmd.Flags {
+			switch f := flag.(type) {
+			case *cli.Uint64SliceFlag:
+				assert.NotEqual(t, "operator-set-ids", f.Name, "operator-set-ids flag should not exist")
+			}
+		}
 	})
 
 	t.Run("Socket Format Example", func(t *testing.T) {
@@ -61,18 +63,58 @@ func TestRegisterAVSCommand(t *testing.T) {
 		assert.Contains(t, socketFlag.Usage, "endpoint")
 	})
 
-	t.Run("Multiple Operator Set IDs", func(t *testing.T) {
-		// Verify operator-set-ids is a slice flag
-		var operatorSetIDsFlag *cli.Uint64SliceFlag
+	t.Run("Context Prerequisites Documentation", func(t *testing.T) {
+		// Verify the command description includes context prerequisites
+		assert.Contains(t, cmd.Description, "operator set configured in the context",
+			"Description should mention operator set context requirement")
+		assert.Contains(t, cmd.Description, "hgctl context set --operator-set-id",
+			"Description should include example of setting operator-set-id")
+		assert.Contains(t, cmd.Description, "Prerequisites",
+			"Description should have prerequisites section")
+		assert.Contains(t, cmd.Description, "AVS address must be configured",
+			"Description should mention AVS address requirement")
+		assert.Contains(t, cmd.Description, "Operator address must be configured",
+			"Description should mention operator address requirement")
+	})
+}
+
+func TestRegisterAVSContextUsage(t *testing.T) {
+	cmd := RegisterAVSCommand()
+	
+	t.Run("Description Mentions Single Operator Set", func(t *testing.T) {
+		// Verify that description clarifies single operator set registration
+		assert.Contains(t, cmd.Description, "registers the operator to the operator set",
+			"Description should clarify single operator set registration")
+	})
+	
+	t.Run("No Operator Set IDs in Flags", func(t *testing.T) {
+		// Ensure no operator-set-ids related flags exist
 		for _, flag := range cmd.Flags {
-			if sf, ok := flag.(*cli.Uint64SliceFlag); ok && sf.Name == "operator-set-ids" {
-				operatorSetIDsFlag = sf
+			flagName := ""
+			switch f := flag.(type) {
+			case *cli.StringFlag:
+				flagName = f.Name
+			case *cli.Uint64SliceFlag:
+				flagName = f.Name
+			case *cli.Uint64Flag:
+				flagName = f.Name
+			}
+			assert.NotContains(t, flagName, "operator-set",
+				"No flags should contain 'operator-set' in their name")
+		}
+	})
+	
+	t.Run("Socket Flag Still Required", func(t *testing.T) {
+		var socketFlag *cli.StringFlag
+		for _, flag := range cmd.Flags {
+			if sf, ok := flag.(*cli.StringFlag); ok && sf.Name == "socket" {
+				socketFlag = sf
 				break
 			}
 		}
-
-		assert.NotNil(t, operatorSetIDsFlag)
-		assert.Contains(t, operatorSetIDsFlag.Usage, "multiple")
+		
+		assert.NotNil(t, socketFlag, "socket flag should exist")
+		assert.True(t, socketFlag.Required, "socket flag should be required")
 	})
 }
 

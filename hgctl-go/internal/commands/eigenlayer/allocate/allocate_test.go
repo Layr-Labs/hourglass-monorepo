@@ -19,8 +19,8 @@ func TestAllocateCommand(t *testing.T) {
 
 	t.Run("Required Flags", func(t *testing.T) {
 		requiredFlags := map[string]bool{
-			"operator-set-id": false,
-			"strategy":        false,
+			"strategy":  false,
+			"magnitude": false,
 		}
 
 		for _, flag := range cmd.Flags {
@@ -29,32 +29,20 @@ func TestAllocateCommand(t *testing.T) {
 				if _, exists := requiredFlags[f.Name]; exists {
 					requiredFlags[f.Name] = f.Required
 				}
-			case *cli.Uint64Flag:
-				if _, exists := requiredFlags[f.Name]; exists {
-					requiredFlags[f.Name] = f.Required
-				}
 			}
 		}
 
-		assert.True(t, requiredFlags["operator-set-id"], "operator-set-id flag should be required")
 		assert.True(t, requiredFlags["strategy"], "strategy flag should be required")
-	})
-
-	t.Run("Default Values", func(t *testing.T) {
-		var magnitudeFlag *cli.StringFlag
+		assert.True(t, requiredFlags["magnitude"], "magnitude flag should be required")
+		
+		// Verify operator-set-id flag no longer exists (comes from context now)
 		for _, flag := range cmd.Flags {
-			if sf, ok := flag.(*cli.StringFlag); ok && sf.Name == "magnitude" {
-				magnitudeFlag = sf
-				break
+			switch f := flag.(type) {
+			case *cli.Uint64Flag:
+				assert.NotEqual(t, "operator-set-id", f.Name, "operator-set-id flag should not exist (comes from context)")
+			case *cli.UintFlag:
+				assert.NotEqual(t, "operator-set-id", f.Name, "operator-set-id flag should not exist (comes from context)")
 			}
 		}
-
-		assert.NotNil(t, magnitudeFlag)
-		assert.Equal(t, "1e18", magnitudeFlag.Value, "magnitude should default to 1e18")
-	})
-
-	t.Run("Example in Description", func(t *testing.T) {
-		assert.Contains(t, cmd.Description, "Example:")
-		assert.Contains(t, cmd.Description, "hgctl allocate")
 	})
 }

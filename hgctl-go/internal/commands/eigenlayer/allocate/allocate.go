@@ -33,9 +33,9 @@ Example:
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:  "magnitude",
-				Usage: "Allocation magnitude (e.g., '1e18' for full allocation)",
-				Value: "1e18",
+				Name:     "magnitude",
+				Usage:    "Allocation magnitude (e.g., '1e18' for full allocation)",
+				Required: true,
 			},
 		},
 		Action: allocateAction,
