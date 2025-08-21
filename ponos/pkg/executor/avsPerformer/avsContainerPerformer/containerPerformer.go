@@ -4,17 +4,18 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"github.com/ethereum/go-ethereum/crypto"
-	"os"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
@@ -811,91 +812,85 @@ func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.Perform
 		return fmt.Errorf("failed to find peer for task")
 	}
 
-	isVerified := false
+	opset, err := peer.GetOperatorSet(t.OperatorSetId)
+	if err != nil {
+		return err
+	}
 
-	// TODO(seanmcgary): this should verify the key against the expected aggregator operatorSetID
-	for _, opset := range peer.OperatorSets {
-		var scheme signing.SigningScheme
-		switch opset.CurveType {
-		case config.CurveTypeBN254:
-			scheme = bn254.NewScheme()
-		case config.CurveTypeECDSA:
-			scheme = ecdsa.NewScheme()
-		default:
-			aps.logger.Sugar().Errorw("Unsupported curve type for signature verification",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("aggregatorAddress", t.AggregatorAddress),
-				zap.String("curveType", opset.CurveType.String()),
-			)
-			return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
-		}
+	var scheme signing.SigningScheme
+	switch opset.CurveType {
+	case config.CurveTypeBN254:
+		scheme = bn254.NewScheme()
+	case config.CurveTypeECDSA:
+		scheme = ecdsa.NewScheme()
+	default:
+		aps.logger.Sugar().Errorw("Unsupported curve type for signature verification",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.String("aggregatorAddress", t.AggregatorAddress),
+			zap.String("curveType", opset.CurveType.String()),
+		)
+		return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
+	}
 
-		sig, err := scheme.NewSignatureFromBytes(t.Signature)
+	sig, err := scheme.NewSignatureFromBytes(t.Signature)
+	if err != nil {
+		aps.logger.Sugar().Errorw("Failed to create bn254 signature from bytes",
+			zap.String("avsAddress", aps.config.AvsAddress),
+			zap.Error(err),
+		)
+		return err
+	}
+
+	var verified bool
+	payloadHash := crypto.Keccak256Hash(t.Payload)
+	switch opset.CurveType {
+	case config.CurveTypeBN254:
+		verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
 		if err != nil {
-			aps.logger.Sugar().Errorw("Failed to create bn254 signature from bytes",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.Error(err),
-			)
-			return err
-		}
-
-		var verified bool
-		payloadHash := crypto.Keccak256Hash(t.Payload)
-		switch opset.CurveType {
-		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
-			if err != nil {
-				aps.logger.Sugar().Errorw("Error verifying BN254 signature",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("aggregatorAddress", t.AggregatorAddress),
-					zap.Error(err),
-				)
-				continue
-			}
-		case config.CurveTypeECDSA:
-			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
-			if err != nil {
-				aps.logger.Sugar().Errorw("Failed to create ECDSA signature from bytes",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.Error(err),
-				)
-				continue
-			}
-			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
-			if err != nil {
-				aps.logger.Sugar().Errorw("Error verifying ECDSA signature",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.String("aggregatorAddress", t.AggregatorAddress),
-					zap.Error(err),
-				)
-				continue
-			}
-		}
-		if !verified {
-			aps.logger.Sugar().Errorw("Failed to verify signature",
+			aps.logger.Sugar().Errorw("Error verifying BN254 signature",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("aggregatorAddress", t.AggregatorAddress),
 				zap.Error(err),
 			)
-			continue
+			return fmt.Errorf("failed to verify signature with the peer operator set")
 		}
-		aps.logger.Sugar().Infow("Signature verified with operator set",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-			zap.Uint32("opsetID", opset.OperatorSetID),
-		)
-		isVerified = true
+	case config.CurveTypeECDSA:
+		typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
+		if err != nil {
+			aps.logger.Sugar().Errorw("Failed to create ECDSA signature from bytes",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to verify signature with the peer operator set")
+
+		}
+		verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
+		if err != nil {
+			aps.logger.Sugar().Errorw("Error verifying ECDSA signature",
+				zap.String("avsAddress", aps.config.AvsAddress),
+				zap.String("aggregatorAddress", t.AggregatorAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to verify signature with the peer operator set")
+		}
 	}
 
-	if !isVerified {
-		aps.logger.Sugar().Errorw("Failed to verify signature with any operator set",
+	if !verified {
+		aps.logger.Sugar().Errorw("Failed to verify signature",
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.String("aggregatorAddress", t.AggregatorAddress),
+			zap.Error(err),
 		)
-		return fmt.Errorf("failed to verify signature with any operator set")
+		return fmt.Errorf("failed to verify signature with peer operator set")
 	}
 
+	aps.logger.Sugar().Infow("Signature verified with operator set",
+		zap.String("avsAddress", aps.config.AvsAddress),
+		zap.String("aggregatorAddress", t.AggregatorAddress),
+		zap.Uint32("opsetID", opset.OperatorSetID),
+	)
 	return nil
+
 }
 
 func (aps *AvsContainerPerformer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {
