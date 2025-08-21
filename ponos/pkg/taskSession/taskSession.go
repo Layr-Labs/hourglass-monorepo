@@ -198,7 +198,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	)
 
 	resultsChan := make(chan *types.TaskResult)
-	doneChan := make(chan struct{})
 
 	for _, peer := range ts.operatorPeersWeight.Operators {
 		go func(peer *peering.OperatorPeerInfo) {
@@ -253,15 +252,13 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				return
 			}
 
-			// Check if done before sending to prevent race condition
-			select {
-			case <-doneChan:
+			// Check if threshold already met before sending to prevent race condition
+			if ts.thresholdMet.Load() {
 				ts.logger.Sugar().Infow("task threshold already met, discarding result",
 					zap.String("taskId", ts.Task.TaskId),
 					zap.String("operatorAddress", peer.OperatorAddress),
 				)
 				return
-			default:
 			}
 
 			resultsChan <- tr
@@ -276,13 +273,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("taskId", taskResult.TaskId),
 				zap.String("operatorAddress", taskResult.OperatorAddress),
 			)
-			if ts.thresholdMet.Load() {
-				ts.logger.Sugar().Infow("task completion threshold already met",
-					zap.String("taskId", taskResult.TaskId),
-					zap.String("operatorAddress", taskResult.OperatorAddress),
-				)
-				continue
-			}
 			if ts.Task.TaskId != taskResult.TaskId {
 				ts.logger.Sugar().Errorw("task ID mismatch: expected",
 					zap.String("expected", ts.Task.TaskId),
@@ -312,9 +302,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 			}
 			ts.thresholdMet.Store(true)
 
-			// Signal producers to stop before closing results channel
-			close(doneChan)
-
 			ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
 				zap.String("taskId", taskResult.TaskId),
 				zap.String("operatorAddress", taskResult.OperatorAddress),
@@ -335,7 +322,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("taskId", ts.Task.TaskId),
 				zap.Error(ts.context.Err()),
 			)
-			close(doneChan)
 			return nil, fmt.Errorf("task session context done while waiting for results: %w", ts.context.Err())
 		}
 	}

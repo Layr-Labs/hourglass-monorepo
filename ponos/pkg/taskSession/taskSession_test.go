@@ -59,7 +59,6 @@ type MockExecutorServiceClient struct {
 	shouldFail      bool
 	response        *executorV1.TaskResult
 	responseDelay   time.Duration
-	responseSize    int
 	taskSubmissions []*executorV1.TaskSubmission
 }
 
@@ -85,6 +84,25 @@ func (m *MockExecutorServiceClient) SubmitTask(ctx context.Context, taskSubmissi
 // Additional gRPC methods would be implemented if needed
 
 // Test helper functions
+
+func createMockOperatorPeerInfo(operatorSetId uint32, networkAddress string) *MockOperatorPeerInfo {
+	return &MockOperatorPeerInfo{
+		OperatorAddress: fmt.Sprintf("0x%040x", operatorSetId),
+		OperatorSets: []*peering.OperatorSet{
+			{
+				OperatorSetID:  operatorSetId,
+				NetworkAddress: networkAddress,
+			},
+		},
+	}
+}
+
+func createMockOperatorPeerInfoWithMultipleSets(operatorAddress string, operatorSets []*peering.OperatorSet) *MockOperatorPeerInfo {
+	return &MockOperatorPeerInfo{
+		OperatorAddress: operatorAddress,
+		OperatorSets:    operatorSets,
+	}
+}
 
 func createBN254TestOperators(count int) ([]*peering.OperatorPeerInfo, []*bn254.PrivateKey, error) {
 	operators := make([]*peering.OperatorPeerInfo, count)
@@ -273,6 +291,94 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, cert)
 		assert.Contains(t, err.Error(), "deadline exceeded")
+	})
+
+	t.Run("mock client demonstrates timeout behavior", func(t *testing.T) {
+		// This test shows how the mock client handles timeouts
+		// and demonstrates the timeout scenario more deterministically
+
+		mockClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("response")},
+			responseDelay: 200 * time.Millisecond, // Longer than context timeout
+		}
+
+		// Short timeout context
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		// Mock client respects context timeout and returns context.DeadlineExceeded
+		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
+			TaskId:  "test",
+			Payload: []byte("test-payload"),
+		})
+
+		require.Error(t, err)
+		require.Nil(t, result)
+		assert.Equal(t, context.DeadlineExceeded, err)
+
+		// Verify the submission was recorded (showing the attempt was made)
+		assert.Len(t, mockClient.taskSubmissions, 1, "Should record submission attempt before timeout")
+	})
+
+	t.Run("mock client successful response", func(t *testing.T) {
+		mockClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("quick response")},
+			responseDelay: 50 * time.Millisecond, // Shorter than timeout
+		}
+
+		// Generous timeout context
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
+			TaskId:  "test",
+			Payload: []byte("test-payload"),
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "test", result.TaskId)
+		assert.Equal(t, []byte("quick response"), result.Output)
+		assert.Len(t, mockClient.taskSubmissions, 1)
+	})
+
+	t.Run("mock client partial timeout scenario", func(t *testing.T) {
+		// Test simulating mixed responses - some fast, some timeout
+		fastClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast")},
+			responseDelay: 20 * time.Millisecond,
+		}
+
+		slowClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow")},
+			responseDelay: 150 * time.Millisecond, // Will timeout
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		// Fast client should succeed
+		fastResult, fastErr := fastClient.SubmitTask(ctx, &executorV1.TaskSubmission{
+			TaskId: "test",
+		})
+		require.NoError(t, fastErr)
+		assert.Equal(t, []byte("fast"), fastResult.Output)
+
+		// Slow client should timeout
+		slowResult, slowErr := slowClient.SubmitTask(ctx, &executorV1.TaskSubmission{
+			TaskId: "test",
+		})
+		require.Error(t, slowErr)
+		assert.Nil(t, slowResult)
+		assert.Equal(t, context.DeadlineExceeded, slowErr)
+
+		// Both should have recorded submissions
+		assert.Len(t, fastClient.taskSubmissions, 1)
+		assert.Len(t, slowClient.taskSubmissions, 1)
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
@@ -522,6 +628,162 @@ func TestTaskSession_ResponseSizeLimit(t *testing.T) {
 		// Test that the constant is set to expected value
 		expectedSize := 1.5 * 1024 * 1024 // 1.5MB
 		assert.Equal(t, expectedSize, float64(maximumTaskResponseSize))
+	})
+}
+
+func TestTaskSession_MockIntegration(t *testing.T) {
+	t.Run("MockOperatorPeerInfo socket resolution", func(t *testing.T) {
+		mockPeer := createMockOperatorPeerInfo(1, "localhost:9001")
+
+		socket, err := mockPeer.GetSocketForOperatorSet(1)
+		require.NoError(t, err)
+		assert.Equal(t, "localhost:9001", socket)
+
+		// Test non-existent operator set
+		_, err = mockPeer.GetSocketForOperatorSet(999)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "operator set with ID 999 not found")
+
+		// Test IncludesOperatorSetId
+		assert.True(t, mockPeer.IncludesOperatorSetId(1))
+		assert.False(t, mockPeer.IncludesOperatorSetId(999))
+	})
+
+	t.Run("MockOperatorPeerInfo with multiple operator sets", func(t *testing.T) {
+		operatorSets := []*peering.OperatorSet{
+			{OperatorSetID: 1, NetworkAddress: "localhost:9001"},
+			{OperatorSetID: 2, NetworkAddress: "localhost:9002"},
+			{OperatorSetID: 3, NetworkAddress: "localhost:9003"},
+		}
+
+		mockPeer := createMockOperatorPeerInfoWithMultipleSets("0xoperator123", operatorSets)
+
+		// Test all operator sets are accessible
+		for i, expected := range operatorSets {
+			socket, err := mockPeer.GetSocketForOperatorSet(expected.OperatorSetID)
+			require.NoError(t, err, "Failed for operator set %d", i+1)
+			assert.Equal(t, expected.NetworkAddress, socket)
+			assert.True(t, mockPeer.IncludesOperatorSetId(expected.OperatorSetID))
+		}
+
+		// Test non-existent set
+		assert.False(t, mockPeer.IncludesOperatorSetId(999))
+	})
+
+	t.Run("task session error handling with MockOperatorPeerInfo", func(t *testing.T) {
+		// Create mock peer with non-existent operator set for the task
+		mockPeer := createMockOperatorPeerInfo(1, "localhost:9001")
+
+		// Convert to peering.OperatorPeerInfo interface
+		operators := []*peering.OperatorPeerInfo{
+			{
+				OperatorAddress: mockPeer.OperatorAddress,
+				OperatorSets:    mockPeer.OperatorSets,
+			},
+		}
+
+		task := createTestTask()
+		task.OperatorSetId = 999 // Set to non-existent operator set
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		operatorPeersWeight := &operatorManager.PeerWeight{
+			Operators: operators,
+		}
+
+		logger := zaptest.NewLogger(t)
+
+		// This should fail because operator set 999 doesn't exist
+		session, err := NewBN254TaskSession(
+			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			operatorPeersWeight, logger,
+		)
+
+		require.Error(t, err)
+		require.Nil(t, session)
+		assert.Contains(t, err.Error(), "failed to get operator set")
+	})
+
+	t.Run("mock client with controlled network addresses", func(t *testing.T) {
+		// This test demonstrates how MockOperatorPeerInfo provides controlled
+		// network addresses that could be used with a mock server or client
+
+		mockPeers := []*MockOperatorPeerInfo{
+			createMockOperatorPeerInfo(1, "mock-server-1:9001"),
+			createMockOperatorPeerInfo(1, "mock-server-2:9002"),
+			createMockOperatorPeerInfo(1, "mock-server-3:9003"),
+		}
+
+		// Verify each mock peer has the expected network address
+		expectedAddresses := []string{
+			"mock-server-1:9001",
+			"mock-server-2:9002",
+			"mock-server-3:9003",
+		}
+
+		for i, mockPeer := range mockPeers {
+			socket, err := mockPeer.GetSocketForOperatorSet(1)
+			require.NoError(t, err)
+			assert.Equal(t, expectedAddresses[i], socket)
+		}
+	})
+
+	t.Run("combined mock scenario - peer info with client behavior", func(t *testing.T) {
+		// This test demonstrates how MockOperatorPeerInfo and MockExecutorServiceClient
+		// could work together for comprehensive testing
+
+		// Create mock peers with controlled network addresses
+		mockPeer1 := createMockOperatorPeerInfo(1, "mock-executor-1:9001")
+		mockPeer2 := createMockOperatorPeerInfo(1, "mock-executor-2:9002")
+
+		// Create mock clients with different behaviors
+		fastClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast-response")},
+			responseDelay: 10 * time.Millisecond,
+		}
+
+		slowClient := &MockExecutorServiceClient{
+			shouldFail:    false,
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow-response")},
+			responseDelay: 200 * time.Millisecond,
+		}
+
+		// Verify the mock peer info provides the expected sockets
+		socket1, err := mockPeer1.GetSocketForOperatorSet(1)
+		require.NoError(t, err)
+		assert.Equal(t, "mock-executor-1:9001", socket1)
+
+		socket2, err := mockPeer2.GetSocketForOperatorSet(1)
+		require.NoError(t, err)
+		assert.Equal(t, "mock-executor-2:9002", socket2)
+
+		// Test client behaviors with different timeouts
+		ctx1, cancel1 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel1()
+
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel2()
+
+		// Fast client should succeed within timeout
+		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{TaskId: "test"})
+		require.NoError(t, err1)
+		assert.Equal(t, []byte("fast-response"), result1.Output)
+
+		// Slow client should timeout
+		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{TaskId: "test"})
+		require.Error(t, err2)
+		assert.Nil(t, result2)
+		assert.Equal(t, context.DeadlineExceeded, err2)
+
+		// Both clients should have recorded submissions
+		assert.Len(t, fastClient.taskSubmissions, 1)
+		assert.Len(t, slowClient.taskSubmissions, 1)
+
+		// This demonstrates how the mocks provide controlled, deterministic testing
+		// where MockOperatorPeerInfo gives us controlled network addresses and
+		// MockExecutorServiceClient gives us controlled response timing/behavior
 	})
 }
 
