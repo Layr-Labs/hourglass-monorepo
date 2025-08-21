@@ -51,11 +51,6 @@ func allocateAction(c *cli.Context) error {
 		return fmt.Errorf("no context configured. Run: hgctl context use <name>")
 	}
 
-	// Validate required context fields
-	if currentCtx.OperatorSetID == 0 {
-		return fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
-	}
-
 	// Get contract client from middleware
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
