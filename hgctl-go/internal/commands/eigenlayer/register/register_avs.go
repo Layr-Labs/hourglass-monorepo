@@ -51,11 +51,6 @@ func registerAVSAction(c *cli.Context) error {
 		return fmt.Errorf("no context configured. Run: hgctl context use <name>")
 	}
 
-	// Validate required context fields
-	if currentCtx.OperatorSetID == 0 {
-		return fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
-	}
-
 	if currentCtx.AVSAddress == "" {
 		return fmt.Errorf("AVS address not configured. Run: hgctl context set --avs-address <address>")
 	}
