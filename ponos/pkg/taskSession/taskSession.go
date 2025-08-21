@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -242,7 +243,19 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.Any("result", res),
 			)
+
 			tr := types.TaskResultFromTaskResultProto(res)
+
+			// note: we can probably set the value of tr.operatorAddress but it'll just fail elsewhere so we'll just check here
+			if !strings.EqualFold(tr.OperatorAddress, peer.OperatorAddress) {
+				ts.logger.Sugar().Errorw("Operator address mismatch in response",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.String("expected", peer.OperatorAddress),
+					zap.String("claimed", tr.OperatorAddress),
+				)
+				return
+			}
+
 			outputSize := len(tr.Output)
 			if outputSize >= maximumTaskResponseSize {
 				ts.logger.Sugar().Errorw("dropping response exceeding maximum output size",
