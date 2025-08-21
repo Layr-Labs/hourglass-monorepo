@@ -3,14 +3,15 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"strings"
-	"sync"
-	"time"
 )
 
 type AggregatedBN254Certificate struct {
@@ -21,7 +22,7 @@ type AggregatedBN254Certificate struct {
 	TaskResponse []byte
 
 	// keccak256 hash of the task response
-	TaskResponseDigest []byte
+	TaskResponseDigest [32]byte
 
 	// public keys for all operators that did not sign the task
 	NonSignersPubKeys []signing.PublicKey
@@ -109,7 +110,7 @@ type ReceivedBN254ResponseWithDigest struct {
 	Signature *bn254.Signature
 
 	// digest is a keccak256 hash of the task result
-	Digest []byte
+	Digest [32]byte
 }
 
 type aggregatedBN254Operators struct {
@@ -189,20 +190,20 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// verify the signature
-	sig, err := tra.VerifyResponseSignature(taskResponse, operator)
+	// Calculate digest from Output
+	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
+
+	// verify the signature using calculated digest
+	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
 	if err != nil {
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
-
-	var digest [32]byte
-	copy(digest[:], taskResponse.OutputDigest)
 
 	rr := &ReceivedBN254ResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
-		Digest:     taskResponse.OutputDigest,
+		Digest:     outputDigest,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -236,8 +237,8 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 			mostCommonCount:    1,
 		}
 		// Track this digest for the first operator
-		tra.aggregatedOperators.digestCounts[digest] = 1
-		tra.aggregatedOperators.digestResponses[digest] = rr
+		tra.aggregatedOperators.digestCounts[outputDigest] = 1
+		tra.aggregatedOperators.digestResponses[outputDigest] = rr
 		tra.aggregatedOperators.mostCommonResponse = rr
 	} else {
 		tra.aggregatedOperators.signersG2.AddPublicKey(bn254PubKey)
@@ -246,18 +247,18 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.totalSigners++
 
 		// Update digest count
-		newCount := tra.aggregatedOperators.digestCounts[digest] + 1
-		tra.aggregatedOperators.digestCounts[digest] = newCount
+		newCount := tra.aggregatedOperators.digestCounts[outputDigest] + 1
+		tra.aggregatedOperators.digestCounts[outputDigest] = newCount
 
 		// Store the first response for this digest (if not already stored)
-		if _, exists := tra.aggregatedOperators.digestResponses[digest]; !exists {
-			tra.aggregatedOperators.digestResponses[digest] = rr
+		if _, exists := tra.aggregatedOperators.digestResponses[outputDigest]; !exists {
+			tra.aggregatedOperators.digestResponses[outputDigest] = rr
 		}
 
 		// Check if this digest is now the most common
 		if newCount > tra.aggregatedOperators.mostCommonCount {
 			tra.aggregatedOperators.mostCommonCount = newCount
-			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[digest]
+			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[outputDigest]
 		}
 	}
 
@@ -266,16 +267,14 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 
 // VerifyResponseSignature verifies that the signature of the response is valid against
 // the operators public key.
-func (tra *BN254TaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[signing.PublicKey]) (*bn254.Signature, error) {
+func (tra *BN254TaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[signing.PublicKey], outputDigest [32]byte) (*bn254.Signature, error) {
 	sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
 	}
 
-	var digest [32]byte
-	copy(digest[:], taskResponse.OutputDigest)
-
-	if verified, err := sig.VerifySolidityCompatible(operator.PublicKey.(*bn254.PublicKey), digest); err != nil {
+	// Use calculated digest instead of network-provided OutputDigest for security
+	if verified, err := sig.VerifySolidityCompatible(operator.PublicKey.(*bn254.PublicKey), outputDigest); err != nil {
 		return nil, fmt.Errorf("signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("signature verification failed: signature does not match operator public key")
