@@ -26,7 +26,7 @@ import (
 type Executor struct {
 	logger              *zap.Logger
 	config              *executorConfig.ExecutorConfig
-	avsPerformers       *sync.Map // map[string]avsPerformer.IAvsPerformer
+	avsPerformers       map[string]avsPerformer.IAvsPerformer
 	taskRpcServer       *rpcServer.RpcServer
 	managementRpcServer *rpcServer.RpcServer
 	ecdsaSigner         signer.ISigner
@@ -107,7 +107,7 @@ func NewExecutor(
 	return &Executor{
 		logger:              logger,
 		config:              config,
-		avsPerformers:       &sync.Map{},
+		avsPerformers:       make(map[string]avsPerformer.IAvsPerformer),
 		taskRpcServer:       taskRpcServer,
 		managementRpcServer: managementRpcServer,
 		ecdsaSigner:         signers.ECDSASigner,
@@ -131,7 +131,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
-		if _, ok := e.avsPerformers.Load(avsAddress); ok {
+		if _, ok := e.avsPerformers[avsAddress]; ok {
 			e.logger.Sugar().Errorw("AVS performer already exists",
 				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
@@ -179,7 +179,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				)
 			}
 
-			e.avsPerformers.Store(avsAddress, performer)
+			e.avsPerformers[avsAddress] = performer
 
 			// Save performer state to storage
 			performerState := &storage.PerformerState{
@@ -222,17 +222,14 @@ func (e *Executor) Initialize(ctx context.Context) error {
 	go func() {
 		<-ctx.Done()
 		e.logger.Sugar().Info("Shutting down AVS performers")
-		e.avsPerformers.Range(func(key, value interface{}) bool {
-			avsAdd := key.(string)
-			perf := value.(avsPerformer.IAvsPerformer)
+		for avsAdd, perf := range e.avsPerformers {
 			if err := perf.Shutdown(); err != nil {
 				e.logger.Sugar().Errorw("Failed to shutdown AVS performer",
 					zap.String("avsAddress", avsAdd),
 					zap.Error(err),
 				)
 			}
-			return true // continue iteration
-		})
+		}
 	}()
 
 	return nil

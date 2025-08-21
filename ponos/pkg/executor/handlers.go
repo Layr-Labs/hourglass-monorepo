@@ -244,64 +244,41 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 // getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
 func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress string) (avsPerformer.IAvsPerformer, error) {
-	// Fast path: try to load existing performer first
-	if performer, ok := e.avsPerformers.Load(avsAddress); ok {
-		return performer.(avsPerformer.IAvsPerformer), nil
+	// Check if performer already exists
+	performer, ok := e.avsPerformers[avsAddress]
+	if ok {
+		return performer, nil
 	}
 
-	// Slow path: need to create a new performer
-	// Use a function to create the performer only when needed
-	createPerformer := func() (avsPerformer.IAvsPerformer, error) {
-		e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
+	// Create new AVS performer for this address
+	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
 
-		// Create config without image info - will be deployed via Deploy method
-		config := &avsPerformer.AvsPerformerConfig{
-			AvsAddress:           avsAddress,
-			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{},
-			PerformerNetworkName: e.config.PerformerNetworkName,
-		}
-
-		newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
-			config,
-			e.peeringFetcher,
-			e.l1ContractCaller,
-			e.logger,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Initialize the performer (fetches aggregator peers, but won't create container)
-		if err := newPerformer.Initialize(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize AVS performer: %w", err)
-		}
-
-		return newPerformer, nil
+	// Create config without image info - will be deployed via Deploy method
+	config := &avsPerformer.AvsPerformerConfig{
+		AvsAddress:           avsAddress,
+		ProcessType:          avsPerformer.AvsProcessTypeServer,
+		Image:                avsPerformer.PerformerImage{},
+		PerformerNetworkName: e.config.PerformerNetworkName,
 	}
 
-	// Create the performer
-	newPerformer, err := createPerformer()
+	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
+		config,
+		e.peeringFetcher,
+		e.l1ContractCaller,
+		e.logger,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use LoadOrStore to atomically check-and-store, preventing race conditions
-	actual, loaded := e.avsPerformers.LoadOrStore(avsAddress, newPerformer)
-	if loaded {
-		// Another goroutine already created and stored a performer for this address
-		// Shutdown our newly created performer to prevent resource leak
-		e.logger.Info("AVS performer already exists, using existing one", zap.String("avsAddress", avsAddress))
-		if err := newPerformer.Shutdown(); err != nil {
-			e.logger.Sugar().Warnw("Failed to shutdown duplicate performer",
-				"avsAddress", avsAddress,
-				"error", err,
-			)
-		}
-		return actual.(avsPerformer.IAvsPerformer), nil
+	// Initialize the performer (fetches aggregator peers, but won't create container)
+	if err := newPerformer.Initialize(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize AVS performer: %w", err)
 	}
 
-	// We successfully stored our performer
+	// Add to performers map
+	e.avsPerformers[avsAddress] = newPerformer
+
 	return newPerformer, nil
 }
 
@@ -315,11 +292,10 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
-	value, ok := e.avsPerformers.Load(task.AvsAddress)
+	avsPerf, ok := e.avsPerformers[task.AvsAddress]
 	if !ok {
 		return nil, fmt.Errorf("AVS avsPerf not found for address %s", task.AvsAddress)
 	}
-	avsPerf := value.(avsPerformer.IAvsPerformer)
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
 
@@ -482,13 +458,10 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 	filterAddress := strings.ToLower(req.GetAvsAddress())
 
 	// Iterate through all AVS performers
-	e.avsPerformers.Range(func(key, value interface{}) bool {
-		avsAddress := key.(string)
-		avsServerPerformer := value.(avsPerformer.IAvsPerformer)
-
+	for avsAddress, avsServerPerformer := range e.avsPerformers {
 		// Apply filter if provided
 		if filterAddress != "" && !strings.EqualFold(filterAddress, avsAddress) {
-			return true // continue iteration
+			continue
 		}
 
 		// Get performer info from the server performer
@@ -498,8 +471,7 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 		for _, info := range performerInfos {
 			allPerformers = append(allPerformers, e.performerInfoToProto(info))
 		}
-		return true // continue iteration
-	})
+	}
 
 	// Also include persisted performer states from storage
 	persistedStates, err := e.store.ListPerformerStates(ctx)
@@ -636,27 +608,13 @@ func (e *Executor) validateRemovePerformerRequest(req *executorV1.RemovePerforme
 
 // findPerformerByID finds a performer by ID across all AVS performers
 func (e *Executor) findPerformerByID(performerID string) (string, avsPerformer.IAvsPerformer, error) {
-	var foundAvsAddress string
-	var foundPerformer avsPerformer.IAvsPerformer
-	var found bool
-
-	e.avsPerformers.Range(func(key, value interface{}) bool {
-		avsAddress := key.(string)
-		avsServerPerformer := value.(avsPerformer.IAvsPerformer)
+	for avsAddress, avsServerPerformer := range e.avsPerformers {
 		performerInfos := avsServerPerformer.ListPerformers()
 		for _, info := range performerInfos {
 			if info.PerformerID == performerID {
-				foundAvsAddress = avsAddress
-				foundPerformer = avsServerPerformer
-				found = true
-				return false // stop iteration
+				return avsAddress, avsServerPerformer, nil
 			}
 		}
-		return true // continue iteration
-	})
-
-	if found {
-		return foundAvsAddress, foundPerformer, nil
 	}
 	return "", nil, fmt.Errorf("performer with ID %s not found", performerID)
 }
