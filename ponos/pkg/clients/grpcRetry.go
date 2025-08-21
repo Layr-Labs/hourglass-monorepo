@@ -41,8 +41,7 @@ func DefaultRetryConfig() *RetryConfig {
 	}
 }
 
-// NewGrpcClientWithRetry creates a gRPC client without forcing connection
-// The actual connection will be established lazily on first use
+// NewGrpcClientWithRetry creates a gRPC client and forcing connection
 func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryConfig) (*grpc.ClientConn, error) {
 	if retryConfig == nil {
 		retryConfig = DefaultRetryConfig()
