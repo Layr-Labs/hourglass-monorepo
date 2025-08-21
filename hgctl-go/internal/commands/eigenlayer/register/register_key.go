@@ -1,7 +1,6 @@
 package register
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
@@ -22,53 +21,26 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 )
 
-// RegisterKeyCommand returns the command for registering operator keys
+// RegisterKeyCommand returns the command for registering system keys
 func RegisterKeyCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "register-key",
-		Usage: "Register operator signing key with AVS",
-		Description: `Register an operator's signing key with an AVS operator set.
-This command supports both ECDSA and BN254 key types.
+		Usage: "Register system signing key with AVS",
+		Description: `Register a system signing key with an AVS operator set.
 
-The AVS address and operator address must be configured in the context before running this command.
+This command registers the system keys configured in the context (ECDSA or BN254).
+The operator ECDSA key is used to sign ECDSA registrations.
+BN254 registrations use the BN254 key itself for signing.
 
-For ECDSA keys:
-  hgctl register-key --operator-set-id 0 --key-type ecdsa --key-address 0x789...
+Prerequisites:
+- AVS address must be configured: hgctl context set --avs-address <address>
+- Operator set ID must be configured: hgctl context set --operator-set-id <id>
+- Operator signer must be configured: hgctl signer operator
+- System signer must be configured: hgctl signer system
+- For system keystores, SYSTEM_KEYSTORE_PASSWORD environment variable must be set
 
-For BN254 keys:
-  hgctl register-key --operator-set-id 0 --key-type bn254 --key-data <hex-encoded-key>`,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:     "operator-set-id",
-				Usage:    "Operator set ID to register key for",
-				Required: true,
-			},
-			&cli.StringFlag{
-				Name:     "key-type",
-				Usage:    "Key type (ecdsa or bn254)",
-				Required: true,
-			},
-			&cli.StringFlag{
-				Name:  "key-address",
-				Usage: "ECDSA key address (required for ecdsa key type)",
-			},
-			&cli.StringFlag{
-				Name:  "key-data",
-				Usage: "BN254 key data in hex format (required for bn254 key type)",
-			},
-			&cli.StringFlag{
-				Name:  "keystore-path",
-				Usage: "Path to BN254 keystore file (alternative to --key-data)",
-			},
-			&cli.StringFlag{
-				Name:  "password",
-				Usage: "Password for BN254 keystore",
-			},
-			&cli.StringFlag{
-				Name:  "signature",
-				Usage: "Pre-signed signature in hex format (optional, will be generated if not provided)",
-			},
-		},
+Usage:
+  hgctl register-key`,
 		Action: registerKeyAction,
 	}
 }
@@ -91,11 +63,13 @@ type KeyHandler interface {
 // ECDSAKeyHandler handles ECDSA key registration
 type ECDSAKeyHandler struct {
 	log logger.Logger
+	ctx *config.Context
 }
 
 // BN254KeyHandler handles BN254 key registration
 type BN254KeyHandler struct {
 	log        logger.Logger
+	ctx        *config.Context
 	privateKey *bn254.PrivateKey
 }
 
@@ -158,39 +132,61 @@ func registerKeyAction(c *cli.Context) error {
 
 // parseKeyRegistrationParams parses common parameters and returns appropriate handler
 func parseKeyRegistrationParams(c *cli.Context, log logger.Logger) (*KeyRegistrationParams, KeyHandler, error) {
-	operatorSetID := uint32(c.Uint64("operator-set-id"))
-	keyType := strings.ToLower(c.String("key-type"))
-	signatureHex := c.String("signature")
-
-	// Validate key type
-	if keyType != "ecdsa" && keyType != "bn254" {
-		return nil, nil, fmt.Errorf("invalid key type: %s (must be 'ecdsa' or 'bn254')", keyType)
+	// Get context
+	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
+	if currentCtx == nil {
+		return nil, nil, fmt.Errorf("no context configured. Run: hgctl context use <name>")
 	}
 
-	// Parse signature if provided
-	var signature []byte
-	if signatureHex != "" {
-		var err error
-		signature, err = hex.DecodeString(strings.TrimPrefix(signatureHex, "0x"))
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid signature hex: %w", err)
-		}
+	// Validate required context fields
+	if currentCtx.OperatorSetID == 0 {
+		return nil, nil, fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
+	}
+	
+	if currentCtx.AVSAddress == "" {
+		return nil, nil, fmt.Errorf("AVS address not configured. Run: hgctl context set --avs-address <address>")
+	}
+	
+	if currentCtx.OperatorKeys == nil {
+		return nil, nil, fmt.Errorf("operator signer not configured. Run: hgctl signer operator")
+	}
+	
+	if currentCtx.SystemSignerKeys == nil {
+		return nil, nil, fmt.Errorf("system signer not configured. Run: hgctl signer system")
+	}
+
+	// Get operator set ID from context
+	operatorSetID := currentCtx.OperatorSetID
+	
+	// Detect key type from SystemSignerKeys
+	var keyType string
+	if currentCtx.SystemSignerKeys.ECDSA != nil {
+		keyType = "ecdsa"
+	} else if currentCtx.SystemSignerKeys.BN254 != nil {
+		keyType = "bn254"
+	} else {
+		return nil, nil, fmt.Errorf("no system signing key configured. Run: hgctl signer system")
 	}
 
 	params := &KeyRegistrationParams{
 		OperatorSetID: operatorSetID,
 		KeyType:       keyType,
-		Signature:     signature,
+		Signature:     nil, // Will be generated
 	}
 
-	// Create appropriate handler
+	// Create appropriate handler with context
 	var handler KeyHandler
 	switch keyType {
 	case "ecdsa":
-		handler = &ECDSAKeyHandler{log: log}
+		handler = &ECDSAKeyHandler{log: log, ctx: currentCtx}
 	case "bn254":
-		handler = &BN254KeyHandler{log: log}
+		handler = &BN254KeyHandler{log: log, ctx: currentCtx}
 	}
+
+	log.Info("Using context configuration",
+		zap.Uint32("operatorSetId", operatorSetID),
+		zap.String("keyType", keyType),
+		zap.String("avsAddress", currentCtx.AVSAddress))
 
 	return params, handler, nil
 }
@@ -198,15 +194,71 @@ func parseKeyRegistrationParams(c *cli.Context, log logger.Logger) (*KeyRegistra
 // ECDSAKeyHandler implementation
 
 func (h *ECDSAKeyHandler) ValidateParams(c *cli.Context) error {
-	keyAddress := c.String("key-address")
-	if keyAddress == "" {
-		return fmt.Errorf("key-address is required for ECDSA key type")
+	// Validate that system ECDSA is configured
+	if h.ctx.SystemSignerKeys == nil || h.ctx.SystemSignerKeys.ECDSA == nil {
+		return fmt.Errorf("system ECDSA key not configured. Run: hgctl signer system")
 	}
 	return nil
 }
 
 func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClient) ([]byte, error) {
-	keyAddress := c.String("key-address")
+	// Get system ECDSA key address from context configuration
+	systemECDSA := h.ctx.SystemSignerKeys.ECDSA
+	var keyAddress string
+	
+	if systemECDSA.Keystore != nil {
+		// Load keystore to get address
+		password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
+		if password == "" {
+			return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system ECDSA keystore")
+		}
+		
+		// Find keystore path
+		var keystorePath string
+		for _, ks := range h.ctx.Keystores {
+			if ks.Name == systemECDSA.Keystore.Name {
+				keystorePath = ks.Path
+				break
+			}
+		}
+		
+		if keystorePath == "" {
+			return nil, fmt.Errorf("system ECDSA keystore '%s' not found in context", systemECDSA.Keystore.Name)
+		}
+		
+		// Load keystore and extract address
+		keystoreBytes, err := os.ReadFile(keystorePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read system ECDSA keystore: %w", err)
+		}
+		
+		key, err := keystore.DecryptKey(keystoreBytes, password)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt system ECDSA keystore: %w", err)
+		}
+		keyAddress = key.Address.Hex()
+		
+	} else if systemECDSA.PrivateKey {
+		// For system ECDSA private key mode, we need the address
+		// The address should be provided via SYSTEM_ECDSA_ADDRESS environment variable
+		keyAddress = os.Getenv("SYSTEM_ECDSA_ADDRESS")
+		if keyAddress == "" {
+			return nil, fmt.Errorf("SYSTEM_ECDSA_ADDRESS environment variable required when using system ECDSA private key")
+		}
+		
+	} else if systemECDSA.RemoteSignerConfig != nil {
+		// For remote signer, we need to get the address from the configuration
+		// This would typically be stored in the RemoteSignerConfig
+		return nil, fmt.Errorf("remote signer not yet supported for system keys")
+	} else {
+		return nil, fmt.Errorf("system ECDSA key configuration not recognized")
+	}
+	
+	if keyAddress == "" {
+		return nil, fmt.Errorf("could not determine system ECDSA key address")
+	}
+	
+	h.log.Info("Using system ECDSA key", zap.String("address", keyAddress))
 	addr := common.HexToAddress(keyAddress)
 	return addr.Bytes(), nil
 }
@@ -274,47 +326,45 @@ func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *clie
 // BN254KeyHandler implementation
 
 func (h *BN254KeyHandler) ValidateParams(c *cli.Context) error {
-	keyDataHex := c.String("key-data")
-	keystorePath := c.String("keystore-path")
-
-	if keyDataHex == "" && keystorePath == "" {
-		return fmt.Errorf("either --key-data or --keystore-path required for BN254")
+	// Validate that system BN254 is configured
+	if h.ctx.SystemSignerKeys == nil || h.ctx.SystemSignerKeys.BN254 == nil {
+		return fmt.Errorf("system BN254 key not configured. Run: hgctl signer system")
 	}
-
-	if keystorePath != "" && c.String("password") == "" {
-		return fmt.Errorf("password required when using keystore")
-	}
-
 	return nil
 }
 
 func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context, contractClient *client.ContractClient) ([]byte, error) {
-	keyDataHex := c.String("key-data")
-	keystorePath := c.String("keystore-path")
-
-	if keystorePath != "" {
-		return h.prepareKeyDataFromKeystore(c, contractClient, keystorePath)
+	// Get system BN254 keystore configuration
+	bn254KeyRef := h.ctx.SystemSignerKeys.BN254
+	
+	// Find keystore path
+	var keystorePath string
+	for _, ks := range h.ctx.Keystores {
+		if ks.Name == bn254KeyRef.Name {
+			keystorePath = ks.Path
+			break
+		}
 	}
-
-	// Use provided key data
-	keyData, err := hex.DecodeString(strings.TrimPrefix(keyDataHex, "0x"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid key data hex: %w", err)
+	
+	if keystorePath == "" {
+		return nil, fmt.Errorf("system BN254 keystore '%s' not found in context", bn254KeyRef.Name)
 	}
-
-	if len(keyData) != 192 {
-		return nil, fmt.Errorf("invalid BN254 key data length: expected 192 bytes, got %d", len(keyData))
+	
+	// Get password from environment
+	password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
+	if password == "" {
+		return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system BN254 keystore")
 	}
-
-	return keyData, nil
+	
+	h.log.Info("Using system BN254 keystore", zap.String("keystore", bn254KeyRef.Name))
+	return h.prepareKeyDataFromKeystore(contractClient, keystorePath, password)
 }
 
 func (h *BN254KeyHandler) prepareKeyDataFromKeystore(
-	c *cli.Context,
 	contractClient *client.ContractClient,
 	keystorePath string,
+	password string,
 ) ([]byte, error) {
-	password := c.String("password")
 
 	// Read keystore file
 	keystoreBytes, err := os.ReadFile(keystorePath)
