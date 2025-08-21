@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 )
 
@@ -20,21 +21,17 @@ func RegisterAVSCommand() *cli.Command {
 		Name:  "register-avs",
 		Usage: "Register operator with an AVS",
 		Description: `Register an operator with an AVS (Actively Validated Service).
-This command handles the operator registration to specific operator sets within an AVS.
 
-The operator address and AVS address must be configured in the context before running this command.
+This command registers the operator to the operator set configured in the context.
 
-To discover available operator sets for an AVS, use:
-  hgctl operator-set get
+Prerequisites:
+- AVS address must be configured: hgctl context set --avs-address <address>
+- Operator set ID must be configured: hgctl context set --operator-set-id <id>
+- Operator address must be configured: hgctl context set --operator-address <address>
 
 Example:
-  hgctl register-avs --operator-set-ids 0,1 --socket https://operator.example.com:8080`,
+  hgctl register-avs --socket https://operator.example.com:8080`,
 		Flags: []cli.Flag{
-			&cli.Uint64SliceFlag{
-				Name:     "operator-set-ids",
-				Usage:    "Operator set IDs to register for (can specify multiple)",
-				Required: true,
-			},
 			&cli.StringFlag{
 				Name:     "socket",
 				Usage:    "Operator socket endpoint (e.g., 'https://operator.example.com:8080')",
@@ -48,21 +45,34 @@ Example:
 func registerAVSAction(c *cli.Context) error {
 	log := middleware.GetLogger(c)
 
+	// Get context
+	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
+	if currentCtx == nil {
+		return fmt.Errorf("no context configured. Run: hgctl context use <name>")
+	}
+
+	// Validate required context fields
+	if currentCtx.OperatorSetID == 0 {
+		return fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
+	}
+
+	if currentCtx.AVSAddress == "" {
+		return fmt.Errorf("AVS address not configured. Run: hgctl context set --avs-address <address>")
+	}
+
+	if currentCtx.OperatorAddress == "" {
+		return fmt.Errorf("operator address not configured. Run: hgctl context set --operator-address <address>")
+	}
+
 	// Get contract client from middleware
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Get parameters
-	operatorSetIDsUint64 := c.Uint64Slice("operator-set-ids")
+	// Get operator set ID from context (as a single ID, converted to slice for compatibility)
+	operatorSetIDs := []uint32{currentCtx.OperatorSetID}
 	socket := c.String("socket")
-
-	// Convert uint64 slice to uint32
-	operatorSetIDs := make([]uint32, len(operatorSetIDsUint64))
-	for i, id := range operatorSetIDsUint64 {
-		operatorSetIDs[i] = uint32(id)
-	}
 
 	// Check if running on macOS and socket is localhost, translate to host.docker.internal
 	if runtime.GOOS == "darwin" {
@@ -87,8 +97,10 @@ func registerAVSAction(c *cli.Context) error {
 	}
 
 	log.Info("Registering operator with AVS",
-		zap.Any("operatorSetIds", operatorSetIDs),
+		zap.Uint32("operatorSetId", currentCtx.OperatorSetID),
 		zap.String("socket", socket),
+		zap.String("avsAddress", currentCtx.AVSAddress),
+		zap.String("operatorAddress", currentCtx.OperatorAddress),
 	)
 
 	// Register operator to AVS
