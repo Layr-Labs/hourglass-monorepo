@@ -292,9 +292,9 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
-	avsPerf, ok := e.avsPerformers[task.AvsAddress]
+	avsPerf, ok := e.avsPerformers[avsAddress]
 	if !ok {
-		return nil, fmt.Errorf("AVS avsPerf not found for address %s", task.AvsAddress)
+		return nil, fmt.Errorf("AVS avsPerf not found for address %s", avsAddress)
 	}
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
@@ -307,7 +307,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	// Save inflight task to storage
 	taskInfo := &storage.TaskInfo{
 		TaskId:            task.TaskId,
-		AvsAddress:        task.AvsAddress,
+		AvsAddress:        avsAddress,
 		OperatorAddress:   e.config.Operator.Address,
 		ReceivedAt:        time.Now(),
 		Status:            "processing",
@@ -325,7 +325,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to run task",
 			"taskId", task.TaskId,
-			"avsAddress", task.AvsAddress,
+			"avsAddress", avsAddress,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to run task %s", err.Error())
@@ -335,7 +335,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to sign result",
 			zap.String("taskId", task.TaskId),
-			zap.String("avsAddress", task.AvsAddress),
+			zap.String("avsAddress", avsAddress),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to sign result %s", err.Error())
@@ -343,7 +343,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 
 	e.logger.Sugar().Infow("returning task result to aggregator",
 		zap.String("taskId", task.TaskId),
-		zap.String("avsAddress", task.AvsAddress),
+		zap.String("avsAddress", avsAddress),
 		zap.String("operatorAddress", e.config.Operator.Address),
 		zap.String("signature", string(sig)),
 	)
@@ -363,7 +363,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		OperatorAddress: e.config.Operator.Address,
 		Output:          response.Result,
 		Signature:       sig,
-		AvsAddress:      task.AvsAddress,
+		AvsAddress:      avsAddress,
 		OutputDigest:    digest[:],
 	}, nil
 }
