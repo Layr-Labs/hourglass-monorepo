@@ -138,26 +138,21 @@ func parseKeyRegistrationParams(c *cli.Context, log logger.Logger) (*KeyRegistra
 		return nil, nil, fmt.Errorf("no context configured. Run: hgctl context use <name>")
 	}
 
-	// Validate required context fields
-	if currentCtx.OperatorSetID == 0 {
-		return nil, nil, fmt.Errorf("operator set ID not configured. Run: hgctl context set --operator-set-id <id>")
-	}
-	
 	if currentCtx.AVSAddress == "" {
 		return nil, nil, fmt.Errorf("AVS address not configured. Run: hgctl context set --avs-address <address>")
 	}
-	
+
 	if currentCtx.OperatorKeys == nil {
 		return nil, nil, fmt.Errorf("operator signer not configured. Run: hgctl signer operator")
 	}
-	
+
 	if currentCtx.SystemSignerKeys == nil {
 		return nil, nil, fmt.Errorf("system signer not configured. Run: hgctl signer system")
 	}
 
 	// Get operator set ID from context
 	operatorSetID := currentCtx.OperatorSetID
-	
+
 	// Detect key type from SystemSignerKeys
 	var keyType string
 	if currentCtx.SystemSignerKeys.ECDSA != nil {
@@ -205,14 +200,14 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClien
 	// Get system ECDSA key address from context configuration
 	systemECDSA := h.ctx.SystemSignerKeys.ECDSA
 	var keyAddress string
-	
+
 	if systemECDSA.Keystore != nil {
 		// Load keystore to get address
 		password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
 		if password == "" {
 			return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system ECDSA keystore")
 		}
-		
+
 		// Find keystore path
 		var keystorePath string
 		for _, ks := range h.ctx.Keystores {
@@ -221,23 +216,23 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClien
 				break
 			}
 		}
-		
+
 		if keystorePath == "" {
 			return nil, fmt.Errorf("system ECDSA keystore '%s' not found in context", systemECDSA.Keystore.Name)
 		}
-		
+
 		// Load keystore and extract address
 		keystoreBytes, err := os.ReadFile(keystorePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read system ECDSA keystore: %w", err)
 		}
-		
+
 		key, err := keystore.DecryptKey(keystoreBytes, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt system ECDSA keystore: %w", err)
 		}
 		keyAddress = key.Address.Hex()
-		
+
 	} else if systemECDSA.PrivateKey {
 		// For system ECDSA private key mode, we need the address
 		// The address should be provided via SYSTEM_ECDSA_ADDRESS environment variable
@@ -245,7 +240,7 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClien
 		if keyAddress == "" {
 			return nil, fmt.Errorf("SYSTEM_ECDSA_ADDRESS environment variable required when using system ECDSA private key")
 		}
-		
+
 	} else if systemECDSA.RemoteSignerConfig != nil {
 		// For remote signer, we need to get the address from the configuration
 		// This would typically be stored in the RemoteSignerConfig
@@ -253,11 +248,11 @@ func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClien
 	} else {
 		return nil, fmt.Errorf("system ECDSA key configuration not recognized")
 	}
-	
+
 	if keyAddress == "" {
 		return nil, fmt.Errorf("could not determine system ECDSA key address")
 	}
-	
+
 	h.log.Info("Using system ECDSA key", zap.String("address", keyAddress))
 	addr := common.HexToAddress(keyAddress)
 	return addr.Bytes(), nil
@@ -336,7 +331,7 @@ func (h *BN254KeyHandler) ValidateParams(c *cli.Context) error {
 func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context, contractClient *client.ContractClient) ([]byte, error) {
 	// Get system BN254 keystore configuration
 	bn254KeyRef := h.ctx.SystemSignerKeys.BN254
-	
+
 	// Find keystore path
 	var keystorePath string
 	for _, ks := range h.ctx.Keystores {
@@ -345,17 +340,17 @@ func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context, contractClient *client.
 			break
 		}
 	}
-	
+
 	if keystorePath == "" {
 		return nil, fmt.Errorf("system BN254 keystore '%s' not found in context", bn254KeyRef.Name)
 	}
-	
+
 	// Get password from environment
 	password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
 	if password == "" {
 		return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system BN254 keystore")
 	}
-	
+
 	h.log.Info("Using system BN254 keystore", zap.String("keystore", bn254KeyRef.Name))
 	return h.prepareKeyDataFromKeystore(contractClient, keystorePath, password)
 }
