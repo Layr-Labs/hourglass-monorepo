@@ -4,17 +4,17 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"github.com/ethereum/go-ethereum/crypto"
-	"os"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
@@ -177,9 +177,6 @@ func (aps *AvsContainerPerformer) buildDockerEnvsFromConfig(image avsPerformer.P
 	dockerEnvs := make([]string, 0)
 	for _, env := range image.Envs {
 		val := env.Value
-		if env.ValueFromEnv != "" {
-			val = os.Getenv(env.ValueFromEnv)
-		}
 		dockerEnvs = append(dockerEnvs, fmt.Sprintf("%s=%s", env.Name, val))
 	}
 	return dockerEnvs
