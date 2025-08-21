@@ -2,6 +2,7 @@ package avsKubernetesPerformer
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -246,11 +247,16 @@ func TestAvsKubernetesPerformer_TaskStateLifecycle(t *testing.T) {
 	// Cleanup the performer state
 	performer.cleanupTaskWaitGroup("performer-1")
 
-	// Verify it's cleaned up
+	// Verify it's marked as shutdown (but state still exists to prevent race conditions)
 	performer.performerStatesMu.Lock()
-	_, exists := performer.performerTaskStates["performer-1"]
-	assert.False(t, exists)
+	state, exists := performer.performerTaskStates["performer-1"]
+	assert.True(t, exists)
+	assert.Equal(t, PerformerStateShutdown, state.state)
 	performer.performerStatesMu.Unlock()
+
+	// Try to add task to shutdown performer (should fail)
+	success = performer.tryAddTask("performer-1")
+	assert.False(t, success)
 }
 
 func TestAvsKubernetesPerformer_ListPerformers_Empty(t *testing.T) {
@@ -386,6 +392,239 @@ func TestAvsKubernetesPerformer_EdgeCases(t *testing.T) {
 	// Test cleanup on non-existent performer
 	performer.cleanupTaskWaitGroup("non-existent")
 	// Should not panic
+}
+
+// TestAvsKubernetesPerformer_RaceConditionFix tests that waitGroup references remain stable after cleanup
+func TestAvsKubernetesPerformer_RaceConditionFix(t *testing.T) {
+	performer, _, _, _ := createTestKubernetesPerformer(t)
+
+	// Add a task to create a state
+	success := performer.tryAddTask("test-performer")
+	assert.True(t, success)
+
+	// Get the waitGroup reference before cleanup
+	performer.performerStatesMu.Lock()
+	state := performer.performerTaskStates["test-performer"]
+	originalWaitGroup := state.waitGroup
+	performer.performerStatesMu.Unlock()
+
+	// Call cleanup (this should NOT delete the state anymore)
+	performer.cleanupTaskWaitGroup("test-performer")
+
+	// Verify state still exists and is marked as shutdown
+	performer.performerStatesMu.Lock()
+	state, exists := performer.performerTaskStates["test-performer"]
+	assert.True(t, exists, "State should still exist after cleanup")
+	assert.Equal(t, PerformerStateShutdown, state.state, "State should be marked as shutdown")
+
+	// Verify waitGroup reference is the same (no new waitGroup created)
+	assert.Same(t, originalWaitGroup, state.waitGroup, "WaitGroup reference should remain the same")
+	performer.performerStatesMu.Unlock()
+
+	// Try to add a task to shutdown performer - should fail
+	success = performer.tryAddTask("test-performer")
+	assert.False(t, success, "Should not allow tasks on shutdown performer")
+
+	// Verify waitGroup is still the same after failed task addition
+	performer.performerStatesMu.Lock()
+	state = performer.performerTaskStates["test-performer"]
+	assert.Same(t, originalWaitGroup, state.waitGroup, "WaitGroup should still be the same after failed task add")
+	performer.performerStatesMu.Unlock()
+
+	// Complete the original task to clean up the waitGroup
+	performer.taskCompleted("test-performer")
+}
+
+// TestAvsKubernetesPerformer_StateTransitionUnidirectional tests that state transitions are unidirectional
+func TestAvsKubernetesPerformer_StateTransitionUnidirectional(t *testing.T) {
+	performer, _, _, _ := createTestKubernetesPerformer(t)
+
+	// Test: Active -> Draining transition
+	success := performer.tryAddTask("performer-1")
+	assert.True(t, success)
+
+	performer.performerStatesMu.Lock()
+	state := performer.performerTaskStates["performer-1"]
+	assert.Equal(t, PerformerStateActive, state.state)
+
+	// Manually set to draining
+	state.state = PerformerStateDraining
+	performer.performerStatesMu.Unlock()
+
+	// Test: tryAddTask should fail for draining performer
+	success = performer.tryAddTask("performer-1")
+	assert.False(t, success, "Should not allow tasks on draining performer")
+
+	// Test: Draining -> Shutdown transition
+	performer.cleanupTaskWaitGroup("performer-1")
+	performer.performerStatesMu.Lock()
+	assert.Equal(t, PerformerStateShutdown, state.state)
+	performer.performerStatesMu.Unlock()
+
+	// Test: waitForTaskCompletion should NOT regress Shutdown back to Draining
+	performer.waitForTaskCompletion("performer-1")
+	performer.performerStatesMu.Lock()
+	assert.Equal(t, PerformerStateShutdown, state.state, "Should remain shutdown, not regress to draining")
+	performer.performerStatesMu.Unlock()
+
+	// Test: tryAddTask should still fail for shutdown performer
+	success = performer.tryAddTask("performer-1")
+	assert.False(t, success, "Should not allow tasks on shutdown performer")
+
+	// Cleanup
+	performer.taskCompleted("performer-1")
+}
+
+// TestAvsKubernetesPerformer_ConcurrentWaitForTaskCompletion tests that concurrent calls to waitForTaskCompletion are safe
+func TestAvsKubernetesPerformer_ConcurrentWaitForTaskCompletion(t *testing.T) {
+	performer, _, _, _ := createTestKubernetesPerformer(t)
+
+	// Add multiple tasks to the same performer
+	performerID := "concurrent-test-performer"
+
+	// Add 3 tasks
+	for i := 0; i < 3; i++ {
+		success := performer.tryAddTask(performerID)
+		assert.True(t, success)
+	}
+
+	// Get the waitGroup reference
+	performer.performerStatesMu.Lock()
+	state := performer.performerTaskStates[performerID]
+	waitGroupRef := state.waitGroup
+	performer.performerStatesMu.Unlock()
+
+	// Start multiple concurrent waitForTaskCompletion calls
+	numWaiters := 3
+	waitersStarted := make(chan struct{}, numWaiters)
+	waitersFinished := make(chan struct{}, numWaiters)
+
+	for i := 0; i < numWaiters; i++ {
+		go func(waiterID int) {
+			waitersStarted <- struct{}{}
+
+			// All waiters should use the same waitGroup reference
+			performer.waitForTaskCompletion(performerID)
+
+			waitersFinished <- struct{}{}
+		}(i)
+	}
+
+	// Wait for all waiters to start
+	for i := 0; i < numWaiters; i++ {
+		<-waitersStarted
+	}
+
+	// Give waiters a moment to get to the Wait() call
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify all waiters are still using the same waitGroup
+	performer.performerStatesMu.Lock()
+	currentState := performer.performerTaskStates[performerID]
+	assert.Same(t, waitGroupRef, currentState.waitGroup, "All waiters should use the same waitGroup")
+	assert.Equal(t, PerformerStateDraining, currentState.state, "State should be draining")
+	performer.performerStatesMu.Unlock()
+
+	// Complete all tasks - this should release all waiters
+	for i := 0; i < 3; i++ {
+		performer.taskCompleted(performerID)
+	}
+
+	// Wait for all waiters to finish
+	for i := 0; i < numWaiters; i++ {
+		select {
+		case <-waitersFinished:
+			// Waiter finished successfully
+		case <-time.After(1 * time.Second):
+			t.Fatal("Waiter timed out - this indicates a deadlock or race condition")
+		}
+	}
+
+	// Verify final state
+	performer.performerStatesMu.Lock()
+	finalState := performer.performerTaskStates[performerID]
+	assert.Same(t, waitGroupRef, finalState.waitGroup, "WaitGroup reference should still be the same")
+	performer.performerStatesMu.Unlock()
+}
+
+// TestAvsKubernetesPerformer_WaitGroupStabilityUnderConcurrentOperations tests waitGroup stability under various concurrent operations
+func TestAvsKubernetesPerformer_WaitGroupStabilityUnderConcurrentOperations(t *testing.T) {
+	performer, _, _, _ := createTestKubernetesPerformer(t)
+	performerID := "stability-test-performer"
+
+	// Add initial task
+	success := performer.tryAddTask(performerID)
+	assert.True(t, success)
+
+	// Get initial waitGroup reference
+	performer.performerStatesMu.Lock()
+	initialState := performer.performerTaskStates[performerID]
+	initialWaitGroup := initialState.waitGroup
+	performer.performerStatesMu.Unlock()
+
+	// Start concurrent operations
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Try to add more tasks (should succeed until cleanup)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 5; i++ {
+			performer.tryAddTask(performerID)
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	// Goroutine 2: Call waitForTaskCompletion
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(50 * time.Millisecond) // Let some tasks get added first
+		performer.waitForTaskCompletion(performerID)
+	}()
+
+	// Goroutine 3: Complete tasks gradually
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(100 * time.Millisecond) // Let draining start
+
+		// Complete tasks in a loop until waitGroup count reaches 0
+		for i := 0; i < 10; i++ { // Upper bound to prevent infinite loop
+			performer.taskCompleted(performerID)
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	// Goroutine 4: Call cleanup after some time
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		time.Sleep(200 * time.Millisecond)
+		performer.cleanupTaskWaitGroup(performerID)
+	}()
+
+	// Wait for all operations to complete
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// All operations completed
+	case <-time.After(5 * time.Second):
+		t.Fatal("Test timed out - indicates a deadlock or race condition")
+	}
+
+	// Verify final state - waitGroup reference should still be the same
+	performer.performerStatesMu.Lock()
+	finalState := performer.performerTaskStates[performerID]
+	assert.True(t, finalState != nil, "State should still exist")
+	assert.Same(t, initialWaitGroup, finalState.waitGroup, "WaitGroup reference should never change")
+	assert.Equal(t, PerformerStateShutdown, finalState.state, "Final state should be shutdown")
+	performer.performerStatesMu.Unlock()
 }
 
 // Tests for environment variable building functionality

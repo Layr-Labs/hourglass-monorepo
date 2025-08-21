@@ -781,6 +781,7 @@ func (akp *AvsKubernetesPerformer) convertPerformerResource(performer *Performer
 }
 
 // tryAddTask attempts to add a task for the performer if it's in active state
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) tryAddTask(performerID string) bool {
 	akp.performerStatesMu.Lock()
 	defer akp.performerStatesMu.Unlock()
@@ -793,6 +794,9 @@ func (akp *AvsKubernetesPerformer) tryAddTask(performerID string) bool {
 			state:     PerformerStateActive,
 		}
 		akp.performerTaskStates[performerID] = state
+	} else if state.state == PerformerStateShutdown {
+		// Don't allow tasks on shutdown performers
+		return false
 	}
 
 	// Only allow task addition if performer is active
@@ -805,6 +809,7 @@ func (akp *AvsKubernetesPerformer) tryAddTask(performerID string) bool {
 }
 
 // taskCompleted marks a task as completed
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) taskCompleted(performerID string) {
 	akp.performerStatesMu.Lock()
 	defer akp.performerStatesMu.Unlock()
@@ -815,12 +820,15 @@ func (akp *AvsKubernetesPerformer) taskCompleted(performerID string) {
 }
 
 // waitForTaskCompletion waits for all tasks on a performer to complete
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) waitForTaskCompletion(performerID string) {
 	akp.performerStatesMu.Lock()
 	state, exists := akp.performerTaskStates[performerID]
 	if exists {
-		// Mark as draining to prevent new tasks
-		state.state = PerformerStateDraining
+		// Mark as draining to prevent new tasks (unless already shutdown)
+		if state.state != PerformerStateShutdown {
+			state.state = PerformerStateDraining
+		}
 		wg := state.waitGroup
 		akp.performerStatesMu.Unlock()
 
@@ -831,14 +839,17 @@ func (akp *AvsKubernetesPerformer) waitForTaskCompletion(performerID string) {
 	}
 }
 
-// cleanupTaskWaitGroup removes the performer state after shutdown
+// cleanupTaskWaitGroup marks the performer state as shutdown but keeps the state
+// to prevent race conditions with waitForTaskCompletion
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) cleanupTaskWaitGroup(performerID string) {
 	akp.performerStatesMu.Lock()
 	defer akp.performerStatesMu.Unlock()
 
 	if state, exists := akp.performerTaskStates[performerID]; exists {
 		state.state = PerformerStateShutdown
-		delete(akp.performerTaskStates, performerID)
+		// Do not delete the state to prevent waitGroup race conditions
+		// The state will be cleaned up when the performer map itself is cleaned up
 	}
 }
 
@@ -850,14 +861,14 @@ func (akp *AvsKubernetesPerformer) startDrainAndRemove(performer *PerformerResou
 	akp.performerStatesMu.Lock()
 	state, exists := akp.performerTaskStates[performerID]
 	if !exists {
-		// Create draining state if performer doesn't exist
+		// Create draining state if performer doesn't exist (but not if it was shutdown)
 		state = &PerformerTaskState{
 			waitGroup: &sync.WaitGroup{},
 			state:     PerformerStateDraining,
 		}
 		akp.performerTaskStates[performerID] = state
 	} else if state.state == PerformerStateDraining || state.state == PerformerStateShutdown {
-		// Already draining or shutdown
+		// Already draining or shutdown - don't restart drain process
 		akp.performerStatesMu.Unlock()
 		return
 	} else {
@@ -867,11 +878,6 @@ func (akp *AvsKubernetesPerformer) startDrainAndRemove(performer *PerformerResou
 	akp.performerStatesMu.Unlock()
 
 	go func() {
-		defer func() {
-			// No need to explicitly remove from draining state
-			// cleanupTaskWaitGroup will handle final cleanup
-		}()
-
 		akp.logger.Info("Starting performer drain",
 			zap.String("performerID", performerID),
 		)
