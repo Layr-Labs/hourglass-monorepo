@@ -8,7 +8,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 )
 
 func listCommand() *cli.Command {
@@ -20,7 +19,7 @@ func listCommand() *cli.Command {
 }
 
 func contextListAction(c *cli.Context) error {
-	log := logger.FromContext(c.Context)
+	log := config.LoggerFromContext(c.Context)
 
 	cfg, err := config.LoadConfig()
 	if err != nil {

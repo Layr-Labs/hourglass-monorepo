@@ -1,12 +1,16 @@
 package config
 
 import (
+	"context"
+	"encoding/hex"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Define custom types for context keys to avoid collisions
@@ -18,21 +22,9 @@ var (
 	EnvKey            contextKey = "env"
 	ContractClientKey contextKey = "contractClient"
 	LoggerKey         contextKey = "loggerKey"
+	KeystoreName      string     = "KEYSTORE_NAME"
+	KeystorePassword  string     = "KEYSTORE_PASSWORD"
 )
-
-type KeystoreReference struct {
-	Name string `yaml:"name"`
-	Path string `yaml:"path"`
-	Type string `yaml:"type"`
-}
-
-type Web3SignerReference struct {
-	Name           string `yaml:"name"`
-	ConfigPath     string `yaml:"configPath,omitempty"`
-	CACertPath     string `yaml:"caCertPath,omitempty"`
-	ClientCertPath string `yaml:"clientCertPath,omitempty"`
-	ClientKeyPath  string `yaml:"clientKeyPath,omitempty"`
-}
 
 type ContractOverrides struct {
 	DelegationManager string `yaml:"delegationManager,omitempty"`
@@ -44,34 +36,165 @@ type ContractOverrides struct {
 
 type Context struct {
 	Name            string `yaml:"-"`
-	ExecutorAddress string `yaml:"executorAddress"`
+	ExecutorAddress string `yaml:"executorAddress,omitempty"`
 	AVSAddress      string `yaml:"avsAddress,omitempty"`
-	OperatorAddress string `yaml:"operatorAddress"`
+	OperatorAddress string `yaml:"operatorAddress,omitempty"`
 	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
-	NetworkID       uint64 `yaml:"networkId,omitempty"`
-	L1RPCUrl        string `yaml:"rpcUrl,omitempty"`
+	L1ChainID       uint32 `yaml:"l1ChainId,omitempty"`
+	L1RPCUrl        string `yaml:"l1RpcUrl,omitempty"`
+	L2ChainID       uint32 `yaml:"l2ChainId,omitempty"`
+	L2RPCUrl        string `yaml:"l2RpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
 	PrivateKey string `yaml:"-"`
-
-	// Environment variables for deployments (non-secret values only)
-	// Secrets should be provided at runtime via flags or environment variables
-	EnvironmentVars map[string]string `yaml:"environmentVars,omitempty"`
 
 	// Path to secrets file (e.g., .env.secrets)
 	EnvSecretsPath string `yaml:"envSecretsPath"` // Remove omitempty to preserve field
 
 	// Keystore and Web3 Signer references
-	Keystores   []KeystoreReference   `yaml:"keystores,omitempty"`
-	Web3Signers []Web3SignerReference `yaml:"web3signers,omitempty"`
+	Keystores []signer.KeystoreReference `yaml:"keystores,omitempty"`
 
-	// EigenLayer contract addresses (optional - overrides chainId-based lookup)
-	ContractOverrides *ContractOverrides `yaml:"contractOverrides,omitempty"`
+	// Signing keys
+	SystemSignerKeys *signer.SigningKeys `yaml:"systemSigner,omitempty"`
+
+	// Operator Keys
+	OperatorKeys *signer.ECDSAKeyConfig `yaml:"operatorSigner,omitempty"`
+
+	// Experimental features flag
+	Experimental bool `yaml:"experimental,omitempty"`
 }
 
 type Config struct {
 	CurrentContext string              `yaml:"currentContext"`
 	Contexts       map[string]*Context `yaml:"contexts"`
+}
+
+// OperatorSignerFromContext loads the operator key signer from context
+func OperatorSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, error) {
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return nil, fmt.Errorf("no operator signing keys configured -- please use `hgctl signer` and follow the wizard to setup")
+	}
+
+	opKeys := ctx.OperatorKeys
+	if opKeys.Keystore != nil {
+		return signer.LoadKeystoreSigner(opKeys.Keystore)
+	}
+
+	if opKeys.RemoteSignerConfig != nil {
+		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)
+		}
+		return client.LoadWeb3Signer(web3SignerConfig, l)
+	}
+
+	if opKeys.PrivateKey {
+		return signer.LoadPrivateKeySigner()
+	}
+
+	return nil, fmt.Errorf("operator signing keys not found in context")
+}
+
+// SystemSignerFromContext loads the operator key signer from context
+func SystemSignerFromContext(ctx *Context, l logger.Logger) (signer.ISigner, error) {
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return nil, fmt.Errorf("no operator signing keys found in context")
+	}
+
+	opKeys := ctx.OperatorKeys
+	if opKeys.Keystore != nil {
+		return signer.LoadKeystoreSigner(opKeys.Keystore)
+	}
+
+	if opKeys.RemoteSignerConfig != nil {
+		web3SignerConfig, err := signer.LoadWeb3SignerConfig(opKeys.RemoteSignerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load web3 signer config: %w", err)
+		}
+		return client.LoadWeb3Signer(web3SignerConfig, l)
+	}
+
+	if opKeys.PrivateKey {
+		return signer.LoadPrivateKeySigner()
+	}
+
+	return nil, fmt.Errorf("operator signing keys not found in context")
+}
+
+// ConvertKeystoreToPrivateKey converts an ECDSA keystore to a hex-encoded private key
+func convertKeystoreToPrivateKey(keystorePath, password string) (string, error) {
+	// Clean and validate the path
+	keystorePath = filepath.Clean(keystorePath)
+
+	// Read the keystore file
+	keyStoreContents, err := os.ReadFile(keystorePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read keystore at %s: %w", keystorePath, err)
+	}
+
+	// Decrypt the keystore
+	key, err := keystore.DecryptKey(keyStoreContents, password)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt keystore: %w", err)
+	}
+
+	// Convert to hex string with 0x prefix
+	privateKeyHex := hex.EncodeToString(key.PrivateKey.D.Bytes())
+	return "0x" + privateKeyHex, nil
+}
+
+// GetOperatorPrivateKey retrieves the operator private key from the configured source
+// Returns an error if no operator signer is configured or if required values are missing
+func GetOperatorPrivateKey(ctx *Context) (string, error) {
+	// Ensure context and operator keys are configured
+	if ctx == nil || ctx.OperatorKeys == nil {
+		return "", fmt.Errorf("no operator signer configured in context")
+	}
+
+	// Handle private key configuration
+	if ctx.OperatorKeys.PrivateKey {
+		privateKey := os.Getenv("OPERATOR_PRIVATE_KEY")
+		if privateKey == "" {
+			return "", fmt.Errorf("operator configured to use private key but OPERATOR_PRIVATE_KEY environment variable is not set")
+		}
+		return privateKey, nil
+	}
+
+	// Handle keystore configuration
+	if ctx.OperatorKeys.Keystore != nil {
+		password := os.Getenv("OPERATOR_KEYSTORE_PASSWORD")
+		if password == "" {
+			return "", fmt.Errorf("OPERATOR_KEYSTORE_PASSWORD environment variable required for operator keystore '%s'",
+				ctx.OperatorKeys.Keystore.Name)
+		}
+
+		// Find keystore path from context
+		for _, ks := range ctx.Keystores {
+			if ks.Name == ctx.OperatorKeys.Keystore.Name {
+				privateKey, err := convertKeystoreToPrivateKey(ks.Path, password)
+				if err != nil {
+					return "", fmt.Errorf("failed to decrypt operator keystore '%s': %w", ks.Name, err)
+				}
+				return privateKey, nil
+			}
+		}
+		return "", fmt.Errorf("operator keystore '%s' not found in context", ctx.OperatorKeys.Keystore.Name)
+	}
+
+	// Handle Web3Signer configuration (not supported for contract client)
+	if ctx.OperatorKeys.RemoteSignerConfig != nil {
+		return "", fmt.Errorf("Web3Signer not supported for contract client operations")
+	}
+
+	return "", fmt.Errorf("operator signer configuration is invalid")
+}
+
+// LoggerFromContext retrieves the logger from the context
+func LoggerFromContext(ctx context.Context) logger.Logger {
+	if l, ok := ctx.Value(LoggerKey).(logger.Logger); ok {
+		return l
+	}
+	return logger.GetLogger()
 }
 
 func LoadConfig() (*Config, error) {
@@ -94,11 +217,6 @@ func LoadConfig() (*Config, error) {
 	// Set context names and initialize nil pointers
 	for name, ctx := range config.Contexts {
 		ctx.Name = name
-
-		// Initialize ContractOverrides if nil to prevent loss during save
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &ContractOverrides{}
-		}
 	}
 
 	return &config, nil
@@ -111,13 +229,6 @@ func SaveConfig(config *Config) error {
 	configDir := filepath.Dir(configPath)
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	// Ensure all contexts have initialized ContractOverrides before saving
-	for _, ctx := range config.Contexts {
-		if ctx.ContractOverrides == nil {
-			ctx.ContractOverrides = &ContractOverrides{}
-		}
 	}
 
 	data, err := yaml.Marshal(config)
@@ -147,7 +258,6 @@ func GetCurrentContext() (*Context, error) {
 }
 
 func GetConfigDir() string {
-	// Default to home directory
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".hgctl")
 }
@@ -177,16 +287,23 @@ func (c *Context) ToMap() map[string]interface{} {
 		result["avs-address"] = c.AVSAddress
 	}
 
-	if c.OperatorSetID != 0 {
-		result["operator-set-id"] = c.OperatorSetID
-	}
+	// Always show operator-set-id since 0 is a valid value
+	result["operator-set-id"] = c.OperatorSetID
 
-	if c.NetworkID != 0 {
-		result["network-id"] = c.NetworkID
+	if c.L1ChainID != 0 {
+		result["l1-chain-id"] = c.L1ChainID
 	}
 
 	if c.L1RPCUrl != "" {
-		result["rpc-url"] = c.L1RPCUrl
+		result["l1-rpc-url"] = c.L1RPCUrl
+	}
+
+	if c.L2ChainID != 0 {
+		result["l2-chain-id"] = c.L2ChainID
+	}
+
+	if c.L2RPCUrl != "" {
+		result["l2-rpc-url"] = c.L2RPCUrl
 	}
 
 	if c.ExecutorAddress != "" {
@@ -195,15 +312,6 @@ func (c *Context) ToMap() map[string]interface{} {
 
 	if c.OperatorAddress != "" {
 		result["operator-address"] = c.OperatorAddress
-	}
-
-	if c.EnvSecretsPath != "" {
-		result["env-secrets-path"] = c.EnvSecretsPath
-	}
-
-	// Add environment variables if any
-	if len(c.EnvironmentVars) > 0 {
-		result["env"] = c.EnvironmentVars
 	}
 
 	// Add env secrets path if set
@@ -216,56 +324,15 @@ func (c *Context) ToMap() map[string]interface{} {
 		result["keystores"] = c.Keystores
 	}
 
-	// Add web3signer references if any
-	if len(c.Web3Signers) > 0 {
-		result["web3signers"] = c.Web3Signers
+	// Add signer key if set
+	if c.OperatorKeys != nil {
+		result["operator-key"] = c.OperatorKeys
 	}
 
-	// Add contract overrides if any
-	if c.ContractOverrides != nil {
-		overrides := make(map[string]string)
-		if c.ContractOverrides.DelegationManager != "" {
-			overrides["delegation-manager"] = c.ContractOverrides.DelegationManager
-		}
-		if c.ContractOverrides.AllocationManager != "" {
-			overrides["allocation-manager"] = c.ContractOverrides.AllocationManager
-		}
-		if c.ContractOverrides.StrategyManager != "" {
-			overrides["strategy-manager"] = c.ContractOverrides.StrategyManager
-		}
-		if c.ContractOverrides.KeyRegistrar != "" {
-			overrides["key-registrar"] = c.ContractOverrides.KeyRegistrar
-		}
-		if c.ContractOverrides.ReleaseManager != "" {
-			overrides["release-manager"] = c.ContractOverrides.ReleaseManager
-		}
-		if len(overrides) > 0 {
-			result["contract-overrides"] = overrides
-		}
+	// Add signer key if set
+	if c.SystemSignerKeys != nil {
+		result["system-key"] = c.SystemSignerKeys
 	}
 
 	return result
-}
-
-// IsSecretVariable checks if an environment variable name indicates it contains a secret
-func IsSecretVariable(name string) bool {
-	// List of patterns that indicate secret variables
-	secretPatterns := []string{
-		"PRIVATE_KEY",
-		"PASSWORD",
-		"SECRET",
-		"TOKEN",
-		"API_KEY",
-		"MNEMONIC",
-		"SEED",
-	}
-
-	upperName := strings.ToUpper(name)
-	for _, pattern := range secretPatterns {
-		if strings.Contains(upperName, pattern) {
-			return true
-		}
-	}
-
-	return false
 }

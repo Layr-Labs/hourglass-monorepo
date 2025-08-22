@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/config"
 	"io"
 	"os"
@@ -20,13 +21,13 @@ import (
 // ChainManager handles Anvil chain lifecycle for tests
 type ChainManager struct {
 	projectRoot string
-	logger      *zap.Logger
+	logger      logger.Logger
 	l1Cmd       *exec.Cmd
 	l2Cmd       *exec.Cmd
 }
 
 // NewChainManager creates a new chain manager instance
-func NewChainManager(logger *zap.Logger) *ChainManager {
+func NewChainManager(logger logger.Logger) *ChainManager {
 	// Find project root by looking for the generateTestChainState.sh script
 	projectRoot := findHourglassRoot()
 	return &ChainManager{
@@ -172,7 +173,7 @@ func (c *ChainManager) startAnvilL1() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func logPipe(name string, pipe io.ReadCloser, logger *zap.Logger) {
+func logPipe(name string, pipe io.ReadCloser, logger logger.Logger) {
 	scanner := bufio.NewScanner(pipe)
 	for scanner.Scan() {
 		logger.Info(name, zap.String("line", scanner.Text()))

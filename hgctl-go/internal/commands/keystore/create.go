@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,7 @@ import (
 func createCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "create",
-		Usage: "Create a new BLS or ECDSA keystore",
+		Usage: "Create a new BN254 or ECDSA keystore",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "name",
@@ -37,12 +38,12 @@ func createCommand() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:     "type",
-				Usage:    "Keystore type (bn254 for BLS or ecdsa)",
+				Usage:    "Keystore type (bn254 for BN254 or ecdsa)",
 				Required: true,
 			},
 			&cli.StringFlag{
 				Name:  "key",
-				Usage: "Private key (BLS in large number format or ECDSA in hex format). If not provided, a new key will be generated",
+				Usage: "Private key (BN254 in large number format or ECDSA in hex format). If not provided, a new key will be generated",
 			},
 			&cli.StringFlag{
 				Name:  "password",
@@ -51,7 +52,7 @@ func createCommand() *cli.Command {
 			},
 		},
 		Action: func(c *cli.Context) error {
-			log := logger.FromContext(c.Context)
+			log := config.LoggerFromContext(c.Context)
 
 			name := c.String("name")
 			keystoreType := c.String("type")
@@ -64,6 +65,25 @@ func createCommand() *cli.Command {
 				return fmt.Errorf("unsupported keystore type: %s (supported: bn254, ecdsa)", keystoreType)
 			}
 
+			// Load config first to validate name uniqueness
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Get context
+			ctx, exists := cfg.Contexts[cfg.CurrentContext]
+			if !exists {
+				return fmt.Errorf("context %s not found", cfg.CurrentContext)
+			}
+
+			// Check if keystore with same name already exists in the context
+			for _, ks := range ctx.Keystores {
+				if ks.Name == name {
+					return fmt.Errorf("keystore with name '%s' already exists in context '%s'", name, cfg.CurrentContext)
+				}
+			}
+
 			// Prompt for password if not provided
 			if password == "" {
 				var err error
@@ -73,21 +93,21 @@ func createCommand() *cli.Command {
 				}
 			}
 
-			// Create keystore directory
-			cfg, err := config.LoadConfig()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
+			// Create keystore directory with absolute path
 			keystoreDir := filepath.Join(config.GetConfigDir(), cfg.CurrentContext, "keystores", name)
 			if err := os.MkdirAll(keystoreDir, 0700); err != nil {
 				return fmt.Errorf("failed to create keystore directory: %w", err)
 			}
 
-			keystorePath := filepath.Join(keystoreDir, "key.json")
+			// Ensure we have an absolute path
+			keystorePath, err := filepath.Abs(filepath.Join(keystoreDir, "key.json"))
+			if err != nil {
+				return fmt.Errorf("failed to get absolute keystore path: %w", err)
+			}
 
-			// Check if keystore already exists
+			// Check if keystore file already exists on disk
 			if _, err := os.Stat(keystorePath); err == nil {
-				return fmt.Errorf("keystore already exists at %s", keystorePath)
+				return fmt.Errorf("keystore file already exists at %s", keystorePath)
 			}
 
 			log.Info("Creating keystore",
@@ -109,14 +129,8 @@ func createCommand() *cli.Command {
 				return fmt.Errorf("unsupported keystore type: %s", keystoreType)
 			}
 
-			// Get context
-			ctx, exists := cfg.Contexts[cfg.CurrentContext]
-			if !exists {
-				return fmt.Errorf("context %s not found", cfg.Contexts[cfg.CurrentContext].Name)
-			}
-
 			// Add keystore reference
-			ctx.Keystores = append(ctx.Keystores, config.KeystoreReference{
+			ctx.Keystores = append(ctx.Keystores, signer.KeystoreReference{
 				Name: name,
 				Path: keystorePath,
 				Type: keystoreType,
@@ -144,10 +158,10 @@ func createBLSKeystore(log logger.Logger, privateKey, path, password string) err
 
 	if privateKey == "" {
 		// Generate new key
-		log.Info("Generating new BLS private key")
+		log.Info("Generating new BN254 private key")
 		privKey, _, err = scheme.GenerateKeyPair()
 		if err != nil {
-			return fmt.Errorf("failed to generate BLS private key: %w", err)
+			return fmt.Errorf("failed to generate BN254 private key: %w", err)
 		}
 	} else {
 		// Use provided key
@@ -180,9 +194,9 @@ func createBLSKeystore(log logger.Logger, privateKey, path, password string) err
 		return errors.New("failed to extract the private key from the keystore file")
 	}
 
-	log.Info("✅ BLS keystore created successfully",
+	log.Info("✅ BN254 keystore created successfully",
 		zap.String("path", path))
-	log.Info("🔑 Save this BLS private key in a secure location:",
+	log.Info("🔑 Save this BN254 private key in a secure location:",
 		zap.String("privateKey", string(privateKeyData.Bytes())))
 
 	return nil
