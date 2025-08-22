@@ -22,7 +22,7 @@ import (
 )
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
-	res, err := e.handleReceivedTask(req)
+	res, err := e.handleReceivedTask(ctx, req)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to handle received task",
 			"taskId", req.TaskId,
@@ -282,7 +282,7 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 	return newPerformer, nil
 }
 
-func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
+func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
 	e.logger.Sugar().Infow("Received task from AVS avsPerf",
 		"taskId", task.TaskId,
 		"avsAddress", task.AvsAddress,
@@ -314,7 +314,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		AggregatorAddress: task.GetAggregatorAddress(),
 		OperatorSetId:     task.OperatorSetId,
 	}
-	if err := e.store.SaveInflightTask(context.Background(), task.TaskId, taskInfo); err != nil {
+	if err := e.store.SaveInflightTask(ctx, task.TaskId, taskInfo); err != nil {
 		e.logger.Sugar().Warnw("Failed to save inflight task to storage",
 			"error", err,
 			"taskId", task.TaskId,
@@ -332,7 +332,8 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		}
 	}()
 
-	response, err := avsPerf.RunTask(context.Background(), pt)
+	response, err := avsPerf.RunTask(ctx, pt)
+
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to run task",
 			"taskId", task.TaskId,
