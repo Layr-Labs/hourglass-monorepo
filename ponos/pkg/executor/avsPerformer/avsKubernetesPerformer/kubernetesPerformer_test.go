@@ -462,6 +462,10 @@ func TestAvsKubernetesPerformer_StateTransitionUnidirectional(t *testing.T) {
 	performer.performerStatesMu.Unlock()
 
 	// Test: waitForTaskCompletion should NOT regress Shutdown back to Draining
+	go func() {
+		time.Sleep(1 * time.Second)
+		performer.taskCompleted("performer-1")
+	}()
 	performer.waitForTaskCompletion("performer-1")
 	performer.performerStatesMu.Lock()
 	assert.Equal(t, PerformerStateShutdown, state.state, "Should remain shutdown, not regress to draining")
@@ -470,9 +474,6 @@ func TestAvsKubernetesPerformer_StateTransitionUnidirectional(t *testing.T) {
 	// Test: tryAddTask should still fail for shutdown performer
 	success = performer.tryAddTask("performer-1")
 	assert.False(t, success, "Should not allow tasks on shutdown performer")
-
-	// Cleanup
-	performer.taskCompleted("performer-1")
 }
 
 // TestAvsKubernetesPerformer_ConcurrentWaitForTaskCompletion tests that concurrent calls to waitForTaskCompletion are safe
@@ -564,15 +565,20 @@ func TestAvsKubernetesPerformer_WaitGroupStabilityUnderConcurrentOperations(t *t
 
 	// Start concurrent operations
 	var wg sync.WaitGroup
+	tasksAdded := make(chan int, 1) // Channel to communicate how many tasks were actually added
 
 	// Goroutine 1: Try to add more tasks (should succeed until cleanup)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		successfulAdds := 0
 		for i := 0; i < 5; i++ {
-			performer.tryAddTask(performerID)
+			if performer.tryAddTask(performerID) {
+				successfulAdds++
+			}
 			time.Sleep(10 * time.Millisecond)
 		}
+		tasksAdded <- successfulAdds // Send count to completion goroutine
 	}()
 
 	// Goroutine 2: Call waitForTaskCompletion
@@ -589,8 +595,18 @@ func TestAvsKubernetesPerformer_WaitGroupStabilityUnderConcurrentOperations(t *t
 		defer wg.Done()
 		time.Sleep(100 * time.Millisecond) // Let draining start
 
-		// Complete tasks in a loop until waitGroup count reaches 0
-		for i := 0; i < 10; i++ { // Upper bound to prevent infinite loop
+		// Get the count of successfully added tasks
+		var additionalTasksAdded int
+		select {
+		case additionalTasksAdded = <-tasksAdded:
+		case <-time.After(500 * time.Millisecond):
+			// Fallback if channel read times out
+			additionalTasksAdded = 0
+		}
+
+		// Complete tasks: 1 initial + however many were actually added in goroutine 1
+		totalTasksToComplete := 1 + additionalTasksAdded
+		for i := 0; i < totalTasksToComplete; i++ {
 			performer.taskCompleted(performerID)
 			time.Sleep(20 * time.Millisecond)
 		}
