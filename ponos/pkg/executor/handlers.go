@@ -22,7 +22,7 @@ import (
 )
 
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
-	res, err := e.handleReceivedTask(req)
+	res, err := e.handleReceivedTask(ctx, req)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to handle received task",
 			"taskId", req.TaskId,
@@ -301,7 +301,7 @@ func (e *Executor) getOrCreateAvsPerformer(avsAddress string) (avsPerformer.IAvs
 	return newPerformer, nil
 }
 
-func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
+func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
 	e.logger.Sugar().Infow("Received task from AVS avsPerf",
 		"taskId", task.TaskId,
 		"avsAddress", task.AvsAddress,
@@ -312,8 +312,9 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	}
 
 	value, ok := e.avsPerformers.Load(task.AvsAddress)
+
 	if !ok {
-		return nil, fmt.Errorf("AVS avsPerf not found for address %s", task.AvsAddress)
+		return nil, fmt.Errorf("AVS avsPerf not found for address %s", avsAddress)
 	}
 	avsPerf := value.(avsPerformer.IAvsPerformer)
 
@@ -327,35 +328,48 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	// Save inflight task to storage
 	taskInfo := &storage.TaskInfo{
 		TaskId:            task.TaskId,
-		AvsAddress:        task.AvsAddress,
+		AvsAddress:        avsAddress,
 		OperatorAddress:   e.config.Operator.Address,
 		ReceivedAt:        time.Now(),
 		Status:            "processing",
 		AggregatorAddress: task.GetAggregatorAddress(),
 		OperatorSetId:     task.OperatorSetId,
 	}
-	if err := e.store.SaveInflightTask(context.Background(), task.TaskId, taskInfo); err != nil {
+	if err := e.store.SaveInflightTask(ctx, task.TaskId, taskInfo); err != nil {
 		e.logger.Sugar().Warnw("Failed to save inflight task to storage",
 			"error", err,
 			"taskId", task.TaskId,
 		)
 	}
 
-	response, err := avsPerf.RunTask(context.Background(), pt)
+	// Cleanup inflight task and delete from storage irrespective of the result of the task.
+	defer func() {
+		e.inflightTasks.Delete(task.TaskId)
+		if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
+			e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
+				"error", err,
+				"taskId", task.TaskId,
+			)
+		}
+	}()
+
+	response, err := avsPerf.RunTask(ctx, pt)
+
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to run task",
 			"taskId", task.TaskId,
-			"avsAddress", task.AvsAddress,
+			"avsAddress", avsAddress,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to run task %s", err.Error())
 	}
 
 	sig, digest, err := e.signResult(pt, response)
+
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to sign result",
 			zap.String("taskId", task.TaskId),
-			zap.String("avsAddress", task.AvsAddress),
+			zap.String("avsAddress", avsAddress),
 			zap.Error(err),
 		)
 		return nil, status.Errorf(codes.Internal, "Failed to sign result %s", err.Error())
@@ -363,27 +377,17 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 
 	e.logger.Sugar().Infow("returning task result to aggregator",
 		zap.String("taskId", task.TaskId),
-		zap.String("avsAddress", task.AvsAddress),
+		zap.String("avsAddress", avsAddress),
 		zap.String("operatorAddress", e.config.Operator.Address),
 		zap.String("signature", string(sig)),
 	)
-
-	e.inflightTasks.Delete(task.TaskId)
-
-	// Remove inflight task from storage
-	if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
-		e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
-			"error", err,
-			"taskId", task.TaskId,
-		)
-	}
 
 	return &executorV1.TaskResult{
 		TaskId:          response.TaskID,
 		OperatorAddress: e.config.Operator.Address,
 		Output:          response.Result,
 		Signature:       sig,
-		AvsAddress:      task.AvsAddress,
+		AvsAddress:      avsAddress,
 		OutputDigest:    digest[:],
 	}, nil
 }

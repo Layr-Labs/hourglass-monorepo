@@ -170,6 +170,7 @@ func (e *Executor) Initialize(ctx context.Context) error {
 					zap.String("deploymentMode", string(avs.DeploymentMode)),
 					zap.Error(err),
 				)
+				return err
 			} else {
 				e.logger.Sugar().Infow("AVS performer deployed successfully",
 					zap.String("avsAddress", avsAddress),

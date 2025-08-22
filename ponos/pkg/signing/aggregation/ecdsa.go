@@ -3,16 +3,17 @@ package aggregation
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 type AggregatedECDSACertificate struct {
@@ -197,20 +198,20 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// verify the signature
-	sig, err := tra.VerifyResponseSignature(taskResponse, operator)
+	// Calculate digest from Output
+	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
+
+	// verify the signature using calculated digest
+	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
 	if err != nil {
 		return fmt.Errorf("failed to verify signature: %w", err)
 	}
-
-	var digest [32]byte
-	copy(digest[:], taskResponse.OutputDigest)
 
 	rr := &ReceivedECDSAResponseWithDigest{
 		TaskId:     taskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
-		Digest:     digest,
+		Digest:     outputDigest,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -239,8 +240,8 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 			mostCommonCount:    1,
 		}
 		// Track this digest for the first operator
-		tra.aggregatedOperators.digestCounts[digest] = 1
-		tra.aggregatedOperators.digestResponses[digest] = rr
+		tra.aggregatedOperators.digestCounts[outputDigest] = 1
+		tra.aggregatedOperators.digestResponses[outputDigest] = rr
 		tra.aggregatedOperators.mostCommonResponse = rr
 	} else {
 		tra.aggregatedOperators.signersSignatures[operator.GetAddress()] = taskResponse.Signature
@@ -248,18 +249,18 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.totalSigners++
 
 		// Update digest count
-		newCount := tra.aggregatedOperators.digestCounts[digest] + 1
-		tra.aggregatedOperators.digestCounts[digest] = newCount
+		newCount := tra.aggregatedOperators.digestCounts[outputDigest] + 1
+		tra.aggregatedOperators.digestCounts[outputDigest] = newCount
 
 		// Store the first response for this digest (if not already stored)
-		if _, exists := tra.aggregatedOperators.digestResponses[digest]; !exists {
-			tra.aggregatedOperators.digestResponses[digest] = rr
+		if _, exists := tra.aggregatedOperators.digestResponses[outputDigest]; !exists {
+			tra.aggregatedOperators.digestResponses[outputDigest] = rr
 		}
 
 		// Check if this digest is now the most common
 		if newCount > tra.aggregatedOperators.mostCommonCount {
 			tra.aggregatedOperators.mostCommonCount = newCount
-			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[digest]
+			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[outputDigest]
 		}
 	}
 
@@ -278,13 +279,14 @@ func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 	return tra.aggregatedOperators.totalSigners >= required
 }
 
-func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[common.Address]) (*ecdsa.Signature, error) {
+func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[common.Address], outputDigest [32]byte) (*ecdsa.Signature, error) {
 	sig, err := ecdsa.NewSignatureFromBytes(taskResponse.Signature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
 	}
 
-	if verified, err := sig.VerifyWithAddress(taskResponse.OutputDigest, operator.PublicKey); err != nil {
+	// Use calculated digest instead of network-provided OutputDigest for security
+	if verified, err := sig.VerifyWithAddress(outputDigest[:], operator.PublicKey); err != nil {
 		return nil, fmt.Errorf("signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("signature verification failed: signature does not match operator public key")

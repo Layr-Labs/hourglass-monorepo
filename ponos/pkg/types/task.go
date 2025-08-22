@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -70,6 +71,11 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	var avsAddress string
 	var taskId string
 
+	// validate log.Arguments length matches the onchain event
+	if len(log.Arguments) < 9 {
+		return nil, fmt.Errorf("invalid log arguments length: %d", len(log.Arguments))
+	}
+
 	taskId, ok := log.Arguments[1].Value.(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task id")
@@ -91,19 +97,17 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 
 	type outputDataType struct {
 		ExecutorOperatorSetId uint32
-		TaskDeadline          uint64
+		TaskDeadline          *big.Int `json:"TaskDeadline"`
 		Payload               []byte
 	}
 	var od *outputDataType
 	if err := json.Unmarshal(outputBytes, &od); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal output data: %w", err)
 	}
-	parsedTaskDeadline := new(big.Int).SetUint64(od.TaskDeadline)
-	// Check for integer overflow when converting to int64
-	if parsedTaskDeadline.Int64() < 0 {
-		return nil, fmt.Errorf("value %s exceeds int64 bounds", parsedTaskDeadline.String())
+	if od.TaskDeadline.Cmp(big.NewInt(math.MaxInt64)) > 0 {
+		return nil, fmt.Errorf("task deadline too large for duration calculation: %s", od.TaskDeadline.String())
 	}
-	taskDeadlineTime := time.Now().Add(time.Duration(parsedTaskDeadline.Int64()) * time.Second)
+	taskDeadlineTime := time.Now().Add(time.Duration(od.TaskDeadline.Uint64()) * time.Second)
 
 	return &Task{
 		TaskId:              taskId,
