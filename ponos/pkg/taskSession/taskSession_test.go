@@ -196,7 +196,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		require.Error(t, err)
@@ -253,7 +253,7 @@ func TestNewECDSATaskSession(t *testing.T) {
 
 		session, err := NewECDSATaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		require.NoError(t, err)
@@ -282,7 +282,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -396,7 +396,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -428,7 +428,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -461,7 +461,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 
 		session, err := NewECDSATaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -499,7 +499,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -553,7 +553,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -594,7 +594,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -697,7 +697,7 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		// This should fail because operator set 999 doesn't exist
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		require.Error(t, err)
@@ -802,7 +802,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		// Should return error due to no operators
@@ -827,7 +827,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		// Should return error due to invalid threshold
@@ -852,7 +852,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 
 		// Should successfully create session with 100% threshold
@@ -879,7 +879,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 
 		session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 
@@ -909,7 +909,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 
 		bn254Session, err := NewBN254TaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			operatorPeersWeight, logger,
+			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 		require.NotNil(t, bn254Session)
@@ -924,7 +924,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 
 		ecdsaSession, err := NewECDSATaskSession(
 			ctx, cancel, task, "0xaggregator", []byte("signature"),
-			ecdsaOperatorPeersWeight, logger,
+			ecdsaOperatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
 		require.NotNil(t, ecdsaSession)
@@ -932,5 +932,55 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		// Both should have the same task configuration
 		assert.Equal(t, bn254Session.Task.TaskId, ecdsaSession.Task.TaskId)
 		assert.Equal(t, bn254Session.Task.ThresholdBips, ecdsaSession.Task.ThresholdBips)
+	})
+}
+
+func TestTaskSession_TLSConfiguration(t *testing.T) {
+	t.Run("secure connections by default", func(t *testing.T) {
+		operators, _, err := createBN254TestOperators(2)
+		require.NoError(t, err)
+
+		task := createTestTask()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		operatorPeersWeight := &operatorManager.PeerWeight{
+			Operators: operators,
+		}
+
+		logger := zaptest.NewLogger(t)
+
+		// Test with secure connections (insecureExecutorConnections = false)
+		secureSession, err := NewBN254TaskSession(
+			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			operatorPeersWeight, false, logger,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, secureSession)
+		assert.False(t, secureSession.insecureExecutorConnections, "Should use secure connections by default")
+	})
+
+	t.Run("insecure connections for local development", func(t *testing.T) {
+		operators, _, err := createECDSATestOperators(2)
+		require.NoError(t, err)
+
+		task := createTestTask()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		operatorPeersWeight := &operatorManager.PeerWeight{
+			Operators: operators,
+		}
+
+		logger := zaptest.NewLogger(t)
+
+		// Test with insecure connections (insecureExecutorConnections = true)
+		insecureSession, err := NewECDSATaskSession(
+			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			operatorPeersWeight, true, logger,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, insecureSession)
+		assert.True(t, insecureSession.insecureExecutorConnections, "Should allow insecure connections when explicitly configured")
 	})
 }
