@@ -321,6 +321,17 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		)
 	}
 
+	// Cleanup inflight task and delete from storage irrespective of the result of the task.
+	defer func() {
+		e.inflightTasks.Delete(task.TaskId)
+		if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
+			e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
+				"error", err,
+				"taskId", task.TaskId,
+			)
+		}
+	}()
+
 	response, err := avsPerf.RunTask(context.Background(), pt)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to run task",
@@ -332,6 +343,7 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 	}
 
 	sig, digest, err := e.signResult(pt, response)
+
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to sign result",
 			zap.String("taskId", task.TaskId),
@@ -347,16 +359,6 @@ func (e *Executor) handleReceivedTask(task *executorV1.TaskSubmission) (*executo
 		zap.String("operatorAddress", e.config.Operator.Address),
 		zap.String("signature", string(sig)),
 	)
-
-	e.inflightTasks.Delete(task.TaskId)
-
-	// Remove inflight task from storage
-	if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
-		e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
-			"error", err,
-			"taskId", task.TaskId,
-		)
-	}
 
 	return &executorV1.TaskResult{
 		TaskId:          response.TaskID,
