@@ -34,6 +34,21 @@ const (
 	defaultGRPCPort           = 8080
 )
 
+// PerformerLifecycleState represents the lifecycle state of a performer
+type PerformerLifecycleState int
+
+const (
+	PerformerStateActive PerformerLifecycleState = iota
+	PerformerStateDraining
+	PerformerStateShutdown
+)
+
+// PerformerTaskState holds task tracking state for a performer
+type PerformerTaskState struct {
+	waitGroup *sync.WaitGroup
+	state     PerformerLifecycleState
+}
+
 // PerformerResource holds information about a Kubernetes performer
 type PerformerResource struct {
 	performerID string
@@ -65,13 +80,9 @@ type AvsKubernetesPerformer struct {
 	nextPerformer        *PerformerResource
 	performerResourcesMu sync.Mutex
 
-	// Task tracking
-	taskWaitGroups   map[string]*sync.WaitGroup
-	taskWaitGroupsMu sync.Mutex
-
-	// Draining tracking
-	drainingPerformers   map[string]struct{}
-	drainingPerformersMu sync.Mutex
+	// Task tracking - single mutex protects both maps and lifecycle state
+	performerTaskStates map[string]*PerformerTaskState
+	performerStatesMu   sync.Mutex
 
 	// Deployment tracking
 	activeDeploymentMu sync.Mutex
@@ -104,15 +115,14 @@ func NewAvsKubernetesPerformer(
 	crdOps := kubernetesManager.NewCRDOperations(clientWrapper.CRDClient, kubernetesConfig, logger)
 
 	return &AvsKubernetesPerformer{
-		config:             config,
-		kubernetesConfig:   kubernetesConfig,
-		logger:             logger,
-		peeringFetcher:     peeringFetcher,
-		l1ContractCaller:   l1ContractCaller,
-		kubernetesManager:  crdOps,
-		clientWrapper:      clientWrapper,
-		taskWaitGroups:     make(map[string]*sync.WaitGroup),
-		drainingPerformers: make(map[string]struct{}),
+		config:              config,
+		kubernetesConfig:    kubernetesConfig,
+		logger:              logger,
+		peeringFetcher:      peeringFetcher,
+		l1ContractCaller:    l1ContractCaller,
+		kubernetesManager:   crdOps,
+		clientWrapper:       clientWrapper,
+		performerTaskStates: make(map[string]*PerformerTaskState),
 	}, nil
 }
 
@@ -549,9 +559,10 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	}
 
 	// Track this task with the performer's WaitGroup
-	wg := akp.getOrCreateTaskWaitGroup(currentPerformer.performerID)
-	wg.Add(1)
-	defer wg.Done()
+	if !akp.tryAddTask(currentPerformer.performerID) {
+		return nil, fmt.Errorf("performer %s is no longer accepting tasks (draining or shutdown)", currentPerformer.performerID)
+	}
+	defer akp.taskCompleted(currentPerformer.performerID)
 
 	// Execute the task using the pre-created client
 	res, err := currentPerformer.client.ExecuteTask(ctx, &performerV1.TaskRequest{
@@ -769,35 +780,77 @@ func (akp *AvsKubernetesPerformer) convertPerformerResource(performer *Performer
 	}
 }
 
-// getOrCreateTaskWaitGroup returns the WaitGroup for a performer
-func (akp *AvsKubernetesPerformer) getOrCreateTaskWaitGroup(performerID string) *sync.WaitGroup {
-	akp.taskWaitGroupsMu.Lock()
-	defer akp.taskWaitGroupsMu.Unlock()
+// tryAddTask attempts to add a task for the performer if it's in active state
+// LOCKING: this will acquire lock on the state to modify.
+func (akp *AvsKubernetesPerformer) tryAddTask(performerID string) bool {
+	akp.performerStatesMu.Lock()
+	defer akp.performerStatesMu.Unlock()
 
-	wg, exists := akp.taskWaitGroups[performerID]
+	state, exists := akp.performerTaskStates[performerID]
 	if !exists {
-		wg = &sync.WaitGroup{}
-		akp.taskWaitGroups[performerID] = wg
+		// Create new active state for this performer
+		state = &PerformerTaskState{
+			waitGroup: &sync.WaitGroup{},
+			state:     PerformerStateActive,
+		}
+		akp.performerTaskStates[performerID] = state
+	} else if state.state == PerformerStateShutdown {
+		// Don't allow tasks on shutdown performers
+		return false
 	}
-	return wg
+
+	// Only allow task addition if performer is active
+	if state.state != PerformerStateActive {
+		return false
+	}
+
+	state.waitGroup.Add(1)
+	return true
+}
+
+// taskCompleted marks a task as completed
+// LOCKING: this will acquire lock on the state to modify.
+func (akp *AvsKubernetesPerformer) taskCompleted(performerID string) {
+	akp.performerStatesMu.Lock()
+	defer akp.performerStatesMu.Unlock()
+
+	if state, exists := akp.performerTaskStates[performerID]; exists {
+		state.waitGroup.Done()
+	}
 }
 
 // waitForTaskCompletion waits for all tasks on a performer to complete
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) waitForTaskCompletion(performerID string) {
-	akp.taskWaitGroupsMu.Lock()
-	wg, exists := akp.taskWaitGroups[performerID]
-	akp.taskWaitGroupsMu.Unlock()
+	akp.performerStatesMu.Lock()
+	state, exists := akp.performerTaskStates[performerID]
+	if exists {
+		// Mark as draining to prevent new tasks (unless already shutdown)
+		if state.state != PerformerStateShutdown {
+			state.state = PerformerStateDraining
+		}
+		wg := state.waitGroup
+		akp.performerStatesMu.Unlock()
 
-	if exists && wg != nil {
+		// Wait outside the critical section
 		wg.Wait()
+	} else {
+		akp.performerStatesMu.Unlock()
 	}
 }
 
-// cleanupTaskWaitGroup removes the WaitGroup for a performer
+// cleanupTaskWaitGroup marks the performer state as shutdown but keeps the state
+// to prevent race conditions with waitForTaskCompletion
+// LOCKING: this will acquire lock on the state to modify.
 func (akp *AvsKubernetesPerformer) cleanupTaskWaitGroup(performerID string) {
-	akp.taskWaitGroupsMu.Lock()
-	defer akp.taskWaitGroupsMu.Unlock()
-	delete(akp.taskWaitGroups, performerID)
+	akp.performerStatesMu.Lock()
+	defer akp.performerStatesMu.Unlock()
+
+	if state, exists := akp.performerTaskStates[performerID]; exists {
+		state.state = PerformerStateShutdown
+		// Do not delete the state to prevent waitGroup race conditions
+		// The state will be cleaned up when the performer map itself is cleaned up
+	}
 }
 
 // startDrainAndRemove initiates draining of a performer in a separate goroutine
@@ -805,21 +858,26 @@ func (akp *AvsKubernetesPerformer) startDrainAndRemove(performer *PerformerResou
 	performerID := performer.performerID
 
 	// Check if already draining
-	akp.drainingPerformersMu.Lock()
-	if _, exists := akp.drainingPerformers[performerID]; exists {
-		akp.drainingPerformersMu.Unlock()
+	akp.performerStatesMu.Lock()
+	state, exists := akp.performerTaskStates[performerID]
+	if !exists {
+		// Create draining state if performer doesn't exist (but not if it was shutdown)
+		state = &PerformerTaskState{
+			waitGroup: &sync.WaitGroup{},
+			state:     PerformerStateDraining,
+		}
+		akp.performerTaskStates[performerID] = state
+	} else if state.state == PerformerStateDraining || state.state == PerformerStateShutdown {
+		// Already draining or shutdown - don't restart drain process
+		akp.performerStatesMu.Unlock()
 		return
+	} else {
+		// Mark as draining
+		state.state = PerformerStateDraining
 	}
-	akp.drainingPerformers[performerID] = struct{}{}
-	akp.drainingPerformersMu.Unlock()
+	akp.performerStatesMu.Unlock()
 
 	go func() {
-		defer func() {
-			akp.drainingPerformersMu.Lock()
-			delete(akp.drainingPerformers, performerID)
-			akp.drainingPerformersMu.Unlock()
-		}()
-
 		akp.logger.Info("Starting performer drain",
 			zap.String("performerID", performerID),
 		)
@@ -869,12 +927,13 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 		zap.String("avsAddress", akp.config.AvsAddress),
 	)
 
-	// Clear draining performers
-	akp.drainingPerformersMu.Lock()
-	for performerID := range akp.drainingPerformers {
-		delete(akp.drainingPerformers, performerID)
+	// Mark all performers as shutdown
+	akp.performerStatesMu.Lock()
+	for performerID, state := range akp.performerTaskStates {
+		state.state = PerformerStateShutdown
+		delete(akp.performerTaskStates, performerID)
 	}
-	akp.drainingPerformersMu.Unlock()
+	akp.performerStatesMu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
