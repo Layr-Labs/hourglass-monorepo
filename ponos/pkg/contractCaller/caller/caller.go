@@ -3,6 +3,9 @@ package caller
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
@@ -29,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"math/big"
-	"time"
 )
 
 type ContractCaller struct {
@@ -192,8 +193,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
 	}
 
-	var digest [32]byte
-	copy(digest[:], aggCert.TaskResponseDigest)
+	digest := aggCert.TaskResponseDigest
 
 	cert := ITaskMailbox.IBN254CertificateVerifierTypesBN254Certificate{
 		ReferenceTimestamp: globalTableRootReferenceTimestamp,

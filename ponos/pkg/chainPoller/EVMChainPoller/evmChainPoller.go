@@ -3,12 +3,13 @@ package EVMChainPoller
 import (
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -297,6 +298,10 @@ func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
 func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber uint64) ([]*ethereum.EthereumEventLog, error) {
 	var wg sync.WaitGroup
 
+	// TODO: make this configurable in the future
+	ctxWithTimeout, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	allContracts := ecp.listAllInterestingContracts()
 	ecp.logger.Sugar().Infow("Fetching logs for interesting contracts",
 		zap.Any("contracts", allContracts),
@@ -313,7 +318,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				zap.String("contract", contract),
 				zap.Uint64("blockNumber", blockNumber),
 			)
-			logs, err := ecp.ethClient.GetLogs(context.Background(), contract, blockNumber, blockNumber)
+			logs, err := ecp.ethClient.GetLogs(ctxWithTimeout, contract, blockNumber, blockNumber)
 			if err != nil {
 				ecp.logger.Sugar().Errorw("Failed to fetch logs for contract",
 					zap.String("contract", contract),
