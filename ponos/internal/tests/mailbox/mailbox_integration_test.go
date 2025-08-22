@@ -457,7 +457,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			taskResult.OutputDigest = ecdsaDigest[:]
 
 			fmt.Printf("TaskResult %+v\n", taskResult)
-			err = resultAgg.ProcessNewSignature(ctx, task.TaskId, taskResult)
+			err = resultAgg.ProcessNewSignature(ctx, taskResult)
 			assert.Nil(t, err)
 
 			assert.True(t, resultAgg.SigningThresholdMet())

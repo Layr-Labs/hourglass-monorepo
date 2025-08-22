@@ -157,15 +157,14 @@ func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
 // Returns true if the threshold is met after this submission, false otherwise.
 func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	ctx context.Context,
-	taskId string,
 	taskResponse *types.TaskResult,
 ) error {
 	tra.mu.Lock()
 	defer tra.mu.Unlock()
 
-	// Validate task ID matches
-	if taskId != taskResponse.TaskId {
-		return fmt.Errorf("task ID mismatch: expected %s, got %s", taskId, taskResponse.TaskId)
+	// Validate task ID matches the expected task ID for this aggregator
+	if tra.TaskId != taskResponse.TaskId {
+		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
 	}
 
 	// Validate operator is in the allowed set
@@ -200,7 +199,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 
 	rr := &ReceivedBN254ResponseWithDigest{
-		TaskId:     taskId,
+		TaskId:     tra.TaskId,
 		TaskResult: taskResponse,
 		Signature:  sig,
 		Digest:     outputDigest,

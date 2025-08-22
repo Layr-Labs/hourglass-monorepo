@@ -82,7 +82,7 @@ func Test_Aggregation(t *testing.T) {
 			remainingSigs[i] = sig
 
 			// Process the signature
-			err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 		}
 
@@ -200,7 +200,7 @@ func Test_Aggregation(t *testing.T) {
 			remainingSigs[i] = sig.Bytes()
 
 			// Process the signature
-			err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 		}
 
@@ -287,7 +287,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig0, err := privateKeys[0].SignSolidityCompatible(digestA)
 		require.NoError(t, err)
 		taskResult0.Signature = sig0.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult0)
+		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
 
 		// Verify mostCommonCount is 1 and points to digest A
@@ -304,7 +304,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig1, err := privateKeys[1].SignSolidityCompatible(digestB)
 		require.NoError(t, err)
 		taskResult1.Signature = sig1.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult1)
+		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
 
 		// Most common should still be A (both have count 1, A came first)
@@ -321,7 +321,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig2, err := privateKeys[2].SignSolidityCompatible(digestA)
 		require.NoError(t, err)
 		taskResult2.Signature = sig2.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult2)
+		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
 
 		// Now A should have count 2 and be most common
@@ -339,7 +339,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig3, err := privateKeys[3].SignSolidityCompatible(digestC)
 		require.NoError(t, err)
 		taskResult3.Signature = sig3.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult3)
+		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
 
 		// A should still be most common with count 2
@@ -356,7 +356,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig4, err := privateKeys[4].SignSolidityCompatible(digestB)
 		require.NoError(t, err)
 		taskResult4.Signature = sig4.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult4)
+		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
 
 		// A should still be most common (both A and B have count 2, but A reached 2 first)
@@ -429,7 +429,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		taskResult.Signature = sig.Bytes()
 
 		// Process the single signature
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
 		// Verify mostCommonResponse is set correctly
@@ -508,7 +508,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			require.NoError(t, err)
 			taskResult.Signature = sig.Bytes()
 
-			err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 
 			// Most common count should increase with each submission
@@ -584,7 +584,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig0, err := privateKeys[0].Sign(digestA[:])
 		require.NoError(t, err)
 		taskResult0.Signature = sig0.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult0)
+		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
 
 		// Verify mostCommonCount is 1 and points to digest A
@@ -601,7 +601,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig1, err := privateKeys[1].Sign(digestB[:])
 		require.NoError(t, err)
 		taskResult1.Signature = sig1.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult1)
+		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
 
 		// Most common should still be A (both have count 1, A came first)
@@ -618,7 +618,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig2, err := privateKeys[2].Sign(digestA[:])
 		require.NoError(t, err)
 		taskResult2.Signature = sig2.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult2)
+		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
 
 		// Now A should have count 2 and be most common
@@ -636,7 +636,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig3, err := privateKeys[3].Sign(digestC[:])
 		require.NoError(t, err)
 		taskResult3.Signature = sig3.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult3)
+		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
 
 		// A should still be most common with count 2
@@ -653,7 +653,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		sig4, err := privateKeys[4].Sign(digestB[:])
 		require.NoError(t, err)
 		taskResult4.Signature = sig4.Bytes()
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult4)
+		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
 
 		// A should still be most common (both A and B have count 2, but A reached 2 first)
@@ -727,7 +727,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			require.NoError(t, err)
 			taskResult.Signature = sig.Bytes()
 
-			err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 
 			// Most common count should increase with each submission
@@ -795,7 +795,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 
 		// Process the signature - our implementation should calculate digest from Output
 		// and ignore the malicious OutputDigest, so this should succeed
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
 		// Verify that the aggregator used the calculated digest, not the malicious one
@@ -870,7 +870,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 
 		// Process the signature - our implementation should calculate digest from Output
 		// and ignore the malicious OutputDigest, so this should succeed
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
 		// Verify that the aggregator used the calculated digest, not the malicious one
@@ -936,7 +936,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		taskResult.Signature = sig.Bytes()
 
 		// Process the signature with mismatched task ID
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskResult)
 
 		// Should return an error
 		require.Error(t, err)
@@ -957,7 +957,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		}
 		correctTaskResult.Signature = sig.Bytes()
 
-		err = agg.ProcessNewSignature(context.Background(), taskId, correctTaskResult)
+		err = agg.ProcessNewSignature(context.Background(), correctTaskResult)
 		require.NoError(t, err)
 
 		// Verify signature was recorded
@@ -1016,7 +1016,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		taskResult.Signature = sig.Bytes()
 
 		// Process the signature with mismatched task ID
-		err = agg.ProcessNewSignature(context.Background(), taskId, taskResult)
+		err = agg.ProcessNewSignature(context.Background(), taskResult)
 
 		// Should return an error
 		require.Error(t, err)
@@ -1037,7 +1037,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		}
 		correctTaskResult.Signature = sig.Bytes()
 
-		err = agg.ProcessNewSignature(context.Background(), taskId, correctTaskResult)
+		err = agg.ProcessNewSignature(context.Background(), correctTaskResult)
 		require.NoError(t, err)
 
 		// Verify signature was recorded

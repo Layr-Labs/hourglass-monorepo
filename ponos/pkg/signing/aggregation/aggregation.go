@@ -12,7 +12,6 @@ type ITaskResultAggregator[SigT, CertT, PubKeyT any] interface {
 
 	ProcessNewSignature(
 		ctx context.Context,
-		taskId string,
 		taskResponse *types.TaskResult,
 	) error
 
