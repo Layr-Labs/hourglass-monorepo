@@ -82,7 +82,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	avsAddress := strings.ToLower(req.AvsAddress)
 
 	// Find or create the AVS performer
-	performer, err := e.getOrCreateAvsPerformer(ctx, avsAddress)
+	performer, err := e.getOrCreateAvsPerformer(avsAddress)
 	if err != nil {
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
@@ -242,46 +242,42 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	}, nil
 }
 
+func (e *Executor) createAvsPerformer(avsAddress string) (avsPerformer.IAvsPerformer, error) {
+
+	e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
+
+	// Create config without image info - will be deployed via Deploy method
+	config := &avsPerformer.AvsPerformerConfig{
+		AvsAddress:           avsAddress,
+		ProcessType:          avsPerformer.AvsProcessTypeServer,
+		Image:                avsPerformer.PerformerImage{},
+		PerformerNetworkName: e.config.PerformerNetworkName,
+	}
+
+	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
+		config,
+		e.peeringFetcher,
+		e.l1ContractCaller,
+		e.logger,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return newPerformer, nil
+
+}
+
 // getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
-func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress string) (avsPerformer.IAvsPerformer, error) {
+func (e *Executor) getOrCreateAvsPerformer(avsAddress string) (avsPerformer.IAvsPerformer, error) {
 	// Fast path: try to load existing performer first
 	if performer, ok := e.avsPerformers.Load(avsAddress); ok {
 		return performer.(avsPerformer.IAvsPerformer), nil
 	}
 
 	// Slow path: need to create a new performer
-	// Use a function to create the performer only when needed
-	createPerformer := func() (avsPerformer.IAvsPerformer, error) {
-		e.logger.Info("Creating new AVS performer for address", zap.String("avsAddress", avsAddress))
-
-		// Create config without image info - will be deployed via Deploy method
-		config := &avsPerformer.AvsPerformerConfig{
-			AvsAddress:           avsAddress,
-			ProcessType:          avsPerformer.AvsProcessTypeServer,
-			Image:                avsPerformer.PerformerImage{},
-			PerformerNetworkName: e.config.PerformerNetworkName,
-		}
-
-		newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
-			config,
-			e.peeringFetcher,
-			e.l1ContractCaller,
-			e.logger,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Initialize the performer (fetches aggregator peers, but won't create container)
-		if err := newPerformer.Initialize(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize AVS performer: %w", err)
-		}
-
-		return newPerformer, nil
-	}
-
 	// Create the performer
-	newPerformer, err := createPerformer()
+	newPerformer, err := e.createAvsPerformer(avsAddress)
 	if err != nil {
 		return nil, err
 	}
