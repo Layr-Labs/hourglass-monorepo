@@ -5,11 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"math/big"
+	"strings"
+
 	cryptoUtils "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/crypto"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"math/big"
-	"strings"
 )
 
 func DecodeBase64String(s string) ([]byte, error) {
@@ -126,18 +127,6 @@ func Flatten[A any](coll [][]A) []A {
 		out = append(out, arr...)
 	}
 	return out
-}
-
-// ShortenHex shortens a hexadecimal string (like an Ethereum address or hash)
-// by keeping the first 6 characters and last 4 characters, separated by "..".
-//
-// Parameters:
-//   - publicKey: The hexadecimal string to shorten
-//
-// Returns:
-//   - string: The shortened string (e.g., "0x1234..abcd")
-func ShortenHex(publicKey string) string {
-	return publicKey[0:6] + ".." + publicKey[len(publicKey)-4:]
 }
 
 func AreAddressesEqual(a, b string) bool {

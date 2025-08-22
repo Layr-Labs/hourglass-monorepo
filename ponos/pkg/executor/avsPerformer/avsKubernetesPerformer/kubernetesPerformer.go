@@ -482,7 +482,11 @@ func (akp *AvsKubernetesPerformer) RemovePerformer(ctx context.Context, performe
 
 	// Find the performer to remove
 	if current := akp.currentPerformer.Load(); current != nil {
-		currentPerformer := current.(*PerformerResource)
+		currentPerformer, ok := current.(*PerformerResource)
+		if !ok {
+			akp.logger.Error("Invalid type in currentPerformer atomic.Value during removal")
+			return fmt.Errorf("invalid performer type stored in currentPerformer")
+		}
 		if currentPerformer.performerID == performerID {
 			targetPerformer = currentPerformer
 			akp.currentPerformer.Store((*PerformerResource)(nil))
@@ -539,8 +543,8 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 		return nil, fmt.Errorf("no current performer available to execute task")
 	}
 
-	currentPerformer := current.(*PerformerResource)
-	if currentPerformer == nil || currentPerformer.client == nil {
+	currentPerformer, ok := current.(*PerformerResource)
+	if !ok || currentPerformer == nil || currentPerformer.client == nil {
 		return nil, fmt.Errorf("no current performer client available to execute task")
 	}
 
@@ -733,7 +737,11 @@ func (akp *AvsKubernetesPerformer) ListPerformers() []avsPerformer.PerformerMeta
 
 	// Add current performer
 	if current := akp.currentPerformer.Load(); current != nil {
-		currentPerformer := current.(*PerformerResource)
+		currentPerformer, ok := current.(*PerformerResource)
+		if !ok {
+			akp.logger.Error("Invalid type in currentPerformer atomic.Value during listing")
+			return performers
+		}
 		performers = append(performers, akp.convertPerformerResource(currentPerformer))
 	}
 
@@ -875,8 +883,11 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 
 	// Shutdown current performer
 	if current := akp.currentPerformer.Load(); current != nil {
-		currentPerformer := current.(*PerformerResource)
-
+		currentPerformer, ok := current.(*PerformerResource)
+		if !ok {
+			akp.logger.Error("Invalid type in currentPerformer atomic.Value during shutdown")
+			errs = append(errs, fmt.Errorf("invalid performer type stored in currentPerformer"))
+		}
 		// Close gRPC connection
 		if currentPerformer.grpcConn != nil {
 			if err := currentPerformer.grpcConn.Close(); err != nil {
@@ -884,6 +895,7 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 			}
 		}
 
+		akp.waitForTaskCompletion(currentPerformer.performerID)
 		if err := akp.kubernetesManager.DeletePerformer(ctx, currentPerformer.performerID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown current performer: %w", err))
 		}
@@ -900,6 +912,7 @@ func (akp *AvsKubernetesPerformer) Shutdown() error {
 			}
 		}
 
+		akp.waitForTaskCompletion(akp.nextPerformer.performerID)
 		if err := akp.kubernetesManager.DeletePerformer(ctx, akp.nextPerformer.performerID); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown next performer: %w", err))
 		}

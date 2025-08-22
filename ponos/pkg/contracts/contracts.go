@@ -2,10 +2,11 @@ package contracts
 
 import (
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"regexp"
 	"strings"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
 type Contract struct {
@@ -37,6 +38,9 @@ func combineAbis(abis []string) (string, error) {
 	abisToCombine := make([]string, 0)
 
 	for _, contractAbi := range abis {
+		if len(contractAbi) < 2 {
+			return "", fmt.Errorf("invalid ABI string: too short")
+		}
 		strippedContractAbi := contractAbi[1 : len(contractAbi)-1]
 		abisToCombine = append(abisToCombine, strippedContractAbi)
 	}
