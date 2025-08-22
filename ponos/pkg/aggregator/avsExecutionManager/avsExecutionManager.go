@@ -32,6 +32,9 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	L1ChainId                config.ChainId
+	// InsecureExecutorConnections when true, disables TLS for executor client connections.
+	// This should only be used for local development. Defaults to false (secure connections).
+	InsecureExecutorConnections bool
 }
 
 type OperatorSet struct {
@@ -582,6 +585,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			em.config.AggregatorAddress,
 			sig,
 			operatorPeersWeight,
+			em.config.InsecureExecutorConnections,
 			em.logger,
 		)
 		if err != nil {
@@ -600,6 +604,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			em.config.AggregatorAddress,
 			sig,
 			operatorPeersWeight,
+			em.config.InsecureExecutorConnections,
 			em.logger,
 		)
 		if err != nil {
