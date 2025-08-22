@@ -690,8 +690,12 @@ func (aps *AvsContainerPerformer) RemovePerformer(ctx context.Context, performer
 
 	current := aps.currentContainer.Load()
 	if current != nil {
-		currentContainer := current.(*PerformerContainer)
-		if currentContainer != nil && currentContainer.performerID == performerID {
+		currentContainer, ok := current.(*PerformerContainer)
+		if !ok || currentContainer == nil {
+			aps.logger.Error("Invalid type in currentContainer atomic.Value during removal")
+			return fmt.Errorf("invalid performer type stored in currentContainer")
+		}
+		if currentContainer.performerID == performerID {
 			targetContainer = currentContainer
 			aps.currentContainer.Store((*PerformerContainer)(nil))
 		}
@@ -910,8 +914,8 @@ func (aps *AvsContainerPerformer) RunTask(ctx context.Context, task *performerTa
 		return nil, fmt.Errorf("no current container available to execute task")
 	}
 
-	currentContainer := current.(*PerformerContainer)
-	if currentContainer == nil || currentContainer.client == nil {
+	currentContainer, ok := current.(*PerformerContainer)
+	if !ok || currentContainer == nil || currentContainer.client == nil {
 		return nil, fmt.Errorf("no current container available to execute task")
 	}
 
@@ -1005,13 +1009,23 @@ func (aps *AvsContainerPerformer) Shutdown() error {
 	var errs []error
 
 	if current := aps.currentContainer.Load(); current != nil {
-		currentContainer := current.(*PerformerContainer)
+		currentContainer, ok := current.(*PerformerContainer)
+		if !ok {
+			aps.logger.Error("Invalid type in currentContainer atomic.Value during shutdown")
+			errs = append(errs, fmt.Errorf("invalid performer type stored in currentContainer"))
+		}
 		if currentContainer != nil && currentContainer.info != nil {
 			aps.logger.Info("Shutting down current container",
 				zap.String("avsAddress", aps.config.AvsAddress),
 				zap.String("performerID", currentContainer.performerID),
 				zap.String("containerID", currentContainer.info.ID),
 			)
+			// Wait for running tasks to complete
+			aps.logger.Info("Waiting for running tasks to complete",
+				zap.String("performerID", currentContainer.performerID),
+			)
+			aps.waitForTaskCompletion(currentContainer.performerID)
+			// Then shutdown container
 			if err := aps.shutdownContainer(context.Background(), aps.config.AvsAddress, currentContainer); err != nil {
 				errs = append(errs, fmt.Errorf("failed to shutdown current container: %w", err))
 			}
@@ -1026,9 +1040,11 @@ func (aps *AvsContainerPerformer) Shutdown() error {
 			zap.String("performerID", aps.nextContainer.performerID),
 			zap.String("containerID", aps.nextContainer.info.ID),
 		)
+		aps.waitForTaskCompletion(aps.nextContainer.performerID)
 		if err := aps.shutdownContainer(context.Background(), aps.config.AvsAddress, aps.nextContainer); err != nil {
 			errs = append(errs, fmt.Errorf("failed to shutdown next container: %w", err))
 		}
+		aps.cleanupTaskWaitGroup(aps.nextContainer.performerID)
 		aps.nextContainer = nil
 	}
 
@@ -1052,10 +1068,12 @@ func (aps *AvsContainerPerformer) ListPerformers() []avsPerformer.PerformerMetad
 
 	// Add current container info if exists
 	if current := aps.currentContainer.Load(); current != nil {
-		currentContainer := current.(*PerformerContainer)
-		if currentContainer != nil && currentContainer.info != nil {
-			performers = append(performers, convertPerformerContainer(aps.config.AvsAddress, currentContainer))
+		currentContainer, ok := current.(*PerformerContainer)
+		if !ok || currentContainer == nil || currentContainer.info == nil {
+			aps.logger.Error("Invalid type in currentContainer atomic.Value during listing")
+			return performers
 		}
+		performers = append(performers, convertPerformerContainer(aps.config.AvsAddress, currentContainer))
 	}
 
 	// Add next container info if exists
