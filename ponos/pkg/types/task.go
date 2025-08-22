@@ -71,6 +71,11 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	var avsAddress string
 	var taskId string
 
+	// validate log.Arguments length matches the onchain event
+	if len(log.Arguments) < 9 {
+		return nil, fmt.Errorf("invalid log arguments length: %d", len(log.Arguments))
+	}
+
 	taskId, ok := log.Arguments[1].Value.(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to parse task id")

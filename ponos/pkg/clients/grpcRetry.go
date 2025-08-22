@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -61,6 +62,12 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt32)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(math.MaxInt32)),
 		grpc.WithUnaryInterceptor(retryUnaryInterceptor(retryConfig)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                10 * time.Second, // Send keepalive pings every 10 seconds
+			Timeout:             3 * time.Second,  // Wait 3 second for ping ack before considering the connection dead
+			PermitWithoutStream: true,             // Send pings even when there are no active streams
+		}),
+		grpc.WithUserAgent("hourglass-ponos/v1.0.0"),
 	}
 
 	// Create the connection

@@ -2,6 +2,7 @@ package avsPerformerClient
 
 import (
 	"fmt"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
@@ -14,7 +15,7 @@ type PerformerClient struct {
 }
 
 func NewAvsPerformerClient(fullUrl string, insecureConn bool) (*PerformerClient, error) {
-	grpcClient, err := clients.NewGrpcClient(fullUrl, insecureConn)
+	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, insecureConn, clients.DefaultRetryConfig())
 	if err != nil {
 		return nil, err
 	}
