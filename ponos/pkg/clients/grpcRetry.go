@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -41,8 +42,7 @@ func DefaultRetryConfig() *RetryConfig {
 	}
 }
 
-// NewGrpcClientWithRetry creates a gRPC client without forcing connection
-// The actual connection will be established lazily on first use
+// NewGrpcClientWithRetry creates a gRPC client and forcing connection
 func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryConfig) (*grpc.ClientConn, error) {
 	if retryConfig == nil {
 		retryConfig = DefaultRetryConfig()
@@ -63,11 +63,14 @@ func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryCon
 		grpc.WithUnaryInterceptor(retryUnaryInterceptor(retryConfig)),
 	}
 
-	// Simply create the lazy connection - don't test it
+	// Create the connection
 	conn, err := grpc.NewClient(url, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
 	}
+
+	// Force connection establishment to avoid lazy connection timeout issues
+	conn.Connect()
 
 	return conn, nil
 }
@@ -132,6 +135,9 @@ type ConnectionManager struct {
 	lastHealthy    time.Time
 	unhealthyCount int
 	logger         *zap.Logger
+
+	// mu protects all mutable fields (conn, lastHealthy, unhealthyCount)
+	mu sync.Mutex
 }
 
 // NewConnectionManager creates a new connection manager
@@ -150,7 +156,11 @@ func NewConnectionManager(url string, insecureConn bool, retryConfig *RetryConfi
 }
 
 // GetConnection returns a healthy connection, creating or reconnecting if necessary
+// LOCKING: This method ACQUIRES the mutex lock for the entire operation
 func (cm *ConnectionManager) GetConnection() (*grpc.ClientConn, error) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	if cm.conn != nil && cm.isConnectionHealthy() {
 		cm.logger.Sugar().Infow("Connection is healthy",
 			zap.String("url", cm.url),
@@ -181,7 +191,9 @@ func (cm *ConnectionManager) GetConnection() (*grpc.ClientConn, error) {
 }
 
 // isConnectionHealthy checks if the current connection is healthy
+// LOCKING: This method ASSUMES the caller already holds cm.mu lock (does NOT acquire lock)
 func (cm *ConnectionManager) isConnectionHealthy() bool {
+
 	if cm.conn == nil {
 		return false
 	}
@@ -202,14 +214,20 @@ func (cm *ConnectionManager) isConnectionHealthy() bool {
 }
 
 // IsCircuitOpen returns true if the circuit breaker is open (too many failures)
+// LOCKING: This method ASSUMES the caller already holds cm.mu lock (does NOT acquire lock)
 func (cm *ConnectionManager) IsCircuitOpen() bool {
+
 	// Simple circuit breaker: open if we've had more than 5 consecutive failures
 	// and the last healthy time was more than 1 minute ago
 	return cm.unhealthyCount > 5 && time.Since(cm.lastHealthy) > time.Minute
 }
 
 // GetConnectionStats returns connection statistics
+// LOCKING: This method ACQUIRES the mutex lock for the entire operation
 func (cm *ConnectionManager) GetConnectionStats() map[string]interface{} {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	state := connectivity.Shutdown
 	if cm.conn != nil {
 		state = cm.conn.GetState()
@@ -225,7 +243,11 @@ func (cm *ConnectionManager) GetConnectionStats() map[string]interface{} {
 }
 
 // Close closes the connection manager
+// LOCKING: This method ACQUIRES the mutex lock for the entire operation
 func (cm *ConnectionManager) Close() error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
 	if cm.conn != nil {
 		err := cm.conn.Close()
 		cm.conn = nil
