@@ -82,7 +82,7 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	avsAddress := strings.ToLower(req.AvsAddress)
 
 	// Find or create the AVS performer
-	performer, err := e.getOrCreateAvsPerformer(avsAddress)
+	performer, err := e.getOrCreateAvsPerformer(ctx, avsAddress)
 	if err != nil {
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
@@ -269,7 +269,7 @@ func (e *Executor) createAvsPerformer(avsAddress string) (avsPerformer.IAvsPerfo
 }
 
 // getOrCreateAvsPerformer gets an existing AVS performer or creates a new one if it doesn't exist
-func (e *Executor) getOrCreateAvsPerformer(avsAddress string) (avsPerformer.IAvsPerformer, error) {
+func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress string) (avsPerformer.IAvsPerformer, error) {
 	// Fast path: try to load existing performer first
 	if performer, ok := e.avsPerformers.Load(avsAddress); ok {
 		return performer.(avsPerformer.IAvsPerformer), nil
@@ -279,6 +279,10 @@ func (e *Executor) getOrCreateAvsPerformer(avsAddress string) (avsPerformer.IAvs
 	// Create the performer
 	newPerformer, err := e.createAvsPerformer(avsAddress)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := newPerformer.Initialize(ctx); err != nil {
 		return nil, err
 	}
 
