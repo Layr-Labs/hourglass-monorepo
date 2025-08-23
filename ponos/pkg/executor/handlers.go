@@ -328,7 +328,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
-	value, ok := e.avsPerformers.Load(task.AvsAddress)
+	value, ok := e.avsPerformers.Load(avsAddress)
 
 	if !ok {
 		return nil, fmt.Errorf("AVS avsPerf not found for address %s", avsAddress)
