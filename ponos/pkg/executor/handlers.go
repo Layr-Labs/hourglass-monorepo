@@ -319,7 +319,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 	if err != nil {
 		return nil, err
 	}
-	if opSet == nil || opSet.OperatorSetID == 0 {
+	if opSet == nil {
 		return nil, fmt.Errorf("invalid task operator set")
 	}
 
