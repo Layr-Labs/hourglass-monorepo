@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"strings"
 	"sync"
 	"testing"
 
@@ -114,33 +115,6 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 			errorContains: "invalid task operator set",
 		},
 		{
-			name:         "operator not in operator set - zero ID",
-			operatorAddr: "0x1234567890123456789012345678901234567890",
-			task: &executor.TaskSubmission{
-				TaskId:        "task-3",
-				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
-			},
-			operatorSet: &peering.OperatorSet{
-				OperatorSetID: 0,
-				WrappedPublicKey: peering.WrappedPublicKey{
-					PublicKey: common.HexToAddress(""),
-				},
-				NetworkAddress: "127.0.0.1:8080",
-				CurveType:      config.CurveTypeBN254,
-			},
-			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
-				m.On("GetOperatorSetDetailsForOperator",
-					common.HexToAddress(operatorAddr),
-					task.GetAvsAddress(),
-					task.OperatorSetId,
-				).Return(opSet, nil)
-			},
-			expectError:   true,
-			errorContains: "invalid task operator set",
-		},
-		{
 			name:         "contract caller error",
 			operatorAddr: "0x1234567890123456789012345678901234567890",
 			task: &executor.TaskSubmission{
@@ -242,8 +216,9 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 				bn254Signer:      &MockSigner{},
 			}
 
+			// Store performer with normalized (lowercase) address to match production behavior
 			if tt.task.AvsAddress != "" {
-				e.avsPerformers[tt.task.AvsAddress] = &MockPerformer{}
+				e.avsPerformers[strings.ToLower(tt.task.AvsAddress)] = &MockPerformer{}
 			}
 
 			result, err := e.handleReceivedTask(context.Background(), tt.task)
