@@ -209,7 +209,7 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 				config:           execConfig,
 				l1ContractCaller: mockCaller,
 				logger:           l,
-				avsPerformers:    make(map[string]avsPerformer.IAvsPerformer),
+				avsPerformers:    &sync.Map{},
 				store:            memory.NewInMemoryExecutorStore(),
 				inflightTasks:    &sync.Map{},
 				ecdsaSigner:      &MockSigner{},
@@ -218,7 +218,7 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 
 			// Store performer with normalized (lowercase) address to match production behavior
 			if tt.task.AvsAddress != "" {
-				e.avsPerformers[strings.ToLower(tt.task.AvsAddress)] = &MockPerformer{}
+				e.avsPerformers.Store(strings.ToLower(tt.task.AvsAddress), &MockPerformer{})
 			}
 
 			result, err := e.handleReceivedTask(context.Background(), tt.task)
