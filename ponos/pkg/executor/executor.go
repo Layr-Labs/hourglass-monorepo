@@ -262,6 +262,7 @@ func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig,
 	return avsContainerPerformer.NewAvsContainerPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:           avsAddress,
+			OperatorAddress:      e.config.Operator.Address,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
 			PerformerNetworkName: e.config.PerformerNetworkName,
 		},
@@ -295,6 +296,7 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 	return avsKubernetesPerformer.NewAvsKubernetesPerformer(
 		&avsPerformer.AvsPerformerConfig{
 			AvsAddress:       avsAddress,
+			OperatorAddress:  e.config.Operator.Address,
 			ProcessType:      avsPerformer.AvsProcessType(avs.ProcessType),
 			EndpointOverride: endpointOverride,
 		},
