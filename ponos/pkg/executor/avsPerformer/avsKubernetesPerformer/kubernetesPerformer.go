@@ -8,20 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
-	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
-	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -67,9 +59,6 @@ type AvsKubernetesPerformer struct {
 	config           *avsPerformer.AvsPerformerConfig
 	kubernetesConfig *kubernetesManager.Config
 	logger           *zap.Logger
-	peeringFetcher   peering.IPeeringDataFetcher
-	l1ContractCaller contractCaller.IContractCaller
-	aggregatorPeers  []*peering.OperatorPeerInfo
 
 	// Kubernetes operations
 	kubernetesManager *kubernetesManager.CRDOperations
@@ -92,8 +81,6 @@ type AvsKubernetesPerformer struct {
 func NewAvsKubernetesPerformer(
 	config *avsPerformer.AvsPerformerConfig,
 	kubernetesConfig *kubernetesManager.Config,
-	peeringFetcher peering.IPeeringDataFetcher,
-	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsKubernetesPerformer, error) {
 
@@ -118,8 +105,6 @@ func NewAvsKubernetesPerformer(
 		config:              config,
 		kubernetesConfig:    kubernetesConfig,
 		logger:              logger,
-		peeringFetcher:      peeringFetcher,
-		l1ContractCaller:    l1ContractCaller,
 		kubernetesManager:   crdOps,
 		clientWrapper:       clientWrapper,
 		performerTaskStates: make(map[string]*PerformerTaskState),
@@ -131,17 +116,9 @@ func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 	akp.performerResourcesMu.Lock()
 	defer akp.performerResourcesMu.Unlock()
 
-	// Fetch aggregator peer information
-	aggregatorPeers, err := akp.fetchAggregatorPeerInfo(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to fetch aggregator peers: %w", err)
-	}
-	akp.aggregatorPeers = aggregatorPeers
-
 	akp.logger.Info("Kubernetes performer initialized",
 		zap.String("avsAddress", akp.config.AvsAddress),
 		zap.String("namespace", akp.kubernetesConfig.Namespace),
-		zap.Int("aggregatorPeers", len(akp.aggregatorPeers)),
 	)
 
 	// Skip initial container creation if image info is empty (for deployment-based initialization)
@@ -162,27 +139,6 @@ func (akp *AvsKubernetesPerformer) Initialize(ctx context.Context) error {
 	akp.currentPerformer.Store(performerResource)
 
 	return nil
-}
-
-// fetchAggregatorPeerInfo fetches peer information with retries
-func (akp *AvsKubernetesPerformer) fetchAggregatorPeerInfo(ctx context.Context) ([]*peering.OperatorPeerInfo, error) {
-	retries := []uint64{1, 3, 5, 10, 20}
-	for i, retry := range retries {
-		aggPeers, err := akp.peeringFetcher.ListAggregatorOperators(ctx, akp.config.AvsAddress)
-		if err != nil {
-			akp.logger.Error("Failed to fetch aggregator peers",
-				zap.String("avsAddress", akp.config.AvsAddress),
-				zap.Error(err),
-			)
-			if i == len(retries)-1 {
-				return nil, err
-			}
-			time.Sleep(time.Duration(retry) * time.Second)
-			continue
-		}
-		return aggPeers, nil
-	}
-	return nil, fmt.Errorf("failed to fetch aggregator peers after retries")
 }
 
 // generatePerformerID generates a unique performer ID
@@ -584,66 +540,6 @@ func (akp *AvsKubernetesPerformer) RunTask(ctx context.Context, task *performerT
 	)
 
 	return performerTask.NewTaskResultFromResultProto(res), nil
-}
-
-// ValidateTaskSignature validates task signatures (same as container implementation)
-func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
-	peer := util.Find(akp.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
-		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
-	})
-	if peer == nil {
-		return fmt.Errorf("failed to find peer for task")
-	}
-
-	isVerified := false
-
-	for _, opset := range peer.OperatorSets {
-		var scheme signing.SigningScheme
-		switch opset.CurveType {
-		case config.CurveTypeBN254:
-			scheme = bn254.NewScheme()
-		case config.CurveTypeECDSA:
-			scheme = ecdsa.NewScheme()
-		default:
-			return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
-		}
-
-		sig, err := scheme.NewSignatureFromBytes(t.Signature)
-		if err != nil {
-			return err
-		}
-
-		var verified bool
-		payloadHash := crypto.Keccak256Hash(t.Payload)
-		switch opset.CurveType {
-		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
-		case config.CurveTypeECDSA:
-			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
-			if err != nil {
-				continue
-			}
-			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
-			if err != nil {
-				continue
-			}
-		}
-
-		if err != nil {
-			continue
-		}
-
-		if verified {
-			isVerified = true
-			break
-		}
-	}
-
-	if !isVerified {
-		return fmt.Errorf("failed to verify signature with any operator set")
-	}
-
-	return nil
 }
 
 // Deploy performs a synchronous deployment

@@ -16,7 +16,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/kubernetesManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"go.uber.org/zap"
 )
 
@@ -91,11 +90,6 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 
 	t.Logf("Operator deployed successfully: %s", operator.ReleaseName)
 
-	// Create peering data fetcher
-	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-		AggregatorPeers: nil,
-	}, l)
-
 	// Create AvsKubernetesPerformer without image (so Initialize doesn't hang)
 	performerConfig := &avsPerformer.AvsPerformerConfig{
 		AvsAddress: "0xtest-avs-address",
@@ -116,8 +110,6 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 	performer, err := NewAvsKubernetesPerformer(
 		performerConfig,
 		kubernetesConfig,
-		pdf,
-		nil,
 		l,
 	)
 	if err != nil {

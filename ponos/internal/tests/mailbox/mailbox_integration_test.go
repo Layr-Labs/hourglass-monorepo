@@ -419,21 +419,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			// Compile the result
 			// ----------------------------------------------------------------
 			outputResult := util.BigIntToHex(new(big.Int).SetUint64(16))
-			taskOutputHash := util.GetKeccak256Digest(outputResult)
-
-			// for ecdsa only
-			ecdsaDigestBytes, err := avsCc.CalculateECDSACertificateDigestBytes(
-				ctx,
-				operatorPeersWeight.RootReferenceTimestamp,
-				taskOutputHash,
-			)
-			if err != nil {
-				hasErrors = true
-				l.Sugar().Errorf("Failed to calculate ECDSA certificate digest: %v", err)
-				cancel()
-				return
-			}
-			ecdsaDigest := util.GetKeccak256Digest(ecdsaDigestBytes)
 
 			taskResult := &types.TaskResult{
 				TaskId:          task.TaskId,
@@ -441,20 +426,42 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				OperatorSetId:   task.OperatorSetId,
 				Output:          outputResult,
 				OperatorAddress: chainConfig.ExecOperatorAccountAddress,
-				Signature:       nil,
-				OutputDigest:    nil,
+				ResultSignature: nil,
+				AuthSignature:   nil,
 			}
+
 			signer := inMemorySigner.NewInMemorySigner(execKeysECDSA.PrivateKey, config.CurveTypeECDSA)
-			sig, err := signer.SignMessageForSolidity(ecdsaDigestBytes)
+
+			// Step 1: Sign the result (signs the hash of the output)
+			outputDigest := util.GetKeccak256Digest(outputResult)
+			resultSig, err := signer.SignMessageForSolidity(outputDigest[:])
 			if err != nil {
 				hasErrors = true
-				l.Sugar().Errorf("Failed to sign message: %v", err)
+				l.Sugar().Errorf("Failed to sign result: %v", err)
 				cancel()
 				return
 			}
+			taskResult.ResultSignature = resultSig
 
-			taskResult.Signature = sig
-			taskResult.OutputDigest = ecdsaDigest[:]
+			// Step 2: Sign the auth data (unique per operator)
+			resultSigDigest := util.GetKeccak256Digest(taskResult.ResultSignature)
+			authData := &types.AuthSignatureData{
+				TaskId:          taskResult.TaskId,
+				AvsAddress:      taskResult.AvsAddress,
+				OperatorAddress: taskResult.OperatorAddress,
+				OperatorSetId:   taskResult.OperatorSetId,
+				ResultSigDigest: resultSigDigest,
+			}
+			authBytes := authData.ToSigningBytes()
+			authDigest := util.GetKeccak256Digest(authBytes)
+			authSig, err := signer.SignMessageForSolidity(authDigest[:])
+			if err != nil {
+				hasErrors = true
+				l.Sugar().Errorf("Failed to sign auth data: %v", err)
+				cancel()
+				return
+			}
+			taskResult.AuthSignature = authSig
 
 			fmt.Printf("TaskResult %+v\n", taskResult)
 			err = resultAgg.ProcessNewSignature(ctx, taskResult)

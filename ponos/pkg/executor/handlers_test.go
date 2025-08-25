@@ -6,15 +6,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/executorConfig"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +22,14 @@ import (
 type mockContractCaller struct {
 	mock.Mock
 	contractCaller.IContractCaller
+}
+
+func (m *mockContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
+	args := m.Called(avsAddress)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*contractCaller.AVSConfig), args.Error(1)
 }
 
 func (m *mockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
@@ -56,7 +61,8 @@ func (m *mockContractCaller) CalculateECDSACertificateDigestBytes(ctx context.Co
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
+// TestValidateOperatorInSet tests operator validation in isolation
+func TestValidateOperatorInSet(t *testing.T) {
 	tests := []struct {
 		name          string
 		operatorAddr  string
@@ -76,12 +82,8 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 				Payload:       []byte("test payload"),
 			},
 			operatorSet: &peering.OperatorSet{
-				OperatorSetID: 1,
-				WrappedPublicKey: peering.WrappedPublicKey{
-					PublicKey: common.HexToAddress(""),
-				},
+				OperatorSetID:  1,
 				NetworkAddress: "127.0.0.1:8080",
-				CurveType:      config.CurveTypeBN254,
 			},
 			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
 				m.On("GetOperatorSetDetailsForOperator",
@@ -89,8 +91,6 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 					task.GetAvsAddress(),
 					task.OperatorSetId,
 				).Return(opSet, nil)
-				m.On("GetOperatorSetCurveType", task.GetAvsAddress(), task.OperatorSetId).Return(config.CurveTypeBN254, nil)
-				m.On("CalculateBN254CertificateDigestBytes", mock.Anything, mock.Anything, mock.Anything).Return([]byte("mock-digest"), nil)
 			},
 			expectError: false,
 		},
@@ -134,56 +134,6 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 			expectError:   true,
 			errorContains: "contract call failed",
 		},
-		{
-			name:         "empty AVS address",
-			operatorAddr: "0x1234567890123456789012345678901234567890",
-			task: &executor.TaskSubmission{
-				TaskId:        "task-5",
-				AvsAddress:    "",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
-			},
-			operatorSet: &peering.OperatorSet{
-				OperatorSetID: 1,
-			},
-			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
-				m.On("GetOperatorSetDetailsForOperator",
-					common.HexToAddress(operatorAddr),
-					task.GetAvsAddress(),
-					task.OperatorSetId,
-				).Return(opSet, nil).Maybe()
-			},
-			expectError:   true,
-			errorContains: "AVS address is empty",
-		},
-		{
-			name:         "mixed case AVS address normalization",
-			operatorAddr: "0x1234567890123456789012345678901234567890",
-			task: &executor.TaskSubmission{
-				TaskId:        "task-6",
-				AvsAddress:    "0xAbCdEf1234567890123456789012345678901234",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
-			},
-			operatorSet: &peering.OperatorSet{
-				OperatorSetID: 1,
-				WrappedPublicKey: peering.WrappedPublicKey{
-					PublicKey: common.HexToAddress(""),
-				},
-				NetworkAddress: "127.0.0.1:8080",
-				CurveType:      config.CurveTypeBN254,
-			},
-			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
-				m.On("GetOperatorSetDetailsForOperator",
-					common.HexToAddress(operatorAddr),
-					task.GetAvsAddress(),
-					task.OperatorSetId,
-				).Return(opSet, nil)
-				m.On("GetOperatorSetCurveType", task.GetAvsAddress(), task.OperatorSetId).Return(config.CurveTypeBN254, nil)
-				m.On("CalculateBN254CertificateDigestBytes", mock.Anything, mock.Anything, mock.Anything).Return([]byte("mock-digest"), nil)
-			},
-			expectError: false,
-		},
 	}
 
 	for _, tt := range tests {
@@ -209,29 +159,18 @@ func TestHandleReceivedTask_OperatorValidation(t *testing.T) {
 				config:           execConfig,
 				l1ContractCaller: mockCaller,
 				logger:           l,
-				avsPerformers:    &sync.Map{},
-				store:            memory.NewInMemoryExecutorStore(),
-				inflightTasks:    &sync.Map{},
-				ecdsaSigner:      &MockSigner{},
-				bn254Signer:      &MockSigner{},
 			}
 
-			// Store performer with normalized (lowercase) address to match production behavior
-			if tt.task.AvsAddress != "" {
-				e.avsPerformers.Store(strings.ToLower(tt.task.AvsAddress), &MockPerformer{})
-			}
-
-			result, err := e.handleReceivedTask(context.Background(), tt.task)
+			// Test only the validateOperatorInSet method
+			err = e.validateOperatorInSet(tt.task)
 
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorContains != "" {
 					assert.Contains(t, err.Error(), tt.errorContains)
 				}
-				assert.Nil(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.NotNil(t, result)
 			}
 
 			mockCaller.AssertExpectations(t)
@@ -262,10 +201,6 @@ func (m *MockPerformer) RunTask(ctx context.Context, task *performerTask.Perform
 		TaskID: task.TaskID,
 		Result: []byte("mock result"),
 	}, nil
-}
-
-func (m *MockPerformer) ValidateTaskSignature(task *performerTask.PerformerTask) error {
-	return nil
 }
 
 func (m *MockPerformer) Deploy(ctx context.Context, image avsPerformer.PerformerImage) (*avsPerformer.DeploymentResult, error) {

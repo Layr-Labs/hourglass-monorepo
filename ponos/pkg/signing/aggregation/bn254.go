@@ -109,8 +109,8 @@ type ReceivedBN254ResponseWithDigest struct {
 	// signature is the signature of the task result from the operator signed with their bls key
 	Signature *bn254.Signature
 
-	// digest is a keccak256 hash of the task result
-	Digest [32]byte
+	// OutputDigest is a keccak256 hash of the output bytes (for consensus tracking)
+	OutputDigest [32]byte
 }
 
 type aggregatedBN254Operators struct {
@@ -167,6 +167,12 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
 	}
 
+	// Validate OperatorSetId matches
+	if taskResponse.OperatorSetId != tra.OperatorSetId {
+		return fmt.Errorf("operator set ID mismatch: expected %d, got %d",
+			tra.OperatorSetId, taskResponse.OperatorSetId)
+	}
+
 	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator[signing.PublicKey]) bool {
 		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
@@ -175,8 +181,11 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s is not in the allowed set", taskResponse.OperatorAddress)
 	}
 
-	if len(taskResponse.Signature) == 0 {
-		return fmt.Errorf("signature is empty")
+	if len(taskResponse.ResultSignature) == 0 {
+		return fmt.Errorf("result signature is empty")
+	}
+	if len(taskResponse.AuthSignature) == 0 {
+		return fmt.Errorf("auth signature is empty")
 	}
 
 	// Initialize map if nil
@@ -189,20 +198,20 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// Calculate digest from Output
+	// Calculate output digest for consensus tracking
 	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
 
-	// verify the signature using calculated digest
+	// Verify both signatures
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
 	if err != nil {
-		return fmt.Errorf("failed to verify signature: %w", err)
+		return fmt.Errorf("failed to verify signatures: %w", err)
 	}
 
 	rr := &ReceivedBN254ResponseWithDigest{
-		TaskId:     tra.TaskId,
-		TaskResult: taskResponse,
-		Signature:  sig,
-		Digest:     outputDigest,
+		TaskId:       tra.TaskId,
+		TaskResult:   taskResponse,
+		Signature:    sig,
+		OutputDigest: outputDigest,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -245,7 +254,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.signersOperatorSet[taskResponse.OperatorAddress] = true
 		tra.aggregatedOperators.totalSigners++
 
-		// Update digest count
+		// Update digest count using output digest for consensus tracking
 		newCount := tra.aggregatedOperators.digestCounts[outputDigest] + 1
 		tra.aggregatedOperators.digestCounts[outputDigest] = newCount
 
@@ -264,21 +273,61 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	return nil
 }
 
-// VerifyResponseSignature verifies that the signature of the response is valid against
-// the operators public key.
-func (tra *BN254TaskResultAggregator) VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[signing.PublicKey], outputDigest [32]byte) (*bn254.Signature, error) {
-	sig, err := bn254.NewSignatureFromBytes(taskResponse.Signature)
+// VerifyResponseSignature verifies both result and auth signatures
+func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
+	taskResponse *types.TaskResult,
+	operator *Operator[signing.PublicKey],
+	outputDigest [32]byte,
+) (*bn254.Signature, error) {
+	// Step 1: Verify the result signature
+	resultSig, err := bn254.NewSignatureFromBytes(taskResponse.ResultSignature)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create signature from bytes: %w", err)
+		return nil, fmt.Errorf("failed to parse result signature: %w", err)
 	}
 
-	// Use calculated digest instead of network-provided OutputDigest for security
-	if verified, err := sig.VerifySolidityCompatible(operator.PublicKey.(*bn254.PublicKey), outputDigest); err != nil {
-		return nil, fmt.Errorf("signature verification failed: %w", err)
-	} else if !verified {
-		return nil, fmt.Errorf("signature verification failed: signature does not match operator public key")
+	// Verify result signature matches output digest
+	bn254PubKey, ok := operator.PublicKey.(*bn254.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("failed to cast public key to bn254.PublicKey")
 	}
-	return sig, nil
+	if verified, err := resultSig.VerifySolidityCompatible(bn254PubKey, outputDigest); err != nil {
+		return nil, fmt.Errorf("result signature verification failed: %w", err)
+	} else if !verified {
+		return nil, fmt.Errorf("result signature verification failed: signature does not match operator public key")
+	}
+
+	// Step 2: Verify the auth signature (for identity)
+	authSig, err := bn254.NewSignatureFromBytes(taskResponse.AuthSignature)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
+	}
+
+	// Create the auth data that should have been signed
+	resultSigDigest := util.GetKeccak256Digest(taskResponse.ResultSignature)
+	authData := &types.AuthSignatureData{
+		TaskId:          taskResponse.TaskId,
+		AvsAddress:      taskResponse.AvsAddress,
+		OperatorAddress: taskResponse.OperatorAddress,
+		OperatorSetId:   taskResponse.OperatorSetId,
+		ResultSigDigest: resultSigDigest,
+	}
+	authBytes := authData.ToSigningBytes()
+	authDigest := util.GetKeccak256Digest(authBytes)
+
+	// Verify auth signature
+	if verified, err := authSig.VerifySolidityCompatible(operator.PublicKey.(*bn254.PublicKey), authDigest); err != nil {
+		return nil, fmt.Errorf("auth signature verification failed: %w", err)
+	} else if !verified {
+		return nil, fmt.Errorf("auth signature verification failed: signature does not match operator public key")
+	}
+
+	// Additional validation: ensure claimed operator matches expected
+	if !strings.EqualFold(taskResponse.OperatorAddress, operator.Address) {
+		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s",
+			operator.Address, taskResponse.OperatorAddress)
+	}
+
+	return resultSig, nil
 }
 
 // GenerateFinalCertificate generates the final aggregated certificate for the task.
@@ -324,7 +373,7 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 	return &AggregatedBN254Certificate{
 		TaskId:              taskIdBytes,
 		TaskResponse:        tra.aggregatedOperators.mostCommonResponse.TaskResult.Output,
-		TaskResponseDigest:  tra.aggregatedOperators.mostCommonResponse.Digest,
+		TaskResponseDigest:  tra.aggregatedOperators.mostCommonResponse.OutputDigest,
 		NonSignersPubKeys:   nonSignerPublicKeys,
 		AllOperatorsPubKeys: allPublicKeys,
 		SignersPublicKey:    tra.aggregatedOperators.signersG2,

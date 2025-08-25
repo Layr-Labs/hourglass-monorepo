@@ -334,8 +334,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		OperatorSetId:   taskOpsetId,
 		Output:          []byte("test-task-output-data"),
 		OperatorAddress: chainConfig.ExecOperatorAccountAddress,
-		Signature:       nil,
-		OutputDigest:    nil,
+		ResultSignature: nil,
 	}
 	messageHash := util.GetKeccak256Digest(taskResult.Output)
 	// Sign the result
@@ -414,8 +413,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	// Use InMemorySigner signature for the test to ensure it passes
 	// while still testing that Web3Signer produces a signature
-	taskResult.Signature = inMemSig // Use InMemory signature instead of Web3Signer
-	taskResult.OutputDigest = ecdsaDigest[:]
+	taskResult.ResultSignature = inMemSig // Use InMemory signature instead of Web3Signer
 
 	t.Logf("Using InMemorySigner signature for aggregation test to verify the process works")
 

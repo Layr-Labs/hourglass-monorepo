@@ -123,7 +123,6 @@ func createTestKubernetesPerformer(t *testing.T) (*AvsKubernetesPerformer, *Mock
 		config:              config,
 		kubernetesConfig:    kubernetesConfig,
 		logger:              logger,
-		peeringFetcher:      mockPeeringFetcher,
 		performerTaskStates: make(map[string]*PerformerTaskState),
 	}
 
@@ -146,7 +145,7 @@ func TestNewAvsKubernetesPerformer(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
 	// Create performer - it may or may not fail depending on the test environment
-	performer, err := NewAvsKubernetesPerformer(config, kubernetesConfig, nil, nil, logger)
+	performer, err := NewAvsKubernetesPerformer(config, kubernetesConfig, logger)
 
 	// In most test environments without a real k8s cluster, this will fail
 	// In environments with kind or a real cluster, it might succeed
