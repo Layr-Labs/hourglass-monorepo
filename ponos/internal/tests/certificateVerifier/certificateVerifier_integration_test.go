@@ -419,7 +419,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	t.Logf("Using InMemorySigner signature for aggregation test to verify the process works")
 
-	if err := agg.ProcessNewSignature(ctx, taskId, taskResult); err != nil {
+	if err := agg.ProcessNewSignature(ctx, taskResult); err != nil {
 		t.Fatalf("Failed to process new signature: %v", err)
 	}
 
