@@ -2,6 +2,8 @@ package avsExecutionManager
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -537,9 +539,30 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("unsupported curve type: %s", avsConfig.curveType)
 	}
 
-	sig, err := signerToUse.SignMessage(task.Payload)
+	// Create comprehensive hash including all identifying information to prevent tampering
+	// This includes TaskID, AvsAddress, OperatorSetId, and Payload
+	// Note: OperatorAddress is not included here as the aggregator doesn't know which specific
+	// executor will process the task. Each executor will add their own address during verification.
+	taskHashBytes, err := hex.DecodeString(strings.TrimPrefix(task.TaskId, "0x"))
 	if err != nil {
-		return fmt.Errorf("failed to sign task payload: %w", err)
+		em.logger.Sugar().Errorw("Failed to decode TaskID",
+			zap.String("taskId", task.TaskId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to decode TaskID: %w", err)
+	}
+
+	// Create comprehensive data to sign over (without specific operator address)
+	var dataToSign []byte
+	dataToSign = append(dataToSign, taskHashBytes...)           // TaskID (TaskHash)
+	dataToSign = append(dataToSign, []byte(task.AVSAddress)...) // AvsAddress
+	dataToSign = append(dataToSign, make([]byte, 4)...)         // OperatorSetId (4 bytes)
+	binary.BigEndian.PutUint32(dataToSign[len(dataToSign)-4:], task.OperatorSetId)
+	dataToSign = append(dataToSign, task.Payload...) // Payload
+
+	sig, err := signerToUse.SignMessage(dataToSign)
+	if err != nil {
+		return fmt.Errorf("failed to sign comprehensive task data: %w", err)
 	}
 
 	chainCC, err := em.getContractCallerForChain(task.ChainId)

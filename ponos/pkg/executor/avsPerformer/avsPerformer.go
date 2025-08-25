@@ -72,6 +72,7 @@ type PerformerMetadata struct {
 
 type AvsPerformerConfig struct {
 	AvsAddress                     string
+	OperatorAddress                string // The operator address for this executor
 	ProcessType                    AvsProcessType
 	Image                          PerformerImage
 	PerformerNetworkName           string

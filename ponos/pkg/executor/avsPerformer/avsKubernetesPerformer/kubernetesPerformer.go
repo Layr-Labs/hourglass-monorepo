@@ -2,6 +2,8 @@ package avsKubernetesPerformer
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -614,16 +616,48 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 		}
 
 		var verified bool
-		payloadHash := crypto.Keccak256Hash(t.Payload)
+
+		// Create comprehensive hash including all identifying information to prevent tampering
+		// This includes TaskID, OperatorAddress, AvsAddress, OperatorSetId, and Payload
+		taskHashBytes, err := hex.DecodeString(strings.TrimPrefix(t.TaskID, "0x"))
+		if err != nil {
+			akp.logger.Sugar().Errorw("Failed to decode TaskID",
+				zap.String("taskID", t.TaskID),
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to decode TaskID: %w", err)
+		}
+
+		// Get executor's operator address from config
+		executorOperatorAddress := akp.config.OperatorAddress
+		if executorOperatorAddress == "" {
+			akp.logger.Sugar().Errorw("Executor operator address not configured")
+			return fmt.Errorf("executor operator address not configured")
+		}
+
+		// Create comprehensive data to verify against (matching aggregator's signing)
+		// The aggregator signs: TaskID + AvsAddress + OperatorSetId + Payload
+		// Each executor verifies this signature and additionally checks that the task
+		// is intended for their specific operator address and operator set
+		var dataToVerify []byte
+		dataToVerify = append(dataToVerify, taskHashBytes...)   // TaskID (TaskHash)
+		dataToVerify = append(dataToVerify, []byte(t.Avs)...)   // AvsAddress
+		dataToVerify = append(dataToVerify, make([]byte, 4)...) // OperatorSetId (4 bytes)
+		binary.BigEndian.PutUint32(dataToVerify[len(dataToVerify)-4:], t.OperatorSetId)
+		dataToVerify = append(dataToVerify, t.Payload...) // Payload
+
+		// Hash the comprehensive data
+		comprehensiveHash := crypto.Keccak256Hash(dataToVerify)
+
 		switch opset.CurveType {
 		case config.CurveTypeBN254:
-			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
+			verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, comprehensiveHash[:])
 		case config.CurveTypeECDSA:
 			typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
 			if err != nil {
 				continue
 			}
-			verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
+			verified, err = typedSig.VerifyWithAddress(comprehensiveHash[:], opset.WrappedPublicKey.ECDSAAddress)
 			if err != nil {
 				continue
 			}
@@ -642,6 +676,40 @@ func (akp *AvsKubernetesPerformer) ValidateTaskSignature(t *performerTask.Perfor
 	if !isVerified {
 		return fmt.Errorf("failed to verify signature with any operator set")
 	}
+
+	// Additional validation: Ensure this executor is authorized for this specific task
+	// Get executor's operator address from config (need to get it again since it was in the loop)
+	executorOperatorAddress := akp.config.OperatorAddress
+	if executorOperatorAddress == "" {
+		akp.logger.Sugar().Errorw("Executor operator address not configured")
+		return fmt.Errorf("executor operator address not configured")
+	}
+
+	// Verify that the task's AVS address matches what this executor is configured to serve
+	if !strings.EqualFold(t.Avs, akp.config.AvsAddress) {
+		akp.logger.Sugar().Errorw("Task AVS address does not match executor configuration",
+			zap.String("taskAvsAddress", t.Avs),
+			zap.String("executorAvsAddress", akp.config.AvsAddress),
+		)
+		return fmt.Errorf("task AVS address %s does not match executor configuration %s", t.Avs, akp.config.AvsAddress)
+	}
+
+	// Verify that the executor's operator address matches the aggregator address for this task
+	// This ensures the task is specifically intended for this executor
+	if !strings.EqualFold(executorOperatorAddress, t.AggregatorAddress) {
+		akp.logger.Sugar().Errorw("Task aggregator address does not match executor operator address",
+			zap.String("taskAggregatorAddress", t.AggregatorAddress),
+			zap.String("executorOperatorAddress", executorOperatorAddress),
+		)
+		return fmt.Errorf("task aggregator address %s does not match executor operator address %s", t.AggregatorAddress, executorOperatorAddress)
+	}
+
+	akp.logger.Sugar().Infow("Signature verified and task authorization confirmed",
+		zap.String("avsAddress", akp.config.AvsAddress),
+		zap.String("aggregatorAddress", t.AggregatorAddress),
+		zap.String("executorOperatorAddress", executorOperatorAddress),
+		zap.Uint32("operatorSetId", t.OperatorSetId),
+	)
 
 	return nil
 }
