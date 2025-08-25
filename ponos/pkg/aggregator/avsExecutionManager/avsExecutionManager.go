@@ -537,11 +537,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("unsupported curve type: %s", avsConfig.curveType)
 	}
 
-	sig, err := signerToUse.SignMessage(task.Payload)
-	if err != nil {
-		return fmt.Errorf("failed to sign task payload: %w", err)
-	}
-
 	chainCC, err := em.getContractCallerForChain(task.ChainId)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get contract caller for chain",
@@ -583,7 +578,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			cancel,
 			task,
 			em.config.AggregatorAddress,
-			sig,
+			signerToUse,
 			operatorPeersWeight,
 			em.config.InsecureExecutorConnections,
 			em.logger,
@@ -602,7 +597,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			cancel,
 			task,
 			em.config.AggregatorAddress,
-			sig,
+			signerToUse,
 			operatorPeersWeight,
 			em.config.InsecureExecutorConnections,
 			em.logger,

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -54,6 +56,45 @@ type TaskResult struct {
 	OperatorAddress string
 	Signature       []byte
 	OutputDigest    []byte
+}
+
+// TaskSignatureData represents all the data that should be signed for a task
+// This includes all identifying information to prevent replay attacks
+type TaskSignatureData struct {
+	TaskId          string
+	AvsAddress      string
+	OperatorAddress string
+	OperatorSetId   uint32
+	Output          []byte
+}
+
+// ToSigningBytes creates deterministic bytes for signing using ABI encoding
+// Format: taskId(bytes32) || avsAddress(address) || operatorAddress(address) || operatorSetId(uint32) || keccak256(output)
+func (tsd *TaskSignatureData) ToSigningBytes() []byte {
+	// Convert taskId to 32 bytes
+	taskIdBytes := common.HexToHash(tsd.TaskId).Bytes() // 32 bytes
+	
+	// Convert addresses to 20 bytes, then pad to 32
+	avsAddr := common.HexToAddress(tsd.AvsAddress).Bytes() // 20 bytes
+	operAddr := common.HexToAddress(tsd.OperatorAddress).Bytes() // 20 bytes
+	
+	// Convert operatorSetId to 32 bytes (uint32 padded)
+	operSetId := make([]byte, 32)
+	binary.BigEndian.PutUint32(operSetId[28:], tsd.OperatorSetId) // uint32 padded to 32 bytes
+	
+	// Hash the output
+	outputHash := util.GetKeccak256Digest(tsd.Output) // 32 bytes
+	
+	// Concatenate all components
+	// Total: 32 + 32 + 32 + 32 + 32 = 160 bytes
+	result := make([]byte, 0, 160)
+	result = append(result, taskIdBytes...)
+	result = append(result, common.LeftPadBytes(avsAddr, 32)...)
+	result = append(result, common.LeftPadBytes(operAddr, 32)...)
+	result = append(result, operSetId...)
+	result = append(result, outputHash[:]...)
+	
+	return result
 }
 
 func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {

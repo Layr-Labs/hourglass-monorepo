@@ -116,8 +116,6 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 	performer, err := NewAvsKubernetesPerformer(
 		performerConfig,
 		kubernetesConfig,
-		pdf,
-		nil,
 		l,
 	)
 	if err != nil {

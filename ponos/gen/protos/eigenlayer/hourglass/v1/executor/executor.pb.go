@@ -32,6 +32,7 @@ type TaskSubmission struct {
 	Signature          []byte                 `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty"`
 	OperatorSetId      uint32                 `protobuf:"varint,6,opt,name=operator_set_id,json=operatorSetId,proto3" json:"operator_set_id,omitempty"`
 	ReferenceTimestamp uint32                 `protobuf:"varint,7,opt,name=reference_timestamp,json=referenceTimestamp,proto3" json:"reference_timestamp,omitempty"`
+	ExecutorAddress    string                 `protobuf:"bytes,8,opt,name=executor_address,json=executorAddress,proto3" json:"executor_address,omitempty"` // Address of the specific executor this submission is for
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -113,6 +114,13 @@ func (x *TaskSubmission) GetReferenceTimestamp() uint32 {
 		return x.ReferenceTimestamp
 	}
 	return 0
+}
+
+func (x *TaskSubmission) GetExecutorAddress() string {
+	if x != nil {
+		return x.ExecutorAddress
+	}
+	return ""
 }
 
 type TaskResult struct {
@@ -1093,7 +1101,7 @@ var File_eigenlayer_hourglass_v1_executor_executor_proto protoreflect.FileDescri
 
 const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\n" +
-	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\x1a)eigenlayer/hourglass/v1/common/auth.proto\"\x8a\x02\n" +
+	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\x1a)eigenlayer/hourglass/v1/common/auth.proto\"\xb5\x02\n" +
 	"\x0eTaskSubmission\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12-\n" +
 	"\x12aggregator_address\x18\x02 \x01(\tR\x11aggregatorAddress\x12\x1f\n" +
@@ -1102,7 +1110,8 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\apayload\x18\x04 \x01(\fR\apayload\x12\x1c\n" +
 	"\tsignature\x18\x05 \x01(\fR\tsignature\x12&\n" +
 	"\x0foperator_set_id\x18\x06 \x01(\rR\roperatorSetId\x12/\n" +
-	"\x13reference_timestamp\x18\a \x01(\rR\x12referenceTimestamp\"\xf4\x01\n" +
+	"\x13reference_timestamp\x18\a \x01(\rR\x12referenceTimestamp\x12)\n" +
+	"\x10executor_address\x18\b \x01(\tR\x0fexecutorAddress\"\xf4\x01\n" +
 	"\n" +
 	"TaskResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12)\n" +

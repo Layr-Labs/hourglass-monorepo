@@ -265,8 +265,6 @@ func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
 			PerformerNetworkName: e.config.PerformerNetworkName,
 		},
-		e.peeringFetcher,
-		e.l1ContractCaller,
 		e.logger,
 	)
 }
@@ -299,8 +297,6 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 			EndpointOverride: endpointOverride,
 		},
 		kubernetesConfig,
-		e.peeringFetcher,
-		e.l1ContractCaller,
 		e.logger,
 	)
 }

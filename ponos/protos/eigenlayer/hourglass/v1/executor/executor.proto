@@ -36,6 +36,7 @@ message TaskSubmission {
   bytes signature = 5;
   uint32 operator_set_id = 6;
   uint32 reference_timestamp = 7;
+  string executor_address = 8;
 }
 
 message TaskResult {

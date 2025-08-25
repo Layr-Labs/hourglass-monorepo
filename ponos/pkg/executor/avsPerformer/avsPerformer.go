@@ -112,7 +112,6 @@ type PerformerCreationResult struct {
 type IAvsPerformer interface {
 	Initialize(ctx context.Context) error
 	RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error)
-	ValidateTaskSignature(task *performerTask.PerformerTask) error
 	Deploy(ctx context.Context, image PerformerImage) (*DeploymentResult, error)
 	CreatePerformer(ctx context.Context, image PerformerImage) (*PerformerCreationResult, error)
 	PromotePerformer(ctx context.Context, performerID string) error

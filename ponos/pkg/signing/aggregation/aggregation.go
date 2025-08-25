@@ -16,7 +16,7 @@ type ITaskResultAggregator[SigT, CertT, PubKeyT any] interface {
 		taskResponse *types.TaskResult,
 	) error
 
-	VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[PubKeyT], outputDigest [32]byte) (*SigT, error)
+	VerifyResponseSignature(taskResponse *types.TaskResult, operator *Operator[PubKeyT]) (*SigT, [32]byte, error)
 
 	GenerateFinalCertificate() (*CertT, error)
 }

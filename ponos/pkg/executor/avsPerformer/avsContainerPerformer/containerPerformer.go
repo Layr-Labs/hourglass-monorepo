@@ -10,22 +10,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
-	"github.com/Layr-Labs/crypto-libs/pkg/signing"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-
-	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
+	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -53,11 +43,8 @@ type PerformerContainer struct {
 }
 
 type AvsContainerPerformer struct {
-	config           *avsPerformer.AvsPerformerConfig
-	logger           *zap.Logger
-	peeringFetcher   peering.IPeeringDataFetcher
-	l1ContractCaller contractCaller.IContractCaller
-	aggregatorPeers  []*peering.OperatorPeerInfo
+	config *avsPerformer.AvsPerformerConfig
+	logger *zap.Logger
 
 	// Container tracking
 	containerManager      containerManager.ContainerManager
@@ -81,7 +68,6 @@ type AvsContainerPerformer struct {
 // Necessary for injection of container manager behavior.
 func NewAvsContainerPerformerWithContainerManager(
 	config *avsPerformer.AvsPerformerConfig,
-	peeringFetcher peering.IPeeringDataFetcher,
 	logger *zap.Logger,
 	containerManager containerManager.ContainerManager,
 ) *AvsContainerPerformer {
@@ -93,7 +79,6 @@ func NewAvsContainerPerformerWithContainerManager(
 	return &AvsContainerPerformer{
 		config:             config,
 		logger:             logger,
-		peeringFetcher:     peeringFetcher,
 		containerManager:   containerManager,
 		taskWaitGroups:     make(map[string]*sync.WaitGroup),
 		drainingPerformers: make(map[string]struct{}),
@@ -103,8 +88,6 @@ func NewAvsContainerPerformerWithContainerManager(
 // NewAvsContainerPerformer creates a new AvsContainerPerformer
 func NewAvsContainerPerformer(
 	config *avsPerformer.AvsPerformerConfig,
-	peeringFetcher peering.IPeeringDataFetcher,
-	l1ContractCaller contractCaller.IContractCaller,
 	logger *zap.Logger,
 ) (*AvsContainerPerformer, error) {
 	containerMgr, err := containerManager.NewDockerContainerManager(
@@ -123,8 +106,6 @@ func NewAvsContainerPerformer(
 	return &AvsContainerPerformer{
 		config:             config,
 		logger:             logger,
-		peeringFetcher:     peeringFetcher,
-		l1ContractCaller:   l1ContractCaller,
 		containerManager:   containerMgr,
 		taskWaitGroups:     make(map[string]*sync.WaitGroup),
 		drainingPerformers: make(map[string]struct{}),
@@ -144,30 +125,6 @@ func (aps *AvsContainerPerformer) cleanupFailedContainer(containerID string, fai
 			zap.Error(err),
 		)
 	}
-}
-
-func (aps *AvsContainerPerformer) fetchAggregatorPeerInfo(ctx context.Context) ([]*peering.OperatorPeerInfo, error) {
-	retries := []uint64{1, 3, 5, 10, 20}
-	for i, retry := range retries {
-		aggPeers, err := aps.peeringFetcher.ListAggregatorOperators(ctx, aps.config.AvsAddress)
-		if err != nil {
-			aps.logger.Sugar().Errorw("Failed to fetch aggregator peers",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.Error(err),
-			)
-			if i == len(retries)-1 {
-				aps.logger.Sugar().Infow("Giving up on fetching aggregator peers",
-					zap.String("avsAddress", aps.config.AvsAddress),
-					zap.Error(err),
-				)
-				return nil, err
-			}
-			time.Sleep(time.Duration(retry) * time.Second)
-			continue
-		}
-		return aggPeers, nil
-	}
-	return nil, fmt.Errorf("failed to fetch aggregator peers after retries")
 }
 
 // generatePerformerID generates a unique performer ID
@@ -279,16 +236,6 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 func (aps *AvsContainerPerformer) Initialize(ctx context.Context) error {
 	aps.performerContainersMu.Lock()
 	defer aps.performerContainersMu.Unlock()
-	// Fetch aggregator peer information
-	aggregatorPeers, err := aps.fetchAggregatorPeerInfo(ctx)
-	if err != nil {
-		return err
-	}
-	aps.aggregatorPeers = aggregatorPeers
-	aps.logger.Sugar().Infow("Fetched aggregator peers",
-		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.Any("aggregatorPeers", aps.aggregatorPeers),
-	)
 
 	// Check if we should start with a container loaded
 	// Skip container creation if image info is empty (for deployment-based initialization)
@@ -803,106 +750,6 @@ func (aps *AvsContainerPerformer) PromotePerformer(ctx context.Context, performe
 	)
 
 	return nil
-}
-
-func (aps *AvsContainerPerformer) ValidateTaskSignature(t *performerTask.PerformerTask) error {
-	peer := util.Find(aps.aggregatorPeers, func(p *peering.OperatorPeerInfo) bool {
-		return strings.EqualFold(p.OperatorAddress, t.AggregatorAddress)
-	})
-	if peer == nil {
-		aps.logger.Sugar().Errorw("Failed to find peer for task",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-		)
-		return fmt.Errorf("failed to find peer for task")
-	}
-
-	var verified bool
-
-	aggOpSet, err := aps.l1ContractCaller.GetAVSConfig(t.Avs)
-	if err != nil || aggOpSet == nil {
-		aps.logger.Sugar().Errorw("AVS in task is not valid for task processing.")
-		return fmt.Errorf("AVS in task is not valid for task processing")
-	}
-
-	opset, err := aps.l1ContractCaller.GetOperatorSetDetailsForOperator(common.HexToAddress(t.AggregatorAddress), t.Avs, aggOpSet.AggregatorOperatorSetId)
-	if err != nil || opset == nil {
-		return err
-	}
-
-	var scheme signing.SigningScheme
-	switch opset.CurveType {
-	case config.CurveTypeBN254:
-		scheme = bn254.NewScheme()
-	case config.CurveTypeECDSA:
-		scheme = ecdsa.NewScheme()
-	default:
-		aps.logger.Sugar().Errorw("Unsupported curve type for signature verification",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-			zap.String("curveType", opset.CurveType.String()),
-		)
-		return fmt.Errorf("unsupported curve type for signature verification: %s", opset.CurveType)
-	}
-
-	sig, err := scheme.NewSignatureFromBytes(t.Signature)
-	if err != nil {
-		aps.logger.Sugar().Errorw("Failed to create bn254 signature from bytes",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.Error(err),
-		)
-		return err
-	}
-
-	payloadHash := crypto.Keccak256Hash(t.Payload)
-	switch opset.CurveType {
-	case config.CurveTypeBN254:
-		verified, err = sig.Verify(opset.WrappedPublicKey.PublicKey, payloadHash[:])
-		if err != nil {
-			aps.logger.Sugar().Errorw("Error verifying BN254 signature",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("aggregatorAddress", t.AggregatorAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to verify signature with the peer operator set")
-		}
-	case config.CurveTypeECDSA:
-		typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
-		if err != nil {
-			aps.logger.Sugar().Errorw("Failed to create ECDSA signature from bytes",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to verify signature with the peer operator set")
-
-		}
-		verified, err = typedSig.VerifyWithAddress(payloadHash[:], opset.WrappedPublicKey.ECDSAAddress)
-		if err != nil {
-			aps.logger.Sugar().Errorw("Error verifying ECDSA signature",
-				zap.String("avsAddress", aps.config.AvsAddress),
-				zap.String("aggregatorAddress", t.AggregatorAddress),
-				zap.Error(err),
-			)
-			return fmt.Errorf("failed to verify signature with the peer operator set")
-		}
-	}
-
-	if !verified {
-		aps.logger.Sugar().Errorw("Failed to verify signature",
-			zap.String("avsAddress", aps.config.AvsAddress),
-			zap.String("aggregatorAddress", t.AggregatorAddress),
-			zap.Error(err),
-		)
-		return fmt.Errorf("failed to verify signature with peer operator set")
-	}
-
-	aps.logger.Sugar().Infow("Signature verified with operator set",
-		zap.String("avsAddress", aps.config.AvsAddress),
-		zap.String("aggregatorAddress", t.AggregatorAddress),
-		zap.Uint32("opsetID", opset.OperatorSetID),
-	)
-	return nil
-
 }
 
 func (aps *AvsContainerPerformer) RunTask(ctx context.Context, task *performerTask.PerformerTask) (*performerTask.PerformerTaskResult, error) {

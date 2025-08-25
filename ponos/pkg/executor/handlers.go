@@ -4,19 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"strings"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -257,8 +260,6 @@ func (e *Executor) createAvsPerformer(avsAddress string) (avsPerformer.IAvsPerfo
 
 	newPerformer, err := avsContainerPerformer.NewAvsContainerPerformer(
 		config,
-		e.peeringFetcher,
-		e.l1ContractCaller,
 		e.logger,
 	)
 	if err != nil {
@@ -307,39 +308,48 @@ func (e *Executor) getOrCreateAvsPerformer(ctx context.Context, avsAddress strin
 }
 
 func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
-	e.logger.Sugar().Infow("Received task from AVS avsPerf",
+	e.logger.Sugar().Infow("Received task from AVS",
 		"taskId", task.TaskId,
 		"avsAddress", task.AvsAddress,
+		"executorAddress", task.ExecutorAddress,
+		"aggregatorAddress", task.AggregatorAddress,
 	)
-	opSet, err := e.l1ContractCaller.GetOperatorSetDetailsForOperator(
-		common.HexToAddress(e.config.Operator.Address),
-		task.GetAvsAddress(),
-		task.OperatorSetId,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if opSet == nil {
-		return nil, fmt.Errorf("invalid task operator set")
-	}
 
 	avsAddress := strings.ToLower(task.GetAvsAddress())
 	if avsAddress == "" {
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
-	value, ok := e.avsPerformers.Load(avsAddress)
+	if task.ExecutorAddress != "" && !strings.EqualFold(task.ExecutorAddress, e.config.Operator.Address) {
+		e.logger.Sugar().Errorw("Task executor address mismatch",
+			"expected", e.config.Operator.Address,
+			"received", task.ExecutorAddress,
+		)
+		return nil, fmt.Errorf("task executor address mismatch: expected %s, got %s",
+			e.config.Operator.Address, task.ExecutorAddress)
+	}
 
+	// Validate operator is in the operator set
+	if err := e.validateOperatorInSet(task); err != nil {
+		return nil, err
+	}
+
+	// Validate task signature
+	if err := e.validateTaskSignature(task); err != nil {
+		e.logger.Sugar().Errorw("Task signature validation failed",
+			"taskId", task.TaskId,
+			"error", err,
+		)
+		return nil, fmt.Errorf("signature validation failed: %w", err)
+	}
+
+	value, ok := e.avsPerformers.Load(avsAddress)
 	if !ok {
-		return nil, fmt.Errorf("AVS avsPerf not found for address %s", avsAddress)
+		return nil, fmt.Errorf("AVS performer not found for address %s", avsAddress)
 	}
 	avsPerf := value.(avsPerformer.IAvsPerformer)
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
-
-	if err := avsPerf.ValidateTaskSignature(pt); err != nil {
-		return nil, fmt.Errorf("failed to validate task signature: %w", err)
-	}
 	e.inflightTasks.Store(task.TaskId, task)
 
 	// Save inflight task to storage
@@ -410,11 +420,23 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 }
 
 // signResult signs the result of a task and returns the signature and the digest.
+// createTaskResultSignatureData creates the signature data structure for a task result
+func (e *Executor) createTaskResultSignatureData(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) *types.TaskSignatureData {
+	return &types.TaskSignatureData{
+		TaskId:          task.TaskID,
+		AvsAddress:      task.Avs,
+		OperatorAddress: e.config.Operator.Address,
+		OperatorSetId:   task.OperatorSetId,
+		Output:          result.Result,
+	}
+}
+
 func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
-	// the bytes of the result that we need to sign over.
-	// the ecdsaSigner will end up hashing this to get the digest, so
-	// this value is the raw []bytes that get hashed
-	var signedOverBytes []byte
+	// Create the signature data structure with ALL identifying information
+	sigData := e.createTaskResultSignatureData(task, result)
+
+	// Get deterministic bytes to sign
+	signedOverBytes := sigData.ToSigningBytes()
 
 	curveType, err := e.l1ContractCaller.GetOperatorSetCurveType(task.Avs, task.OperatorSetId)
 	if err != nil {
@@ -423,46 +445,25 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 			zap.Uint32("operatorSetId", task.OperatorSetId),
 			zap.Error(err),
 		)
-		return nil, signedOverBytes, fmt.Errorf("failed to get operator set curve type: %w", err)
+		return nil, nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
 
 	var signerToUse signer.ISigner
 	if curveType == config.CurveTypeBN254 {
-
 		if e.bn254Signer == nil {
-			return nil, signedOverBytes, fmt.Errorf("BN254 signer is not initialized")
+			return nil, nil, fmt.Errorf("BN254 signer is not initialized")
 		}
 		signerToUse = e.bn254Signer
-
-		signedOverBytes, err = e.l1ContractCaller.CalculateBN254CertificateDigestBytes(
-			context.Background(),
-			task.ReferenceTimestamp,
-			util.GetKeccak256Digest(result.Result),
-		)
-		if err != nil {
-			return nil, signedOverBytes, fmt.Errorf("failed to calculate BN254 certificate digest: %w", err)
-		}
-
 	} else if curveType == config.CurveTypeECDSA {
-
 		if e.ecdsaSigner == nil {
-			return nil, signedOverBytes, fmt.Errorf("ECDSA signer is not initialized")
+			return nil, nil, fmt.Errorf("ECDSA signer is not initialized")
 		}
 		signerToUse = e.ecdsaSigner
-
-		signedOverBytes, err = e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
-			context.Background(),
-			task.ReferenceTimestamp,
-			util.GetKeccak256Digest(result.Result),
-		)
-		if err != nil {
-			return nil, signedOverBytes, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
-		}
-
 	} else {
-		return nil, signedOverBytes, fmt.Errorf("unsupported curve type: %s", curveType)
+		return nil, nil, fmt.Errorf("unsupported curve type: %s", curveType)
 	}
 
+	// Sign the complete task identity data
 	sig, err := signerToUse.SignMessageForSolidity(signedOverBytes)
 	if err != nil {
 		e.logger.Error("Failed to sign result",
@@ -470,11 +471,10 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 			zap.String("avsAddress", task.Avs),
 			zap.Error(err),
 		)
-		return nil, signedOverBytes, fmt.Errorf("failed to sign result: %w", err)
+		return nil, nil, fmt.Errorf("failed to sign result: %w", err)
 	}
-	// signResult() is expected to return the digest of what was signed over.
-	// We do this as the very last thing since some signing backends hash the raw bytes themselves
-	// but dont return the digest.
+
+	// Return signature and digest of what was signed
 	signedOverDigest := util.GetKeccak256Digest(signedOverBytes)
 	return sig, signedOverDigest[:], nil
 }
@@ -724,4 +724,145 @@ func (e *Executor) GetChallengeToken(ctx context.Context, req *executorV1.GetCha
 		ChallengeToken: entry.Token,
 		ExpiresAt:      entry.ExpiresAt.Unix(),
 	}, nil
+}
+
+// validateTaskSignature validates the signature of a task submission
+// validateOperatorInSet checks if the operator is in the specified operator set
+func (e *Executor) validateOperatorInSet(task *executorV1.TaskSubmission) error {
+	opSet, err := e.l1ContractCaller.GetOperatorSetDetailsForOperator(
+		common.HexToAddress(e.config.Operator.Address),
+		task.GetAvsAddress(),
+		task.OperatorSetId,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get operator set details: %w", err)
+	}
+
+	if opSet == nil {
+		return fmt.Errorf("invalid task operator set")
+	}
+
+	return nil
+}
+
+// constructTaskSubmissionMessage creates the message to be signed for a task submission
+func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmission) []byte {
+	// IMPORTANT: We always use OUR executor address, not what's in the task
+	// This binds the signature to this specific executor
+	return util.EncodeTaskSubmissionMessage(
+		task.TaskId,
+		task.AvsAddress,
+		e.config.Operator.Address, // Use our address, not task.ExecutorAddress
+		task.OperatorSetId,
+		task.Payload,
+	)
+}
+
+func (e *Executor) validateTaskSignature(task *executorV1.TaskSubmission) error {
+	// Get AVS config to find aggregator's operator set
+	aggConfig, err := e.l1ContractCaller.GetAVSConfig(task.AvsAddress)
+	if err != nil {
+		e.logger.Sugar().Errorw("Failed to get AVS config",
+			zap.String("avsAddress", task.AvsAddress),
+			zap.Error(err),
+		)
+		return fmt.Errorf("invalid AVS config: %w", err)
+	}
+	if aggConfig == nil {
+		return fmt.Errorf("avs config not found for avs")
+	}
+
+	// Get aggregator's operator set details
+	aggOpSet, err := e.l1ContractCaller.GetOperatorSetDetailsForOperator(
+		common.HexToAddress(task.AggregatorAddress),
+		task.AvsAddress,
+		aggConfig.AggregatorOperatorSetId,
+	)
+	if err != nil {
+		e.logger.Sugar().Errorw("Failed to get aggregator operator set",
+			zap.String("aggregatorAddress", task.AggregatorAddress),
+			zap.String("avsAddress", task.AvsAddress),
+			zap.Uint32("operatorSetId", aggConfig.AggregatorOperatorSetId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("invalid aggregator operator set: %w", err)
+	}
+	if aggOpSet == nil {
+		return fmt.Errorf("aggregator operator set not found for aggregator")
+	}
+
+	// Create signing scheme based on curve type
+	var scheme signing.SigningScheme
+	switch aggOpSet.CurveType {
+	case config.CurveTypeBN254:
+		scheme = bn254.NewScheme()
+	case config.CurveTypeECDSA:
+		scheme = ecdsa.NewScheme()
+	default:
+		e.logger.Sugar().Errorw("Unsupported curve type",
+			zap.String("curveType", aggOpSet.CurveType.String()),
+		)
+		return fmt.Errorf("unsupported curve type: %s", aggOpSet.CurveType)
+	}
+
+	// Parse signature
+	sig, err := scheme.NewSignatureFromBytes(task.Signature)
+	if err != nil {
+		e.logger.Sugar().Errorw("Failed to parse signature",
+			zap.Error(err),
+		)
+		return fmt.Errorf("invalid signature format: %w", err)
+	}
+
+	// Create the message that should have been signed
+	messageToVerify := e.constructTaskSubmissionMessage(task)
+
+	// Verify signature based on curve type
+	var verified bool
+	switch aggOpSet.CurveType {
+	case config.CurveTypeBN254:
+		verified, err = sig.Verify(aggOpSet.WrappedPublicKey.PublicKey, messageToVerify)
+		if err != nil {
+			e.logger.Sugar().Errorw("Error verifying BN254 signature",
+				zap.String("aggregatorAddress", task.AggregatorAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
+	case config.CurveTypeECDSA:
+		typedSig, err := ecdsa.NewSignatureFromBytes(sig.Bytes())
+		if err != nil {
+			e.logger.Sugar().Errorw("Failed to create ECDSA signature",
+				zap.Error(err),
+			)
+			return fmt.Errorf("failed to create ECDSA signature: %w", err)
+		}
+		// ECDSA verification needs the hash of the message
+		messageHash := util.GetKeccak256Digest(messageToVerify)
+		verified, err = typedSig.VerifyWithAddress(messageHash[:], aggOpSet.WrappedPublicKey.ECDSAAddress)
+		if err != nil {
+			e.logger.Sugar().Errorw("Error verifying ECDSA signature",
+				zap.String("aggregatorAddress", task.AggregatorAddress),
+				zap.Error(err),
+			)
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
+	}
+
+	if !verified {
+		e.logger.Sugar().Errorw("Signature verification failed",
+			zap.String("taskId", task.TaskId),
+			zap.String("aggregatorAddress", task.AggregatorAddress),
+			zap.String("executorAddress", e.config.Operator.Address),
+		)
+		return fmt.Errorf("signature verification failed")
+	}
+
+	e.logger.Sugar().Infow("Task signature verified successfully",
+		zap.String("taskId", task.TaskId),
+		zap.String("aggregatorAddress", task.AggregatorAddress),
+		zap.Uint32("operatorSetId", aggOpSet.OperatorSetID),
+	)
+
+	return nil
 }
