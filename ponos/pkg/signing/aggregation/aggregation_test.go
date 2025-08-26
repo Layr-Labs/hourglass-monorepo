@@ -852,7 +852,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		operatorIndices := []uint32{4, 2, 0, 3, 1} // Deliberately non-sequential
 		operators := make([]*Operator[signing.PublicKey], 5)
 		privateKeys := make([]*bn254.PrivateKey, 5)
-		
+
 		for i := 0; i < 5; i++ {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
@@ -885,10 +885,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 		// Have operators at positions 0, 2, and 4 sign (with indices 4, 0, 1)
 		// This means operators with indices 2 and 3 will be non-signers
 		signingOperatorPositions := []int{0, 2, 4} // Positions in operators array
-		expectedNonSignerIndices := []uint32{2, 3}  // Expected non-signer operator indices (sorted)
-		
+		expectedNonSignerIndices := []uint32{2, 3} // Expected non-signer operator indices (sorted)
+
 		commonPayload := []byte("test-response")
-		
+
 		for _, pos := range signingOperatorPositions {
 			operator := operators[pos]
 			taskResult, err := createSignedBN254TaskResult(
@@ -899,7 +899,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 				privateKeys[pos],
 			)
 			require.NoError(t, err)
-			
+
 			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 		}
@@ -927,7 +927,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		for _, ns := range cert.NonSignerOperators {
 			nonSignerAddresses[ns.Address] = true
 		}
-		
+
 		// Operators at positions 1 and 3 (with indices 2 and 3) should be non-signers
 		assert.True(t, nonSignerAddresses[operators[1].Address], "Operator at position 1 should be non-signer")
 		assert.True(t, nonSignerAddresses[operators[3].Address], "Operator at position 3 should be non-signer")
@@ -938,7 +938,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		operatorIndices := []uint32{2, 0, 1}
 		operators := make([]*Operator[signing.PublicKey], 3)
 		privateKeys := make([]*bn254.PrivateKey, 3)
-		
+
 		for i := 0; i < 3; i++ {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
@@ -967,7 +967,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		require.NoError(t, err)
 
 		commonPayload := []byte("test-response")
-		
+
 		// All operators sign
 		for i := 0; i < 3; i++ {
 			taskResult, err := createSignedBN254TaskResult(
@@ -984,7 +984,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 
 		cert, err := agg.GenerateFinalCertificate()
 		require.NoError(t, err)
-		
+
 		// Should have no non-signers
 		assert.Equal(t, 0, len(cert.NonSignerOperators), "Should have no non-signers when all sign")
 		assert.Equal(t, 0, len(cert.NonSignersPubKeys), "Should have no non-signer public keys")
@@ -994,7 +994,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		// Create operators with indices that would need sorting
 		operatorIndices := []uint32{3, 1, 2, 0}
 		operators := make([]*Operator[signing.PublicKey], 4)
-		
+
 		for i := 0; i < 4; i++ {
 			_, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
@@ -1038,10 +1038,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 
 		cert, err := agg.GenerateFinalCertificate()
 		require.NoError(t, err)
-		
+
 		// All operators should be non-signers, sorted by OperatorIndex
 		assert.Equal(t, 4, len(cert.NonSignerOperators), "Should have all operators as non-signers")
-		
+
 		// Verify they're sorted by OperatorIndex (should be 0, 1, 2, 3)
 		for i := 0; i < 4; i++ {
 			assert.Equal(t, uint32(i), cert.NonSignerOperators[i].OperatorIndex,
@@ -1053,7 +1053,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		// Create operators where only one doesn't sign
 		operators := make([]*Operator[signing.PublicKey], 3)
 		privateKeys := make([]*bn254.PrivateKey, 3)
-		
+
 		for i := 0; i < 3; i++ {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
@@ -1082,7 +1082,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 		require.NoError(t, err)
 
 		commonPayload := []byte("test-response")
-		
+
 		// Operators 0 and 2 sign, operator 1 doesn't
 		for _, i := range []int{0, 2} {
 			taskResult, err := createSignedBN254TaskResult(
@@ -1099,7 +1099,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 
 		cert, err := agg.GenerateFinalCertificate()
 		require.NoError(t, err)
-		
+
 		// Should have exactly one non-signer (operator at index 1)
 		assert.Equal(t, 1, len(cert.NonSignerOperators), "Should have exactly one non-signer")
 		assert.Equal(t, uint32(1), cert.NonSignerOperators[0].OperatorIndex, "Non-signer should have OperatorIndex 1")
