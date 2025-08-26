@@ -20,4 +20,7 @@ var (
 
 	// ErrTaskNotFound is returned when a task is not found
 	ErrTaskNotFound = errors.New("task not found")
+
+	// ErrTaskAlreadyProcessed is returned when a task has already been processed
+	ErrTaskAlreadyProcessed = errors.New("task already processed")
 )
