@@ -105,6 +105,7 @@ func createMockOperatorPeerInfo(operatorSetId uint32, networkAddress string) *Mo
 		OperatorSets: []*peering.OperatorSet{
 			{
 				OperatorSetID:  operatorSetId,
+				OperatorIndex:  0, // Mock operator is at index 0
 				NetworkAddress: networkAddress,
 			},
 		},
@@ -134,6 +135,7 @@ func createBN254TestOperators(count int) ([]*peering.OperatorPeerInfo, []*bn254.
 			OperatorSets: []*peering.OperatorSet{
 				{
 					OperatorSetID: 1,
+					OperatorIndex: uint32(i),
 					WrappedPublicKey: peering.WrappedPublicKey{
 						PublicKey: pubKey,
 					},
@@ -167,6 +169,7 @@ func createECDSATestOperators(count int) ([]*peering.OperatorPeerInfo, []*ecdsa.
 			OperatorSets: []*peering.OperatorSet{
 				{
 					OperatorSetID: 1,
+					OperatorIndex: uint32(i),
 					WrappedPublicKey: peering.WrappedPublicKey{
 						ECDSAAddress: ecdsaAddr,
 					},
@@ -674,9 +677,9 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 
 	t.Run("MockOperatorPeerInfo with multiple operator sets", func(t *testing.T) {
 		operatorSets := []*peering.OperatorSet{
-			{OperatorSetID: 1, NetworkAddress: "localhost:9001"},
-			{OperatorSetID: 2, NetworkAddress: "localhost:9002"},
-			{OperatorSetID: 3, NetworkAddress: "localhost:9003"},
+			{OperatorSetID: 1, OperatorIndex: 0, NetworkAddress: "localhost:9001"},
+			{OperatorSetID: 2, OperatorIndex: 1, NetworkAddress: "localhost:9002"},
+			{OperatorSetID: 3, OperatorIndex: 2, NetworkAddress: "localhost:9003"},
 		}
 
 		mockPeer := createMockOperatorPeerInfoWithMultipleSets("0xoperator123", operatorSets)

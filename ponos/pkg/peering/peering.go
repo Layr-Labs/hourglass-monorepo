@@ -15,6 +15,7 @@ type WrappedPublicKey struct {
 
 type OperatorSet struct {
 	OperatorSetID    uint32           `json:"operatorSetId"`
+	OperatorIndex    uint32           `json:"operatorIndex"` // Index of the operator in this specific operator set
 	WrappedPublicKey WrappedPublicKey `json:"publicKey"`
 	NetworkAddress   string           `json:"networkAddress"`
 	CurveType        config.CurveType `json:"curveType"`
@@ -22,7 +23,6 @@ type OperatorSet struct {
 
 type OperatorPeerInfo struct {
 	OperatorAddress string         `json:"operatorAddress"`
-	OperatorIndex   uint32         `json:"operatorIndex"` // Position in the operator set member array
 	OperatorSets    []*OperatorSet `json:"operatorSets,omitempty"`
 }
 
@@ -50,6 +50,14 @@ func (opi *OperatorPeerInfo) IncludesOperatorSetId(operatorSetId uint32) bool {
 		}
 	}
 	return false
+}
+
+func (opi *OperatorPeerInfo) GetOperatorIndexForSet(operatorSetId uint32) (uint32, error) {
+	os, err := opi.GetOperatorSet(operatorSetId)
+	if err != nil {
+		return 0, err
+	}
+	return os.OperatorIndex, nil
 }
 
 type IPeeringDataFetcher interface {

@@ -63,7 +63,7 @@ func NewBN254TaskSession(
 		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
 			Address:       peer.OperatorAddress,
 			PublicKey:     opset.WrappedPublicKey.PublicKey,
-			OperatorIndex: peer.OperatorIndex, // Use the operator's position in the operator set
+			OperatorIndex: opset.OperatorIndex,
 		})
 	}
 
@@ -118,7 +118,7 @@ func NewECDSATaskSession(
 		operators = append(operators, &aggregation.Operator[common.Address]{
 			Address:       peer.OperatorAddress,
 			PublicKey:     opset.WrappedPublicKey.ECDSAAddress,
-			OperatorIndex: peer.OperatorIndex, // Use the operator's position in the operator set
+			OperatorIndex: opset.OperatorIndex,
 		})
 	}
 
