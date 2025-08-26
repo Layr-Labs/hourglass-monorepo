@@ -22,6 +22,7 @@ type OperatorSet struct {
 
 type OperatorPeerInfo struct {
 	OperatorAddress string         `json:"operatorAddress"`
+	OperatorIndex   uint32         `json:"operatorIndex"` // Position in the operator set member array
 	OperatorSets    []*OperatorSet `json:"operatorSets,omitempty"`
 }
 

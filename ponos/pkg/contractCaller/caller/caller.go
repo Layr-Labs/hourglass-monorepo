@@ -195,6 +195,23 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 	digest := aggCert.TaskResponseDigest
 
+	// Populate NonSignerWitnesses from the sorted non-signer operators
+	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(aggCert.NonSignerOperators))
+	for _, nonSigner := range aggCert.NonSignerOperators {
+		// For now, we only provide the operator index
+		// The contract can look up cached operator info or we can provide proofs later
+		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
+			OperatorIndex: nonSigner.OperatorIndex,
+			// OperatorInfoProof and OperatorInfo can be empty if the operator is already cached
+			// in the contract from previous verifications
+			OperatorInfoProof: []byte{},
+			OperatorInfo:      ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
+				// Empty for now - contract will use cached data
+			},
+		}
+		nonSignerWitnesses = append(nonSignerWitnesses, witness)
+	}
+
 	cert := ITaskMailbox.IBN254CertificateVerifierTypesBN254Certificate{
 		ReferenceTimestamp: globalTableRootReferenceTimestamp,
 		MessageHash:        digest,
@@ -212,7 +229,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 				new(big.Int).SetBytes(g2Bytes[96:128]),
 			},
 		},
-		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{},
+		NonSignerWitnesses: nonSignerWitnesses,
 	}
 
 	certBytes, err := cc.taskMailbox.GetBN254CertificateBytes(&bind.CallOpts{}, cert)
@@ -358,6 +375,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 		}
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			OperatorAddress: operatorSetStringAddrs[i],
+			OperatorIndex:   uint32(i), // Capture the operator's position in the operator set
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
 		})
 	}

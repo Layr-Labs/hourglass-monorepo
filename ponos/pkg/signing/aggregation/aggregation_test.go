@@ -108,8 +108,9 @@ func Test_Aggregation(t *testing.T) {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
 			operators[i] = &Operator[signing.PublicKey]{
-				Address:   fmt.Sprintf("0x%d", i+1), // Simple address format for testing
-				PublicKey: pubKey,
+				Address:       fmt.Sprintf("0x%d", i+1), // Simple address format for testing
+				PublicKey:     pubKey,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -197,8 +198,9 @@ func Test_Aggregation(t *testing.T) {
 			}
 
 			operators[i] = &Operator[common.Address]{
-				Address:   derivedAddress.String(),
-				PublicKey: derivedAddress,
+				Address:       derivedAddress.String(),
+				PublicKey:     derivedAddress,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -276,8 +278,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
 			operators[i] = &Operator[signing.PublicKey]{
-				Address:   fmt.Sprintf("0x%d", i+1),
-				PublicKey: pubKey,
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -396,8 +399,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		operators := []*Operator[signing.PublicKey]{
 			{
-				Address:   "0x1",
-				PublicKey: pubKey,
+				Address:       "0x1",
+				PublicKey:     pubKey,
+				OperatorIndex: 0,
 			},
 		}
 
@@ -474,8 +478,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
 			operators[i] = &Operator[signing.PublicKey]{
-				Address:   fmt.Sprintf("0x%d", i+1),
-				PublicKey: pubKey,
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -538,8 +543,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			require.NoError(t, err)
 
 			operators[i] = &Operator[common.Address]{
-				Address:   derivedAddress.String(),
-				PublicKey: derivedAddress,
+				Address:       derivedAddress.String(),
+				PublicKey:     derivedAddress,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -658,8 +664,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			require.NoError(t, err)
 
 			operators[i] = &Operator[common.Address]{
-				Address:   derivedAddress.String(),
-				PublicKey: derivedAddress,
+				Address:       derivedAddress.String(),
+				PublicKey:     derivedAddress,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -720,8 +727,9 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 
 		operators := []*Operator[signing.PublicKey]{
 			{
-				Address:   "0x1",
-				PublicKey: pubKey,
+				Address:       "0x1",
+				PublicKey:     pubKey,
+				OperatorIndex: 0,
 			},
 		}
 
@@ -837,6 +845,268 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 	})
 }
 
+func Test_NonSignerOrdering(t *testing.T) {
+	t.Run("BN254 - Non-Signers Sorted by OperatorIndex", func(t *testing.T) {
+		// Create test operators with specific operator indices in non-sequential order
+		// This tests that sorting is by OperatorIndex, not by address or order of creation
+		operatorIndices := []uint32{4, 2, 0, 3, 1} // Deliberately non-sequential
+		operators := make([]*Operator[signing.PublicKey], 5)
+		privateKeys := make([]*bn254.PrivateKey, 5)
+		
+		for i := 0; i < 5; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: operatorIndices[i],
+			}
+			privateKeys[i] = privKey
+		}
+
+		// Initialize task
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			6000, // 60% threshold (3/5 operators)
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, agg)
+
+		// Have operators at positions 0, 2, and 4 sign (with indices 4, 0, 1)
+		// This means operators with indices 2 and 3 will be non-signers
+		signingOperatorPositions := []int{0, 2, 4} // Positions in operators array
+		expectedNonSignerIndices := []uint32{2, 3}  // Expected non-signer operator indices (sorted)
+		
+		commonPayload := []byte("test-response")
+		
+		for _, pos := range signingOperatorPositions {
+			operator := operators[pos]
+			taskResult, err := createSignedBN254TaskResult(
+				taskId,
+				operator,
+				1, // operatorSetId
+				commonPayload,
+				privateKeys[pos],
+			)
+			require.NoError(t, err)
+			
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
+			require.NoError(t, err)
+		}
+
+		// Verify threshold is met
+		assert.True(t, agg.SigningThresholdMet())
+
+		// Generate final certificate
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		require.NotNil(t, cert)
+
+		// Verify non-signers count
+		assert.Equal(t, 2, len(cert.NonSignerOperators), "Should have 2 non-signers")
+		assert.Equal(t, 2, len(cert.NonSignersPubKeys), "Should have 2 non-signer public keys")
+
+		// Verify non-signers are sorted by OperatorIndex
+		for i, nonSigner := range cert.NonSignerOperators {
+			assert.Equal(t, expectedNonSignerIndices[i], nonSigner.OperatorIndex,
+				"Non-signer at position %d should have OperatorIndex %d", i, expectedNonSignerIndices[i])
+		}
+
+		// Verify the actual non-signer operators are correct
+		nonSignerAddresses := make(map[string]bool)
+		for _, ns := range cert.NonSignerOperators {
+			nonSignerAddresses[ns.Address] = true
+		}
+		
+		// Operators at positions 1 and 3 (with indices 2 and 3) should be non-signers
+		assert.True(t, nonSignerAddresses[operators[1].Address], "Operator at position 1 should be non-signer")
+		assert.True(t, nonSignerAddresses[operators[3].Address], "Operator at position 3 should be non-signer")
+	})
+
+	t.Run("BN254 - All Operators Sign", func(t *testing.T) {
+		// Create operators with random indices
+		operatorIndices := []uint32{2, 0, 1}
+		operators := make([]*Operator[signing.PublicKey], 3)
+		privateKeys := make([]*bn254.PrivateKey, 3)
+		
+		for i := 0; i < 3; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: operatorIndices[i],
+			}
+			privateKeys[i] = privKey
+		}
+
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			10000, // 100% threshold
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+
+		commonPayload := []byte("test-response")
+		
+		// All operators sign
+		for i := 0; i < 3; i++ {
+			taskResult, err := createSignedBN254TaskResult(
+				taskId,
+				operators[i],
+				1,
+				commonPayload,
+				privateKeys[i],
+			)
+			require.NoError(t, err)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
+			require.NoError(t, err)
+		}
+
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		
+		// Should have no non-signers
+		assert.Equal(t, 0, len(cert.NonSignerOperators), "Should have no non-signers when all sign")
+		assert.Equal(t, 0, len(cert.NonSignersPubKeys), "Should have no non-signer public keys")
+	})
+
+	t.Run("BN254 - No Operators Sign", func(t *testing.T) {
+		// Create operators with indices that would need sorting
+		operatorIndices := []uint32{3, 1, 2, 0}
+		operators := make([]*Operator[signing.PublicKey], 4)
+		
+		for i := 0; i < 4; i++ {
+			_, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: operatorIndices[i],
+			}
+		}
+
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			2500, // 25% threshold (can be met with 0 signers if we want to test)
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+
+		// Don't process any signatures, go straight to certificate generation
+		// This would fail in practice due to no signatures, but we're testing the sorting
+		// We need to initialize aggregatedOperators to avoid nil pointer
+		agg.aggregatedOperators = &aggregatedBN254Operators{
+			signersOperatorSet: make(map[string]bool),
+			digestCounts:       make(map[[32]byte]int),
+			digestResponses:    make(map[[32]byte]*ReceivedBN254ResponseWithDigest),
+			signersG2:          bn254.NewZeroG2Point(),
+			signersAggSig:      &bn254.Signature{},
+			mostCommonResponse: &ReceivedBN254ResponseWithDigest{
+				TaskResult:   &types.TaskResult{Output: []byte("dummy")},
+				OutputDigest: [32]byte{},
+			},
+		}
+
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		
+		// All operators should be non-signers, sorted by OperatorIndex
+		assert.Equal(t, 4, len(cert.NonSignerOperators), "Should have all operators as non-signers")
+		
+		// Verify they're sorted by OperatorIndex (should be 0, 1, 2, 3)
+		for i := 0; i < 4; i++ {
+			assert.Equal(t, uint32(i), cert.NonSignerOperators[i].OperatorIndex,
+				"Non-signer at position %d should have OperatorIndex %d", i, i)
+		}
+	})
+
+	t.Run("BN254 - Single Non-Signer", func(t *testing.T) {
+		// Create operators where only one doesn't sign
+		operators := make([]*Operator[signing.PublicKey], 3)
+		privateKeys := make([]*bn254.PrivateKey, 3)
+		
+		for i := 0; i < 3; i++ {
+			privKey, pubKey, err := bn254.GenerateKeyPair()
+			require.NoError(t, err)
+			operators[i] = &Operator[signing.PublicKey]{
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: uint32(i),
+			}
+			privateKeys[i] = privKey
+		}
+
+		taskId := "0x29cebefe301c6ce1bb36b58654fea275e1cacc83"
+		taskData := []byte("test-data")
+		deadline := time.Now().Add(10 * time.Minute)
+
+		agg, err := NewBN254TaskResultAggregator(
+			context.Background(),
+			taskId,
+			100,
+			1,
+			6667, // 66.67% threshold (2/3)
+			taskData,
+			&deadline,
+			operators,
+		)
+		require.NoError(t, err)
+
+		commonPayload := []byte("test-response")
+		
+		// Operators 0 and 2 sign, operator 1 doesn't
+		for _, i := range []int{0, 2} {
+			taskResult, err := createSignedBN254TaskResult(
+				taskId,
+				operators[i],
+				1,
+				commonPayload,
+				privateKeys[i],
+			)
+			require.NoError(t, err)
+			err = agg.ProcessNewSignature(context.Background(), taskResult)
+			require.NoError(t, err)
+		}
+
+		cert, err := agg.GenerateFinalCertificate()
+		require.NoError(t, err)
+		
+		// Should have exactly one non-signer (operator at index 1)
+		assert.Equal(t, 1, len(cert.NonSignerOperators), "Should have exactly one non-signer")
+		assert.Equal(t, uint32(1), cert.NonSignerOperators[0].OperatorIndex, "Non-signer should have OperatorIndex 1")
+		assert.Equal(t, operators[1].Address, cert.NonSignerOperators[0].Address, "Non-signer should be operator 1")
+	})
+}
+
 func Test_TaskIDMismatchValidation(t *testing.T) {
 	t.Run("BN254 - Task ID Mismatch", func(t *testing.T) {
 		// Create test operators with key pairs
@@ -846,8 +1116,9 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 			privKey, pubKey, err := bn254.GenerateKeyPair()
 			require.NoError(t, err)
 			operators[i] = &Operator[signing.PublicKey]{
-				Address:   fmt.Sprintf("0x%d", i+1),
-				PublicKey: pubKey,
+				Address:       fmt.Sprintf("0x%d", i+1),
+				PublicKey:     pubKey,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}
@@ -914,8 +1185,9 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 			require.NoError(t, err)
 
 			operators[i] = &Operator[common.Address]{
-				Address:   derivedAddress.String(),
-				PublicKey: derivedAddress,
+				Address:       derivedAddress.String(),
+				PublicKey:     derivedAddress,
+				OperatorIndex: uint32(i),
 			}
 			privateKeys[i] = privKey
 		}

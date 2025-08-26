@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,9 @@ type AggregatedBN254Certificate struct {
 
 	// the time the certificate was signed
 	SignedAt *time.Time
+
+	// Non-signer operators sorted by OperatorIndex (for contract submission)
+	NonSignerOperators []*Operator[signing.PublicKey]
 }
 
 // BN254TaskResultAggregator represents the data needed to initialize a new aggregation task window.
@@ -340,19 +344,13 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		}
 	}
 
-	// TODO: add this based on the avs registry
-	// the contract requires a sorted nonSignersOperatorIds
-	// sort.SliceStable(nonSignerOperatorIds, func(i, j int) bool {
-	// 	iOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[i][:])
-	// 	jOprInt := new(big.Int).SetBytes(nonSignerOperatorIds[j][:])
-	// 	return iOprInt.Cmp(jOprInt) == -1
-	// })
+	// the contract requires nonSigners sorted by OperatorIndex
+	sort.SliceStable(nonSignerOperatorIds, func(i, j int) bool {
+		return nonSignerOperatorIds[i].OperatorIndex < nonSignerOperatorIds[j].OperatorIndex
+	})
 
 	nonSignerPublicKeys := make([]signing.PublicKey, 0)
-	for _, operatorId := range nonSignerOperatorIds {
-		operator := util.Find(tra.Operators, func(op *Operator[signing.PublicKey]) bool {
-			return strings.EqualFold(op.Address, operatorId.Address)
-		})
+	for _, operator := range nonSignerOperatorIds {
 		nonSignerPublicKeys = append(nonSignerPublicKeys, operator.PublicKey)
 	}
 
@@ -379,6 +377,7 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		SignersPublicKey:    tra.aggregatedOperators.signersG2,
 		SignersSignature:    tra.aggregatedOperators.signersAggSig,
 		SignedAt:            new(time.Time),
+		NonSignerOperators:  nonSignerOperatorIds,
 	}, nil
 }
 
