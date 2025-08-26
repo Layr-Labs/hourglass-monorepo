@@ -22,6 +22,20 @@ import (
 
 // Mock structures for testing
 
+type MockSigner struct {
+	mock.Mock
+}
+
+func (m *MockSigner) SignMessage(data []byte) ([]byte, error) {
+	args := m.Called(data)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func (m *MockSigner) SignMessageForSolidity(data []byte) ([]byte, error) {
+	args := m.Called(data)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
 type MockOperatorPeerInfo struct {
 	mock.Mock
 	OperatorAddress string
@@ -177,6 +191,15 @@ func createTestTask() *types.Task {
 	}
 }
 
+// Helper function to create a mock signer for tests
+func createMockSigner() *MockSigner {
+	mockSigner := new(MockSigner)
+	// Set up default behavior - return a mock signature for any input
+	mockSigner.On("SignMessage", mock.Anything).Return([]byte("mock-signature"), nil)
+	mockSigner.On("SignMessageForSolidity", mock.Anything).Return([]byte("mock-signature-solidity"), nil)
+	return mockSigner
+}
+
 // Test cases
 
 func TestNewBN254TaskSession(t *testing.T) {
@@ -195,7 +218,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -203,7 +226,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 		require.NotNil(t, session)
 		assert.Equal(t, task, session.Task)
 		assert.Equal(t, "0xaggregator", session.aggregatorAddress)
-		assert.Equal(t, []byte("signature"), session.aggregatorSignature)
+		assert.NotNil(t, session.signer)
 		assert.Equal(t, operatorPeersWeight, session.operatorPeersWeight)
 		assert.Equal(t, uint32(0), session.resultsCount.Load())
 		assert.False(t, session.thresholdMet.Load())
@@ -226,7 +249,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -252,7 +275,7 @@ func TestNewECDSATaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewECDSATaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -260,7 +283,7 @@ func TestNewECDSATaskSession(t *testing.T) {
 		require.NotNil(t, session)
 		assert.Equal(t, task, session.Task)
 		assert.Equal(t, "0xaggregator", session.aggregatorAddress)
-		assert.Equal(t, []byte("signature"), session.aggregatorSignature)
+		assert.NotNil(t, session.signer)
 		assert.Equal(t, operatorPeersWeight, session.operatorPeersWeight)
 	})
 }
@@ -281,7 +304,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -395,7 +418,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -427,7 +450,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -460,7 +483,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewECDSATaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -498,7 +521,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -552,7 +575,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -593,7 +616,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -696,7 +719,7 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 
 		// This should fail because operator set 999 doesn't exist
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -801,7 +824,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -826,7 +849,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -851,7 +874,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -878,7 +901,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -908,7 +931,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		bn254Session, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -923,7 +946,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		}
 
 		ecdsaSession, err := NewECDSATaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			ecdsaOperatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -952,7 +975,7 @@ func TestTaskSession_TLSConfiguration(t *testing.T) {
 
 		// Test with secure connections (insecureExecutorConnections = false)
 		secureSession, err := NewBN254TaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -976,7 +999,7 @@ func TestTaskSession_TLSConfiguration(t *testing.T) {
 
 		// Test with insecure connections (insecureExecutorConnections = true)
 		insecureSession, err := NewECDSATaskSession(
-			ctx, cancel, task, "0xaggregator", []byte("signature"),
+			ctx, cancel, task, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, true, logger,
 		)
 		require.NoError(t, err)

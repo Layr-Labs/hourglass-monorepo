@@ -31,7 +31,7 @@ func TestAvsKubernetesPerformer_ConnectionRetryIntegration(t *testing.T) {
 		KubeconfigPath:    "", // Fixed field name
 	}
 
-	akp, err := NewAvsKubernetesPerformer(config, kubernetesConfig, nil, nil, logger)
+	akp, err := NewAvsKubernetesPerformer(config, kubernetesConfig, logger)
 	if err != nil {
 		// Expected error in test environment without k8s
 		t.Logf("Expected error creating performer without valid k8s config: %v", err)

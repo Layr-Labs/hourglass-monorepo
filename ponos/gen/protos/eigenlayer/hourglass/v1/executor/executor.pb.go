@@ -32,6 +32,7 @@ type TaskSubmission struct {
 	Signature          []byte                 `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty"`
 	OperatorSetId      uint32                 `protobuf:"varint,6,opt,name=operator_set_id,json=operatorSetId,proto3" json:"operator_set_id,omitempty"`
 	ReferenceTimestamp uint32                 `protobuf:"varint,7,opt,name=reference_timestamp,json=referenceTimestamp,proto3" json:"reference_timestamp,omitempty"`
+	ExecutorAddress    string                 `protobuf:"bytes,8,opt,name=executor_address,json=executorAddress,proto3" json:"executor_address,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -115,15 +116,22 @@ func (x *TaskSubmission) GetReferenceTimestamp() uint32 {
 	return 0
 }
 
+func (x *TaskSubmission) GetExecutorAddress() string {
+	if x != nil {
+		return x.ExecutorAddress
+	}
+	return ""
+}
+
 type TaskResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	TaskId          string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	OperatorAddress string                 `protobuf:"bytes,2,opt,name=operator_address,json=operatorAddress,proto3" json:"operator_address,omitempty"`
 	Output          []byte                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
-	Signature       []byte                 `protobuf:"bytes,4,opt,name=signature,proto3" json:"signature,omitempty"`
+	ResultSignature []byte                 `protobuf:"bytes,4,opt,name=result_signature,json=resultSignature,proto3" json:"result_signature,omitempty"` // Signs hash(output) - for aggregation
 	AvsAddress      string                 `protobuf:"bytes,5,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
 	OperatorSetId   uint32                 `protobuf:"varint,6,opt,name=operator_set_id,json=operatorSetId,proto3" json:"operator_set_id,omitempty"`
-	OutputDigest    []byte                 `protobuf:"bytes,7,opt,name=output_digest,json=outputDigest,proto3" json:"output_digest,omitempty"`
+	AuthSignature   []byte                 `protobuf:"bytes,7,opt,name=auth_signature,json=authSignature,proto3" json:"auth_signature,omitempty"` // Signs identity data - for authentication
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -179,9 +187,9 @@ func (x *TaskResult) GetOutput() []byte {
 	return nil
 }
 
-func (x *TaskResult) GetSignature() []byte {
+func (x *TaskResult) GetResultSignature() []byte {
 	if x != nil {
-		return x.Signature
+		return x.ResultSignature
 	}
 	return nil
 }
@@ -200,9 +208,9 @@ func (x *TaskResult) GetOperatorSetId() uint32 {
 	return 0
 }
 
-func (x *TaskResult) GetOutputDigest() []byte {
+func (x *TaskResult) GetAuthSignature() []byte {
 	if x != nil {
-		return x.OutputDigest
+		return x.AuthSignature
 	}
 	return nil
 }
@@ -1093,7 +1101,7 @@ var File_eigenlayer_hourglass_v1_executor_executor_proto protoreflect.FileDescri
 
 const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\n" +
-	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\x1a)eigenlayer/hourglass/v1/common/auth.proto\"\x8a\x02\n" +
+	"/eigenlayer/hourglass/v1/executor/executor.proto\x12\x17eigenlayer.hourglass.v1\x1a)eigenlayer/hourglass/v1/common/auth.proto\"\xb5\x02\n" +
 	"\x0eTaskSubmission\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12-\n" +
 	"\x12aggregator_address\x18\x02 \x01(\tR\x11aggregatorAddress\x12\x1f\n" +
@@ -1102,17 +1110,18 @@ const file_eigenlayer_hourglass_v1_executor_executor_proto_rawDesc = "" +
 	"\apayload\x18\x04 \x01(\fR\apayload\x12\x1c\n" +
 	"\tsignature\x18\x05 \x01(\fR\tsignature\x12&\n" +
 	"\x0foperator_set_id\x18\x06 \x01(\rR\roperatorSetId\x12/\n" +
-	"\x13reference_timestamp\x18\a \x01(\rR\x12referenceTimestamp\"\xf4\x01\n" +
+	"\x13reference_timestamp\x18\a \x01(\rR\x12referenceTimestamp\x12)\n" +
+	"\x10executor_address\x18\b \x01(\tR\x0fexecutorAddress\"\x83\x02\n" +
 	"\n" +
 	"TaskResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12)\n" +
 	"\x10operator_address\x18\x02 \x01(\tR\x0foperatorAddress\x12\x16\n" +
-	"\x06output\x18\x03 \x01(\fR\x06output\x12\x1c\n" +
-	"\tsignature\x18\x04 \x01(\fR\tsignature\x12\x1f\n" +
+	"\x06output\x18\x03 \x01(\fR\x06output\x12)\n" +
+	"\x10result_signature\x18\x04 \x01(\fR\x0fresultSignature\x12\x1f\n" +
 	"\vavs_address\x18\x05 \x01(\tR\n" +
 	"avsAddress\x12&\n" +
-	"\x0foperator_set_id\x18\x06 \x01(\rR\roperatorSetId\x12#\n" +
-	"\routput_digest\x18\a \x01(\fR\foutputDigest\"D\n" +
+	"\x0foperator_set_id\x18\x06 \x01(\rR\roperatorSetId\x12%\n" +
+	"\x0eauth_signature\x18\a \x01(\fR\rauthSignature\"D\n" +
 	"\x10KubernetesConfig\x120\n" +
 	"\x14service_account_name\x18\x01 \x01(\tR\x12serviceAccountName\"\xba\x02\n" +
 	"\x15DeployArtifactRequest\x12\x1f\n" +

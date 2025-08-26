@@ -36,16 +36,17 @@ message TaskSubmission {
   bytes signature = 5;
   uint32 operator_set_id = 6;
   uint32 reference_timestamp = 7;
+  string executor_address = 8;
 }
 
 message TaskResult {
   string task_id = 1;
   string operator_address = 2;
   bytes output = 3;
-  bytes signature = 4;
+  bytes result_signature = 4;  // Signs hash(output) - for aggregation
   string avs_address = 5;
   uint32 operator_set_id = 6;
-  bytes output_digest = 7;
+  bytes auth_signature = 7;     // Signs identity data - for authentication
 }
 
 // KubernetesConfig contains Kubernetes-specific configuration for a performer

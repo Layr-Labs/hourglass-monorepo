@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -52,8 +53,44 @@ type TaskResult struct {
 	OperatorSetId   uint32
 	Output          []byte
 	OperatorAddress string
-	Signature       []byte
-	OutputDigest    []byte
+	ResultSignature []byte // Signs: hash(Output) - for aggregation
+	AuthSignature   []byte // Signs: hash(TaskId || AvsAddress || OperatorAddress || OperatorSetId || ResultSigDigest)
+}
+
+// AuthSignatureData represents the authentication data that binds operator identity
+// Each operator signs a unique message including their address
+type AuthSignatureData struct {
+	TaskId          string
+	AvsAddress      string
+	OperatorAddress string
+	OperatorSetId   uint32
+	ResultSigDigest [32]byte
+}
+
+// ToSigningBytes creates deterministic bytes for signing using ABI encoding
+// Format: taskId(bytes32) || avsAddress(address) || operatorAddress(address) || operatorSetId(uint32) || resultSigDigest(bytes32)
+func (asd *AuthSignatureData) ToSigningBytes() []byte {
+	// Convert taskId to 32 bytes
+	taskIdBytes := common.HexToHash(asd.TaskId).Bytes() // 32 bytes
+
+	// Convert addresses to 20 bytes, then pad to 32
+	avsAddr := common.HexToAddress(asd.AvsAddress).Bytes()       // 20 bytes
+	operAddr := common.HexToAddress(asd.OperatorAddress).Bytes() // 20 bytes
+
+	// Convert operatorSetId to 32 bytes (uint32 padded)
+	operSetId := make([]byte, 32)
+	binary.BigEndian.PutUint32(operSetId[28:], asd.OperatorSetId) // uint32 padded to 32 bytes
+
+	// Concatenate all components
+	// Total: 32 + 32 + 32 + 32 + 32 = 160 bytes
+	result := make([]byte, 0, 160)
+	result = append(result, taskIdBytes...)
+	result = append(result, common.LeftPadBytes(avsAddr, 32)...)
+	result = append(result, common.LeftPadBytes(operAddr, 32)...)
+	result = append(result, operSetId...)
+	result = append(result, asd.ResultSigDigest[:]...)
+
+	return result
 }
 
 func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {
@@ -61,9 +98,10 @@ func TaskResultFromTaskResultProto(tr *executorV1.TaskResult) *TaskResult {
 		TaskId:          tr.TaskId,
 		Output:          tr.Output,
 		OperatorAddress: tr.OperatorAddress,
-		Signature:       tr.Signature,
+		ResultSignature: tr.ResultSignature,
+		AuthSignature:   tr.AuthSignature,
 		AvsAddress:      tr.AvsAddress,
-		OutputDigest:    tr.OutputDigest,
+		OperatorSetId:   tr.OperatorSetId,
 	}
 }
 

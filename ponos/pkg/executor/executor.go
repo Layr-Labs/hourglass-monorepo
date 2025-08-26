@@ -21,6 +21,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/rpcServer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Executor struct {
@@ -265,8 +267,6 @@ func (e *Executor) createDockerPerformer(avs *executorConfig.AvsPerformerConfig,
 			ProcessType:          avsPerformer.AvsProcessType(avs.ProcessType),
 			PerformerNetworkName: e.config.PerformerNetworkName,
 		},
-		e.peeringFetcher,
-		e.l1ContractCaller,
 		e.logger,
 	)
 }
@@ -299,8 +299,6 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 			EndpointOverride: endpointOverride,
 		},
 		kubernetesConfig,
-		e.peeringFetcher,
-		e.l1ContractCaller,
 		e.logger,
 	)
 }
@@ -355,10 +353,19 @@ func (e *Executor) registerHandlers() error {
 
 // verifyAuth is a helper method to verify authentication
 func (e *Executor) verifyAuth(auth *commonV1.AuthSignature) error {
-	if e.authVerifier != nil {
-		if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
-			return err
+	// If auth is not enabled, check if auth was provided
+	if e.authVerifier == nil {
+		// If auth was provided but not enabled, return unimplemented
+		if auth != nil {
+			return status.Error(codes.Unimplemented, "authentication is not enabled")
 		}
+		// No auth required and none provided - OK
+		return nil
+	}
+
+	// Auth is enabled, verify it
+	if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
+		return err
 	}
 	return nil
 }

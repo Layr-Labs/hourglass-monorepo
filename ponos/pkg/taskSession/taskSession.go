@@ -14,8 +14,10 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
@@ -23,14 +25,14 @@ import (
 const maximumTaskResponseSize = 1.5 * 1024 * 1024
 
 type TaskSession[SigT, CertT, PubKeyT any] struct {
-	Task                *types.Task
-	aggregatorSignature []byte
-	context             context.Context
-	contextCancel       context.CancelFunc
-	logger              *zap.Logger
-	results             sync.Map
-	resultsCount        atomic.Uint32
-	aggregatorAddress   string
+	Task              *types.Task
+	signer            signer.ISigner
+	context           context.Context
+	contextCancel     context.CancelFunc
+	logger            *zap.Logger
+	results           sync.Map
+	resultsCount      atomic.Uint32
+	aggregatorAddress string
 
 	operatorPeersWeight *operatorManager.PeerWeight
 
@@ -47,7 +49,7 @@ func NewBN254TaskSession(
 	cancel context.CancelFunc,
 	task *types.Task,
 	aggregatorAddress string,
-	aggregatorSignature []byte,
+	signer signer.ISigner,
 	operatorPeersWeight *operatorManager.PeerWeight,
 	insecureExecutorConnections bool,
 	logger *zap.Logger,
@@ -80,7 +82,7 @@ func NewBN254TaskSession(
 	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey]{
 		Task:                        task,
 		aggregatorAddress:           aggregatorAddress,
-		aggregatorSignature:         aggregatorSignature,
+		signer:                      signer,
 		results:                     sync.Map{},
 		context:                     ctx,
 		contextCancel:               cancel,
@@ -101,7 +103,7 @@ func NewECDSATaskSession(
 	cancel context.CancelFunc,
 	task *types.Task,
 	aggregatorAddress string,
-	aggregatorSignature []byte,
+	signer signer.ISigner,
 	operatorPeersWeight *operatorManager.PeerWeight,
 	insecureExecutorConnections bool,
 	logger *zap.Logger,
@@ -134,7 +136,7 @@ func NewECDSATaskSession(
 	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address]{
 		Task:                        task,
 		aggregatorAddress:           aggregatorAddress,
-		aggregatorSignature:         aggregatorSignature,
+		signer:                      signer,
 		results:                     sync.Map{},
 		context:                     ctx,
 		contextCancel:               cancel,
@@ -148,6 +150,18 @@ func NewECDSATaskSession(
 	ts.thresholdMet.Store(false)
 
 	return ts, nil
+}
+
+// generateExecutorSignature creates a signature for a specific executor
+func (ts *TaskSession[SigT, CertT, PubKeyT]) generateExecutorSignature(executorAddress string) ([]byte, error) {
+	encodedMessage := util.EncodeTaskSubmissionMessage(
+		ts.Task.TaskId,
+		ts.Task.AVSAddress,
+		executorAddress,
+		ts.Task.OperatorSetId,
+		ts.Task.Payload,
+	)
+	return ts.signer.SignMessage(encodedMessage)
 }
 
 func (ts *TaskSession[SigT, CertT, PubKeyT]) Process() (*CertT, error) {
@@ -191,20 +205,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 		zap.String("taskId", ts.Task.TaskId),
 		zap.Any("recipientOperators", ts.operatorPeersWeight.Operators),
 	)
-	taskSubmission := &executorV1.TaskSubmission{
-		TaskId:             ts.Task.TaskId,
-		AvsAddress:         ts.Task.AVSAddress,
-		AggregatorAddress:  ts.aggregatorAddress,
-		Payload:            ts.Task.Payload,
-		Signature:          ts.aggregatorSignature,
-		OperatorSetId:      ts.Task.OperatorSetId,
-		ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
-	}
-	ts.logger.Sugar().Infow("broadcasting task session to operators",
-		zap.Any("taskSubmission", taskSubmission),
-		zap.Any("operatorPeers", ts.operatorPeersWeight.Operators),
-	)
-
 	resultsChan := make(chan *types.TaskResult)
 
 	for _, peer := range ts.operatorPeersWeight.Operators {
@@ -232,6 +232,32 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
 				zap.String("networkAddress", socket),
+			)
+
+			// Generate executor-specific signature
+			signature, err := ts.generateExecutorSignature(peer.OperatorAddress)
+			if err != nil {
+				ts.logger.Sugar().Errorw("Failed to generate executor signature",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.String("executorAddress", peer.OperatorAddress),
+					zap.Error(err),
+				)
+				return
+			}
+
+			taskSubmission := &executorV1.TaskSubmission{
+				TaskId:             ts.Task.TaskId,
+				AvsAddress:         ts.Task.AVSAddress,
+				AggregatorAddress:  ts.aggregatorAddress,
+				ExecutorAddress:    peer.OperatorAddress,
+				Payload:            ts.Task.Payload,
+				Signature:          signature,
+				OperatorSetId:      ts.Task.OperatorSetId,
+				ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
+			}
+			ts.logger.Sugar().Infow("broadcasting task session to operators",
+				zap.Any("taskSubmission", taskSubmission),
+				zap.Any("operatorPeers", ts.operatorPeersWeight.Operators),
 			)
 
 			res, err := c.SubmitTask(ts.context, taskSubmission)
