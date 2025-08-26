@@ -106,9 +106,9 @@ func TestMemoryStoreAfterClose(t *testing.T) {
 	// Operations should return ErrStoreClosed
 	err = store.MarkTaskProcessed(ctx, "task-1")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "store is closed")
+	assert.Contains(t, err.Error(), "storage is closed")
 
 	_, err = store.IsTaskProcessed(ctx, "task-1")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "store is closed")
+	assert.Contains(t, err.Error(), "storage is closed")
 }
