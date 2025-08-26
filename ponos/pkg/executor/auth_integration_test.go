@@ -32,9 +32,7 @@ import (
 
 // TestAuthenticationWithRealExecutor tests authentication using a real executor setup
 func TestAuthenticationWithRealExecutor(t *testing.T) {
-	t.Skip("Skipping integration test - requires Anvil and Docker")
-
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(120*time.Second))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(180*time.Second))
 	defer cancel()
 
 	// Setup logger
@@ -58,6 +56,11 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 	if len(execConfig.AvsPerformers) > 0 {
 		execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
+	}
+
+	// Enable authentication for testing
+	execConfig.AuthConfig = &auth.Config{
+		IsEnabled: true,
 	}
 
 	// Parse keys for executor
@@ -268,13 +271,12 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		resp, err := authClient.RemovePerformer(ctx, &executorV1.RemovePerformerRequest{
+		_, err = authClient.RemovePerformer(ctx, &executorV1.RemovePerformerRequest{
 			PerformerId: "non-existent",
 		})
 
 		// Will fail with NotFound, but auth should pass
 		assert.Error(t, err)
-		assert.NotNil(t, resp)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
 		assert.Equal(t, codes.NotFound, statusErr.Code())

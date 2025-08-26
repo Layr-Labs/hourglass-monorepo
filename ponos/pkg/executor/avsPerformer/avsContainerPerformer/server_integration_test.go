@@ -9,7 +9,6 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/localPeeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,11 +51,6 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 	baseContainerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
-	// Create peering data fetcher
-	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-		AggregatorPeers: nil,
-	}, logger)
-
 	t.Run("draining during promotion and routing to new performer", func(t *testing.T) {
 		// Create performer config
 		performerConfig := &avsPerformer.AvsPerformerConfig{
@@ -75,7 +69,6 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		// Create serverPerformer with wrapped container manager
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -170,7 +163,6 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		// Create serverPerformer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			baseContainerMgr,
 		)
@@ -218,11 +210,6 @@ func TestDeploymentIntegration(t *testing.T) {
 	containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
-	// Create peering data fetcher
-	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-		AggregatorPeers: nil,
-	}, logger)
-
 	t.Run("successful deployment with real container", func(t *testing.T) {
 		// Create performer config
 		performerConfig := &avsPerformer.AvsPerformerConfig{
@@ -235,7 +222,6 @@ func TestDeploymentIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -287,7 +273,6 @@ func TestDeploymentIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			slowContainerMgr,
 		)
@@ -329,7 +314,6 @@ func TestDeploymentIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -383,7 +367,6 @@ func TestDeploymentIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -465,11 +448,6 @@ func TestListPerformersIntegration(t *testing.T) {
 	containerMgr, err := containerManager.NewDockerContainerManager(containerManager.DefaultContainerManagerConfig(), logger)
 	require.NoError(t, err)
 
-	// Create peering data fetcher
-	pdf := localPeeringDataFetcher.NewLocalPeeringDataFetcher(&localPeeringDataFetcher.LocalPeeringDataFetcherConfig{
-		AggregatorPeers: nil,
-	}, logger)
-
 	t.Run("list performers empty state", func(t *testing.T) {
 		// Create performer config
 		performerConfig := &avsPerformer.AvsPerformerConfig{
@@ -482,7 +460,6 @@ func TestListPerformersIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -511,7 +488,6 @@ func TestListPerformersIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)
@@ -562,7 +538,6 @@ func TestListPerformersIntegration(t *testing.T) {
 		// Create container performer
 		server := NewAvsContainerPerformerWithContainerManager(
 			performerConfig,
-			pdf,
 			logger,
 			containerMgr,
 		)

@@ -39,7 +39,7 @@ func (sa *SimulatedAggregator) SubmitTaskResult(ctx context.Context, result *exe
 		zap.String("taskId", result.TaskId),
 		zap.String("operatorAddress", result.OperatorAddress),
 		zap.Any("output", result.Output),
-		zap.Binary("signature", result.Signature),
+		zap.Binary("signature", result.ResultSignature),
 	)
 
 	if sa.taskResultInspector != nil {
