@@ -340,3 +340,48 @@ func TestExecutorStorageIsolation(t *testing.T) {
 	assert.Len(t, list2, 1)
 	assert.Equal(t, "isolated-performer-2", list2[0].PerformerId)
 }
+
+func TestTaskDeduplicationMemoryPassthrough(t *testing.T) {
+	ctx := context.Background()
+	store := memory.NewInMemoryExecutorStore()
+
+	// Test that memory storage doesn't track processed tasks (pass-through behavior)
+	taskId := "dedup-task-1"
+
+	// Initially not processed
+	processed, err := store.IsTaskProcessed(ctx, taskId)
+	require.NoError(t, err)
+	assert.False(t, processed, "should always return false for memory storage")
+
+	// Mark as processed (no-op for memory storage)
+	err = store.MarkTaskProcessed(ctx, taskId)
+	require.NoError(t, err)
+
+	// Should still return false (pass-through)
+	processed, err = store.IsTaskProcessed(ctx, taskId)
+	require.NoError(t, err)
+	assert.False(t, processed, "memory storage should not track processed tasks")
+
+	// Mark again (idempotent no-op)
+	err = store.MarkTaskProcessed(ctx, taskId)
+	require.NoError(t, err)
+
+	// Test multiple tasks - all should return false
+	tasks := []string{"task-a", "task-b", "task-c"}
+	for _, tid := range tasks {
+		err = store.MarkTaskProcessed(ctx, tid)
+		require.NoError(t, err)
+	}
+
+	// All should return false (not tracked)
+	for _, tid := range tasks {
+		processed, err = store.IsTaskProcessed(ctx, tid)
+		require.NoError(t, err)
+		assert.False(t, processed, "memory storage should not track task %s", tid)
+	}
+
+	// Non-processed task should also return false
+	processed, err = store.IsTaskProcessed(ctx, "never-processed")
+	require.NoError(t, err)
+	assert.False(t, processed)
+}

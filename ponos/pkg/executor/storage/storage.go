@@ -24,6 +24,10 @@ type ExecutorStore interface {
 	GetDeployment(ctx context.Context, deploymentId string) (*DeploymentInfo, error)
 	UpdateDeploymentStatus(ctx context.Context, deploymentId string, status DeploymentStatus) error
 
+	// Processed task tracking - prevents duplicate task processing
+	MarkTaskProcessed(ctx context.Context, taskId string) error
+	IsTaskProcessed(ctx context.Context, taskId string) (bool, error)
+
 	// Lifecycle management
 	Close() error
 }
@@ -65,6 +69,12 @@ type DeploymentInfo struct {
 	StartedAt        time.Time
 	CompletedAt      *time.Time
 	Error            string
+}
+
+// ProcessedTask represents a task that has been processed
+type ProcessedTask struct {
+	TaskId      string    `json:"taskId"`
+	ProcessedAt time.Time `json:"processedAt"`
 }
 
 // DeploymentStatus represents the status of a deployment

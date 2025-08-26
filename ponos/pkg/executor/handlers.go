@@ -315,6 +315,22 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		"aggregatorAddress", task.AggregatorAddress,
 	)
 
+	// Check if task has already been processed
+	processed, err := e.store.IsTaskProcessed(ctx, task.TaskId)
+	if err != nil {
+		e.logger.Sugar().Warnw("Failed to check if task is processed",
+			"taskId", task.TaskId,
+			"error", err,
+		)
+		// Continue processing even if check fails
+	} else if processed {
+		e.logger.Sugar().Warnw("Task already processed, skipping",
+			"taskId", task.TaskId,
+			"avsAddress", task.AvsAddress,
+		)
+		return nil, fmt.Errorf("task %s already processed", task.TaskId)
+	}
+
 	avsAddress := strings.ToLower(task.GetAvsAddress())
 	if avsAddress == "" {
 		return nil, fmt.Errorf("AVS address is empty")
@@ -412,7 +428,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		zap.String("operatorAddress", e.config.Operator.Address),
 	)
 
-	return &executorV1.TaskResult{
+	result := &executorV1.TaskResult{
 		TaskId:          response.TaskID,
 		OperatorAddress: e.config.Operator.Address,
 		OperatorSetId:   task.OperatorSetId,
@@ -420,7 +436,18 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		ResultSignature: resultSig,
 		AuthSignature:   authSig,
 		AvsAddress:      avsAddress,
-	}, nil
+	}
+
+	// Mark task as processed
+	if err := e.store.MarkTaskProcessed(ctx, task.TaskId); err != nil {
+		e.logger.Sugar().Warnw("Failed to mark task as processed",
+			"taskId", task.TaskId,
+			"error", err,
+		)
+		// Don't fail the task, just log the error
+	}
+
+	return result, nil
 }
 
 // signResult creates both result signature (for aggregation) and auth signature (for identity)

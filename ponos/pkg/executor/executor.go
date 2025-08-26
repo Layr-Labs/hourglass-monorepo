@@ -125,12 +125,6 @@ func NewExecutor(
 func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
-	// Perform recovery from storage
-	if err := e.recoverFromStorage(ctx); err != nil {
-		e.logger.Sugar().Warnw("Failed to recover from storage", "error", err)
-		// Continue anyway - this is not a fatal error
-	}
-
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
 		if _, ok := e.avsPerformers.Load(avsAddress); ok {
@@ -301,31 +295,6 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		kubernetesConfig,
 		e.logger,
 	)
-}
-
-// recoverFromStorage loads performer states from storage
-func (e *Executor) recoverFromStorage(ctx context.Context) error {
-	performerStates, err := e.store.ListPerformerStates(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list performer states: %w", err)
-	}
-
-	e.logger.Sugar().Infow("Recovering performer states from storage",
-		"count", len(performerStates),
-	)
-
-	// TODO: In a future milestone, we will verify if containers/pods still exist
-	// and re-create missing performers. For now, just log the recovery.
-	for _, state := range performerStates {
-		e.logger.Sugar().Infow("Found performer state in storage",
-			"performerId", state.PerformerId,
-			"avsAddress", state.AvsAddress,
-			"status", state.Status,
-			"containerId", state.ContainerId,
-		)
-	}
-
-	return nil
 }
 
 func (e *Executor) Run(ctx context.Context) error {
