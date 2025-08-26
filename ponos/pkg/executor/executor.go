@@ -305,7 +305,7 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 	)
 }
 
-// recoverFromStorage loads performer states from storage and verifies they're still running
+// recoverFromStorage loads performer states from storage
 func (e *Executor) recoverFromStorage(ctx context.Context) error {
 	performerStates, err := e.store.ListPerformerStates(ctx)
 	if err != nil {
@@ -324,24 +324,6 @@ func (e *Executor) recoverFromStorage(ctx context.Context) error {
 			"avsAddress", state.AvsAddress,
 			"status", state.Status,
 			"containerId", state.ContainerId,
-		)
-	}
-
-	// Load inflight tasks
-	inflightTasks, err := e.store.ListInflightTasks(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list inflight tasks: %w", err)
-	}
-
-	e.logger.Sugar().Infow("Recovering inflight tasks from storage",
-		"count", len(inflightTasks),
-	)
-
-	for _, task := range inflightTasks {
-		e.inflightTasks.Store(task.TaskId, task)
-		e.logger.Sugar().Infow("Recovered inflight task",
-			"taskId", task.TaskId,
-			"avsAddress", task.AvsAddress,
 		)
 	}
 
