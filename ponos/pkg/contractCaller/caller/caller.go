@@ -199,14 +199,16 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(aggCert.NonSignerOperators))
 	for _, nonSigner := range aggCert.NonSignerOperators {
 		// For now, we only provide the operator index
-		// The contract can look up cached operator info or we can provide proofs later
 		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
 			OperatorIndex: nonSigner.OperatorIndex,
-			// OperatorInfoProof and OperatorInfo can be empty if the operator is already cached
-			// in the contract from previous verifications
+			// AVSs are expected to perform their own stake table transportation from the L1 to their execution chain
 			OperatorInfoProof: []byte{},
-			OperatorInfo:      ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
-				// Empty for now - contract will use cached data
+			// The contract expects this specific empty format
+			OperatorInfo: ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
+				Pubkey: ITaskMailbox.BN254G1Point{
+					X: big.NewInt(0),
+					Y: big.NewInt(0),
+				},
 			},
 		}
 		nonSignerWitnesses = append(nonSignerWitnesses, witness)
