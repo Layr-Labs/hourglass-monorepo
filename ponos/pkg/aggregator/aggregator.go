@@ -26,6 +26,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"time"
 )
 
@@ -444,16 +446,25 @@ func (a *Aggregator) registerHandlers() {
 }
 
 func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
-	if a.authVerifier != nil {
-		if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
-			a.logger.Sugar().Warnw("Authentication verification failed",
-				zap.Error(err),
-			)
-			return err
+	// If auth is not enabled, check if auth was provided
+	if a.authVerifier == nil {
+		// If auth was provided but not enabled, return unimplemented
+		if auth != nil {
+			a.logger.Sugar().Warnw("Authentication provided but not enabled")
+			return status.Error(codes.Unimplemented, "authentication is not enabled")
 		}
-		a.logger.Sugar().Debugw("Authentication verification successful")
-	} else {
+		// No auth required and none provided - OK
 		a.logger.Sugar().Debugw("Authentication verifier not configured, skipping verification")
+		return nil
 	}
+
+	// Auth is enabled, verify it
+	if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
+		a.logger.Sugar().Warnw("Authentication verification failed",
+			zap.Error(err),
+		)
+		return err
+	}
+	a.logger.Sugar().Debugw("Authentication verification successful")
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -19,17 +20,11 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 	)
 
 	// Verify authentication
-	err := a.verifyAuth(request.Auth)
-	if err != nil {
-		// Preserve the original status code if it's already a status error
-		if s, ok := status.FromError(err); ok {
-			return nil, status.Error(s.Code(), s.Message())
-		}
-		// Fallback to Unauthenticated for non-status errors
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+	if err := auth.HandleAuthError(a.verifyAuth(request.Auth)); err != nil {
+		return nil, err
 	}
 
-	err = a.registerAvs(&aggregatorConfig.AggregatorAvs{
+	err := a.registerAvs(&aggregatorConfig.AggregatorAvs{
 		Address: request.AvsAddress,
 		ChainIds: util.Map(request.ChainIds, func(id uint32, i uint64) uint {
 			return uint(id)
@@ -42,14 +37,8 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 
 func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.DeRegisterAvsRequest) (*aggregatorV1.DeRegisterAvsResponse, error) {
 	// Verify authentication
-	err := a.verifyAuth(request.Auth)
-	if err != nil {
-		// Preserve the original status code if it's already a status error
-		if s, ok := status.FromError(err); ok {
-			return nil, status.Error(s.Code(), s.Message())
-		}
-		// Fallback to Unauthenticated for non-status errors
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+	if err := auth.HandleAuthError(a.verifyAuth(request.Auth)); err != nil {
+		return nil, err
 	}
 
 	return nil, status.Errorf(codes.Unimplemented, "DeRegisterAvs is not implemented yet")
