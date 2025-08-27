@@ -436,6 +436,9 @@ operator:
   signingKeys:
     ecdsa:
       privateKey: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-chains: []
+chains:
+  - chainId: 31337
+    name: "L1 Anvil"
+    rpcURL: "http://localhost:8545"
 avss: []
 `
