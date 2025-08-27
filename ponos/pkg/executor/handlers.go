@@ -11,6 +11,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer/avsContainerPerformer"
@@ -60,19 +61,11 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 	)
 
 	// Verify authentication
-	if err := e.verifyAuth(req.Auth); err != nil {
-		// Preserve the original status code if it's already a status error
-		if s, ok := status.FromError(err); ok {
-			return &executorV1.DeployArtifactResponse{
-				Success: false,
-				Message: "Authentication failed",
-			}, status.Error(s.Code(), s.Message())
-		}
-		// Fallback to Unauthenticated for non-status errors
+	if err := auth.HandleAuthError(e.verifyAuth(req.Auth)); err != nil {
 		return &executorV1.DeployArtifactResponse{
 			Success: false,
 			Message: "Authentication failed",
-		}, status.Error(codes.Unauthenticated, err.Error())
+		}, err
 	}
 
 	// Validate request
@@ -547,13 +540,8 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 	)
 
 	// Verify authentication
-	if err := e.verifyAuth(req.Auth); err != nil {
-		// Preserve the original status code if it's already a status error
-		if s, ok := status.FromError(err); ok {
-			return nil, status.Error(s.Code(), s.Message())
-		}
-		// Fallback to Unauthenticated for non-status errors
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+	if err := auth.HandleAuthError(e.verifyAuth(req.Auth)); err != nil {
+		return nil, err
 	}
 
 	var allPerformers []*executorV1.Performer
@@ -637,19 +625,11 @@ func (e *Executor) RemovePerformer(ctx context.Context, req *executorV1.RemovePe
 	)
 
 	// Verify authentication
-	if err := e.verifyAuth(req.Auth); err != nil {
-		// Preserve the original status code if it's already a status error
-		if s, ok := status.FromError(err); ok {
-			return &executorV1.RemovePerformerResponse{
-				Success: false,
-				Message: "Authentication failed",
-			}, status.Error(s.Code(), s.Message())
-		}
-		// Fallback to Unauthenticated for non-status errors
+	if err := auth.HandleAuthError(e.verifyAuth(req.Auth)); err != nil {
 		return &executorV1.RemovePerformerResponse{
 			Success: false,
 			Message: "Authentication failed",
-		}, status.Error(codes.Unauthenticated, err.Error())
+		}, err
 	}
 
 	// Validate request
