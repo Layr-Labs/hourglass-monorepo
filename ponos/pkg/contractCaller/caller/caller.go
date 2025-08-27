@@ -203,11 +203,11 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 			OperatorIndex: nonSigner.OperatorIndex,
 			// AVSs are expected to perform their own stake table transportation from the L1 to their execution chain
 			OperatorInfoProof: []byte{},
-			// The contract expects this specific empty format
+			// The contract needs these values to properly calculate non-signer operations
 			OperatorInfo: ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
 				Pubkey: ITaskMailbox.BN254G1Point{
-					X: big.NewInt(0),
-					Y: big.NewInt(0),
+					X: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[0:32]),
+					Y: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[32:64]),
 				},
 			},
 		}

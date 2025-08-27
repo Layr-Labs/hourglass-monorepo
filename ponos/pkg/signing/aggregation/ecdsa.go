@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,39 +25,41 @@ type AggregatedECDSACertificate struct {
 	// keccak256 hash of the task response
 	TaskResponseDigest [32]byte
 
-	// public keys for all operators that did not sign the task
-	NonSignersPubKeys []common.Address
-
-	// public keys for all operators that were selected to participate in the task
-	AllOperatorsPubKeys []common.Address
-
-	// aggregated signature of the signers
+	// signatures of the signers
 	// operatorAddress --> signature
 	SignersSignatures map[common.Address][]byte
-
-	// aggregated public key of the signers
-	SignersPublicKeys []common.Address
 
 	// the time the certificate was signed
 	SignedAt *time.Time
 }
 
 func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
-	// Extract and sort addresses
+	if len(cert.SignersSignatures) == 0 {
+		return nil, fmt.Errorf("no signatures found in certificate")
+	}
+
+	// Collect addresses
 	addresses := make([]common.Address, 0, len(cert.SignersSignatures))
 	for addr := range cert.SignersSignatures {
 		addresses = append(addresses, addr)
 	}
-	sort.Slice(addresses, func(i, j int) bool {
-		return addresses[i].Hex() < addresses[j].Hex()
+
+	// Sort by raw bytes using slices.Compare
+	slices.SortFunc(addresses, func(a, b common.Address) int {
+		return slices.Compare(a[:], b[:])
 	})
 
-	// Concatenate in sorted order
+	// Concatenate signatures in sorted order
 	var finalSignature []byte
 	for _, addr := range addresses {
-		finalSignature = append(finalSignature,
-			cert.SignersSignatures[addr]...)
+		sig := cert.SignersSignatures[addr]
+		if len(sig) != 65 {
+			return nil, fmt.Errorf("signature for address %s has invalid length: expected 65, got %d",
+				addr.Hex(), len(sig))
+		}
+		finalSignature = append(finalSignature, sig...)
 	}
+
 	return finalSignature, nil
 }
 
@@ -80,33 +81,32 @@ type ReceivedECDSAResponseWithDigest struct {
 	OutputDigest [32]byte
 }
 
+// signerInfo holds information about an individual signer
+type ecdsaSignerInfo struct {
+	publicKey common.Address
+	signature []byte
+	operator  *Operator[common.Address]
+}
+
+// digestGroup tracks all signers for a specific output digest
+type ecdsaDigestGroup struct {
+	// Operators who signed this specific digest
+	signers map[string]*ecdsaSignerInfo // operator address -> info
+
+	// Representative response for this digest
+	response *ReceivedECDSAResponseWithDigest
+
+	// Count of signatures for this digest
+	count int
+}
+
 type aggregatedECDSAOperators struct {
-	// aggregated public keys of signers
-	signersPublicKeys []common.Address
+	// Group signatures by the digest they signed
+	digestGroups map[[32]byte]*ecdsaDigestGroup
 
-	// aggregated signatures of signers (not really aggregated, but a map)
-	// operatorAddress --> signature
-	signersSignatures map[common.Address][]byte
-
-	// operators that have signed (operatorAddress --> true)
-	// signersOperatorSet map[string]bool
-
-	// simple count of signers. eventually this could represent stake weight or something
-	totalSigners int
-
-	// Track digest counts to find most common result
-	// digest -> count
-	digestCounts map[[32]byte]int
-
-	// Track which response to use for each digest
-	// digest -> response
-	digestResponses map[[32]byte]*ReceivedECDSAResponseWithDigest
-
-	// The response with the most common digest (updated as we aggregate)
-	mostCommonResponse *ReceivedECDSAResponseWithDigest
-
-	// The response with the most common digest (updated as we aggregate)
-	mostCommonCount int
+	// Track the most common digest
+	mostCommonDigest [32]byte
+	mostCommonCount  int
 }
 
 type ECDSATaskResultAggregator struct {
@@ -127,7 +127,7 @@ type ECDSATaskResultAggregator struct {
 }
 
 func NewECDSATaskResultAggregator(
-	ctx context.Context,
+	_ context.Context,
 	taskId string,
 	taskCreatedBlock uint64,
 	operatorSetId uint32,
@@ -164,7 +164,7 @@ func NewECDSATaskResultAggregator(
 }
 
 func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
-	ctx context.Context,
+	_ context.Context,
 	taskResponse *types.TaskResult,
 ) error {
 	tra.mu.Lock()
@@ -224,52 +224,36 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
 
-	// Begin aggregating signatures and public keys.
-	// Track digest counts to select the most common result for the final certificate
+	// Aggregate when generating the final certificate
 	if tra.aggregatedOperators == nil {
-		// no signers yet, initialize the aggregated operators
 		tra.aggregatedOperators = &aggregatedECDSAOperators{
-			signersPublicKeys: []common.Address{operator.PublicKey},
-
-			signersSignatures: map[common.Address][]byte{
-				operator.GetAddress(): taskResponse.ResultSignature,
-			},
-
-			// initialize the map of signers (operatorAddress --> true) to track who actually signed
-			// signersOperatorSet: map[string]bool{taskResponse.OperatorAddress: true},
-
-			// initialize the count of signers (could eventually be weight or something else)
-			totalSigners: 1,
-
-			// Initialize digest tracking maps
-			digestCounts:       make(map[[32]byte]int),
-			digestResponses:    make(map[[32]byte]*ReceivedECDSAResponseWithDigest),
-			mostCommonResponse: rr,
-			mostCommonCount:    1,
+			digestGroups: make(map[[32]byte]*ecdsaDigestGroup),
 		}
-		// Track this digest for the first operator
-		tra.aggregatedOperators.digestCounts[outputDigest] = 1
-		tra.aggregatedOperators.digestResponses[outputDigest] = rr
-		tra.aggregatedOperators.mostCommonResponse = rr
-	} else {
-		tra.aggregatedOperators.signersSignatures[operator.GetAddress()] = taskResponse.ResultSignature
-		tra.aggregatedOperators.signersPublicKeys = append(tra.aggregatedOperators.signersPublicKeys, operator.PublicKey)
-		tra.aggregatedOperators.totalSigners++
+	}
 
-		// Update digest count using output digest for consensus tracking
-		newCount := tra.aggregatedOperators.digestCounts[outputDigest] + 1
-		tra.aggregatedOperators.digestCounts[outputDigest] = newCount
-
-		// Store the first response for this digest (if not already stored)
-		if _, exists := tra.aggregatedOperators.digestResponses[outputDigest]; !exists {
-			tra.aggregatedOperators.digestResponses[outputDigest] = rr
+	// Get or create the digest group for this output
+	group, exists := tra.aggregatedOperators.digestGroups[outputDigest]
+	if !exists {
+		group = &ecdsaDigestGroup{
+			signers:  make(map[string]*ecdsaSignerInfo),
+			response: rr,
+			count:    0,
 		}
+		tra.aggregatedOperators.digestGroups[outputDigest] = group
+	}
 
-		// Check if this digest is now the most common
-		if newCount > tra.aggregatedOperators.mostCommonCount {
-			tra.aggregatedOperators.mostCommonCount = newCount
-			tra.aggregatedOperators.mostCommonResponse = tra.aggregatedOperators.digestResponses[outputDigest]
-		}
+	// Store signer info for later aggregation
+	group.signers[taskResponse.OperatorAddress] = &ecdsaSignerInfo{
+		publicKey: operator.PublicKey,
+		signature: taskResponse.ResultSignature,
+		operator:  operator,
+	}
+	group.count++
+
+	// Update most common tracking
+	if group.count > tra.aggregatedOperators.mostCommonCount {
+		tra.aggregatedOperators.mostCommonCount = group.count
+		tra.aggregatedOperators.mostCommonDigest = outputDigest
 	}
 
 	return nil
@@ -284,7 +268,8 @@ func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 	if tra.aggregatedOperators == nil {
 		return false
 	}
-	return tra.aggregatedOperators.totalSigners >= required
+	// Check if the most common digest has enough signatures
+	return tra.aggregatedOperators.mostCommonCount >= required
 }
 
 // VerifyResponseSignature verifies both result and auth signatures
@@ -341,43 +326,20 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 }
 
 func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECDSACertificate, error) {
-	operatorAddresses := make([]common.Address, 0)
-	for addr := range tra.aggregatedOperators.signersSignatures {
-		operatorAddresses = append(operatorAddresses, addr)
-	}
-	// sort the operator addresses to ensure deterministic order for the certificate verifier
-	sort.Slice(operatorAddresses, func(i, j int) bool {
-		return operatorAddresses[i].Hex() < operatorAddresses[j].Hex()
-	})
-
-	nonSignerOperators := make([]*Operator[common.Address], 0)
-	for _, operator := range tra.Operators {
-		if !slices.Contains(operatorAddresses, operator.GetAddress()) {
-			// if the operator is not in the signers set, add them to the non-signer list
-			nonSignerOperators = append(nonSignerOperators, operator)
-			continue
-		}
+	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
+		return nil, fmt.Errorf("no signatures collected")
 	}
 
-	nonSignerPublicKeys := util.Map(nonSignerOperators, func(op *Operator[common.Address], i uint64) common.Address {
-		return op.PublicKey
-	})
+	// Find the winning digest group
+	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
+	if winningGroup == nil || winningGroup.count == 0 {
+		return nil, fmt.Errorf("no signatures for winning digest")
+	}
 
-	allOperatorAddresses := util.Map(tra.Operators, func(op *Operator[common.Address], i uint64) common.Address {
-		return op.GetAddress()
-	})
-	sort.Slice(allOperatorAddresses, func(i, j int) bool {
-		return allOperatorAddresses[i].Hex() < allOperatorAddresses[j].Hex()
-	})
-
-	allPublicKeys := []common.Address{}
-	for _, opAddr := range allOperatorAddresses {
-		op := util.Find(tra.Operators, func(o *Operator[common.Address]) bool {
-			return strings.EqualFold(o.Address, opAddr.String())
-		})
-		if op != nil {
-			allPublicKeys = append(allPublicKeys, op.PublicKey)
-		}
+	// Collect only the signatures that signed the winning message
+	signersSignatures := make(map[common.Address][]byte)
+	for _, signer := range winningGroup.signers {
+		signersSignatures[signer.operator.GetAddress()] = signer.signature
 	}
 
 	taskIdBytes, err := hexutil.Decode(tra.TaskId)
@@ -385,19 +347,11 @@ func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECD
 		return nil, fmt.Errorf("failed to decode taskId: %w", err)
 	}
 
-	// Use the most common response for the certificate
-	if tra.aggregatedOperators.mostCommonResponse == nil {
-		return nil, fmt.Errorf("no common response found")
-	}
-
 	return &AggregatedECDSACertificate{
-		TaskId:              taskIdBytes,
-		TaskResponse:        tra.aggregatedOperators.mostCommonResponse.TaskResult.Output,
-		TaskResponseDigest:  tra.aggregatedOperators.mostCommonResponse.OutputDigest,
-		NonSignersPubKeys:   nonSignerPublicKeys,
-		AllOperatorsPubKeys: allPublicKeys,
-		SignersPublicKeys:   tra.aggregatedOperators.signersPublicKeys,
-		SignersSignatures:   tra.aggregatedOperators.signersSignatures,
-		SignedAt:            new(time.Time),
+		TaskId:             taskIdBytes,
+		TaskResponse:       winningGroup.response.TaskResult.Output,
+		TaskResponseDigest: winningGroup.response.OutputDigest,
+		SignersSignatures:  signersSignatures,
+		SignedAt:           new(time.Time),
 	}, nil
 }
