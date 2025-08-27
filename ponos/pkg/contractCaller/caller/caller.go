@@ -368,11 +368,14 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 
 	allMembers := make([]*peering.OperatorPeerInfo, 0)
 	for i, member := range operatorSetMemberAddrs {
-		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, uint32(i))
+		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			return nil, err
 		}
+		// Set the operator's index in this operator set based on their position in the members array
+		operatorSetInfo.OperatorIndex = uint32(i)
+
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			OperatorAddress: operatorSetStringAddrs[i],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
@@ -381,7 +384,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	return allMembers, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, operatorIndex uint32) (*peering.OperatorSet, error) {
+func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
 	opset := IKeyRegistrar.OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
@@ -418,7 +421,6 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 
 	peeringOpset := &peering.OperatorSet{
 		OperatorSetID:  operatorSetId,
-		OperatorIndex:  operatorIndex,
 		NetworkAddress: socket,
 		CurveType:      curveType,
 	}
