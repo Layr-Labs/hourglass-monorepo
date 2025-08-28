@@ -54,7 +54,9 @@ func NewBN254TaskSession(
 	insecureExecutorConnections bool,
 	logger *zap.Logger,
 ) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey], error) {
+
 	operators := make([]*aggregation.Operator[signing.PublicKey], 0)
+
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
 		if err != nil {
@@ -70,16 +72,17 @@ func NewBN254TaskSession(
 	ta, err := aggregation.NewBN254TaskResultAggregator(
 		ctx,
 		task.TaskId,
-		task.BlockNumber,
 		task.OperatorSetId,
 		task.ThresholdBips,
 		task.Payload,
 		task.DeadlineUnixSeconds,
 		operators,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
 	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey]{
 		Task:                        task,
 		aggregatorAddress:           aggregatorAddress,
@@ -93,6 +96,7 @@ func NewBN254TaskSession(
 		thresholdMet:                atomic.Bool{},
 		insecureExecutorConnections: insecureExecutorConnections,
 	}
+
 	ts.resultsCount.Store(0)
 	ts.thresholdMet.Store(false)
 
@@ -109,6 +113,7 @@ func NewECDSATaskSession(
 	insecureExecutorConnections bool,
 	logger *zap.Logger,
 ) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address], error) {
+
 	operators := make([]*aggregation.Operator[common.Address], 0)
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
@@ -125,16 +130,17 @@ func NewECDSATaskSession(
 	ta, err := aggregation.NewECDSATaskResultAggregator(
 		ctx,
 		task.TaskId,
-		task.BlockNumber,
 		task.OperatorSetId,
 		task.ThresholdBips,
 		task.Payload,
 		task.DeadlineUnixSeconds,
 		operators,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
 	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address]{
 		Task:                        task,
 		aggregatorAddress:           aggregatorAddress,
@@ -148,26 +154,15 @@ func NewECDSATaskSession(
 		thresholdMet:                atomic.Bool{},
 		insecureExecutorConnections: insecureExecutorConnections,
 	}
+
 	ts.resultsCount.Store(0)
 	ts.thresholdMet.Store(false)
 
 	return ts, nil
 }
 
-// generateExecutorSignature creates a signature for a specific executor
-func (ts *TaskSession[SigT, CertT, PubKeyT]) generateExecutorSignature(executorAddress string) ([]byte, error) {
-	encodedMessage := util.EncodeTaskSubmissionMessage(
-		ts.Task.TaskId,
-		ts.Task.AVSAddress,
-		executorAddress,
-		ts.Task.OperatorSetId,
-		ts.Task.BlockNumber,
-		ts.Task.Payload,
-	)
-	return ts.signer.SignMessage(encodedMessage)
-}
-
 func (ts *TaskSession[SigT, CertT, PubKeyT]) Process() (*CertT, error) {
+
 	ts.logger.Sugar().Infow("task session started",
 		zap.String("taskId", ts.Task.TaskId),
 	)
@@ -204,6 +199,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Process() (*CertT, error) {
 }
 
 func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
+
 	ts.logger.Sugar().Infow("task session broadcast started",
 		zap.String("taskId", ts.Task.TaskId),
 		zap.Any("recipientOperators", ts.operatorPeersWeight.Operators),
@@ -257,7 +253,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				Signature:          signature,
 				OperatorSetId:      ts.Task.OperatorSetId,
 				ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
-				TaskBlockNumber:    ts.Task.BlockNumber,
+				TaskBlockNumber:    ts.Task.L1ReferenceBlockNumber,
 			}
 			ts.logger.Sugar().Infow("broadcasting task session to operators",
 				zap.Any("taskSubmission", taskSubmission),
@@ -363,4 +359,17 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 			return nil, fmt.Errorf("task session context done while waiting for results: %w", ts.context.Err())
 		}
 	}
+}
+
+// generateExecutorSignature creates a signature for a specific executor
+func (ts *TaskSession[SigT, CertT, PubKeyT]) generateExecutorSignature(executorAddress string) ([]byte, error) {
+	encodedMessage := util.EncodeTaskSubmissionMessage(
+		ts.Task.TaskId,
+		ts.Task.AVSAddress,
+		executorAddress,
+		ts.Task.OperatorSetId,
+		ts.Task.L1ReferenceBlockNumber,
+		ts.Task.Payload,
+	)
+	return ts.signer.SignMessage(encodedMessage)
 }

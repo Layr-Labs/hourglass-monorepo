@@ -58,14 +58,14 @@ func TestBadgerAggregatorStore_Persistence(t *testing.T) {
 			AVSAddress:          "0xAVS1",
 			Payload:             []byte("test payload"),
 			ChainId:             config.ChainId(1),
-			BlockNumber:         12345,
+			SourceBlockNumber:   12345,
 			OperatorSetId:       1,
 			CallbackAddr:        "0xcallback123",
 			ThresholdBips:       5000,
 			DeadlineUnixSeconds: &deadline,
 			BlockHash:           "0xblockhash123",
 		}
-		err = store.SaveTask(ctx, task)
+		err = store.SavePendingTask(ctx, task)
 		require.NoError(t, err)
 
 		// Set last processed block
@@ -114,14 +114,14 @@ func TestBadgerAggregatorStore_InMemory(t *testing.T) {
 		AVSAddress:          "0xAVS1",
 		Payload:             []byte("test payload"),
 		ChainId:             config.ChainId(1),
-		BlockNumber:         12345,
+		SourceBlockNumber:   12345,
 		OperatorSetId:       1,
 		CallbackAddr:        "0xcallback123",
 		ThresholdBips:       5000,
 		DeadlineUnixSeconds: &deadline,
 		BlockHash:           "0xblockhash123",
 	}
-	err = store.SaveTask(ctx, task)
+	err = store.SavePendingTask(ctx, task)
 	require.NoError(t, err)
 
 	retrieved, err := store.GetTask(ctx, "task-1")
@@ -154,14 +154,14 @@ func TestBadgerAggregatorStore_LargeDataSet(t *testing.T) {
 			AVSAddress:          "0xAVS1",
 			Payload:             []byte("test payload"),
 			ChainId:             config.ChainId(1),
-			BlockNumber:         12345,
+			SourceBlockNumber:   12345,
 			OperatorSetId:       1,
 			CallbackAddr:        "0xcallback123",
 			ThresholdBips:       5000,
 			DeadlineUnixSeconds: &deadline,
 			BlockHash:           "0xblockhash123",
 		}
-		err := store.SaveTask(ctx, task)
+		err := store.SavePendingTask(ctx, task)
 		require.NoError(t, err)
 	}
 
@@ -197,7 +197,7 @@ func BenchmarkBadgerAggregatorStore(b *testing.B) {
 
 	ctx := context.Background()
 
-	b.Run("SaveTask", func(b *testing.B) {
+	b.Run("SavePendingTask", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			deadline := time.Now().Add(time.Hour)
@@ -206,14 +206,14 @@ func BenchmarkBadgerAggregatorStore(b *testing.B) {
 				AVSAddress:          "0xAVS1",
 				Payload:             []byte("test payload"),
 				ChainId:             config.ChainId(1),
-				BlockNumber:         12345,
+				SourceBlockNumber:   12345,
 				OperatorSetId:       1,
 				CallbackAddr:        "0xcallback123",
 				ThresholdBips:       5000,
 				DeadlineUnixSeconds: &deadline,
 				BlockHash:           "0xblockhash123",
 			}
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 		}
 	})
 
@@ -226,14 +226,14 @@ func BenchmarkBadgerAggregatorStore(b *testing.B) {
 				AVSAddress:          "0xAVS1",
 				Payload:             []byte("test payload"),
 				ChainId:             config.ChainId(1),
-				BlockNumber:         12345,
+				SourceBlockNumber:   12345,
 				OperatorSetId:       1,
 				CallbackAddr:        "0xcallback123",
 				ThresholdBips:       5000,
 				DeadlineUnixSeconds: &deadline,
 				BlockHash:           "0xblockhash123",
 			}
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 		}
 
 		b.ResetTimer()

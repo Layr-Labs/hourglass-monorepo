@@ -42,7 +42,7 @@ func (tsd *TaskSubmissionSignatureData) ToSigningBytes() []byte {
 	binary.BigEndian.PutUint32(operSetId[28:], tsd.OperatorSetId)
 	result = append(result, operSetId...)
 
-	// BlockNumber as uint64 padded to 32 bytes
+	// SourceBlockNumber as uint64 padded to 32 bytes
 	blockNum := make([]byte, 32)
 	binary.BigEndian.PutUint64(blockNum[24:], tsd.BlockNumber)
 	result = append(result, blockNum...)

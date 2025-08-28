@@ -41,7 +41,7 @@ func Test_EthereumClient(t *testing.T) {
 				assert.NotEmpty(t, log.Address)
 				assert.NotEmpty(t, log.BlockHash)
 				assert.NotEmpty(t, log.TransactionHash)
-				// BlockNumber should be within the requested range
+				// SourceBlockNumber should be within the requested range
 				blockNum := log.BlockNumber.Value()
 				assert.True(t, blockNum >= fromBlock && blockNum <= toBlock)
 			}

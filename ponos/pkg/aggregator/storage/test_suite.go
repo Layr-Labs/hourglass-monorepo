@@ -85,7 +85,7 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 		AVSAddress:          "0xavs123",
 		Payload:             []byte("test payload"),
 		ChainId:             config.ChainId(1),
-		BlockNumber:         12345,
+		SourceBlockNumber:   12345,
 		OperatorSetId:       1,
 		CallbackAddr:        "0xcallback123",
 		ThresholdBips:       5000,
@@ -98,7 +98,7 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test saving and getting task
-	err = store.SaveTask(ctx, task)
+	err = store.SavePendingTask(ctx, task)
 	require.NoError(t, err)
 
 	retrieved, err := store.GetTask(ctx, task.TaskId)
@@ -125,14 +125,14 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 		AVSAddress:          "0xavs456",
 		Payload:             []byte("test payload 2"),
 		ChainId:             config.ChainId(1),
-		BlockNumber:         12346,
+		SourceBlockNumber:   12346,
 		OperatorSetId:       1,
 		CallbackAddr:        "0xcallback456",
 		ThresholdBips:       5000,
 		DeadlineUnixSeconds: &deadline,
 		BlockHash:           "0xblockhash456",
 	}
-	err = store.SaveTask(ctx, task2)
+	err = store.SavePendingTask(ctx, task2)
 	require.NoError(t, err)
 
 	// Test listing all pending tasks (should have 2)

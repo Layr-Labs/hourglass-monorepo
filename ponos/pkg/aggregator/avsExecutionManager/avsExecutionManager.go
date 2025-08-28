@@ -2,6 +2,7 @@ package avsExecutionManager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -55,10 +56,11 @@ type OperatorSetTaskConsensus struct {
 }
 
 type OperatorSetTaskConfig struct {
-	TaskSLA      *big.Int
-	CurveType    config.CurveType
-	TaskMetadata []byte
-	Consensus    OperatorSetTaskConsensus
+	TaskSLA                *big.Int
+	CurveType              config.CurveType
+	TaskMetadata           []byte
+	Consensus              OperatorSetTaskConsensus
+	L1ReferenceBlockNumber uint64
 }
 
 type AvsConfig struct {
@@ -69,9 +71,9 @@ type AvsConfig struct {
 
 type AvsExecutionManager struct {
 	logger *zap.Logger
+
 	config *AvsExecutionManagerConfig
 
-	// will be a proper type when another PR is merged
 	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
 
 	signers signer.Signers
@@ -84,14 +86,10 @@ type AvsExecutionManager struct {
 
 	inflightTasks sync.Map
 
-	// operatorSetTaskConfigs is a map of OperatorSet to *OperatorSetTaskConfig
-	operatorSetTaskConfigs sync.Map
-
 	avsConfigMutex sync.Mutex
 
 	avsConfig *AvsConfig
 
-	// store is the persistence layer
 	store storage.AggregatorStore
 }
 
@@ -136,32 +134,6 @@ func NewAvsExecutionManager(
 		taskQueue:            make(chan *types.Task, 10000),
 	}
 	return manager, nil
-}
-
-func hasExpectedMailboxContractsForChains(supportedChains []config.ChainId, mailboxAddresses map[config.ChainId]string) error {
-	for _, chainId := range supportedChains {
-		if _, ok := mailboxAddresses[chainId]; !ok {
-			return fmt.Errorf("missing mailbox contract address for chain ID: %d", chainId)
-		}
-	}
-	return nil
-}
-
-func hasExpectedContractCallersForChains(supportedChains []config.ChainId, contractCallers map[config.ChainId]contractCaller.IContractCaller) error {
-	for _, chainId := range supportedChains {
-		if _, ok := contractCallers[chainId]; !ok {
-			return fmt.Errorf("missing contract caller for chain ID: %d", chainId)
-		}
-	}
-	return nil
-}
-
-func (em *AvsExecutionManager) getListOfContractAddresses() []string {
-	addrs := make([]string, 0, len(em.config.MailboxContractAddresses))
-	for _, addr := range em.config.MailboxContractAddresses {
-		addrs = append(addrs, strings.ToLower(addr))
-	}
-	return addrs
 }
 
 // Init initializes the AvsExecutionManager before starting
@@ -270,67 +242,23 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 	}
 }
 
-func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
+func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 	ctx context.Context,
-	avsAddress string,
-	operatorSetId uint32,
-	taskChainId config.ChainId,
-	blockNumber uint64,
+	task *types.Task,
 ) (*OperatorSetTaskConfig, error) {
-	opset := OperatorSet{
-		Avs: common.HexToAddress(avsAddress),
-		Id:  operatorSetId,
-	}
 
-	// Try to load from storage first
-	storageConfig, err := em.store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
-	if err == nil && storageConfig != nil {
-		em.logger.Sugar().Infow("Found existing operator set task config in storage",
-			zap.String("avsAddress", avsAddress),
-			zap.Uint32("operatorSetId", operatorSetId),
-		)
-		// Convert from storage type to internal type
-		return &OperatorSetTaskConfig{
-			TaskSLA:      big.NewInt(storageConfig.TaskSLA),
-			CurveType:    storageConfig.CurveType,
-			TaskMetadata: storageConfig.TaskMetadata,
-			Consensus: OperatorSetTaskConsensus{
-				ConsensusType: ConsensusType(storageConfig.Consensus.ConsensusType),
-				Threshold:     storageConfig.Consensus.Threshold,
-			},
-		}, nil
-	}
-	// If error is not ErrNotFound, log it but continue
-	if err != nil && err != storage.ErrNotFound {
-		em.logger.Sugar().Warnw("Failed to get operator set config from storage",
-			"error", err,
-			"avsAddress", avsAddress,
-			"operatorSetId", operatorSetId,
-		)
-	}
-
-	// Fall back to sync.Map cache for backward compatibility
-	if val, ok := em.operatorSetTaskConfigs.Load(opset); ok {
-		if val != nil {
-			em.logger.Sugar().Infow("Found existing operator set task config in memory cache",
-				zap.String("avsAddress", avsAddress),
-				zap.Uint32("operatorSetId", operatorSetId),
-			)
-			return val.(*OperatorSetTaskConfig), nil
-		}
-	}
-
-	em.logger.Sugar().Infow("Fetching operator set task config from chain",
-		zap.String("avsAddress", avsAddress),
-		zap.Uint32("operatorSetId", operatorSetId),
-	)
-
+	taskChainId := task.ChainId
 	cc, err := em.getContractCallerForChain(taskChainId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contract caller for chain %d: %w", taskChainId, err)
 	}
 
-	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(avsAddress), operatorSetId, blockNumber)
+	l1ReferenceBlockNumber, err := em.getL1BlockForChainBlock(ctx, taskChainId, task.SourceBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get l1 reference block number for chain %d: %w", taskChainId, err)
+	}
+
+	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, l1ReferenceBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set task config: %w", err)
 	}
@@ -353,28 +281,9 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 			ConsensusType: ConsensusType(opsetConfig.Consensus.ConsensusType),
 			Threshold:     consensusValue,
 		},
+		L1ReferenceBlockNumber: l1ReferenceBlockNumber,
 	}
 
-	// Save to storage
-	saveConfig := &storage.OperatorSetTaskConfig{
-		TaskSLA:      taskConfig.TaskSLA.Int64(),
-		CurveType:    taskConfig.CurveType,
-		TaskMetadata: taskConfig.TaskMetadata,
-		Consensus: storage.OperatorSetTaskConsensus{
-			ConsensusType: storage.ConsensusType(taskConfig.Consensus.ConsensusType),
-			Threshold:     taskConfig.Consensus.Threshold,
-		},
-	}
-	if err := em.store.SaveOperatorSetConfig(ctx, avsAddress, operatorSetId, saveConfig); err != nil {
-		em.logger.Sugar().Warnw("Failed to save operator set config to storage",
-			"error", err,
-			"avsAddress", avsAddress,
-			"operatorSetId", operatorSetId,
-		)
-	}
-
-	// Also store in memory cache for backward compatibility
-	em.operatorSetTaskConfigs.Store(opset, taskConfig)
 	return taskConfig, nil
 }
 
@@ -412,37 +321,9 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	return nil
 }
 
-func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context, blockNumber uint64) (*AvsConfig, error) {
+func (em *AvsExecutionManager) getAggregatorTaskConfig(_ context.Context, blockNumber uint64) (*AvsConfig, error) {
 	em.avsConfigMutex.Lock()
 	defer em.avsConfigMutex.Unlock()
-
-	// Try to load from storage first
-	storageConfig, err := em.store.GetAVSConfig(ctx, em.config.AvsAddress)
-	if err == nil && storageConfig != nil {
-		em.logger.Sugar().Infow("Found existing AVS config in storage",
-			zap.String("avsAddress", em.config.AvsAddress),
-		)
-		// Convert from storage type to internal type
-		em.avsConfig = &AvsConfig{
-			AVSConfig: contractCaller.AVSConfig{
-				AggregatorOperatorSetId: storageConfig.AggregatorOperatorSetId,
-				ExecutorOperatorSetIds:  storageConfig.ExecutorOperatorSetIds,
-			},
-			curveType: storageConfig.CurveType,
-		}
-		return em.avsConfig, nil
-	}
-	// If error is not ErrNotFound, log it but continue
-	if err != nil && err != storage.ErrNotFound {
-		em.logger.Sugar().Warnw("Failed to get AVS config from storage",
-			"error", err,
-			"avsAddress", em.config.AvsAddress,
-		)
-	}
-
-	if em.avsConfig != nil {
-		return em.avsConfig, nil
-	}
 
 	cc, ok := em.chainContractCallers[em.config.L1ChainId]
 	if !ok {
@@ -463,19 +344,6 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context,
 			ExecutorOperatorSetIds:  avsConfig.ExecutorOperatorSetIds,
 		},
 		curveType: curveType,
-	}
-
-	// Save to storage
-	avsStorageConfig := &storage.AvsConfig{
-		AggregatorOperatorSetId: em.avsConfig.AggregatorOperatorSetId,
-		ExecutorOperatorSetIds:  em.avsConfig.ExecutorOperatorSetIds,
-		CurveType:               em.avsConfig.curveType,
-	}
-	if err := em.store.SaveAVSConfig(ctx, em.config.AvsAddress, avsStorageConfig); err != nil {
-		em.logger.Sugar().Warnw("Failed to save AVS config to storage",
-			"error", err,
-			"avsAddress", em.config.AvsAddress,
-		)
 	}
 
 	return em.avsConfig, nil
@@ -499,13 +367,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
-	executorTaskConfig, err := em.getOrSetOperatorSetTaskConfig(
-		ctx,
-		task.AVSAddress,
-		task.OperatorSetId,
-		task.ChainId,
-		task.BlockNumber,
-	)
+	executorTaskConfig, err := em.getOperatorSetTaskConfig(ctx, task)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set operator set task config",
 			zap.String("taskId", task.TaskId),
@@ -515,8 +377,9 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	}
 
 	task.ThresholdBips = executorTaskConfig.Consensus.Threshold
+	task.L1ReferenceBlockNumber = executorTaskConfig.L1ReferenceBlockNumber
 
-	avsConfig, err := em.getOrSetAggregatorTaskConfig(ctx, task.BlockNumber)
+	avsConfig, err := em.getAggregatorTaskConfig(ctx, task.L1ReferenceBlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set aggregator task config",
 			zap.String("taskId", task.TaskId),
@@ -548,23 +411,24 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get contract caller for chain: %w", err)
 	}
 
+	// TODO (FromTheRain):  reuse the calculated L1ReferenceBlockNumber
 	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForBlock(
 		ctx,
 		task.ChainId,
-		task.BlockNumber,
+		task.SourceBlockNumber,
 		task.OperatorSetId,
 	)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get operator peers and weights",
 			zap.Uint("chainId", uint(task.ChainId)),
-			zap.Uint64("blockNumber", task.BlockNumber),
+			zap.Uint64("blockNumber", task.L1ReferenceBlockNumber),
 			zap.Error(err),
 		)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
 	fmt.Printf("Operator peers and weights: %v\n", operatorPeersWeight)
 
-	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(ctx, task.AVSAddress, task.OperatorSetId)
+	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(ctx, task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get curve type for operator set",
 			zap.String("avsAddress", task.AVSAddress),
@@ -618,7 +482,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		zap.String("curveType", opsetCurveType.String()),
 	)
 	return fmt.Errorf("unsupported curve type: %s", opsetCurveType)
-
 }
 
 func (em *AvsExecutionManager) processBN254Task(
@@ -817,19 +680,31 @@ func (em *AvsExecutionManager) processECDSATask(
 		em.inflightTasks.Delete(task.TaskId)
 		return err
 	case <-ctx.Done():
-		switch ctx.Err() {
-		case context.Canceled:
+		switch err := ctx.Err(); {
+		case errors.Is(err, context.Canceled):
 			em.logger.Sugar().Errorw("task session context done",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
-		case context.DeadlineExceeded:
+		case errors.Is(err, context.DeadlineExceeded):
 			em.logger.Sugar().Errorw("task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
+			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+				em.logger.Sugar().Warnw("Failed to update task status to failed",
+					"error", updateErr,
+					"taskId", task.TaskId,
+				)
+			}
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
 		default:
+			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+				em.logger.Sugar().Warnw("Failed to update task status to failed",
+					"error", updateErr,
+					"taskId", task.TaskId,
+				)
+			}
 			em.logger.Sugar().Errorw("task session encountered an error",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
@@ -865,7 +740,7 @@ func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error 
 
 	// Save task to storage
 	ctx := context.Background()
-	if err := em.store.SaveTask(ctx, task); err != nil {
+	if err := em.store.SavePendingTask(ctx, task); err != nil {
 		em.logger.Sugar().Errorw("Failed to save task to storage",
 			"error", err,
 			"taskId", task.TaskId,
@@ -888,4 +763,80 @@ func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId)
 		return nil, fmt.Errorf("no contract caller found for chain ID: %d", chainId)
 	}
 	return caller, nil
+}
+
+func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chainId config.ChainId, blockNumber uint64) (uint64, error) {
+	// If this is L1, return the block number directly
+	if chainId == em.config.L1ChainId {
+		return blockNumber, nil
+	}
+
+	// Get the L1 contract caller
+	l1Cc, ok := em.chainContractCallers[em.config.L1ChainId]
+	if !ok {
+		return 0, fmt.Errorf("no L1 contract caller found")
+	}
+
+	// Get the target chain contract caller
+	targetChainCc, ok := em.chainContractCallers[chainId]
+	if !ok {
+		return 0, fmt.Errorf("no contract caller found for chain ID: %d", chainId)
+	}
+
+	// Get supported chains from L1 to find the table updater address using -1 (latest) for L2 chains
+	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, -1)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get supported chains: %w", err)
+	}
+
+	// Find the table updater address for the target chain
+	var destTableUpdaterAddress common.Address
+	for i, destChainId := range destChainIds {
+		if destChainId.Uint64() == uint64(chainId) {
+			destTableUpdaterAddress = tableUpdaterAddresses[i]
+			break
+		}
+	}
+
+	if destTableUpdaterAddress == (common.Address{}) {
+		return 0, fmt.Errorf("no table updater address found for chain ID %d", chainId)
+	}
+
+	// Get the reference time and block from the target chain
+	latestReferenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(
+		ctx,
+		destTableUpdaterAddress,
+		blockNumber,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get reference time and block: %w", err)
+	}
+
+	return uint64(latestReferenceTimeAndBlock.LatestReferenceBlockNumber), nil
+}
+
+func hasExpectedMailboxContractsForChains(supportedChains []config.ChainId, mailboxAddresses map[config.ChainId]string) error {
+	for _, chainId := range supportedChains {
+		if _, ok := mailboxAddresses[chainId]; !ok {
+			return fmt.Errorf("missing mailbox contract address for chain ID: %d", chainId)
+		}
+	}
+	return nil
+}
+
+func hasExpectedContractCallersForChains(supportedChains []config.ChainId, contractCallers map[config.ChainId]contractCaller.IContractCaller) error {
+	for _, chainId := range supportedChains {
+		if _, ok := contractCallers[chainId]; !ok {
+			return fmt.Errorf("missing contract caller for chain ID: %d", chainId)
+		}
+	}
+	return nil
+}
+
+func (em *AvsExecutionManager) getListOfContractAddresses() []string {
+	addrs := make([]string, 0, len(em.config.MailboxContractAddresses))
+	for _, addr := range em.config.MailboxContractAddresses {
+		addrs = append(addrs, strings.ToLower(addr))
+	}
+	return addrs
 }

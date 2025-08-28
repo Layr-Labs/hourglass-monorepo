@@ -35,10 +35,10 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 		ThresholdBips:       6700,
 		Payload:             []byte("test payload 1"),
 		ChainId:             chainId,
-		BlockNumber:         990,
+		SourceBlockNumber:   990,
 		BlockHash:           "0xhash1",
 	}
-	require.NoError(t, store.SaveTask(ctx, task1))
+	require.NoError(t, store.SavePendingTask(ctx, task1))
 	require.NoError(t, store.UpdateTaskStatus(ctx, "task-1", storage.TaskStatusProcessing))
 
 	deadline2 := time.Now().Add(2 * time.Hour)
@@ -51,10 +51,10 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 		ThresholdBips:       6700,
 		Payload:             []byte("test payload 2"),
 		ChainId:             chainId,
-		BlockNumber:         995,
+		SourceBlockNumber:   995,
 		BlockHash:           "0xhash2",
 	}
-	require.NoError(t, store.SaveTask(ctx, task2))
+	require.NoError(t, store.SavePendingTask(ctx, task2))
 
 	// Save some configs
 	operatorConfig := &storage.OperatorSetTaskConfig{
@@ -119,12 +119,12 @@ func TestAggregatorTaskFlowWithPersistence(t *testing.T) {
 		ThresholdBips:       6700,
 		Payload:             []byte("test payload"),
 		ChainId:             config.ChainId(1),
-		BlockNumber:         1000,
+		SourceBlockNumber:   1000,
 		BlockHash:           "0xhash",
 	}
 
 	// Save task
-	require.NoError(t, store.SaveTask(ctx, task))
+	require.NoError(t, store.SavePendingTask(ctx, task))
 
 	// Update status through lifecycle
 	require.NoError(t, store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing))
@@ -171,10 +171,10 @@ func TestAggregatorConcurrentOperations(t *testing.T) {
 					ThresholdBips:       6700,
 					Payload:             []byte(fmt.Sprintf("payload-%d-%d", id, j)),
 					ChainId:             config.ChainId(1),
-					BlockNumber:         uint64(1000 + j),
+					SourceBlockNumber:   uint64(1000 + j),
 					BlockHash:           fmt.Sprintf("0xhash%d%d", id, j),
 				}
-				if err := store.SaveTask(ctx, task); err != nil {
+				if err := store.SavePendingTask(ctx, task); err != nil {
 					errors <- err
 				}
 			}

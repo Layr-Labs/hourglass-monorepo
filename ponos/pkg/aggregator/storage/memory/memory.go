@@ -63,7 +63,7 @@ func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, cha
 }
 
 // SaveTask saves a task to storage
-func (s *InMemoryAggregatorStore) SaveTask(ctx context.Context, task *types.Task) error {
+func (s *InMemoryAggregatorStore) SavePendingTask(ctx context.Context, task *types.Task) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

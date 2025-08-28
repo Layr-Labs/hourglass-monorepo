@@ -224,15 +224,15 @@ func simulateAggregator(ctx context.Context, t *testing.T, store storage.Aggrega
 			// Create random tasks
 			if rand.Intn(10) < 3 { // 30% chance
 				task := &types.Task{
-					TaskId:        fmt.Sprintf("task-%d", taskCounter),
-					AVSAddress:    "0x123",
-					OperatorSetId: uint32(taskCounter),
-					BlockNumber:   blockNum,
-					ChainId:       chainId,
+					TaskId:            fmt.Sprintf("task-%d", taskCounter),
+					AVSAddress:        "0x123",
+					OperatorSetId:     uint32(taskCounter),
+					SourceBlockNumber: blockNum,
+					ChainId:           chainId,
 				}
 				taskCounter++
 
-				err = store.SaveTask(ctx, task)
+				err = store.SavePendingTask(ctx, task)
 				if err != nil {
 					t.Logf("Error saving task: %v", err)
 					atomic.AddInt64(&stats.errors, 1)
@@ -438,7 +438,7 @@ func TestConcurrentLoad(t *testing.T) {
 								AVSAddress:    "0x123",
 								OperatorSetId: uint32(j),
 							}
-							if err := store.SaveTask(ctx, task); err != nil {
+							if err := store.SavePendingTask(ctx, task); err != nil {
 								errors <- err
 							}
 						case 1: // Update block
@@ -526,7 +526,7 @@ func TestMemoryLeaks(t *testing.T) {
 		}
 
 		// Create and delete tasks
-		require.NoError(t, store.SaveTask(ctx, task))
+		require.NoError(t, store.SavePendingTask(ctx, task))
 		require.NoError(t, store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing))
 		require.NoError(t, store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted))
 

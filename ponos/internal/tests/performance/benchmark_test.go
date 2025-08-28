@@ -52,7 +52,7 @@ func BenchmarkAggregatorOperations(b *testing.B) {
 		fn   func(b *testing.B, store storage.AggregatorStore)
 	}{
 		{
-			name: "SaveTask",
+			name: "SavePendingTask",
 			fn:   benchmarkSaveTask,
 		},
 		{
@@ -92,14 +92,14 @@ func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("bench-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			BlockNumber:   uint64(i / 100),
-			ChainId:       config.ChainId(1),
-			Payload:       make([]byte, 256), // 256 bytes payload
+			TaskId:            fmt.Sprintf("bench-task-%d", i),
+			AVSAddress:        "0x123",
+			OperatorSetId:     uint32(i),
+			SourceBlockNumber: uint64(i / 100),
+			ChainId:           config.ChainId(1),
+			Payload:           make([]byte, 256), // 256 bytes payload
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -117,7 +117,7 @@ func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -143,7 +143,7 @@ func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -176,7 +176,7 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 
@@ -262,7 +262,7 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -287,7 +287,7 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 						OperatorSetId: uint32(i),
 						ChainId:       config.ChainId(1),
 					}
-					if err := store.SaveTask(ctx, task); err != nil {
+					if err := store.SavePendingTask(ctx, task); err != nil {
 						b.Error(err)
 					}
 				case 1: // Get existing task
@@ -470,7 +470,7 @@ func benchmarkMemoryWithTasks(b *testing.B, store storage.AggregatorStore, taskC
 			ChainId:       config.ChainId(1),
 			Payload:       make([]byte, 1024), // 1KB payload
 		}
-		if err := store.SaveTask(ctx, task); err != nil {
+		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -35,16 +35,17 @@ type TaskEvent struct {
 }
 
 type Task struct {
-	TaskId              string         `json:"taskId"`
-	AVSAddress          string         `json:"avsAddress"`
-	OperatorSetId       uint32         `json:"operatorSetId"`
-	CallbackAddr        string         `json:"callbackAddr"`
-	DeadlineUnixSeconds *time.Time     `json:"deadline"`
-	ThresholdBips       uint16         `json:"stakeRequired"`
-	Payload             []byte         `json:"payload"`
-	ChainId             config.ChainId `json:"chainId"`
-	BlockNumber         uint64         `json:"blockNumber"`
-	BlockHash           string         `json:"blockHash"`
+	TaskId                 string         `json:"taskId"`
+	AVSAddress             string         `json:"avsAddress"`
+	OperatorSetId          uint32         `json:"operatorSetId"`
+	CallbackAddr           string         `json:"callbackAddr"`
+	DeadlineUnixSeconds    *time.Time     `json:"deadline"`
+	ThresholdBips          uint16         `json:"stakeRequired"`
+	Payload                []byte         `json:"payload"`
+	ChainId                config.ChainId `json:"chainId"`
+	SourceBlockNumber      uint64         `json:"sourceBlockNumber"`
+	L1ReferenceBlockNumber uint64         `json:"l1ReferenceBlockNumber"`
+	BlockHash              string         `json:"blockHash"`
 }
 
 type TaskResult struct {
@@ -155,7 +156,7 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		DeadlineUnixSeconds: &taskDeadlineTime,
 		Payload:             od.Payload,
 		ChainId:             block.ChainId,
-		BlockNumber:         block.Number.Value(),
+		SourceBlockNumber:   block.Number.Value(),
 		BlockHash:           block.Hash.Value(),
 	}, nil
 }
