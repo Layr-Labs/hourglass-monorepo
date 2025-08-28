@@ -149,7 +149,6 @@ func TestECDSAContractSubmission(t *testing.T) {
 	aggregator, err := NewECDSATaskResultAggregator(
 		ctx,
 		taskId,
-		12345,
 		operatorSetId,
 		7500,
 		[]byte("task data"),

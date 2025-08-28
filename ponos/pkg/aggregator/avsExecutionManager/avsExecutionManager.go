@@ -570,13 +570,13 @@ func (em *AvsExecutionManager) processBN254Task(
 		em.inflightTasks.Delete(task.TaskId)
 		return err
 	case <-ctx.Done():
-		switch ctx.Err() {
-		case context.Canceled:
+		switch err := ctx.Err(); {
+		case errors.Is(err, context.Canceled):
 			em.logger.Sugar().Errorw("task session context done",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
-		case context.DeadlineExceeded:
+		case errors.Is(err, context.DeadlineExceeded):
 			em.logger.Sugar().Errorw("task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),

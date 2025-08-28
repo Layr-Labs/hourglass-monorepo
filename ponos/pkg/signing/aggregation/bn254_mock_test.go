@@ -83,7 +83,6 @@ func TestBN254ContractSubmission(t *testing.T) {
 	aggregator, err := NewBN254TaskResultAggregator(
 		ctx,
 		taskId,
-		12345,
 		operatorSetId,
 		7500,
 		[]byte("task data"),
@@ -274,7 +273,6 @@ func TestBN254ThresholdEdgeCases(t *testing.T) {
 			aggregator, err := NewBN254TaskResultAggregator(
 				ctx,
 				taskId,
-				12345,
 				operatorSetId,
 				tc.thresholdBips,
 				[]byte("task data"),

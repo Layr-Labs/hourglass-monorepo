@@ -124,7 +124,6 @@ func Test_Aggregation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			7500, // thresholdBips (3/4 = 7500 bips)
 			taskData,
@@ -214,7 +213,6 @@ func Test_Aggregation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			7500, // thresholdBips (3/4 = 7500 bips)
 			taskData,
@@ -292,7 +290,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			6000, // thresholdBips (3/5 = 6000 bips)
 			taskData,
@@ -409,7 +406,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold (10000 bips) - requires the single operator
 			taskData,
@@ -489,7 +485,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold (10000 bips)
 			taskData,
@@ -554,7 +549,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			6000, // thresholdBips (3/5 = 6000 bips = 60% participation required)
 			taskData,
@@ -632,7 +626,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			6000, // thresholdBips (3/5 = 6000 bips)
 			taskData,
@@ -754,7 +747,6 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold (10000 bips)
 			taskData,
@@ -816,7 +808,6 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold (10000 bips)
 			taskData,
@@ -883,7 +874,6 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold (10000 bips)
 			taskData,
@@ -949,7 +939,6 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			6000, // 60% threshold (3/5 operators)
 			taskData,
@@ -1034,7 +1023,6 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			10000, // 100% threshold
 			taskData,
@@ -1089,7 +1077,6 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			2500, // 25% threshold (can be met with 0 signers if we want to test)
 			taskData,
@@ -1149,7 +1136,6 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			6667, // 66.67% threshold (2/3)
 			taskData,
@@ -1210,7 +1196,6 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,  // taskCreatedBlock
 			1,    // operatorSetId
 			6667, // thresholdBips (2/3 = 66.67%)
 			taskData,
@@ -1324,7 +1309,6 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			5000, // 50% threshold (5000 bips)
 			taskData,
@@ -1393,7 +1377,6 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
-			100,
 			1,
 			5000, // 50% threshold (5000 bips)
 			taskData,

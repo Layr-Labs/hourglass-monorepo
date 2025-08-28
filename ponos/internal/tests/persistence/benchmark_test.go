@@ -34,16 +34,17 @@ func newSyncMapBaseline() *syncMapBaseline {
 func createTask(id string) *types.Task {
 	deadline := time.Now().Add(time.Hour)
 	return &types.Task{
-		TaskId:              id,
-		AVSAddress:          "0xavs1",
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback",
-		DeadlineUnixSeconds: &deadline,
-		ThresholdBips:       6700,
-		Payload:             []byte(fmt.Sprintf("payload-%s", id)),
-		ChainId:             config.ChainId(1),
-		SourceBlockNumber:   1000,
-		BlockHash:           fmt.Sprintf("0xhash%s", id),
+		TaskId:                 id,
+		AVSAddress:             "0xavs1",
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback",
+		DeadlineUnixSeconds:    &deadline,
+		ThresholdBips:          6700,
+		Payload:                []byte(fmt.Sprintf("payload-%s", id)),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      1000,
+		L1ReferenceBlockNumber: 1000,
+		BlockHash:              fmt.Sprintf("0xhash%s", id),
 	}
 }
 

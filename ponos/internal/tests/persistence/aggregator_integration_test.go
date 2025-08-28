@@ -27,32 +27,34 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	// Save some tasks
 	deadline1 := time.Now().Add(1 * time.Hour)
 	task1 := &types.Task{
-		TaskId:              "task-1",
-		AVSAddress:          "0xavs1",
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback",
-		DeadlineUnixSeconds: &deadline1,
-		ThresholdBips:       6700,
-		Payload:             []byte("test payload 1"),
-		ChainId:             chainId,
-		SourceBlockNumber:   990,
-		BlockHash:           "0xhash1",
+		TaskId:                 "task-1",
+		AVSAddress:             "0xavs1",
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback",
+		DeadlineUnixSeconds:    &deadline1,
+		ThresholdBips:          6700,
+		Payload:                []byte("test payload 1"),
+		ChainId:                chainId,
+		SourceBlockNumber:      990,
+		L1ReferenceBlockNumber: 990,
+		BlockHash:              "0xhash1",
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task1))
 	require.NoError(t, store.UpdateTaskStatus(ctx, "task-1", storage.TaskStatusProcessing))
 
 	deadline2 := time.Now().Add(2 * time.Hour)
 	task2 := &types.Task{
-		TaskId:              "task-2",
-		AVSAddress:          "0xavs1",
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback",
-		DeadlineUnixSeconds: &deadline2,
-		ThresholdBips:       6700,
-		Payload:             []byte("test payload 2"),
-		ChainId:             chainId,
-		SourceBlockNumber:   995,
-		BlockHash:           "0xhash2",
+		TaskId:                 "task-2",
+		AVSAddress:             "0xavs1",
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback",
+		DeadlineUnixSeconds:    &deadline2,
+		ThresholdBips:          6700,
+		Payload:                []byte("test payload 2"),
+		ChainId:                chainId,
+		SourceBlockNumber:      995,
+		L1ReferenceBlockNumber: 995,
+		BlockHash:              "0xhash2",
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task2))
 
@@ -111,16 +113,17 @@ func TestAggregatorTaskFlowWithPersistence(t *testing.T) {
 	// Test task lifecycle
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
-		TaskId:              "task-flow-1",
-		AVSAddress:          "0xavs2",
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback",
-		DeadlineUnixSeconds: &deadline,
-		ThresholdBips:       6700,
-		Payload:             []byte("test payload"),
-		ChainId:             config.ChainId(1),
-		SourceBlockNumber:   1000,
-		BlockHash:           "0xhash",
+		TaskId:                 "task-flow-1",
+		AVSAddress:             "0xavs2",
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback",
+		DeadlineUnixSeconds:    &deadline,
+		ThresholdBips:          6700,
+		Payload:                []byte("test payload"),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      1000,
+		L1ReferenceBlockNumber: 1000,
+		BlockHash:              "0xhash",
 	}
 
 	// Save task
@@ -163,16 +166,17 @@ func TestAggregatorConcurrentOperations(t *testing.T) {
 			for j := 0; j < 100; j++ {
 				deadline := time.Now().Add(time.Hour)
 				task := &types.Task{
-					TaskId:              fmt.Sprintf("concurrent-task-%d-%d", id, j),
-					AVSAddress:          fmt.Sprintf("0xavs%d", id),
-					OperatorSetId:       uint32(id),
-					CallbackAddr:        "0xcallback",
-					DeadlineUnixSeconds: &deadline,
-					ThresholdBips:       6700,
-					Payload:             []byte(fmt.Sprintf("payload-%d-%d", id, j)),
-					ChainId:             config.ChainId(1),
-					SourceBlockNumber:   uint64(1000 + j),
-					BlockHash:           fmt.Sprintf("0xhash%d%d", id, j),
+					TaskId:                 fmt.Sprintf("concurrent-task-%d-%d", id, j),
+					AVSAddress:             fmt.Sprintf("0xavs%d", id),
+					OperatorSetId:          uint32(id),
+					CallbackAddr:           "0xcallback",
+					DeadlineUnixSeconds:    &deadline,
+					ThresholdBips:          6700,
+					Payload:                []byte(fmt.Sprintf("payload-%d-%d", id, j)),
+					ChainId:                config.ChainId(1),
+					SourceBlockNumber:      uint64(1000 + j),
+					L1ReferenceBlockNumber: uint64(1000 + j),
+					BlockHash:              fmt.Sprintf("0xhash%d%d", id, j),
 				}
 				if err := store.SavePendingTask(ctx, task); err != nil {
 					errors <- err

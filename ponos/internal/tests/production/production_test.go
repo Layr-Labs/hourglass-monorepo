@@ -181,12 +181,13 @@ func TestProductionRecovery(t *testing.T) {
 		}
 
 		task := &types.Task{
-			TaskId:            fmt.Sprintf("prod-task-%d", i),
-			AVSAddress:        "0x123",
-			OperatorSetId:     uint32(i),
-			SourceBlockNumber: uint64(i / 10),
-			ChainId:           1,
-			Payload:           make([]byte, 1024), // 1KB payload
+			TaskId:                 fmt.Sprintf("prod-task-%d", i),
+			AVSAddress:             "0x123",
+			OperatorSetId:          uint32(i),
+			SourceBlockNumber:      uint64(i / 10),
+			L1ReferenceBlockNumber: uint64(i / 10),
+			ChainId:                1,
+			Payload:                make([]byte, 1024), // 1KB payload
 		}
 		require.NoError(t, store.SavePendingTask(ctx, task))
 
@@ -229,11 +230,12 @@ func TestProductionRecovery(t *testing.T) {
 	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock+1000))
 
 	newTask := &types.Task{
-		TaskId:            "post-recovery-task",
-		AVSAddress:        "0x123",
-		OperatorSetId:     uint32(numTasks),
-		SourceBlockNumber: lastBlock + 1000,
-		ChainId:           chainId,
+		TaskId:                 "post-recovery-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          uint32(numTasks),
+		SourceBlockNumber:      lastBlock + 1000,
+		L1ReferenceBlockNumber: lastBlock + 1000,
+		ChainId:                chainId,
 	}
 	require.NoError(t, store2.SavePendingTask(ctx, newTask))
 }
@@ -356,11 +358,12 @@ func TestProductionScale(t *testing.T) {
 			}
 
 			task := &types.Task{
-				TaskId:            fmt.Sprintf("chain%d-task-%d", c, i),
-				AVSAddress:        fmt.Sprintf("0xavs%d", c),
-				OperatorSetId:     uint32(i),
-				SourceBlockNumber: uint64(i / 100),
-				ChainId:           config.ChainId(c),
+				TaskId:                 fmt.Sprintf("chain%d-task-%d", c, i),
+				AVSAddress:             fmt.Sprintf("0xavs%d", c),
+				OperatorSetId:          uint32(i),
+				SourceBlockNumber:      uint64(i / 100),
+				L1ReferenceBlockNumber: uint64(i / 100),
+				ChainId:                config.ChainId(c),
 			}
 			require.NoError(t, store.SavePendingTask(ctx, task))
 		}

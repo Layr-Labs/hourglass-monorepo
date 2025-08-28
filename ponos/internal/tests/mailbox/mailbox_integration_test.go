@@ -401,7 +401,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			resultAgg, err := aggregation.NewECDSATaskResultAggregator(
 				ctx,
 				task.TaskId,
-				task.L1ReferenceBlockNumber,
 				task.OperatorSetId,
 				6667,
 				task.Payload,
