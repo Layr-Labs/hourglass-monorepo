@@ -82,13 +82,14 @@ func TestRollingUpgrade(t *testing.T) {
 			require.NoError(t, aggStore1.SetLastProcessedBlock(ctx, chainId, 1000))
 
 			task := &types.Task{
-				TaskId:        "upgrade-task-1",
-				AVSAddress:    "0x123",
-				OperatorSetId: 1,
-				BlockNumber:   1000,
-				ChainId:       config.ChainId(1),
+				TaskId:                 "upgrade-task-1",
+				AVSAddress:             "0x123",
+				OperatorSetId:          1,
+				SourceBlockNumber:      1000,
+				L1ReferenceBlockNumber: 1000,
+				ChainId:                config.ChainId(1),
 			}
-			require.NoError(t, aggStore1.SaveTask(ctx, task))
+			require.NoError(t, aggStore1.SavePendingTask(ctx, task))
 
 			// Populate executor state
 			performer := &executorStorage.PerformerState{
@@ -159,13 +160,14 @@ func TestRollingUpgrade(t *testing.T) {
 			require.NoError(t, aggStore2.SetLastProcessedBlock(ctx, chainId, 2000))
 
 			newTask := &types.Task{
-				TaskId:        "upgrade-task-2",
-				AVSAddress:    "0x123",
-				OperatorSetId: 2,
-				BlockNumber:   2000,
-				ChainId:       config.ChainId(1),
+				TaskId:                 "upgrade-task-2",
+				AVSAddress:             "0x123",
+				OperatorSetId:          2,
+				SourceBlockNumber:      2000,
+				L1ReferenceBlockNumber: 2000,
+				ChainId:                config.ChainId(1),
 			}
-			require.NoError(t, aggStore2.SaveTask(ctx, newTask))
+			require.NoError(t, aggStore2.SavePendingTask(ctx, newTask))
 		})
 	}
 }
@@ -182,13 +184,13 @@ func TestStorageMigration(t *testing.T) {
 	require.NoError(t, memStore.SetLastProcessedBlock(ctx, chainId, 5000))
 
 	tasks := []*types.Task{
-		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, BlockNumber: 4990, ChainId: chainId},
-		{TaskId: "task-2", AVSAddress: "0x123", OperatorSetId: 2, BlockNumber: 4995, ChainId: chainId},
-		{TaskId: "task-3", AVSAddress: "0x123", OperatorSetId: 3, BlockNumber: 5000, ChainId: chainId},
+		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, SourceBlockNumber: 4990, L1ReferenceBlockNumber: 4990, ChainId: chainId},
+		{TaskId: "task-2", AVSAddress: "0x123", OperatorSetId: 2, SourceBlockNumber: 4995, L1ReferenceBlockNumber: 4995, ChainId: chainId},
+		{TaskId: "task-3", AVSAddress: "0x123", OperatorSetId: 3, SourceBlockNumber: 5000, L1ReferenceBlockNumber: 5000, ChainId: chainId},
 	}
 
 	for _, task := range tasks {
-		require.NoError(t, memStore.SaveTask(ctx, task))
+		require.NoError(t, memStore.SavePendingTask(ctx, task))
 	}
 	// Proper status transitions: pending -> processing -> completed
 	require.NoError(t, memStore.UpdateTaskStatus(ctx, "task-1", storage.TaskStatusProcessing))
@@ -211,7 +213,7 @@ func TestStorageMigration(t *testing.T) {
 	// Migrate all tasks (both pending and non-pending)
 	for _, task := range tasks {
 		if loadedTask, err := memStore.GetTask(ctx, task.TaskId); err == nil {
-			require.NoError(t, badgerStore.SaveTask(ctx, loadedTask))
+			require.NoError(t, badgerStore.SavePendingTask(ctx, loadedTask))
 			// Migrate status - need proper transitions
 			if task.TaskId == "task-1" {
 				// task-1 was already transitioned to completed in memory store
@@ -266,14 +268,15 @@ func TestBackwardCompatibility(t *testing.T) {
 	require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, 1000))
 
 	task := &types.Task{
-		TaskId:        "compat-task",
-		AVSAddress:    "0x123",
-		OperatorSetId: 1,
-		BlockNumber:   1000,
-		ChainId:       chainId,
-		Payload:       []byte("test payload"),
+		TaskId:                 "compat-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          1,
+		SourceBlockNumber:      1000,
+		L1ReferenceBlockNumber: 1000,
+		ChainId:                chainId,
+		Payload:                []byte("test payload"),
 	}
-	require.NoError(t, store.SaveTask(ctx, task))
+	require.NoError(t, store.SavePendingTask(ctx, task))
 
 	opConfig := &storage.OperatorSetTaskConfig{
 		TaskSLA:   3600,
@@ -350,13 +353,14 @@ func TestUpgradeUnderLoad(t *testing.T) {
 				// Write operations
 				_ = store1.SetLastProcessedBlock(ctx, chainId, blockNum)
 				task := &types.Task{
-					TaskId:        fmt.Sprintf("load-task-%d", taskId),
-					AVSAddress:    "0x123",
-					OperatorSetId: uint32(taskId),
-					BlockNumber:   blockNum,
-					ChainId:       chainId,
+					TaskId:                 fmt.Sprintf("load-task-%d", taskId),
+					AVSAddress:             "0x123",
+					OperatorSetId:          uint32(taskId),
+					SourceBlockNumber:      blockNum,
+					L1ReferenceBlockNumber: blockNum,
+					ChainId:                chainId,
 				}
-				_ = store1.SaveTask(ctx, task)
+				_ = store1.SavePendingTask(ctx, task)
 
 				blockNum++
 				taskId++
@@ -394,13 +398,14 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock2+100))
 
 	newTask := &types.Task{
-		TaskId:        "post-upgrade-task",
-		AVSAddress:    "0x123",
-		OperatorSetId: 9999,
-		BlockNumber:   lastBlock2 + 100,
-		ChainId:       chainId,
+		TaskId:                 "post-upgrade-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          9999,
+		SourceBlockNumber:      lastBlock2 + 100,
+		L1ReferenceBlockNumber: lastBlock2 + 100,
+		ChainId:                chainId,
 	}
-	require.NoError(t, store2.SaveTask(ctx, newTask))
+	require.NoError(t, store2.SavePendingTask(ctx, newTask))
 
 	// Verify task saved
 	loadedTask, err := store2.GetTask(ctx, "post-upgrade-task")

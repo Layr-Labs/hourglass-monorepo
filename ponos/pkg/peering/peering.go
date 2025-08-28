@@ -53,6 +53,6 @@ func (opi *OperatorPeerInfo) IncludesOperatorSetId(operatorSetId uint32) bool {
 }
 
 type IPeeringDataFetcher interface {
-	ListExecutorOperators(ctx context.Context, avsAddress string) ([]*OperatorPeerInfo, error)
-	ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*OperatorPeerInfo, error)
+	ListExecutorOperators(ctx context.Context, avsAddress string, blockNumber uint64) ([]*OperatorPeerInfo, error)
+	ListAggregatorOperators(ctx context.Context, avsAddress string, blockNumber uint64) ([]*OperatorPeerInfo, error)
 }

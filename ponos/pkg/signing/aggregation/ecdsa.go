@@ -112,7 +112,6 @@ type aggregatedECDSAOperators struct {
 type ECDSATaskResultAggregator struct {
 	mu                 sync.Mutex
 	TaskId             string
-	TaskCreatedBlock   uint64
 	OperatorSetId      uint32
 	ThresholdBips      uint16
 	TaskData           []byte
@@ -129,7 +128,6 @@ type ECDSATaskResultAggregator struct {
 func NewECDSATaskResultAggregator(
 	_ context.Context,
 	taskId string,
-	taskCreatedBlock uint64,
 	operatorSetId uint32,
 	thresholdBips uint16,
 	taskData []byte,
@@ -152,7 +150,6 @@ func NewECDSATaskResultAggregator(
 
 	cert := &ECDSATaskResultAggregator{
 		TaskId:              taskId,
-		TaskCreatedBlock:    taskCreatedBlock,
 		OperatorSetId:       operatorSetId,
 		ThresholdBips:       thresholdBips,
 		TaskData:            taskData,

@@ -14,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -235,13 +236,22 @@ func testWithKeyType(
 	// give containers time to start.
 	time.Sleep(5 * time.Second)
 	taskId := "0x0000000000000000000000000000000000000000000000000000000000000001"
-
+	strBlockNumber, err := l1EthereumClient.GetBlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L1 block strBlockNumber: %v", err)
+	}
+	// Parse hex string (e.g., "0x86d4dd") to uint64
+	blockNumber, err := strconv.ParseUint(strBlockNumber[2:], 16, 64)
+	if err != nil {
+		t.Fatalf("Failed to parse L1 block strBlockNumber %s: %v", strBlockNumber, err)
+	}
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	encodedMessage := util.EncodeTaskSubmissionMessage(
 		taskId,
 		simAggConfig.Avss[0].Address,
 		chainConfig.ExecOperatorAccountAddress,
 		1,
+		blockNumber,
 		payloadJsonBytes,
 	)
 
@@ -267,6 +277,7 @@ func testWithKeyType(
 		ExecutorAddress:   chainConfig.ExecOperatorAccountAddress,
 		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
+		TaskBlockNumber:   blockNumber,
 		OperatorSetId:     1,
 	})
 	if err != nil {

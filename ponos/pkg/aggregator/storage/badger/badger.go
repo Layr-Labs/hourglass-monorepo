@@ -160,7 +160,7 @@ func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, chain
 }
 
 // SaveTask stores a task
-func (s *BadgerAggregatorStore) SaveTask(ctx context.Context, task *types.Task) error {
+func (s *BadgerAggregatorStore) SavePendingTask(ctx context.Context, task *types.Task) error {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()

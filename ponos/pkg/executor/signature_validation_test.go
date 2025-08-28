@@ -279,7 +279,7 @@ func TestValidateTaskSignature_MissingAVSConfig(t *testing.T) {
 
 	// Create mock contract caller that returns error for AVS config
 	mockCaller := NewEnhancedMockContractCaller()
-	mockCaller.On("GetAVSConfig", avsAddress).Return(nil, assert.AnError)
+	mockCaller.On("GetAVSConfig", avsAddress, mock.AnythingOfType("uint64")).Return(nil, assert.AnError)
 
 	// Create signed task
 	task := CreateSignedTaskSubmission(t, aggregatorPrivKey, executorAddress, avsAddress)
@@ -775,14 +775,15 @@ func (m *EnhancedMockContractCaller) SetupValidAggregator(avsAddress, aggregator
 
 	m.operatorSets[key] = opSet
 
-	// Setup GetAVSConfig mock
-	m.On("GetAVSConfig", avsAddress).Return(m.avsConfigs[avsAddress], nil).Maybe()
+	// Setup GetAVSConfig mock - now expects blockNumber parameter
+	m.On("GetAVSConfig", avsAddress, mock.AnythingOfType("uint64")).Return(m.avsConfigs[avsAddress], nil).Maybe()
 
 	// Setup GetOperatorSetDetailsForOperator mock for aggregator
 	m.On("GetOperatorSetDetailsForOperator",
 		common.HexToAddress(aggregatorAddress),
 		avsAddress,
 		uint32(0),
+		mock.AnythingOfType("uint64"),
 	).Return(m.operatorSets[key], nil).Maybe()
 }
 
@@ -797,6 +798,7 @@ func (m *EnhancedMockContractCaller) SetupValidOperatorSet(operatorAddress, avsA
 		common.HexToAddress(operatorAddress),
 		avsAddress,
 		operatorSetId,
+		mock.AnythingOfType("uint64"),
 	).Return(m.operatorSets[key], nil).Maybe()
 }
 
@@ -805,12 +807,12 @@ func (m *EnhancedMockContractCaller) SetupOperatorSetCurveType(avsAddress string
 	key := fmt.Sprintf("%s-%d", avsAddress, operatorSetId)
 	m.curveTypes[key] = curveType
 
-	m.On("GetOperatorSetCurveType", avsAddress, operatorSetId).Return(curveType, nil).Maybe()
+	m.On("GetOperatorSetCurveType", avsAddress, operatorSetId, mock.AnythingOfType("uint64")).Return(curveType, nil).Maybe()
 }
 
 // GetAVSConfig implementation
-func (m *EnhancedMockContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
-	args := m.Called(avsAddress)
+func (m *EnhancedMockContractCaller) GetAVSConfig(avsAddress string, blockNumber uint64) (*contractCaller.AVSConfig, error) {
+	args := m.Called(avsAddress, blockNumber)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -818,8 +820,8 @@ func (m *EnhancedMockContractCaller) GetAVSConfig(avsAddress string) (*contractC
 }
 
 // GetOperatorSetDetailsForOperator implementation
-func (m *EnhancedMockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
-	args := m.Called(operatorAddress, avsAddress, operatorSetId)
+func (m *EnhancedMockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error) {
+	args := m.Called(operatorAddress, avsAddress, operatorSetId, blockNumber)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -827,8 +829,8 @@ func (m *EnhancedMockContractCaller) GetOperatorSetDetailsForOperator(operatorAd
 }
 
 // GetOperatorSetCurveType implementation
-func (m *EnhancedMockContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
-	args := m.Called(avsAddress, operatorSetId)
+func (m *EnhancedMockContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error) {
+	args := m.Called(avsAddress, operatorSetId, blockNumber)
 	return args.Get(0).(config.CurveType), args.Error(1)
 }
 
@@ -982,6 +984,7 @@ func CreateValidTaskSubmission(t *testing.T, aggregatorKey interface{}, executor
 		ExecutorAddress:   executorAddress,
 		AggregatorAddress: aggregatorAddress,
 		OperatorSetId:     operatorSetID,
+		TaskBlockNumber:   12345678,
 		Payload:           payload,
 	}
 }
@@ -994,6 +997,7 @@ func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey
 		task.AvsAddress,
 		executorAddress, // Use the provided executor address
 		task.OperatorSetId,
+		task.TaskBlockNumber, // Use the task's block number
 		task.Payload,
 	)
 

@@ -181,14 +181,15 @@ func TestProductionRecovery(t *testing.T) {
 		}
 
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("prod-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			BlockNumber:   uint64(i / 10),
-			ChainId:       1,
-			Payload:       make([]byte, 1024), // 1KB payload
+			TaskId:                 fmt.Sprintf("prod-task-%d", i),
+			AVSAddress:             "0x123",
+			OperatorSetId:          uint32(i),
+			SourceBlockNumber:      uint64(i / 10),
+			L1ReferenceBlockNumber: uint64(i / 10),
+			ChainId:                1,
+			Payload:                make([]byte, 1024), // 1KB payload
 		}
-		require.NoError(t, store.SaveTask(ctx, task))
+		require.NoError(t, store.SavePendingTask(ctx, task))
 
 		// Update some tasks
 		if i > 0 && i%3 == 0 {
@@ -229,13 +230,14 @@ func TestProductionRecovery(t *testing.T) {
 	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock+1000))
 
 	newTask := &types.Task{
-		TaskId:        "post-recovery-task",
-		AVSAddress:    "0x123",
-		OperatorSetId: uint32(numTasks),
-		BlockNumber:   lastBlock + 1000,
-		ChainId:       chainId,
+		TaskId:                 "post-recovery-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          uint32(numTasks),
+		SourceBlockNumber:      lastBlock + 1000,
+		L1ReferenceBlockNumber: lastBlock + 1000,
+		ChainId:                chainId,
 	}
-	require.NoError(t, store2.SaveTask(ctx, newTask))
+	require.NoError(t, store2.SavePendingTask(ctx, newTask))
 }
 
 // TestProductionMetrics validates metrics and monitoring
@@ -261,10 +263,10 @@ func TestProductionMetrics(t *testing.T) {
 			ChainId:       config.ChainId(1),
 		}
 
-		// SaveTask
+		// SavePendingTask
 		start := time.Now()
-		err := store.SaveTask(ctx, task)
-		timings["SaveTask"] = append(timings["SaveTask"], time.Since(start))
+		err := store.SavePendingTask(ctx, task)
+		timings["SavePendingTask"] = append(timings["SavePendingTask"], time.Since(start))
 		require.NoError(t, err)
 
 		// GetTask
@@ -305,7 +307,7 @@ func TestProductionMetrics(t *testing.T) {
 		// Production SLAs
 		var maxAllowed time.Duration
 		switch op {
-		case "SaveTask", "GetTask", "UpdateTaskStatus":
+		case "SavePendingTask", "GetTask", "UpdateTaskStatus":
 			maxAllowed = 10 * time.Millisecond
 		case "ListPendingTasks":
 			maxAllowed = 100 * time.Millisecond
@@ -356,13 +358,14 @@ func TestProductionScale(t *testing.T) {
 			}
 
 			task := &types.Task{
-				TaskId:        fmt.Sprintf("chain%d-task-%d", c, i),
-				AVSAddress:    fmt.Sprintf("0xavs%d", c),
-				OperatorSetId: uint32(i),
-				BlockNumber:   uint64(i / 100),
-				ChainId:       config.ChainId(c),
+				TaskId:                 fmt.Sprintf("chain%d-task-%d", c, i),
+				AVSAddress:             fmt.Sprintf("0xavs%d", c),
+				OperatorSetId:          uint32(i),
+				SourceBlockNumber:      uint64(i / 100),
+				L1ReferenceBlockNumber: uint64(i / 100),
+				ChainId:                config.ChainId(c),
 			}
-			require.NoError(t, store.SaveTask(ctx, task))
+			require.NoError(t, store.SavePendingTask(ctx, task))
 		}
 	}
 

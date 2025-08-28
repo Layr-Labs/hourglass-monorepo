@@ -15,7 +15,7 @@ type AggregatorStore interface {
 	SetLastProcessedBlock(ctx context.Context, chainId config.ChainId, blockNum uint64) error
 
 	// Task management
-	SaveTask(ctx context.Context, task *types.Task) error
+	SavePendingTask(ctx context.Context, task *types.Task) error
 	GetTask(ctx context.Context, taskId string) (*types.Task, error)
 	ListPendingTasks(ctx context.Context) ([]*types.Task, error)
 	ListPendingTasksForAVS(ctx context.Context, avsAddress string) ([]*types.Task, error)

@@ -12,17 +12,18 @@ type TaskSubmissionSignatureData struct {
 	AvsAddress      string   // 20 bytes padded to 32
 	ExecutorAddress string   // 20 bytes padded to 32
 	OperatorSetId   uint32   // 4 bytes padded to 32
+	BlockNumber     uint64   // 8 bytes padded to 32
 	PayloadDigest   [32]byte // 32 bytes (keccak256 of payload)
 }
 
 // ToSigningBytes creates deterministic ABI-encoded bytes for signing
 // Format: taskId(bytes32) || avsAddress(address) || executorAddress(address) ||
 //
-//	operatorSetId(uint32) || payloadDigest(bytes32)
+//	operatorSetId(uint32) || blockNumber(uint64) || payloadDigest(bytes32)
 //
-// Total: 160 bytes
+// Total: 192 bytes
 func (tsd *TaskSubmissionSignatureData) ToSigningBytes() []byte {
-	result := make([]byte, 0, 160)
+	result := make([]byte, 0, 192)
 
 	// TaskId as 32 bytes
 	taskIdBytes := common.HexToHash(tsd.TaskId).Bytes()
@@ -40,6 +41,11 @@ func (tsd *TaskSubmissionSignatureData) ToSigningBytes() []byte {
 	operSetId := make([]byte, 32)
 	binary.BigEndian.PutUint32(operSetId[28:], tsd.OperatorSetId)
 	result = append(result, operSetId...)
+
+	// SourceBlockNumber as uint64 padded to 32 bytes
+	blockNum := make([]byte, 32)
+	binary.BigEndian.PutUint64(blockNum[24:], tsd.BlockNumber)
+	result = append(result, blockNum...)
 
 	// Payload digest (already 32 bytes)
 	result = append(result, tsd.PayloadDigest[:]...)
@@ -90,6 +96,7 @@ func EncodeTaskSubmissionMessage(
 	avsAddress string,
 	executorAddress string,
 	operatorSetId uint32,
+	blockNumber uint64,
 	payload []byte,
 ) []byte {
 
@@ -100,6 +107,7 @@ func EncodeTaskSubmissionMessage(
 		AvsAddress:      avsAddress,
 		ExecutorAddress: executorAddress,
 		OperatorSetId:   operatorSetId,
+		BlockNumber:     blockNumber,
 		PayloadDigest:   [32]byte(payloadDigest),
 	}
 

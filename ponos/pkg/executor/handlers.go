@@ -445,12 +445,13 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 
 // signResult creates both result signature (for aggregation) and auth signature (for identity)
 func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
-	// Get the curve type for the operator set
-	curveType, err := e.l1ContractCaller.GetOperatorSetCurveType(task.Avs, task.OperatorSetId)
+	// Get the curve type for the operator set using the task's block number for historical accuracy
+	curveType, err := e.l1ContractCaller.GetOperatorSetCurveType(task.Avs, task.OperatorSetId, task.TaskBlockNumber)
 	if err != nil {
 		e.logger.Error("Failed to get operator set curve type",
 			zap.String("avsAddress", task.Avs),
 			zap.Uint32("operatorSetId", task.OperatorSetId),
+			zap.Uint64("blockNumber", task.TaskBlockNumber),
 			zap.Error(err),
 		)
 		return nil, nil, fmt.Errorf("failed to get operator set curve type: %w", err)
@@ -778,6 +779,7 @@ func (e *Executor) validateOperatorInSet(task *executorV1.TaskSubmission) error 
 		common.HexToAddress(e.config.Operator.Address),
 		task.GetAvsAddress(),
 		task.OperatorSetId,
+		task.TaskBlockNumber,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get operator set details: %w", err)
@@ -799,17 +801,19 @@ func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmissio
 		task.AvsAddress,
 		e.config.Operator.Address,
 		task.OperatorSetId,
+		task.TaskBlockNumber,
 		task.Payload,
 	)
 }
 
 // validateTaskSignature validates the signature of a task submission
 func (e *Executor) validateTaskSignature(task *executorV1.TaskSubmission) error {
-	// Get AVS config to find aggregator's operator set
-	aggConfig, err := e.l1ContractCaller.GetAVSConfig(task.AvsAddress)
+	// Get AVS config to find aggregator's operator set using historical block number
+	aggConfig, err := e.l1ContractCaller.GetAVSConfig(task.AvsAddress, task.TaskBlockNumber)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to get AVS config",
 			zap.String("avsAddress", task.AvsAddress),
+			zap.Uint64("blockNumber", task.TaskBlockNumber),
 			zap.Error(err),
 		)
 		return fmt.Errorf("invalid AVS config: %w", err)
@@ -818,11 +822,12 @@ func (e *Executor) validateTaskSignature(task *executorV1.TaskSubmission) error 
 		return fmt.Errorf("avs config not found for avs")
 	}
 
-	// Get aggregator's operator set details
+	// Get aggregator's operator set details using the task block number
 	aggOpSet, err := e.l1ContractCaller.GetOperatorSetDetailsForOperator(
 		common.HexToAddress(task.AggregatorAddress),
 		task.AvsAddress,
 		aggConfig.AggregatorOperatorSetId,
+		task.TaskBlockNumber,
 	)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to get aggregator operator set",

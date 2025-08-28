@@ -13,6 +13,7 @@ type PerformerTask struct {
 	AggregatorAddress  string
 	OperatorSetId      uint32
 	ReferenceTimestamp uint32
+	TaskBlockNumber    uint64
 }
 
 // NewPerformerTaskFromTaskSubmissionProto creates a new PerformerTask from a TaskSubmission proto
@@ -25,6 +26,7 @@ func NewPerformerTaskFromTaskSubmissionProto(t *v1.TaskSubmission) *PerformerTas
 		AggregatorAddress:  t.AggregatorAddress,
 		OperatorSetId:      t.OperatorSetId,
 		ReferenceTimestamp: t.ReferenceTimestamp,
+		TaskBlockNumber:    t.TaskBlockNumber,
 	}
 }
 

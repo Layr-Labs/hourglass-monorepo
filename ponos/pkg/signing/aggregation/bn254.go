@@ -48,7 +48,6 @@ type AggregatedBN254Certificate struct {
 type BN254TaskResultAggregator struct {
 	mu                 sync.Mutex
 	TaskId             string
-	TaskCreatedBlock   uint64
 	OperatorSetId      uint32
 	ThresholdBips      uint16
 	TaskData           []byte
@@ -64,9 +63,8 @@ type BN254TaskResultAggregator struct {
 // NewBN254TaskResultAggregator initializes a new aggregation certificate for a task window.
 // All required data must be provided as arguments; no network or chain calls are performed.
 func NewBN254TaskResultAggregator(
-	ctx context.Context,
+	_ context.Context,
 	taskId string,
-	taskCreatedBlock uint64,
 	operatorSetId uint32,
 	thresholdBips uint16,
 	taskData []byte,
@@ -92,7 +90,6 @@ func NewBN254TaskResultAggregator(
 
 	cert := &BN254TaskResultAggregator{
 		TaskId:             taskId,
-		TaskCreatedBlock:   taskCreatedBlock,
 		OperatorSetId:      operatorSetId,
 		ThresholdBips:      thresholdBips,
 		TaskData:           taskData,

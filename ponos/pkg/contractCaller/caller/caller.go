@@ -323,11 +323,19 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
 }
 
-func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(
+	_ context.Context,
+	referenceTimestamp uint32,
+	messageHash [32]byte,
+) ([]byte, error) {
 	return cc.ecdsaCertVerifier.CalculateCertificateDigestBytes(&bind.CallOpts{}, referenceTimestamp, messageHash)
 }
 
-func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error) {
+func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(
+	_ context.Context,
+	referenceTimestamp uint32,
+	messageHash [32]byte,
+) ([]byte, error) {
 	digest, err := cc.bn254CertVerifier.CalculateCertificateDigest(&bind.CallOpts{}, referenceTimestamp, messageHash)
 	if err != nil {
 		return nil, err
@@ -335,8 +343,17 @@ func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(ctx context.Conte
 	return digest[:], nil
 }
 
-func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*contractCaller.TaskMailboxExecutorOperatorSetConfig, error) {
-	res, err := cc.taskMailbox.GetExecutorOperatorSetTaskConfig(&bind.CallOpts{}, ITaskMailbox.OperatorSet{
+func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(
+	_ context.Context,
+	avsAddress common.Address,
+	opsetId uint32,
+	blockNumber uint64,
+) (*contractCaller.TaskMailboxExecutorOperatorSetConfig, error) {
+	blockHeightOpts := &bind.CallOpts{}
+	if blockNumber > 0 {
+		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
+	}
+	res, err := cc.taskMailbox.GetExecutorOperatorSetTaskConfig(blockHeightOpts, ITaskMailbox.OperatorSet{
 		Avs: avsAddress,
 		Id:  opsetId,
 	})
@@ -355,11 +372,8 @@ func (cc *ContractCaller) GetExecutorOperatorSetTaskConfig(ctx context.Context, 
 	}, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
-	avsAddress string,
-	operatorSetId uint32,
-) ([]*peering.OperatorPeerInfo, error) {
-	operatorSetStringAddrs, err := cc.getOperatorSetMembers(avsAddress, operatorSetId)
+func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32, blockNumber uint64) ([]*peering.OperatorPeerInfo, error) {
+	operatorSetStringAddrs, err := cc.getOperatorSetMembers(avsAddress, operatorSetId, blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +384,7 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 
 	allMembers := make([]*peering.OperatorPeerInfo, 0)
 	for i, member := range operatorSetMemberAddrs {
-		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId)
+		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, 0)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			return nil, err
@@ -386,15 +400,20 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 	return allMembers, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
+func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error) {
 	opset := IKeyRegistrar.OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
 
+	blockHeightOpts := &bind.CallOpts{}
+	if blockNumber > 0 {
+		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
+	}
+
 	// Get the AVS registrar address from the allocation manager
 	avsAddr := common.HexToAddress(avsAddress)
-	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, avsAddr)
+	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(blockHeightOpts, avsAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
 	}
@@ -404,12 +423,12 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
 	}
-	socket, err := caller.GetOperatorSocket(&bind.CallOpts{}, operatorAddress)
+	socket, err := caller.GetOperatorSocket(blockHeightOpts, operatorAddress)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
 
-	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, opset)
+	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, opset)
 	if err != nil {
 		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
 		return nil, err
@@ -428,7 +447,7 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 	}
 
 	if curveType == config.CurveTypeBN254 {
-		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(&bind.CallOpts{}, opset, operatorAddress)
+		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(blockHeightOpts, opset, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
@@ -461,7 +480,7 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 	}
 
 	if curveType == config.CurveTypeECDSA {
-		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(&bind.CallOpts{}, opset, operatorAddress)
+		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(blockHeightOpts, opset, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
@@ -475,10 +494,16 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 	return nil, fmt.Errorf("unsupported curve type: %s", curveType)
 }
 
-func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
+func (cc *ContractCaller) GetAVSConfig(avsAddress string, blockNumber uint64) (*contractCaller.AVSConfig, error) {
 	avsAddr := common.HexToAddress(avsAddress)
 
-	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(&bind.CallOpts{}, avsAddr)
+	// Support optional block number parameter for historical queries
+	blockHeightOpts := &bind.CallOpts{}
+	if blockNumber > 0 {
+		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
+	}
+
+	avsRegistrarAddress, err := cc.allocationManager.GetAVSRegistrar(blockHeightOpts, avsAddr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AVS registrar address: %w", err)
 	}
@@ -488,7 +513,7 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 		return nil, fmt.Errorf("failed to create AVS registrar caller: %w", err)
 	}
 
-	avsConfig, err := registrarCaller.GetAvsConfig(&bind.CallOpts{})
+	avsConfig, err := registrarCaller.GetAvsConfig(blockHeightOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -499,8 +524,13 @@ func (cc *ContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSCo
 	}, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
-	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(&bind.CallOpts{}, IKeyRegistrar.OperatorSet{
+func (cc *ContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error) {
+	blockHeightOpts := &bind.CallOpts{}
+	if blockNumber > 0 {
+		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
+	}
+
+	curveType, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, IKeyRegistrar.OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	})
@@ -732,9 +762,13 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 	return socketReceipt, nil
 }
 
-func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId uint32) ([]string, error) {
+func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId uint32, blockNumber uint64) ([]string, error) {
 	avsAddr := common.HexToAddress(avsAddress)
-	operatorSet, err := cc.allocationManager.GetMembers(&bind.CallOpts{}, IAllocationManager.OperatorSet{
+	blockHeightOpts := &bind.CallOpts{}
+	if blockNumber > 0 {
+		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
+	}
+	operatorSet, err := cc.allocationManager.GetMembers(blockHeightOpts, IAllocationManager.OperatorSet{
 		Avs: avsAddr,
 		Id:  operatorSetId,
 	})

@@ -174,7 +174,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			var peers []*peering.OperatorPeerInfo
 			if tc.operatorType == "executor" {
-				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress)
+				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress, 0)
 				if err != nil {
 					t.Fatalf("Failed to list executor operators: %v", err)
 				}
@@ -185,7 +185,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
 
 			} else if tc.operatorType == "aggregator" {
-				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress)
+				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress, 0)
 				if err != nil {
 					t.Fatalf("Failed to list aggregator operators: %v", err)
 				}
@@ -380,7 +380,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 			var peers []*peering.OperatorPeerInfo
 			if tc.operatorType == "executor" {
-				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress)
+				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress, 0)
 				if err != nil {
 					t.Fatalf("Failed to list executor operators: %v", err)
 				}
@@ -391,7 +391,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 				assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
 
 			} else if tc.operatorType == "aggregator" {
-				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress)
+				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress, 0)
 				if err != nil {
 					t.Fatalf("Failed to list aggregator operators: %v", err)
 				}

@@ -317,7 +317,6 @@ func Test_CertificateVerifier(t *testing.T) {
 	agg, err := aggregation.NewECDSATaskResultAggregator(
 		context.Background(),
 		taskId,
-		taskCreatedBlock,
 		1,
 		10_000,
 		taskInputData,

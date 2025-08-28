@@ -185,12 +185,13 @@ func createECDSATestOperators(count int) ([]*peering.OperatorPeerInfo, []*ecdsa.
 func createTestTask() *types.Task {
 	deadline := time.Now().Add(10 * time.Minute)
 	return &types.Task{
-		TaskId:              "0x1234567890abcdef",
-		AVSAddress:          "0xavsaddress",
-		OperatorSetId:       1,
-		ThresholdBips:       7500, // 75%
-		Payload:             []byte("test-payload"),
-		DeadlineUnixSeconds: &deadline,
+		TaskId:                 "0x1234567890abcdef",
+		AVSAddress:             "0xavsaddress",
+		OperatorSetId:          1,
+		ThresholdBips:          7500, // 75%
+		Payload:                []byte("test-payload"),
+		DeadlineUnixSeconds:    &deadline,
+		L1ReferenceBlockNumber: 12345678, // Include block number for testing
 	}
 }
 
@@ -335,8 +336,9 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		// Mock client respects context timeout and returns context.DeadlineExceeded
 		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId:  "test",
-			Payload: []byte("test-payload"),
+			TaskId:          "test",
+			Payload:         []byte("test-payload"),
+			TaskBlockNumber: 0,
 		})
 
 		require.Error(t, err)
@@ -345,6 +347,8 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		// Verify the submission was recorded (showing the attempt was made)
 		assert.Len(t, mockClient.taskSubmissions, 1, "Should record submission attempt before timeout")
+		assert.Equal(t, uint64(0), mockClient.taskSubmissions[0].TaskBlockNumber,
+			"TaskBlockNumber should be included in submission")
 	})
 
 	t.Run("mock client successful response", func(t *testing.T) {
@@ -359,8 +363,9 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		defer cancel()
 
 		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId:  "test",
-			Payload: []byte("test-payload"),
+			TaskId:          "test",
+			Payload:         []byte("test-payload"),
+			TaskBlockNumber: 0,
 		})
 
 		require.NoError(t, err)
@@ -368,6 +373,8 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		assert.Equal(t, "test", result.TaskId)
 		assert.Equal(t, []byte("quick response"), result.Output)
 		assert.Len(t, mockClient.taskSubmissions, 1)
+		assert.Equal(t, uint64(0), mockClient.taskSubmissions[0].TaskBlockNumber,
+			"TaskBlockNumber should be included in submission")
 	})
 
 	t.Run("mock client partial timeout scenario", func(t *testing.T) {
@@ -389,14 +396,16 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		// Fast client should succeed
 		fastResult, fastErr := fastClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId: "test",
+			TaskId:          "test",
+			TaskBlockNumber: 0,
 		})
 		require.NoError(t, fastErr)
 		assert.Equal(t, []byte("fast"), fastResult.Output)
 
 		// Slow client should timeout
 		slowResult, slowErr := slowClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId: "test",
+			TaskId:          "test",
+			TaskBlockNumber: 0,
 		})
 		require.Error(t, slowErr)
 		assert.Nil(t, slowResult)
@@ -793,12 +802,18 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		defer cancel2()
 
 		// Fast client should succeed within timeout
-		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{TaskId: "test"})
+		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{
+			TaskId:          "test",
+			TaskBlockNumber: 0,
+		})
 		require.NoError(t, err1)
 		assert.Equal(t, []byte("fast-response"), result1.Output)
 
 		// Slow client should timeout
-		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{TaskId: "test"})
+		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{
+			TaskId:          "test",
+			TaskBlockNumber: 0,
+		})
 		require.Error(t, err2)
 		assert.Nil(t, result2)
 		assert.Equal(t, context.DeadlineExceeded, err2)
@@ -806,6 +821,12 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		// Both clients should have recorded submissions
 		assert.Len(t, fastClient.taskSubmissions, 1)
 		assert.Len(t, slowClient.taskSubmissions, 1)
+
+		// Validate TaskBlockNumber is properly included in submissions
+		assert.Equal(t, uint64(0), fastClient.taskSubmissions[0].TaskBlockNumber,
+			"Fast client should capture TaskBlockNumber")
+		assert.Equal(t, uint64(0), slowClient.taskSubmissions[0].TaskBlockNumber,
+			"Slow client should capture TaskBlockNumber")
 
 		// This demonstrates how the mocks provide controlled, deterministic testing
 		// where MockOperatorPeerInfo gives us controlled network addresses and

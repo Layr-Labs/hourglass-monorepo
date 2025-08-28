@@ -34,16 +34,17 @@ func newSyncMapBaseline() *syncMapBaseline {
 func createTask(id string) *types.Task {
 	deadline := time.Now().Add(time.Hour)
 	return &types.Task{
-		TaskId:              id,
-		AVSAddress:          "0xavs1",
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback",
-		DeadlineUnixSeconds: &deadline,
-		ThresholdBips:       6700,
-		Payload:             []byte(fmt.Sprintf("payload-%s", id)),
-		ChainId:             config.ChainId(1),
-		BlockNumber:         1000,
-		BlockHash:           fmt.Sprintf("0xhash%s", id),
+		TaskId:                 id,
+		AVSAddress:             "0xavs1",
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback",
+		DeadlineUnixSeconds:    &deadline,
+		ThresholdBips:          6700,
+		Payload:                []byte(fmt.Sprintf("payload-%s", id)),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      1000,
+		L1ReferenceBlockNumber: 1000,
+		BlockHash:              fmt.Sprintf("0xhash%s", id),
 	}
 }
 
@@ -51,16 +52,16 @@ func createTask(id string) *types.Task {
 func BenchmarkTaskOperations(b *testing.B) {
 	ctx := context.Background()
 
-	b.Run("InMemoryStore/SaveTask", func(b *testing.B) {
+	b.Run("InMemoryStore/SavePendingTask", func(b *testing.B) {
 		store := memory.NewInMemoryAggregatorStore()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			task := createTask(fmt.Sprintf("task-%d", i))
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 		}
 	})
 
-	b.Run("SyncMap/SaveTask", func(b *testing.B) {
+	b.Run("SyncMap/SavePendingTask", func(b *testing.B) {
 		baseline := newSyncMapBaseline()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -74,7 +75,7 @@ func BenchmarkTaskOperations(b *testing.B) {
 		// Pre-populate
 		for i := 0; i < 1000; i++ {
 			task := createTask(fmt.Sprintf("task-%d", i))
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 		}
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -100,7 +101,7 @@ func BenchmarkTaskOperations(b *testing.B) {
 		// Pre-populate with mixed statuses
 		for i := 0; i < 1000; i++ {
 			task := createTask(fmt.Sprintf("task-%d", i))
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 			if i%3 == 0 {
 				_ = store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted)
 			}
@@ -123,7 +124,7 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 			for pb.Next() {
 				if i%2 == 0 {
 					task := createTask(fmt.Sprintf("task-%d-%d", i, time.Now().UnixNano()))
-					_ = store.SaveTask(ctx, task)
+					_ = store.SavePendingTask(ctx, task)
 				} else {
 					_, _ = store.ListPendingTasks(ctx)
 				}
@@ -245,7 +246,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			task.AVSAddress = fmt.Sprintf("0xavs%d", i%100)
 			task.OperatorSetId = uint32(i % 10)
 			task.Payload = []byte(fmt.Sprintf("payload-data-%d", i))
-			_ = store.SaveTask(ctx, task)
+			_ = store.SavePendingTask(ctx, task)
 
 			if i%100 == 0 {
 				config := &storage.OperatorSetTaskConfig{

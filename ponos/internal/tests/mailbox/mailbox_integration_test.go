@@ -369,7 +369,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			operatorPeersWeight, err := opManager.GetExecutorPeersAndWeightsForBlock(
 				ctx,
 				task.ChainId,
-				task.BlockNumber,
+				task.SourceBlockNumber,
 				task.OperatorSetId,
 			)
 			if err != nil {
@@ -401,7 +401,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			resultAgg, err := aggregation.NewECDSATaskResultAggregator(
 				ctx,
 				task.TaskId,
-				task.BlockNumber,
 				task.OperatorSetId,
 				6667,
 				task.Payload,
