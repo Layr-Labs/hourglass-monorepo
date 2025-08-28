@@ -76,13 +76,13 @@ type IContractCaller interface {
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	GetAVSConfig(avsAddress string) (*AVSConfig, error)
+	GetAVSConfig(avsAddress string, blockNumber uint64) (*AVSConfig, error)
 
-	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error)
+	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error)
 
-	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32) ([]*peering.OperatorPeerInfo, error)
+	GetOperatorSetMembersWithPeering(avsAddress string, operatorSetId uint32, blockNumber uint64) ([]*peering.OperatorPeerInfo, error)
 
-	GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error)
+	GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error)
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
@@ -106,7 +106,7 @@ type IContractCaller interface {
 
 	CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
 
-	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32) (*TaskMailboxExecutorOperatorSetConfig, error)
+	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32, blockNumber uint64) (*TaskMailboxExecutorOperatorSetConfig, error)
 
 	// ------------------------------------------------------------------------
 	// Helper functions for test setup

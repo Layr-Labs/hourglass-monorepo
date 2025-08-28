@@ -242,6 +242,7 @@ func testWithKeyType(
 		simAggConfig.Avss[0].Address,
 		chainConfig.ExecOperatorAccountAddress,
 		1,
+		0,
 		payloadJsonBytes,
 	)
 
@@ -267,6 +268,7 @@ func testWithKeyType(
 		ExecutorAddress:   chainConfig.ExecOperatorAccountAddress,
 		Payload:           payloadJsonBytes,
 		Signature:         payloadSig,
+		TaskBlockNumber:   0,
 		OperatorSetId:     1,
 	})
 	if err != nil {

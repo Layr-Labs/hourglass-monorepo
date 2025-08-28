@@ -161,6 +161,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) generateExecutorSignature(executorA
 		ts.Task.AVSAddress,
 		executorAddress,
 		ts.Task.OperatorSetId,
+		ts.Task.BlockNumber,
 		ts.Task.Payload,
 	)
 	return ts.signer.SignMessage(encodedMessage)
@@ -256,6 +257,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				Signature:          signature,
 				OperatorSetId:      ts.Task.OperatorSetId,
 				ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
+				TaskBlockNumber:    ts.Task.BlockNumber,
 			}
 			ts.logger.Sugar().Infow("broadcasting task session to operators",
 				zap.Any("taskSubmission", taskSubmission),

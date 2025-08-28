@@ -23,8 +23,8 @@ func NewPeeringDataFetcher(
 	}
 }
 
-func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress)
+func (pdf *PeeringDataFetcher) ListExecutorOperators(_ context.Context, avsAddress string, blockNumber uint64) ([]*peering.OperatorPeerInfo, error) {
+	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress, blockNumber)
 	if err != nil {
 		pdf.logger.Sugar().Errorw("Failed to get AVS config",
 			zap.String("avsAddress", avsAddress),
@@ -37,7 +37,7 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAdd
 
 	// iterate over all operator sets and get their members with peering info
 	for _, operatorSetId := range avsConfig.ExecutorOperatorSetIds {
-		peeringInfos, err := pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, operatorSetId)
+		peeringInfos, err := pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, operatorSetId, blockNumber)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set members with peering %w", err)
 		}
@@ -58,8 +58,9 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAdd
 	return result, nil
 }
 
-func (pdf *PeeringDataFetcher) ListAggregatorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
-	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress)
+func (pdf *PeeringDataFetcher) ListAggregatorOperators(_ context.Context, avsAddress string, blockNumber uint64) ([]*peering.OperatorPeerInfo, error) {
+	// Use blockNumber 0 to get the latest state
+	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress, blockNumber)
 	if err != nil {
 		pdf.logger.Sugar().Errorw("Failed to get AVS config", zap.Error(err))
 		return nil, err
@@ -70,5 +71,5 @@ func (pdf *PeeringDataFetcher) ListAggregatorOperators(ctx context.Context, avsA
 		return nil, nil
 	}
 
-	return pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, avsConfig.AggregatorOperatorSetId)
+	return pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, avsConfig.AggregatorOperatorSetId, blockNumber)
 }

@@ -28,7 +28,7 @@ func NewLocalPeeringDataFetcher(
 	}
 }
 
-func (lpdf *LocalPeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
+func (lpdf *LocalPeeringDataFetcher) ListExecutorOperators(ctx context.Context, avsAddress string, number uint64) ([]*peering.OperatorPeerInfo, error) {
 	return lpdf.operatorPeers, nil
 }
 

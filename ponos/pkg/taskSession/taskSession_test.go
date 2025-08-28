@@ -335,8 +335,9 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		// Mock client respects context timeout and returns context.DeadlineExceeded
 		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId:  "test",
-			Payload: []byte("test-payload"),
+			TaskId:          "test",
+			Payload:         []byte("test-payload"),
+			TaskBlockNumber: 0,
 		})
 
 		require.Error(t, err)
@@ -359,8 +360,9 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		defer cancel()
 
 		result, err := mockClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId:  "test",
-			Payload: []byte("test-payload"),
+			TaskId:          "test",
+			Payload:         []byte("test-payload"),
+			TaskBlockNumber: 0,
 		})
 
 		require.NoError(t, err)
@@ -389,14 +391,16 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		// Fast client should succeed
 		fastResult, fastErr := fastClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId: "test",
+			TaskId:          "test",
+			TaskBlockNumber: 0,
 		})
 		require.NoError(t, fastErr)
 		assert.Equal(t, []byte("fast"), fastResult.Output)
 
 		// Slow client should timeout
 		slowResult, slowErr := slowClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-			TaskId: "test",
+			TaskId:          "test",
+			TaskBlockNumber: 0,
 		})
 		require.Error(t, slowErr)
 		assert.Nil(t, slowResult)
@@ -793,12 +797,18 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		defer cancel2()
 
 		// Fast client should succeed within timeout
-		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{TaskId: "test"})
+		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{
+			TaskId:          "test",
+			TaskBlockNumber: 0,
+		})
 		require.NoError(t, err1)
 		assert.Equal(t, []byte("fast-response"), result1.Output)
 
 		// Slow client should timeout
-		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{TaskId: "test"})
+		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{
+			TaskId:          "test",
+			TaskBlockNumber: 0,
+		})
 		require.Error(t, err2)
 		assert.Nil(t, result2)
 		assert.Equal(t, context.DeadlineExceeded, err2)

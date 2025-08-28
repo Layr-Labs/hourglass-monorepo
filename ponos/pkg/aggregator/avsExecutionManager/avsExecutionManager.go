@@ -169,11 +169,6 @@ func (em *AvsExecutionManager) Init(ctx context.Context) error {
 	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
 		zap.String("avsAddress", em.config.AvsAddress),
 	)
-	// initialize the task config for the first time
-	_, err := em.getOrSetAggregatorTaskConfig(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get or set aggregator task config: %w", err)
-	}
 
 	// Recover pending tasks from storage
 	if err := em.recoverPendingTasks(ctx); err != nil {
@@ -280,6 +275,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 	avsAddress string,
 	operatorSetId uint32,
 	taskChainId config.ChainId,
+	blockNumber uint64,
 ) (*OperatorSetTaskConfig, error) {
 	opset := OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
@@ -334,7 +330,7 @@ func (em *AvsExecutionManager) getOrSetOperatorSetTaskConfig(
 		return nil, fmt.Errorf("failed to get contract caller for chain %d: %w", taskChainId, err)
 	}
 
-	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(avsAddress), operatorSetId)
+	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(avsAddress), operatorSetId, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set task config: %w", err)
 	}
@@ -416,7 +412,7 @@ func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
 	return nil
 }
 
-func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context) (*AvsConfig, error) {
+func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context, blockNumber uint64) (*AvsConfig, error) {
 	em.avsConfigMutex.Lock()
 	defer em.avsConfigMutex.Unlock()
 
@@ -452,12 +448,12 @@ func (em *AvsExecutionManager) getOrSetAggregatorTaskConfig(ctx context.Context)
 	if !ok {
 		return nil, fmt.Errorf("no contract caller found for L1ChainId: %d", em.config.L1ChainId)
 	}
-	avsConfig, err := cc.GetAVSConfig(em.config.AvsAddress)
+	avsConfig, err := cc.GetAVSConfig(em.config.AvsAddress, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get AVS config: %w", err)
 	}
 
-	curveType, err := cc.GetOperatorSetCurveType(em.config.AvsAddress, avsConfig.AggregatorOperatorSetId)
+	curveType, err := cc.GetOperatorSetCurveType(em.config.AvsAddress, avsConfig.AggregatorOperatorSetId, blockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get curve type for operator set: %w", err)
 	}
@@ -503,7 +499,13 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
-	executorTaskConfig, err := em.getOrSetOperatorSetTaskConfig(ctx, task.AVSAddress, task.OperatorSetId, task.ChainId)
+	executorTaskConfig, err := em.getOrSetOperatorSetTaskConfig(
+		ctx,
+		task.AVSAddress,
+		task.OperatorSetId,
+		task.ChainId,
+		task.BlockNumber,
+	)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set operator set task config",
 			zap.String("taskId", task.TaskId),
@@ -514,7 +516,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 
 	task.ThresholdBips = executorTaskConfig.Consensus.Threshold
 
-	avsConfig, err := em.getOrSetAggregatorTaskConfig(ctx)
+	avsConfig, err := em.getOrSetAggregatorTaskConfig(ctx, task.BlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set aggregator task config",
 			zap.String("taskId", task.TaskId),

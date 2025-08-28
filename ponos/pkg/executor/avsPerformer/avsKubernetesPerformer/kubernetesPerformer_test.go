@@ -90,7 +90,7 @@ func (m *MockPeeringFetcher) ListAggregatorOperators(ctx context.Context, avsAdd
 	return args.Get(0).([]*peering.OperatorPeerInfo), args.Error(1)
 }
 
-func (m *MockPeeringFetcher) ListExecutorOperators(ctx context.Context, avsAddress string) ([]*peering.OperatorPeerInfo, error) {
+func (m *MockPeeringFetcher) ListExecutorOperators(ctx context.Context, avsAddress string, number uint64) ([]*peering.OperatorPeerInfo, error) {
 	args := m.Called(ctx, avsAddress)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)

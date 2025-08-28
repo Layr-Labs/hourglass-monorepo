@@ -249,6 +249,7 @@ func TestAuthenticationWithRealExecutor(t *testing.T) {
 			AvsAddress:        chainConfig.AVSAccountAddress,
 			Payload:           []byte("test"),
 			Signature:         []byte("sig"),
+			TaskBlockNumber:   0,
 			OperatorSetId:     1,
 		})
 

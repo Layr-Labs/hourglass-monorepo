@@ -37,6 +37,7 @@ message TaskSubmission {
   uint32 operator_set_id = 6;
   uint32 reference_timestamp = 7;
   string executor_address = 8;
+  uint64 task_block_number = 9;  // Block number for consistent state queries
 }
 
 message TaskResult {

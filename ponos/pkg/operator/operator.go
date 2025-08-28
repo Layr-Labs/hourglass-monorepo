@@ -95,7 +95,7 @@ func RegisterOperatorToOperatorSets(
 			zap.String("txHash", tx.TxHash.String()),
 		)
 
-		setCurveType, err := avsContractCaller.GetOperatorSetCurveType(avsAddress.String(), operatorSetId)
+		setCurveType, err := avsContractCaller.GetOperatorSetCurveType(avsAddress.String(), operatorSetId, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 		}

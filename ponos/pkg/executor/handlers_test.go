@@ -24,24 +24,24 @@ type mockContractCaller struct {
 	contractCaller.IContractCaller
 }
 
-func (m *mockContractCaller) GetAVSConfig(avsAddress string) (*contractCaller.AVSConfig, error) {
-	args := m.Called(avsAddress)
+func (m *mockContractCaller) GetAVSConfig(avsAddress string, blockNumber uint64) (*contractCaller.AVSConfig, error) {
+	args := m.Called(avsAddress, blockNumber)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*contractCaller.AVSConfig), args.Error(1)
 }
 
-func (m *mockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32) (*peering.OperatorSet, error) {
-	args := m.Called(operatorAddress, avsAddress, operatorSetId)
+func (m *mockContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error) {
+	args := m.Called(operatorAddress, avsAddress, operatorSetId, blockNumber)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*peering.OperatorSet), args.Error(1)
 }
 
-func (m *mockContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32) (config.CurveType, error) {
-	args := m.Called(avsAddress, operatorSetId)
+func (m *mockContractCaller) GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error) {
+	args := m.Called(avsAddress, operatorSetId, blockNumber)
 	return args.Get(0).(config.CurveType), args.Error(1)
 }
 
@@ -76,10 +76,11 @@ func TestValidateOperatorInSet(t *testing.T) {
 			name:         "valid operator in operator set",
 			operatorAddr: "0x1234567890123456789012345678901234567890",
 			task: &executor.TaskSubmission{
-				TaskId:        "task-1",
-				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
+				TaskId:          "task-1",
+				AvsAddress:      "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId:   1,
+				TaskBlockNumber: 12345678,
+				Payload:         []byte("test payload"),
 			},
 			operatorSet: &peering.OperatorSet{
 				OperatorSetID:  1,
@@ -90,6 +91,7 @@ func TestValidateOperatorInSet(t *testing.T) {
 					common.HexToAddress(operatorAddr),
 					task.GetAvsAddress(),
 					task.OperatorSetId,
+					task.TaskBlockNumber,
 				).Return(opSet, nil)
 			},
 			expectError: false,
@@ -98,10 +100,11 @@ func TestValidateOperatorInSet(t *testing.T) {
 			name:         "operator not in operator set - nil response",
 			operatorAddr: "0x1234567890123456789012345678901234567890",
 			task: &executor.TaskSubmission{
-				TaskId:        "task-2",
-				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
+				TaskId:          "task-2",
+				AvsAddress:      "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId:   1,
+				TaskBlockNumber: 12345678,
+				Payload:         []byte("test payload"),
 			},
 			operatorSet: nil,
 			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
@@ -109,6 +112,7 @@ func TestValidateOperatorInSet(t *testing.T) {
 					common.HexToAddress(operatorAddr),
 					task.GetAvsAddress(),
 					task.OperatorSetId,
+					task.TaskBlockNumber,
 				).Return(nil, nil)
 			},
 			expectError:   true,
@@ -118,10 +122,11 @@ func TestValidateOperatorInSet(t *testing.T) {
 			name:         "contract caller error",
 			operatorAddr: "0x1234567890123456789012345678901234567890",
 			task: &executor.TaskSubmission{
-				TaskId:        "task-4",
-				AvsAddress:    "0xABCDEF1234567890123456789012345678901234",
-				OperatorSetId: 1,
-				Payload:       []byte("test payload"),
+				TaskId:          "task-4",
+				AvsAddress:      "0xABCDEF1234567890123456789012345678901234",
+				OperatorSetId:   1,
+				TaskBlockNumber: 12345678,
+				Payload:         []byte("test payload"),
 			},
 			operatorSet: nil,
 			setupMock: func(m *mockContractCaller, operatorAddr string, task *executor.TaskSubmission, opSet *peering.OperatorSet) {
@@ -129,6 +134,7 @@ func TestValidateOperatorInSet(t *testing.T) {
 					common.HexToAddress(operatorAddr),
 					task.GetAvsAddress(),
 					task.OperatorSetId,
+					task.TaskBlockNumber,
 				).Return(nil, fmt.Errorf("contract call failed"))
 			},
 			expectError:   true,

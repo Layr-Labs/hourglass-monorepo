@@ -64,7 +64,8 @@ func (om *OperatorManager) GetCurveTypeForOperatorSet(ctx context.Context, avsAd
 		return config.CurveTypeUnknown, err
 	}
 
-	return l1Cc.GetOperatorSetCurveType(avsAddress, operatorSetId)
+	// Use latest block (0) for GetCurveTypeForOperatorSet since it's not task-specific
+	return l1Cc.GetOperatorSetCurveType(avsAddress, operatorSetId, 0)
 }
 
 // TODO(seanmcgary): extend/rename this later to support the aggregator as well when we add distributed aggregation
@@ -208,7 +209,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		operatorWeights[operator.String()] = weight
 	}
 
-	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress)
+	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress, taskBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
 	}
@@ -235,7 +236,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
 	}
 
-	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId)
+	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId, taskBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
