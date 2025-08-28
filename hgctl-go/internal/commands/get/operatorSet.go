@@ -12,7 +12,7 @@ import (
 
 func operatorSetCommand() *cli.Command {
 	return &cli.Command{
-		Name:      "get",
+		Name:      "operator-set",
 		Usage:     "List operator sets for an AVS",
 		ArgsUsage: "",
 		Description: `List operator sets for an AVS.

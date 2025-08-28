@@ -41,6 +41,15 @@ var runCmd = &cobra.Command{
 
 		l.Sugar().Infow("executor run")
 
+		// Log authentication configuration
+		if Config.AuthConfig != nil {
+			l.Sugar().Infow("Authentication configuration loaded from config file",
+				"enabled", Config.AuthConfig.IsEnabled,
+			)
+		} else {
+			l.Sugar().Infow("No authentication configuration in config file")
+		}
+
 		execSigners, err := signerUtils.ParseSignersFromOperatorConfig(Config.Operator, l)
 		if err != nil {
 			return fmt.Errorf("failed to parse signers from operator config: %w", err)
