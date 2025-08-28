@@ -195,6 +195,25 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 	digest := aggCert.TaskResponseDigest
 
+	// Populate NonSignerWitnesses from the sorted non-signer operators
+	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(aggCert.NonSignerOperators))
+	for _, nonSigner := range aggCert.NonSignerOperators {
+		// For now, we only provide the operator index
+		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
+			OperatorIndex: nonSigner.OperatorIndex,
+			// AVSs are expected to perform their own stake table transportation from the L1 to their execution chain
+			OperatorInfoProof: []byte{},
+			// The contract needs these values to properly calculate non-signer operations
+			OperatorInfo: ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
+				Pubkey: ITaskMailbox.BN254G1Point{
+					X: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[0:32]),
+					Y: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[32:64]),
+				},
+			},
+		}
+		nonSignerWitnesses = append(nonSignerWitnesses, witness)
+	}
+
 	cert := ITaskMailbox.IBN254CertificateVerifierTypesBN254Certificate{
 		ReferenceTimestamp: globalTableRootReferenceTimestamp,
 		MessageHash:        digest,
@@ -212,7 +231,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 				new(big.Int).SetBytes(g2Bytes[96:128]),
 			},
 		},
-		NonSignerWitnesses: []ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{},
+		NonSignerWitnesses: nonSignerWitnesses,
 	}
 
 	certBytes, err := cc.taskMailbox.GetBN254CertificateBytes(&bind.CallOpts{}, cert)
@@ -356,6 +375,9 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			return nil, err
 		}
+		// Set the operator's index in this operator set based on their position in the members array
+		operatorSetInfo.OperatorIndex = uint32(i)
+
 		allMembers = append(allMembers, &peering.OperatorPeerInfo{
 			OperatorAddress: operatorSetStringAddrs[i],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},

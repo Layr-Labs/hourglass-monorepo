@@ -15,6 +15,7 @@ type WrappedPublicKey struct {
 
 type OperatorSet struct {
 	OperatorSetID    uint32           `json:"operatorSetId"`
+	OperatorIndex    uint32           `json:"operatorIndex"`
 	WrappedPublicKey WrappedPublicKey `json:"publicKey"`
 	NetworkAddress   string           `json:"networkAddress"`
 	CurveType        config.CurveType `json:"curveType"`

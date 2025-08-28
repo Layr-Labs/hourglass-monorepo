@@ -21,8 +21,9 @@ type ITaskResultAggregator[SigT, CertT, PubKeyT any] interface {
 }
 
 type Operator[PubKeyT any] struct {
-	Address   string
-	PublicKey PubKeyT
+	Address       string
+	PublicKey     PubKeyT
+	OperatorIndex uint32
 }
 
 func (o *Operator[PubKeyT]) GetAddress() common.Address {
