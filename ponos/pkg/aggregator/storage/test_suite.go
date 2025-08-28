@@ -81,16 +81,17 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 	// Create test task
 	deadline := time.Now().Add(time.Hour)
 	task := &types.Task{
-		TaskId:              "task-123",
-		AVSAddress:          "0xavs123",
-		Payload:             []byte("test payload"),
-		ChainId:             config.ChainId(1),
-		SourceBlockNumber:   12345,
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback123",
-		ThresholdBips:       5000,
-		DeadlineUnixSeconds: &deadline,
-		BlockHash:           "0xblockhash123",
+		TaskId:                 "task-123",
+		AVSAddress:             "0xavs123",
+		Payload:                []byte("test payload"),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      12345,
+		L1ReferenceBlockNumber: 12345,
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback123",
+		ThresholdBips:          5000,
+		DeadlineUnixSeconds:    &deadline,
+		BlockHash:              "0xblockhash123",
 	}
 
 	// Test getting non-existent task
@@ -121,16 +122,17 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 
 	// Create another task for a different AVS
 	task2 := &types.Task{
-		TaskId:              "task-456",
-		AVSAddress:          "0xavs456",
-		Payload:             []byte("test payload 2"),
-		ChainId:             config.ChainId(1),
-		SourceBlockNumber:   12346,
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback456",
-		ThresholdBips:       5000,
-		DeadlineUnixSeconds: &deadline,
-		BlockHash:           "0xblockhash456",
+		TaskId:                 "task-456",
+		AVSAddress:             "0xavs456",
+		Payload:                []byte("test payload 2"),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      12346,
+		L1ReferenceBlockNumber: 12345,
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback456",
+		ThresholdBips:          5000,
+		DeadlineUnixSeconds:    &deadline,
+		BlockHash:              "0xblockhash456",
 	}
 	err = store.SavePendingTask(ctx, task2)
 	require.NoError(t, err)

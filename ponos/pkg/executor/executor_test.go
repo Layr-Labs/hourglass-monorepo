@@ -240,9 +240,10 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("Failed to get L1 block strBlockNumber: %v", err)
 	}
-	blockNumber, err := strconv.ParseUint(strBlockNumber, 10, 64)
+	// Parse hex string (e.g., "0x86d4dd") to uint64
+	blockNumber, err := strconv.ParseUint(strBlockNumber[2:], 16, 64)
 	if err != nil {
-		t.Fatalf("Failed to parse L1 block strBlockNumber: %v", err)
+		t.Fatalf("Failed to parse L1 block strBlockNumber %s: %v", strBlockNumber, err)
 	}
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	encodedMessage := util.EncodeTaskSubmissionMessage(

@@ -415,6 +415,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForBlock(
 		ctx,
 		task.ChainId,
+		// This must be source block number so this method can translate to reference block.
 		task.SourceBlockNumber,
 		task.OperatorSetId,
 	)

@@ -110,16 +110,17 @@ func TestBadgerAggregatorStore_InMemory(t *testing.T) {
 	ctx := context.Background()
 	deadline := time.Now().Add(time.Hour)
 	task := &types.Task{
-		TaskId:              "task-1",
-		AVSAddress:          "0xAVS1",
-		Payload:             []byte("test payload"),
-		ChainId:             config.ChainId(1),
-		SourceBlockNumber:   12345,
-		OperatorSetId:       1,
-		CallbackAddr:        "0xcallback123",
-		ThresholdBips:       5000,
-		DeadlineUnixSeconds: &deadline,
-		BlockHash:           "0xblockhash123",
+		TaskId:                 "task-1",
+		AVSAddress:             "0xAVS1",
+		Payload:                []byte("test payload"),
+		ChainId:                config.ChainId(1),
+		SourceBlockNumber:      12345,
+		L1ReferenceBlockNumber: 12345,
+		OperatorSetId:          1,
+		CallbackAddr:           "0xcallback123",
+		ThresholdBips:          5000,
+		DeadlineUnixSeconds:    &deadline,
+		BlockHash:              "0xblockhash123",
 	}
 	err = store.SavePendingTask(ctx, task)
 	require.NoError(t, err)
@@ -150,16 +151,17 @@ func TestBadgerAggregatorStore_LargeDataSet(t *testing.T) {
 	for i := 0; i < numTasks; i++ {
 		deadline := time.Now().Add(time.Hour)
 		task := &types.Task{
-			TaskId:              fmt.Sprintf("task-%d", i),
-			AVSAddress:          "0xAVS1",
-			Payload:             []byte("test payload"),
-			ChainId:             config.ChainId(1),
-			SourceBlockNumber:   12345,
-			OperatorSetId:       1,
-			CallbackAddr:        "0xcallback123",
-			ThresholdBips:       5000,
-			DeadlineUnixSeconds: &deadline,
-			BlockHash:           "0xblockhash123",
+			TaskId:                 fmt.Sprintf("task-%d", i),
+			AVSAddress:             "0xAVS1",
+			Payload:                []byte("test payload"),
+			ChainId:                config.ChainId(1),
+			SourceBlockNumber:      12345,
+			L1ReferenceBlockNumber: 12345,
+			OperatorSetId:          1,
+			CallbackAddr:           "0xcallback123",
+			ThresholdBips:          5000,
+			DeadlineUnixSeconds:    &deadline,
+			BlockHash:              "0xblockhash123",
 		}
 		err := store.SavePendingTask(ctx, task)
 		require.NoError(t, err)
@@ -202,16 +204,17 @@ func BenchmarkBadgerAggregatorStore(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			deadline := time.Now().Add(time.Hour)
 			task := &types.Task{
-				TaskId:              fmt.Sprintf("task-bench-%d", i),
-				AVSAddress:          "0xAVS1",
-				Payload:             []byte("test payload"),
-				ChainId:             config.ChainId(1),
-				SourceBlockNumber:   12345,
-				OperatorSetId:       1,
-				CallbackAddr:        "0xcallback123",
-				ThresholdBips:       5000,
-				DeadlineUnixSeconds: &deadline,
-				BlockHash:           "0xblockhash123",
+				TaskId:                 fmt.Sprintf("task-bench-%d", i),
+				AVSAddress:             "0xAVS1",
+				Payload:                []byte("test payload"),
+				ChainId:                config.ChainId(1),
+				SourceBlockNumber:      12345,
+				L1ReferenceBlockNumber: 12345,
+				OperatorSetId:          1,
+				CallbackAddr:           "0xcallback123",
+				ThresholdBips:          5000,
+				DeadlineUnixSeconds:    &deadline,
+				BlockHash:              "0xblockhash123",
 			}
 			_ = store.SavePendingTask(ctx, task)
 		}
@@ -222,16 +225,17 @@ func BenchmarkBadgerAggregatorStore(b *testing.B) {
 		for i := 0; i < 100; i++ {
 			deadline := time.Now().Add(time.Hour)
 			task := &types.Task{
-				TaskId:              fmt.Sprintf("task-get-%d", i),
-				AVSAddress:          "0xAVS1",
-				Payload:             []byte("test payload"),
-				ChainId:             config.ChainId(1),
-				SourceBlockNumber:   12345,
-				OperatorSetId:       1,
-				CallbackAddr:        "0xcallback123",
-				ThresholdBips:       5000,
-				DeadlineUnixSeconds: &deadline,
-				BlockHash:           "0xblockhash123",
+				TaskId:                 fmt.Sprintf("task-get-%d", i),
+				AVSAddress:             "0xAVS1",
+				Payload:                []byte("test payload"),
+				ChainId:                config.ChainId(1),
+				SourceBlockNumber:      12345,
+				L1ReferenceBlockNumber: 12345,
+				OperatorSetId:          1,
+				CallbackAddr:           "0xcallback123",
+				ThresholdBips:          5000,
+				DeadlineUnixSeconds:    &deadline,
+				BlockHash:              "0xblockhash123",
 			}
 			_ = store.SavePendingTask(ctx, task)
 		}

@@ -92,12 +92,13 @@ func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		task := &types.Task{
-			TaskId:            fmt.Sprintf("bench-task-%d", i),
-			AVSAddress:        "0x123",
-			OperatorSetId:     uint32(i),
-			SourceBlockNumber: uint64(i / 100),
-			ChainId:           config.ChainId(1),
-			Payload:           make([]byte, 256), // 256 bytes payload
+			TaskId:                 fmt.Sprintf("bench-task-%d", i),
+			AVSAddress:             "0x123",
+			OperatorSetId:          uint32(i),
+			SourceBlockNumber:      uint64(i / 100),
+			L1ReferenceBlockNumber: uint64(i / 100),
+			ChainId:                config.ChainId(1),
+			Payload:                make([]byte, 256), // 256 bytes payload
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)

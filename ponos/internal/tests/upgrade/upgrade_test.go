@@ -82,11 +82,12 @@ func TestRollingUpgrade(t *testing.T) {
 			require.NoError(t, aggStore1.SetLastProcessedBlock(ctx, chainId, 1000))
 
 			task := &types.Task{
-				TaskId:            "upgrade-task-1",
-				AVSAddress:        "0x123",
-				OperatorSetId:     1,
-				SourceBlockNumber: 1000,
-				ChainId:           config.ChainId(1),
+				TaskId:                 "upgrade-task-1",
+				AVSAddress:             "0x123",
+				OperatorSetId:          1,
+				SourceBlockNumber:      1000,
+				L1ReferenceBlockNumber: 1000,
+				ChainId:                config.ChainId(1),
 			}
 			require.NoError(t, aggStore1.SavePendingTask(ctx, task))
 
@@ -159,11 +160,12 @@ func TestRollingUpgrade(t *testing.T) {
 			require.NoError(t, aggStore2.SetLastProcessedBlock(ctx, chainId, 2000))
 
 			newTask := &types.Task{
-				TaskId:            "upgrade-task-2",
-				AVSAddress:        "0x123",
-				OperatorSetId:     2,
-				SourceBlockNumber: 2000,
-				ChainId:           config.ChainId(1),
+				TaskId:                 "upgrade-task-2",
+				AVSAddress:             "0x123",
+				OperatorSetId:          2,
+				SourceBlockNumber:      2000,
+				L1ReferenceBlockNumber: 2000,
+				ChainId:                config.ChainId(1),
 			}
 			require.NoError(t, aggStore2.SavePendingTask(ctx, newTask))
 		})
@@ -182,9 +184,9 @@ func TestStorageMigration(t *testing.T) {
 	require.NoError(t, memStore.SetLastProcessedBlock(ctx, chainId, 5000))
 
 	tasks := []*types.Task{
-		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, SourceBlockNumber: 4990, ChainId: chainId},
-		{TaskId: "task-2", AVSAddress: "0x123", OperatorSetId: 2, SourceBlockNumber: 4995, ChainId: chainId},
-		{TaskId: "task-3", AVSAddress: "0x123", OperatorSetId: 3, SourceBlockNumber: 5000, ChainId: chainId},
+		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, SourceBlockNumber: 4990, L1ReferenceBlockNumber: 4990, ChainId: chainId},
+		{TaskId: "task-2", AVSAddress: "0x123", OperatorSetId: 2, SourceBlockNumber: 4995, L1ReferenceBlockNumber: 4995, ChainId: chainId},
+		{TaskId: "task-3", AVSAddress: "0x123", OperatorSetId: 3, SourceBlockNumber: 5000, L1ReferenceBlockNumber: 5000, ChainId: chainId},
 	}
 
 	for _, task := range tasks {
@@ -266,12 +268,13 @@ func TestBackwardCompatibility(t *testing.T) {
 	require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, 1000))
 
 	task := &types.Task{
-		TaskId:            "compat-task",
-		AVSAddress:        "0x123",
-		OperatorSetId:     1,
-		SourceBlockNumber: 1000,
-		ChainId:           chainId,
-		Payload:           []byte("test payload"),
+		TaskId:                 "compat-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          1,
+		SourceBlockNumber:      1000,
+		L1ReferenceBlockNumber: 1000,
+		ChainId:                chainId,
+		Payload:                []byte("test payload"),
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task))
 
@@ -350,11 +353,12 @@ func TestUpgradeUnderLoad(t *testing.T) {
 				// Write operations
 				_ = store1.SetLastProcessedBlock(ctx, chainId, blockNum)
 				task := &types.Task{
-					TaskId:            fmt.Sprintf("load-task-%d", taskId),
-					AVSAddress:        "0x123",
-					OperatorSetId:     uint32(taskId),
-					SourceBlockNumber: blockNum,
-					ChainId:           chainId,
+					TaskId:                 fmt.Sprintf("load-task-%d", taskId),
+					AVSAddress:             "0x123",
+					OperatorSetId:          uint32(taskId),
+					SourceBlockNumber:      blockNum,
+					L1ReferenceBlockNumber: blockNum,
+					ChainId:                chainId,
 				}
 				_ = store1.SavePendingTask(ctx, task)
 
@@ -394,11 +398,12 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock2+100))
 
 	newTask := &types.Task{
-		TaskId:            "post-upgrade-task",
-		AVSAddress:        "0x123",
-		OperatorSetId:     9999,
-		SourceBlockNumber: lastBlock2 + 100,
-		ChainId:           chainId,
+		TaskId:                 "post-upgrade-task",
+		AVSAddress:             "0x123",
+		OperatorSetId:          9999,
+		SourceBlockNumber:      lastBlock2 + 100,
+		L1ReferenceBlockNumber: lastBlock2 + 100,
+		ChainId:                chainId,
 	}
 	require.NoError(t, store2.SavePendingTask(ctx, newTask))
 

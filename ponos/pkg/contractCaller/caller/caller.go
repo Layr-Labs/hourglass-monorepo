@@ -35,7 +35,6 @@ import (
 )
 
 type ContractCaller struct {
-	l1ChainId          *big.Int
 	taskMailbox        *ITaskMailbox.ITaskMailbox
 	allocationManager  *IAllocationManager.IAllocationManager
 	delegationManager  *IDelegationManager.IDelegationManager
@@ -115,7 +114,6 @@ func NewContractCaller(
 	}
 
 	return &ContractCaller{
-		l1ChainId:          chainId,
 		taskMailbox:        taskMailbox,
 		allocationManager:  allocationManager,
 		keyRegistrar:       keyRegistrar,
