@@ -134,12 +134,6 @@ var runCmd = &cobra.Command{
 			l.Sugar().Infow("No storage configured, running without persistence")
 		}
 
-		l.Sugar().Infow("Creating executor with configuration",
-			"grpcPort", Config.GrpcPort,
-			"managementPort", Config.ManagementServerGrpcPort,
-			"authEnabled", Config.AuthConfig != nil && Config.AuthConfig.IsEnabled,
-		)
-
 		exec, err := executor.NewExecutorWithRpcServers(Config.GrpcPort, Config.ManagementServerGrpcPort, Config, l, execSigners, pdf, cc, store)
 		if err != nil {
 			return fmt.Errorf("failed to create executor: %w", err)

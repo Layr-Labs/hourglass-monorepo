@@ -70,10 +70,6 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, err
 	}
 
-	e.logger.Sugar().Infow("Authentication passed, proceeding with deployment",
-		zap.String("avsAddress", req.AvsAddress),
-	)
-
 	// Validate request
 	if errMsg := validateDeployArtifactRequest(req); errMsg != "" {
 		return &executorV1.DeployArtifactResponse{
