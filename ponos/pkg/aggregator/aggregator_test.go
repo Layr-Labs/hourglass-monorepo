@@ -919,7 +919,12 @@ func Test_DeRegisterAvs(t *testing.T) {
 				agg := createTestAggregator(t)
 				// Pre-register an AVS to deregister later
 				mockAEM := &avsExecutionManager.AvsExecutionManager{}
-				agg.avsExecutionManagers["0x123avs"] = mockAEM
+				avsInfo := &AvsExecutionManagerInfo{
+					Address:          "0x123avs",
+					ExecutionManager: mockAEM,
+					CancelFunc:       nil,
+				}
+				agg.avsManagers["0x123avs"] = avsInfo
 				return agg
 			},
 			request: &aggregatorV1.DeRegisterAvsRequest{
@@ -939,7 +944,9 @@ func Test_DeRegisterAvs(t *testing.T) {
 				Auth:       nil,
 			},
 			expectSuccess: false,
-			expectError:   false, // Function should return success=false, not error
+			expectError:   true,
+			errorCode:     codes.Internal,
+			errorContains: "AVS 0x999nonexistent is not registered",
 		},
 		{
 			name: "deregister_with_auth_disabled_but_provided",
@@ -947,7 +954,12 @@ func Test_DeRegisterAvs(t *testing.T) {
 				agg := createTestAggregator(t)
 				// Pre-register an AVS
 				mockAEM := &avsExecutionManager.AvsExecutionManager{}
-				agg.avsExecutionManagers["0x456avs"] = mockAEM
+				avsInfo := &AvsExecutionManagerInfo{
+					Address:          "0x456avs",
+					ExecutionManager: mockAEM,
+					CancelFunc:       nil,
+				}
+				agg.avsManagers["0x456avs"] = avsInfo
 				return agg
 			},
 			request: &aggregatorV1.DeRegisterAvsRequest{
@@ -970,7 +982,7 @@ func Test_DeRegisterAvs(t *testing.T) {
 			agg := tt.setupAggregator(t)
 
 			// Store initial count of AVS execution managers
-			initialCount := len(agg.avsExecutionManagers)
+			initialCount := len(agg.avsManagers)
 
 			response, err := agg.DeRegisterAvs(ctx, tt.request)
 
@@ -993,18 +1005,127 @@ func Test_DeRegisterAvs(t *testing.T) {
 
 			if tt.expectSuccess {
 				// Verify the AVS was actually removed from the map
-				_, exists := agg.avsExecutionManagers[tt.request.AvsAddress]
-				assert.False(t, exists, "AVS should be removed from avsExecutionManagers")
-				assert.Equal(t, initialCount-1, len(agg.avsExecutionManagers), "AVS count should decrease by 1")
-			} else {
-				// If deregistration failed, the count should remain the same
-				if tt.request.AvsAddress != "0x999nonexistent" {
-					// Only check this for cases where the AVS existed initially
-					assert.Equal(t, initialCount, len(agg.avsExecutionManagers), "AVS count should remain the same on failed deregistration")
-				}
+				_, exists := agg.avsManagers[tt.request.AvsAddress]
+				assert.False(t, exists, "AVS should be removed from avsManagers")
+				assert.Equal(t, initialCount-1, len(agg.avsManagers), "AVS count should decrease by 1")
 			}
 		})
 	}
+}
+
+// Test_DeRegisterAvs_ContextCancellation tests that the context cancellation mechanism works
+func Test_DeRegisterAvs_ContextCancellation(t *testing.T) {
+	ctx := context.Background()
+	agg := createTestAggregator(t)
+
+	// Simulate an AVS being started (normally done in Start() method)
+	avsAddress := "0x123avs"
+	mockAEM := &avsExecutionManager.AvsExecutionManager{}
+
+	// Create a mock cancel function to verify it gets called
+	cancelCalled := false
+	mockCancel := func() {
+		cancelCalled = true
+	}
+
+	avsInfo := &AvsExecutionManagerInfo{
+		Address:          avsAddress,
+		ExecutionManager: mockAEM,
+		CancelFunc:       mockCancel,
+	}
+	agg.avsManagers[avsAddress] = avsInfo
+
+	// Verify initial state
+	assert.Equal(t, 1, len(agg.avsManagers))
+
+	// Deregister the AVS
+	request := &aggregatorV1.DeRegisterAvsRequest{
+		AvsAddress: avsAddress,
+		Auth:       nil,
+	}
+
+	response, err := agg.DeRegisterAvs(ctx, request)
+	require.NoError(t, err)
+	require.NotNil(t, response)
+	assert.True(t, response.Success)
+
+	// Verify the cancel function was called
+	assert.True(t, cancelCalled, "Cancel function should have been called")
+
+	// Verify cleanup of the map
+	_, avsExists := agg.avsManagers[avsAddress]
+	assert.False(t, avsExists, "AVS should be removed from avsManagers map")
+
+	// Verify final state
+	assert.Equal(t, 0, len(agg.avsManagers))
+}
+
+// Test_DeRegisterAvs_ThreadSafety tests concurrent register/deregister operations
+func Test_DeRegisterAvs_ThreadSafety(t *testing.T) {
+	ctx := context.Background()
+	agg := createTestAggregator(t)
+
+	const numGoroutines = 10
+	const numOperations = 20
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	// Run concurrent register/deregister operations
+	for i := 0; i < numGoroutines; i++ {
+		go func(goroutineID int) {
+			defer wg.Done()
+
+			for j := 0; j < numOperations; j++ {
+				avsAddress := fmt.Sprintf("0x%d%davs", goroutineID, j)
+
+				// Register AVS by directly adding to maps (simulating successful registration)
+				agg.avsMutex.Lock()
+				if _, exists := agg.avsManagers[avsAddress]; !exists {
+					mockAEM := &avsExecutionManager.AvsExecutionManager{}
+					mockCancel := func() {}
+					avsInfo := &AvsExecutionManagerInfo{
+						Address:          avsAddress,
+						ExecutionManager: mockAEM,
+						CancelFunc:       mockCancel,
+					}
+					agg.avsManagers[avsAddress] = avsInfo
+				}
+				agg.avsMutex.Unlock()
+
+				// Small delay to increase chance of race conditions
+				time.Sleep(time.Microsecond * 100)
+
+				// Attempt to deregister
+				request := &aggregatorV1.DeRegisterAvsRequest{
+					AvsAddress: avsAddress,
+					Auth:       nil,
+				}
+
+				_, err := agg.DeRegisterAvs(ctx, request)
+				// Either succeeds or fails with "not registered" - both are valid outcomes
+				if err != nil {
+					assert.Contains(t, err.Error(), "not registered")
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify no maps are corrupted and all entries are properly cleaned up
+	agg.avsMutex.RLock()
+	avsCount := len(agg.avsManagers)
+
+	// Verify data integrity - each AVS info should have consistent fields
+	for avsAddr, avsInfo := range agg.avsManagers {
+		assert.Equal(t, avsAddr, avsInfo.Address, "AVS info address should match map key")
+		assert.NotNil(t, avsInfo.ExecutionManager, "Execution manager should not be nil")
+		// CancelFunc can be nil if AVS was registered but not yet started
+	}
+	agg.avsMutex.RUnlock()
+
+	t.Logf("Thread safety test completed. Final state: %d AVSs registered", avsCount)
 }
 
 // createTestAggregator creates a minimal aggregator for testing
@@ -1019,8 +1140,8 @@ func createTestAggregator(t *testing.T) *Aggregator {
 			Address:   "0xaggregator",
 			L1ChainId: config.ChainId_EthereumMainnet,
 		},
-		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
-		authVerifier:         nil, // No auth verification for these tests
+		avsManagers:  make(map[string]*AvsExecutionManagerInfo),
+		authVerifier: nil, // No auth verification for these tests
 	}
 
 	return agg
