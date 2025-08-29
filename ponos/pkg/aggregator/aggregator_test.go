@@ -4,18 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
-	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"math/big"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+
+	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
+	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
@@ -33,7 +37,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -893,4 +900,128 @@ spec:
 
 	logger.Info("NodePort service created successfully on port 30080")
 	return nil
+}
+
+// Test_DeRegisterAvs tests the DeRegisterAvs handler function
+func Test_DeRegisterAvs(t *testing.T) {
+	tests := []struct {
+		name            string
+		setupAggregator func(t *testing.T) *Aggregator
+		request         *aggregatorV1.DeRegisterAvsRequest
+		expectSuccess   bool
+		expectError     bool
+		errorCode       codes.Code
+		errorContains   string
+	}{
+		{
+			name: "successful_deregistration",
+			setupAggregator: func(t *testing.T) *Aggregator {
+				agg := createTestAggregator(t)
+				// Pre-register an AVS to deregister later
+				mockAEM := &avsExecutionManager.AvsExecutionManager{}
+				agg.avsExecutionManagers["0x123avs"] = mockAEM
+				return agg
+			},
+			request: &aggregatorV1.DeRegisterAvsRequest{
+				AvsAddress: "0x123avs",
+				Auth:       nil, // No auth for this test
+			},
+			expectSuccess: true,
+			expectError:   false,
+		},
+		{
+			name: "deregister_nonexistent_avs",
+			setupAggregator: func(t *testing.T) *Aggregator {
+				return createTestAggregator(t)
+			},
+			request: &aggregatorV1.DeRegisterAvsRequest{
+				AvsAddress: "0x999nonexistent",
+				Auth:       nil,
+			},
+			expectSuccess: false,
+			expectError:   false, // Function should return success=false, not error
+		},
+		{
+			name: "deregister_with_auth_disabled_but_provided",
+			setupAggregator: func(t *testing.T) *Aggregator {
+				agg := createTestAggregator(t)
+				// Pre-register an AVS
+				mockAEM := &avsExecutionManager.AvsExecutionManager{}
+				agg.avsExecutionManagers["0x456avs"] = mockAEM
+				return agg
+			},
+			request: &aggregatorV1.DeRegisterAvsRequest{
+				AvsAddress: "0x456avs",
+				Auth: &commonV1.AuthSignature{
+					ChallengeToken: "test-challenge-token",
+					Signature:      []byte("test-signature"),
+				},
+			},
+			expectSuccess: false,
+			expectError:   true,
+			errorCode:     codes.Unimplemented,
+			errorContains: "authentication is not enabled",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			agg := tt.setupAggregator(t)
+
+			// Store initial count of AVS execution managers
+			initialCount := len(agg.avsExecutionManagers)
+
+			response, err := agg.DeRegisterAvs(ctx, tt.request)
+
+			if tt.expectError {
+				require.Error(t, err)
+				if tt.errorCode != codes.OK {
+					st, ok := status.FromError(err)
+					require.True(t, ok, "Error should be a gRPC status error")
+					assert.Equal(t, tt.errorCode, st.Code())
+				}
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, response)
+			assert.Equal(t, tt.expectSuccess, response.Success)
+
+			if tt.expectSuccess {
+				// Verify the AVS was actually removed from the map
+				_, exists := agg.avsExecutionManagers[tt.request.AvsAddress]
+				assert.False(t, exists, "AVS should be removed from avsExecutionManagers")
+				assert.Equal(t, initialCount-1, len(agg.avsExecutionManagers), "AVS count should decrease by 1")
+			} else {
+				// If deregistration failed, the count should remain the same
+				if tt.request.AvsAddress != "0x999nonexistent" {
+					// Only check this for cases where the AVS existed initially
+					assert.Equal(t, initialCount, len(agg.avsExecutionManagers), "AVS count should remain the same on failed deregistration")
+				}
+			}
+		})
+	}
+}
+
+// createTestAggregator creates a minimal aggregator for testing
+func createTestAggregator(t *testing.T) *Aggregator {
+	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	require.NoError(t, err)
+
+	// Create minimal aggregator with required fields
+	agg := &Aggregator{
+		logger: l,
+		config: &AggregatorConfig{
+			Address:   "0xaggregator",
+			L1ChainId: config.ChainId_EthereumMainnet,
+		},
+		avsExecutionManagers: make(map[string]*avsExecutionManager.AvsExecutionManager),
+		authVerifier:         nil, // No auth verification for these tests
+	}
+
+	return agg
 }

@@ -2,6 +2,7 @@ package aggregator
 
 import (
 	"context"
+
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
@@ -36,12 +37,21 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 }
 
 func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.DeRegisterAvsRequest) (*aggregatorV1.DeRegisterAvsResponse, error) {
+	a.logger.Sugar().Infow("DeRegisterAvs called",
+		zap.String("avsAddress", request.AvsAddress),
+		zap.Bool("hasAuth", request.Auth != nil),
+		zap.Bool("authEnabled", a.authVerifier != nil),
+	)
+
 	// Verify authentication
 	if err := auth.HandleAuthError(a.verifyAuth(request.Auth)); err != nil {
 		return nil, err
 	}
 
-	return nil, status.Errorf(codes.Unimplemented, "DeRegisterAvs is not implemented yet")
+	err := a.deregisterAvs(request.AvsAddress)
+	return &aggregatorV1.DeRegisterAvsResponse{
+		Success: err == nil,
+	}, nil
 }
 
 // GetChallengeToken generates a challenge token for authentication

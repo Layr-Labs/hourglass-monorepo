@@ -3,6 +3,8 @@ package aggregator
 import (
 	"context"
 	"fmt"
+	"time"
+
 	aggregatorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/aggregator"
 	commonV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/common"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
@@ -28,7 +30,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"time"
 )
 
 type AggregatorConfig struct {
@@ -253,6 +254,25 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	}
 
 	a.avsExecutionManagers[avs.Address] = aem
+	return nil
+}
+
+func (a *Aggregator) deregisterAvs(avsAddress string) error {
+	a.logger.Sugar().Infow("Deregistering AVS",
+		zap.String("avsAddress", avsAddress),
+	)
+
+	// Check if AVS execution manager exists
+	if _, ok := a.avsExecutionManagers[avsAddress]; !ok {
+		return fmt.Errorf("AVS %s is not registered", avsAddress)
+	}
+
+	// Remove AVS execution manager from map
+	delete(a.avsExecutionManagers, avsAddress)
+
+	a.logger.Sugar().Infow("AVS deregistered successfully",
+		zap.String("avsAddress", avsAddress),
+	)
 	return nil
 }
 
