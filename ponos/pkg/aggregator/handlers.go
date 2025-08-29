@@ -31,6 +31,10 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 			return uint(id)
 		}),
 	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to register AVS: %v", err)
+	}
+
 	return &aggregatorV1.RegisterAvsResponse{
 		Success: err == nil,
 	}, nil
@@ -49,6 +53,10 @@ func (a *Aggregator) DeRegisterAvs(ctx context.Context, request *aggregatorV1.De
 	}
 
 	err := a.deregisterAvs(request.AvsAddress)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to deregister AVS: %v", err)
+	}
+
 	return &aggregatorV1.DeRegisterAvsResponse{
 		Success: err == nil,
 	}, nil
