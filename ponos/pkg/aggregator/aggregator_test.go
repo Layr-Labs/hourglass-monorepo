@@ -1140,6 +1140,7 @@ func createTestAggregator(t *testing.T) *Aggregator {
 			Address:   "0xaggregator",
 			L1ChainId: config.ChainId_EthereumMainnet,
 		},
+		rootCtx:      context.Background(), // Set root context for tests
 		avsManagers:  make(map[string]*AvsExecutionManagerInfo),
 		authVerifier: nil, // No auth verification for these tests
 	}

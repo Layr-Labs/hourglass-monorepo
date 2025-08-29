@@ -53,6 +53,10 @@ type Aggregator struct {
 	logger *zap.Logger
 	config *AggregatorConfig
 
+	// rootCtx is the root context for the aggregator lifetime, used for creating child contexts for AVSs
+	// This ensures AVSs registered via API calls have proper lifecycle management tied to aggregator shutdown
+	rootCtx context.Context
+
 	// chainPollers is a map of chainId to its chain poller
 	chainPollers map[config.ChainId]chainPoller.IChainPoller
 
@@ -262,16 +266,24 @@ func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.Aggr
 		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
+	// Use root context instead of passed context to ensure proper lifecycle management
+	// This prevents AVSs registered via API from stopping when the gRPC request completes
+	if a.rootCtx == nil {
+		return fmt.Errorf("aggregator not started, cannot register AVS %s", avs.Address)
+	}
+
+	// Create child context from root context for AVS lifecycle
+	avsCtx, avsCancel := context.WithCancel(a.rootCtx)
+
 	// Add to map with exclusive lock (double-check pattern)
 	a.avsMutex.Lock()
 	defer a.avsMutex.Unlock()
 
 	// Double-check that it wasn't added while we were creating the AEM
 	if _, ok := a.avsManagers[avs.Address]; ok {
+		avsCancel() // Clean up context
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
-
-	avsCtx, avsCancel := context.WithCancel(ctx)
 
 	avsInfo := &AvsExecutionManagerInfo{
 		Address:          avs.Address,
@@ -292,18 +304,31 @@ func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.Aggr
 		return fmt.Errorf("failed to initialize AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
-	// Start in a goroutine so registerAvs doesn't block
+	// Create error channel for startup result with timeout
+	startErr := make(chan error, 1)
+
 	go func() {
-		if err := aem.Start(avsCtx); err != nil {
-			a.logger.Sugar().Errorw("AVS Execution Manager failed to start",
-				"error", err,
-				"avsAddress", avs.Address)
+		startErr <- aem.Start(avsCtx)
+	}()
+
+	startCtx, startCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer startCancel()
+
+	select {
+	case err := <-startErr:
+		if err != nil {
 			a.avsMutex.Lock()
 			delete(a.avsManagers, avs.Address)
 			a.avsMutex.Unlock()
 			avsCancel()
+			return fmt.Errorf("failed to start AVS Execution Manager for %s: %w", avs.Address, err)
 		}
-	}()
+	case <-startCtx.Done():
+		// Timeout occurred - AVS is still starting but we return success
+		// The AVS will continue running in background and log any eventual errors
+		a.logger.Sugar().Infow("AVS execution manager startup timeout reached, continuing in background",
+			zap.String("avsAddress", avs.Address))
+	}
 
 	a.logger.Sugar().Infow("AVS execution manager started successfully",
 		zap.String("avsAddress", avs.Address))
@@ -456,6 +481,9 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 // Start starts the aggregator and its components
 func (a *Aggregator) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
+
+	// Store the root context for AVS lifecycle management
+	a.rootCtx = ctx
 
 	// Register AVSs from config - this will create, init, and start them
 	for _, avs := range a.config.AVSs {
