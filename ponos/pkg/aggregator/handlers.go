@@ -25,7 +25,7 @@ func (a *Aggregator) RegisterAvs(ctx context.Context, request *aggregatorV1.Regi
 		return nil, err
 	}
 
-	err := a.registerAvs(&aggregatorConfig.AggregatorAvs{
+	err := a.registerAvs(ctx, &aggregatorConfig.AggregatorAvs{
 		Address: request.AvsAddress,
 		ChainIds: util.Map(request.ChainIds, func(id uint32, i uint64) uint {
 			return uint(id)

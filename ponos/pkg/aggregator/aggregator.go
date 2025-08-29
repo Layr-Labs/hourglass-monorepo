@@ -207,19 +207,6 @@ func (a *Aggregator) Initialize() error {
 		)
 	}
 
-	for _, avs := range a.config.AVSs {
-		a.logger.Sugar().Infow("Registering AVS",
-			zap.String("address", avs.Address),
-			zap.Any("chainIds", avs.ChainIds),
-		)
-		if err := a.registerAvs(avs); err != nil {
-			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
-		}
-		a.logger.Sugar().Infow("AVS registered successfully",
-			zap.String("address", avs.Address),
-		)
-	}
-
 	a.registerHandlers()
 
 	// Get count with read lock for logging
@@ -236,7 +223,7 @@ func (a *Aggregator) Initialize() error {
 	return nil
 }
 
-func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.AggregatorAvs) error {
 	// Check if already exists (with read lock)
 	a.avsMutex.RLock()
 	if _, ok := a.avsManagers[avs.Address]; ok {
@@ -284,13 +271,42 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
 
-	// Create AvsExecutionManagerInfo and add to map
+	avsCtx, avsCancel := context.WithCancel(ctx)
+
 	avsInfo := &AvsExecutionManagerInfo{
 		Address:          avs.Address,
 		ExecutionManager: aem,
-		CancelFunc:       nil, // Will be set when started
+		CancelFunc:       avsCancel,
 	}
 	a.avsManagers[avs.Address] = avsInfo
+	a.avsMutex.Unlock()
+
+	a.logger.Sugar().Infow("Starting AVS execution manager",
+		zap.String("avsAddress", avs.Address))
+
+	if err := aem.Init(avsCtx); err != nil {
+		a.avsMutex.Lock()
+		delete(a.avsManagers, avs.Address)
+		a.avsMutex.Unlock()
+		avsCancel()
+		return fmt.Errorf("failed to initialize AVS Execution Manager for %s: %w", avs.Address, err)
+	}
+
+	// Start in a goroutine so registerAvs doesn't block
+	go func() {
+		if err := aem.Start(avsCtx); err != nil {
+			a.logger.Sugar().Errorw("AVS Execution Manager failed to start",
+				"error", err,
+				"avsAddress", avs.Address)
+			a.avsMutex.Lock()
+			delete(a.avsManagers, avs.Address)
+			a.avsMutex.Unlock()
+			avsCancel()
+		}
+	}()
+
+	a.logger.Sugar().Infow("AVS execution manager started successfully",
+		zap.String("avsAddress", avs.Address))
 	return nil
 }
 
@@ -441,6 +457,21 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 func (a *Aggregator) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 
+	// Register AVSs from config - this will create, init, and start them
+	for _, avs := range a.config.AVSs {
+		a.logger.Sugar().Infow("Registering and starting AVS from config",
+			zap.String("address", avs.Address),
+			zap.Any("chainIds", avs.ChainIds),
+		)
+		if err := a.registerAvs(ctx, avs); err != nil {
+			cancel()
+			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
+		}
+		a.logger.Sugar().Infow("AVS registered and started successfully",
+			zap.String("address", avs.Address),
+		)
+	}
+
 	// consume the events channel
 	go func() {
 		if err := a.processEventsChan(ctx); err != nil {
@@ -448,33 +479,6 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			cancel()
 		}
 	}()
-
-	// run execution managers with individual contexts
-	a.avsMutex.Lock()
-	for _, avsInfo := range a.avsManagers {
-		// Create individual context for this AVS
-		avsCtx, avsCancel := context.WithCancel(ctx)
-
-		// Store cancel function in the AvsExecutionManagerInfo
-		avsInfo.CancelFunc = avsCancel
-
-		go func(avsInfo *AvsExecutionManagerInfo, avsCtx context.Context) {
-			if err := avsInfo.ExecutionManager.Init(avsCtx); err != nil {
-				a.logger.Sugar().Errorw("AVS Execution Manager failed to initialize",
-					"error", err,
-					"avsAddress", avsInfo.Address)
-				cancel() // Cancel main context on init failure
-			}
-			if err := avsInfo.ExecutionManager.Start(avsCtx); err != nil {
-				a.logger.Sugar().Errorw("AVS Execution Manager failed to start",
-					"error", err,
-					"avsAddress", avsInfo.Address)
-				cancel() // Cancel main context on start failure
-			}
-		}(avsInfo, avsCtx)
-	}
-	a.avsMutex.Unlock()
-	a.logger.Sugar().Infow("Execution managers started")
 
 	// start polling for blocks
 	for _, poller := range a.chainPollers {
