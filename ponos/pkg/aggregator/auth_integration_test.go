@@ -18,7 +18,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -98,7 +98,11 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 
 	// Setup contract store and transaction log parser
-	contractStore := inMemoryContractStore.NewInMemoryContractStore([]*contracts.Contract{}, l)
+	// Load EigenLayer contracts that include mailbox contracts needed for AVS registration
+	eigenlayerContracts, err := eigenlayer.LoadContracts()
+	require.NoError(t, err)
+
+	contractStore := inMemoryContractStore.NewInMemoryContractStore(eigenlayerContracts, l)
 	tlp := transactionLogParser.NewTransactionLogParser(contractStore, l)
 
 	// Enable authentication for testing
@@ -283,11 +287,12 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 			AvsAddress: chainConfig.AVSAccountAddress,
 		})
 
-		// Will fail with Unimplemented, but auth should pass
+		// Should fail because AVS was never registered, but auth should pass
 		assert.Error(t, err)
 		statusErr, ok := status.FromError(err)
 		assert.True(t, ok)
-		assert.Equal(t, codes.Unimplemented, statusErr.Code()) // Not an auth error
+		assert.Equal(t, codes.Internal, statusErr.Code()) // Not an auth error
+		assert.Contains(t, statusErr.Message(), "not registered")
 	})
 }
 
