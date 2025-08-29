@@ -227,7 +227,7 @@ func (a *Aggregator) Initialize() error {
 	return nil
 }
 
-func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.AggregatorAvs) error {
+func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	// Check if already exists (with read lock)
 	a.avsMutex.RLock()
 	if _, ok := a.avsManagers[avs.Address]; ok {
@@ -311,7 +311,7 @@ func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.Aggr
 		startErr <- aem.Start(avsCtx)
 	}()
 
-	startCtx, startCancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	startCtx, startCancel := context.WithTimeout(avsCtx, 500*time.Millisecond)
 	defer startCancel()
 
 	select {
@@ -324,10 +324,14 @@ func (a *Aggregator) registerAvs(ctx context.Context, avs *aggregatorConfig.Aggr
 			return fmt.Errorf("failed to start AVS Execution Manager for %s: %w", avs.Address, err)
 		}
 	case <-startCtx.Done():
-		// Timeout occurred - AVS is still starting but we return success
-		// The AVS will continue running in background and log any eventual errors
-		a.logger.Sugar().Infow("AVS execution manager startup timeout reached, continuing in background",
+		// Timeout occurred - cancel AVS context and clean up
+		a.logger.Sugar().Warnw("AVS execution manager startup timeout, cancelling and cleaning up",
 			zap.String("avsAddress", avs.Address))
+		a.avsMutex.Lock()
+		delete(a.avsManagers, avs.Address)
+		a.avsMutex.Unlock()
+		avsCancel()
+		return fmt.Errorf("AVS Execution Manager startup timeout for %s after 500ms", avs.Address)
 	}
 
 	a.logger.Sugar().Infow("AVS execution manager started successfully",
@@ -491,7 +495,7 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			zap.String("address", avs.Address),
 			zap.Any("chainIds", avs.ChainIds),
 		)
-		if err := a.registerAvs(ctx, avs); err != nil {
+		if err := a.registerAvs(avs); err != nil {
 			cancel()
 			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
 		}
