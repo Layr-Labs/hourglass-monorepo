@@ -251,8 +251,11 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 		signature, err := aggSigner.SignMessage(signedMessage)
 		require.NoError(t, err)
 
+		// Use a different AVS address to avoid "already exists" conflicts from previous tests
+		tokenTestAvsAddress := "0xcafebabecafebabecafebabecafebabecafebabe"
+
 		req := &aggregatorV1.RegisterAvsRequest{
-			AvsAddress: chainConfig.AVSAccountAddress,
+			AvsAddress: tokenTestAvsAddress,
 			ChainIds:   []uint32{31337},
 			Auth: &commonV1.AuthSignature{
 				ChallengeToken: tokenResp.ChallengeToken,
@@ -262,8 +265,13 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 
 		// First request should succeed (auth-wise)
 		_, err = managementClient.RegisterAvs(ctx, req)
-		assert.NoError(t, err)
 		// May fail due to other reasons, but not auth
+		if err != nil {
+			statusErr, ok := status.FromError(err)
+			require.True(t, ok)
+			// Should not be an authentication error
+			assert.NotEqual(t, codes.Unauthenticated, statusErr.Code())
+		}
 
 		// Second request with same token should fail with auth error
 		_, err = managementClient.RegisterAvs(ctx, req)
@@ -283,8 +291,11 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		// Use a different AVS address to ensure it's not registered
+		unregisteredAvsAddress := "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
 		_, err = authClient.DeRegisterAvs(ctx, &aggregatorV1.DeRegisterAvsRequest{
-			AvsAddress: chainConfig.AVSAccountAddress,
+			AvsAddress: unregisteredAvsAddress,
 		})
 
 		// Should fail because AVS was never registered, but auth should pass
