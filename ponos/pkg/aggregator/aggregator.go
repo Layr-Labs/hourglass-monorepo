@@ -277,10 +277,10 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 
 	// Add to map with exclusive lock (double-check pattern)
 	a.avsMutex.Lock()
-	defer a.avsMutex.Unlock()
 
 	// Double-check that it wasn't added while we were creating the AEM
 	if _, ok := a.avsManagers[avs.Address]; ok {
+		a.avsMutex.Unlock()
 		avsCancel() // Clean up context
 		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
 	}
