@@ -219,7 +219,7 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 				time.Sleep(2 * time.Second)
 
 				// Create gRPC client connection
-				grpcClient, err := avsPerformerClient.NewAvsPerformerClient("localhost:8080", true)
+				grpcClient, err := avsPerformerClient.NewAvsPerformerClient("localhost:8080", false)
 				if err != nil {
 					t.Logf("Failed to create gRPC client: %v", err)
 				} else {

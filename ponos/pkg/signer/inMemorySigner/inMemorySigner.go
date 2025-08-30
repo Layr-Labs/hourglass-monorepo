@@ -6,6 +6,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type InMemorySigner struct {
@@ -43,7 +44,13 @@ func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
 }
 
 func (ims *InMemorySigner) SignMessageForSolidity(data []byte) ([]byte, error) {
-	hashedData := util.GetKeccak256Digest(data)
+
+	var hashedData [32]byte
+	if len(data) == 32 {
+		copy(hashedData[:], data)
+	} else {
+		hashedData = crypto.Keccak256Hash(data)
+	}
 
 	if ims.curveType == config.CurveTypeBN254 {
 		pk := ims.privateKey.(*bn254.PrivateKey)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"sync"
 	"sync/atomic"
 
@@ -39,19 +40,19 @@ type TaskSession[SigT, CertT, PubKeyT any] struct {
 	taskAggregator aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
 	thresholdMet   atomic.Bool
 
-	// insecureExecutorConnections when true, disables TLS for executor client connections.
-	// This should only be used for local development. Defaults to false (secure connections).
-	insecureExecutorConnections bool
+	// tlsEnabled when true, disables TLS for executor client connections.
+	tlsEnabled bool
 }
 
 func NewBN254TaskSession(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	task *types.Task,
+	l1ContractCaller contractCaller.IContractCaller,
 	aggregatorAddress string,
 	signer signer.ISigner,
 	operatorPeersWeight *operatorManager.PeerWeight,
-	insecureExecutorConnections bool,
+	tlsEnabled bool,
 	logger *zap.Logger,
 ) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey], error) {
 
@@ -72,8 +73,10 @@ func NewBN254TaskSession(
 	ta, err := aggregation.NewBN254TaskResultAggregator(
 		ctx,
 		task.TaskId,
+		operatorPeersWeight.RootReferenceTimestamp,
 		task.OperatorSetId,
 		task.ThresholdBips,
+		l1ContractCaller,
 		task.Payload,
 		task.DeadlineUnixSeconds,
 		operators,
@@ -84,17 +87,17 @@ func NewBN254TaskSession(
 	}
 
 	ts := &TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey]{
-		Task:                        task,
-		aggregatorAddress:           aggregatorAddress,
-		signer:                      signer,
-		results:                     sync.Map{},
-		context:                     ctx,
-		contextCancel:               cancel,
-		logger:                      logger,
-		taskAggregator:              ta,
-		operatorPeersWeight:         operatorPeersWeight,
-		thresholdMet:                atomic.Bool{},
-		insecureExecutorConnections: insecureExecutorConnections,
+		Task:                task,
+		aggregatorAddress:   aggregatorAddress,
+		signer:              signer,
+		results:             sync.Map{},
+		context:             ctx,
+		contextCancel:       cancel,
+		logger:              logger,
+		taskAggregator:      ta,
+		operatorPeersWeight: operatorPeersWeight,
+		thresholdMet:        atomic.Bool{},
+		tlsEnabled:          tlsEnabled,
 	}
 
 	ts.resultsCount.Store(0)
@@ -107,10 +110,11 @@ func NewECDSATaskSession(
 	ctx context.Context,
 	cancel context.CancelFunc,
 	task *types.Task,
+	l1ContractCaller contractCaller.IContractCaller,
 	aggregatorAddress string,
 	signer signer.ISigner,
 	operatorPeersWeight *operatorManager.PeerWeight,
-	insecureExecutorConnections bool,
+	tlsEnabled bool,
 	logger *zap.Logger,
 ) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address], error) {
 
@@ -130,8 +134,10 @@ func NewECDSATaskSession(
 	ta, err := aggregation.NewECDSATaskResultAggregator(
 		ctx,
 		task.TaskId,
+		operatorPeersWeight.RootReferenceTimestamp,
 		task.OperatorSetId,
 		task.ThresholdBips,
+		l1ContractCaller,
 		task.Payload,
 		task.DeadlineUnixSeconds,
 		operators,
@@ -142,17 +148,17 @@ func NewECDSATaskSession(
 	}
 
 	ts := &TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address]{
-		Task:                        task,
-		aggregatorAddress:           aggregatorAddress,
-		signer:                      signer,
-		results:                     sync.Map{},
-		context:                     ctx,
-		contextCancel:               cancel,
-		logger:                      logger,
-		taskAggregator:              ta,
-		operatorPeersWeight:         operatorPeersWeight,
-		thresholdMet:                atomic.Bool{},
-		insecureExecutorConnections: insecureExecutorConnections,
+		Task:                task,
+		aggregatorAddress:   aggregatorAddress,
+		signer:              signer,
+		results:             sync.Map{},
+		context:             ctx,
+		contextCancel:       cancel,
+		logger:              logger,
+		taskAggregator:      ta,
+		operatorPeersWeight: operatorPeersWeight,
+		thresholdMet:        atomic.Bool{},
+		tlsEnabled:          tlsEnabled,
 	}
 
 	ts.resultsCount.Store(0)
@@ -217,7 +223,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				)
 				return
 			}
-			c, err := executorClient.NewExecutorClient(socket, ts.insecureExecutorConnections)
+			c, err := executorClient.NewExecutorClient(socket, ts.tlsEnabled)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to create executor client",
 					zap.String("executorAddress", peer.OperatorAddress),
@@ -234,7 +240,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 			)
 
 			// Generate executor-specific signature
-			signature, err := ts.generateExecutorSignature(peer.OperatorAddress)
+			signature, err := ts.generateSignatureForExecutor(peer.OperatorAddress)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to generate executor signature",
 					zap.String("taskId", ts.Task.TaskId),
@@ -361,15 +367,17 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	}
 }
 
-// generateExecutorSignature creates a signature for a specific executor
-func (ts *TaskSession[SigT, CertT, PubKeyT]) generateExecutorSignature(executorAddress string) ([]byte, error) {
+// generateSignatureForExecutor creates a signature for a specific executor
+func (ts *TaskSession[SigT, CertT, PubKeyT]) generateSignatureForExecutor(executorAddress string) ([]byte, error) {
 	encodedMessage := util.EncodeTaskSubmissionMessage(
 		ts.Task.TaskId,
 		ts.Task.AVSAddress,
 		executorAddress,
-		ts.Task.OperatorSetId,
+		ts.operatorPeersWeight.RootReferenceTimestamp,
 		ts.Task.L1ReferenceBlockNumber,
+		ts.Task.OperatorSetId,
 		ts.Task.Payload,
 	)
+
 	return ts.signer.SignMessage(encodedMessage)
 }

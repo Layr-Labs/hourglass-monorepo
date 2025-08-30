@@ -42,7 +42,13 @@ func (ims *InMemorySigner) SignMessage(data []byte) ([]byte, error) {
 }
 
 func (ims *InMemorySigner) SignMessageForSolidity(data []byte) ([]byte, error) {
-	hashedData := getKeccak256Digest(data)
+
+	var hashedData [32]byte
+	if len(data) == 32 {
+		copy(hashedData[:], data)
+	} else {
+		hashedData = crypto.Keccak256Hash(data)
+	}
 
 	if ims.curveType == CurveTypeBN254 {
 		pk := ims.privateKey.(*bn254.PrivateKey)

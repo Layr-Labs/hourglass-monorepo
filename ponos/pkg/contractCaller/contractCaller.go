@@ -5,7 +5,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	ethereumTypes "github.com/ethereum/go-ethereum/core/types"
@@ -51,28 +50,52 @@ func (tm *TaskMailboxExecutorOperatorSetConfig) GetCurveType() (config.CurveType
 	return config.ConvertSolidityEnumToCurveType(tm.CurveType)
 }
 
+// BN254TaskResultParams contains all fields needed to submit a BN254 task result
+type BN254TaskResultParams struct {
+	TaskId             []byte
+	TaskResponse       []byte
+	TaskResponseDigest [32]byte
+	SignersSignature   *bn254.Signature
+	SignersPublicKey   *bn254.G2Point
+	NonSignerOperators []BN254NonSignerOperator
+}
+
+// BN254NonSignerOperator contains operator info for non-signers
+type BN254NonSignerOperator struct {
+	OperatorIndex uint32
+	PublicKey     []byte // BN254 public key bytes
+}
+
+// ECDSATaskResultParams contains all fields needed to submit an ECDSA task result
+type ECDSATaskResultParams struct {
+	TaskId             []byte
+	TaskResponse       []byte
+	TaskResponseDigest [32]byte
+	SignersSignatures  map[common.Address][]byte
+}
+
 type IContractCaller interface {
 	SubmitBN254TaskResult(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedBN254Certificate,
+		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedBN254Certificate,
+		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitECDSATaskResult(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedECDSACertificate,
+		params *ECDSATaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitECDSATaskResultRetryable(
 		ctx context.Context,
-		aggCert *aggregation.AggregatedECDSACertificate,
+		params *ECDSATaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
@@ -107,6 +130,24 @@ type IContractCaller interface {
 	CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
 
 	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32, blockNumber uint64) (*TaskMailboxExecutorOperatorSetConfig, error)
+
+	CreateGenerationReservation(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		operatorTableCalculatorAddress common.Address,
+		owner common.Address,
+		maxStalenessPeriod uint32,
+	) (*ethereumTypes.Receipt, error)
+
+	SetOperatorTableCalculator(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		operatorTableCalculatorAddress common.Address,
+	) (*ethereumTypes.Receipt, error)
+
+	GetTableCalculatorAddress(curveType config.CurveType) common.Address
 
 	// ------------------------------------------------------------------------
 	// Helper functions for test setup

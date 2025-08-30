@@ -3,6 +3,13 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,9 +26,85 @@ import (
 
 // Helper constants for tests
 const testAvsAddress = "0x1234567890123456789012345678901234567890"
+const testReferenceTimestamp uint32 = 1000
+
+// Helper function to setup test environment with Anvil and contract caller
+func setupTestEnvironment(t *testing.T) (contractCaller.IContractCaller, func()) {
+	const L1RpcUrl = "http://127.0.0.1:8545"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	require.NoError(t, err)
+
+	root := testUtils.GetProjectRootPath()
+
+	// Setup Anvil
+	anvilWg := &sync.WaitGroup{}
+	anvilWg.Add(1)
+	startErrorsChan := make(chan error, 1)
+
+	_ = testUtils.KillallAnvils()
+
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L1 Anvil: %v", err)
+	}
+
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RpcUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
+
+	anvilWg.Wait()
+	close(startErrorsChan)
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Fatalf("Failed to start Anvil: %v", err)
+		}
+	}
+	anvilCancel()
+
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 private key signer: %v", err)
+	}
+
+	l1CC, err := caller.NewContractCaller(l1EthClient, l1PrivateKeySigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 contract caller: %v", err)
+	}
+
+	cleanup := func() {
+		cancel()
+		_ = testUtils.KillAnvil(l1Anvil)
+	}
+
+	return l1CC, cleanup
+}
 
 // Helper function to create a properly signed TaskResult for BN254
-func createSignedBN254TaskResult(taskId string, operator *Operator[signing.PublicKey], operatorSetId uint32, output []byte, privateKey *bn254.PrivateKey) (*types.TaskResult, error) {
+func createSignedBN254TaskResult(
+	taskId string,
+	operator *Operator[signing.PublicKey],
+	operatorSetId uint32,
+	output []byte,
+	privateKey *bn254.PrivateKey,
+	referenceTimestamp uint32,
+	l1ContractCaller contractCaller.IContractCaller,
+) (*types.TaskResult, error) {
 	taskResult := &types.TaskResult{
 		TaskId:          taskId,
 		AvsAddress:      testAvsAddress,
@@ -31,9 +114,14 @@ func createSignedBN254TaskResult(taskId string, operator *Operator[signing.Publi
 	}
 
 	// Step 1: Sign the result (same for all operators)
-	// We need to sign hash(output), and SignSolidityCompatible expects a [32]byte
+	// Calculate the certificate digest that includes the reference timestamp
 	outputDigest := util.GetKeccak256Digest(output)
-	resultSig, err := privateKey.SignSolidityCompatible(outputDigest)
+	certDigestBytes, err := l1ContractCaller.CalculateBN254CertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
+	if err != nil {
+		return nil, err
+	}
+	certDigestHash := util.GetKeccak256Digest(certDigestBytes)
+	resultSig, err := privateKey.SignSolidityCompatible(certDigestHash)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +138,11 @@ func createSignedBN254TaskResult(taskId string, operator *Operator[signing.Publi
 	}
 	authBytes := authData.ToSigningBytes()
 	authDigest := util.GetKeccak256Digest(authBytes)
-	authSig, err := privateKey.SignSolidityCompatible(authDigest)
+
+	resultHashSlice := make([]byte, 32)
+	copy(resultHashSlice, authDigest[:])
+	authSig, err := privateKey.Sign(resultHashSlice)
+
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +152,15 @@ func createSignedBN254TaskResult(taskId string, operator *Operator[signing.Publi
 }
 
 // Helper function to create a properly signed TaskResult for ECDSA
-func createSignedECDSATaskResult(taskId string, operator *Operator[common.Address], operatorSetId uint32, output []byte, privateKey *cryptoLibsEcdsa.PrivateKey) (*types.TaskResult, error) {
+func createSignedECDSATaskResult(
+	taskId string,
+	operator *Operator[common.Address],
+	operatorSetId uint32,
+	output []byte,
+	privateKey *cryptoLibsEcdsa.PrivateKey,
+	referenceTimestamp uint32,
+	l1ContractCaller contractCaller.IContractCaller,
+) (*types.TaskResult, error) {
 	taskResult := &types.TaskResult{
 		TaskId:          taskId,
 		AvsAddress:      testAvsAddress,
@@ -70,9 +170,15 @@ func createSignedECDSATaskResult(taskId string, operator *Operator[common.Addres
 	}
 
 	// Step 1: Sign the result (same for all operators)
-	// We need to sign hash(output), and Sign expects []byte
+	// Calculate the certificate digest that includes the reference timestamp
 	outputDigest := util.GetKeccak256Digest(output)
-	resultSig, err := privateKey.Sign(outputDigest[:])
+	certDigestBytes, err := l1ContractCaller.CalculateECDSACertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
+	if err != nil {
+		return nil, err
+	}
+	// For ECDSA, we need to hash the certificate digest bytes
+	certDigestHash := util.GetKeccak256Digest(certDigestBytes)
+	resultSig, err := privateKey.Sign(certDigestHash[:])
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +205,77 @@ func createSignedECDSATaskResult(taskId string, operator *Operator[common.Addres
 }
 
 func Test_Aggregation(t *testing.T) {
+	const (
+		L1RpcUrl = "http://127.0.0.1:8545"
+	)
+	_, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: false})
+	require.NoError(t, err)
+
+	root := testUtils.GetProjectRootPath()
+	t.Logf("Project root path: %s", root)
+
+	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+		BaseUrl:   L1RpcUrl,
+		BlockType: ethereum.BlockType_Latest,
+	}, l)
+	require.NoError(t, err)
+
+	ctx, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+
+	anvilWg := &sync.WaitGroup{}
+	anvilWg.Add(1)
+	startErrorsChan := make(chan error, 1)
+
+	anvilCtx, anvilCancel := context.WithDeadline(ctx, time.Now().Add(30*time.Second))
+	defer anvilCancel()
+
+	_ = testUtils.KillallAnvils()
+
+	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
+	if err != nil {
+		t.Fatalf("Failed to start L1 Anvil: %v", err)
+	}
+	defer func() { _ = testUtils.KillAnvil(l1Anvil) }()
+	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
+
+	anvilWg.Wait()
+	close(startErrorsChan)
+	for err := range startErrorsChan {
+		if err != nil {
+			t.Errorf("Failed to start Anvil: %v", err)
+		}
+	}
+	anvilCancel()
+
+	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
+	if err != nil {
+		t.Fatalf("Failed to get Ethereum contract caller: %v", err)
+	}
+
+	chainConfig, err := testUtils.ReadChainConfig(root)
+	if err != nil {
+		t.Fatalf("Failed to read chain config: %v", err)
+	}
+
+	l1ChainId, err := l1EthClient.ChainID(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L1 chain ID: %v", err)
+	}
+	t.Logf("L1 Chain ID: %s", l1ChainId.String())
+
+	l1PrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create L1 private key signer: %v", err)
+	}
+
+	l1CC, err := caller.NewContractCaller(l1EthClient, l1PrivateKeySigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create L2 contract caller: %v", err)
+	}
+
 	t.Run("BN254", func(t *testing.T) {
 		// Create test operators with key pairs
 		operators := make([]*Operator[signing.PublicKey], 4) // Changed to 4 operators
@@ -121,11 +298,14 @@ func Test_Aggregation(t *testing.T) {
 
 		deadline := time.Now().Add(10 * time.Minute)
 
+		// Use the real contract caller
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
-			1,    // operatorSetId
-			7500, // thresholdBips (3/4 = 7500 bips)
+			testReferenceTimestamp,
+			1,
+			7500,
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -146,6 +326,8 @@ func Test_Aggregation(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -163,10 +345,20 @@ func Test_Aggregation(t *testing.T) {
 		require.NotNil(t, cert)
 
 		// Verify the aggregated signature
+		// The signature is over the certificate digest, not just the response digest
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
-		responseDigest := cert.TaskResponseDigest
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, responseDigest)
+
+		// Calculate the certificate digest that was actually signed
+		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+			context.Background(),
+			testReferenceTimestamp,
+			cert.TaskResponseDigest,
+		)
+		require.NoError(t, err)
+
+		certDigest := util.GetKeccak256Digest(certDigestBytes)
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigest)
 		require.NoError(t, err)
 		assert.True(t, verified, "Aggregated signature verification failed")
 
@@ -213,8 +405,10 @@ func Test_Aggregation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,    // operatorSetId
 			7500, // thresholdBips (3/4 = 7500 bips)
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -235,6 +429,8 @@ func Test_Aggregation(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -256,7 +452,7 @@ func Test_Aggregation(t *testing.T) {
 		assert.Equal(t, 3, len(cert.SignersSignatures), "Should have three signers")
 
 		// Verify certificate uses implementation's hash calculation method
-		taskMessageHash := cert.GetTaskMessageHash()
+		taskMessageHash := util.GetKeccak256Digest(cert.TaskResponse)
 		expectedHash := util.GetKeccak256Digest(commonPayload)
 		assert.Equal(t, expectedHash, taskMessageHash, "Certificate should calculate correct task message hash")
 
@@ -267,6 +463,9 @@ func Test_Aggregation(t *testing.T) {
 }
 
 func Test_MostCommonDigestTracking(t *testing.T) {
+	l1CC, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
 	t.Run("BN254 - Multiple Digests", func(t *testing.T) {
 		// Create test operators with key pairs
 		operators := make([]*Operator[signing.PublicKey], 5)
@@ -290,8 +489,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,    // operatorSetId
-			6000, // thresholdBips (3/5 = 6000 bips)
+			6000, // thresholdBips (3/5 = 6000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -316,7 +517,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		// - Operator 4: submits digest B (B now has 2 votes, but A should remain most common as it got 2 first)
 
 		// Operator 0 submits digest A
-		taskResult0, err := createSignedBN254TaskResult(taskId, operators[0], 1, payloadA, privateKeys[0])
+		taskResult0, err := createSignedBN254TaskResult(taskId, operators[0], 1, payloadA, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
@@ -326,7 +527,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 1 submits digest B
-		taskResult1, err := createSignedBN254TaskResult(taskId, operators[1], 1, payloadB, privateKeys[1])
+		taskResult1, err := createSignedBN254TaskResult(taskId, operators[1], 1, payloadB, privateKeys[1], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
@@ -336,7 +537,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 2 submits digest A
-		taskResult2, err := createSignedBN254TaskResult(taskId, operators[2], 1, payloadA, privateKeys[2])
+		taskResult2, err := createSignedBN254TaskResult(taskId, operators[2], 1, payloadA, privateKeys[2], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
@@ -347,7 +548,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.mostCommonDigest].response.TaskResult.Output)
 
 		// Operator 3 submits digest C
-		taskResult3, err := createSignedBN254TaskResult(taskId, operators[3], 1, payloadC, privateKeys[3])
+		taskResult3, err := createSignedBN254TaskResult(taskId, operators[3], 1, payloadC, privateKeys[3], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
@@ -357,7 +558,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 4 submits digest B
-		taskResult4, err := createSignedBN254TaskResult(taskId, operators[4], 1, payloadB, privateKeys[4])
+		taskResult4, err := createSignedBN254TaskResult(taskId, operators[4], 1, payloadB, privateKeys[4], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
@@ -406,8 +607,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold (10000 bips) - requires the single operator
+			10000, // 100% threshold (10000 bips) - requires the single operator,
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -425,6 +628,8 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			1, // operatorSetId
 			payload,
 			privKey,
+			testReferenceTimestamp,
+			l1CC,
 		)
 		require.NoError(t, err)
 
@@ -450,10 +655,19 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, payload, cert.TaskResponse)
 		assert.Equal(t, digest, cert.TaskResponseDigest)
 
-		// Verify signature
+		// Verify signature - need to use certificate digest
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, cert.TaskResponseDigest)
+
+		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+			context.Background(),
+			testReferenceTimestamp,
+			cert.TaskResponseDigest,
+		)
+		require.NoError(t, err)
+
+		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
 		require.NoError(t, err)
 		assert.True(t, verified, "Single operator signature verification failed")
 
@@ -485,8 +699,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold (10000 bips)
+			10000, // 100% threshold (10000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -505,6 +721,8 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -549,8 +767,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,    // operatorSetId
-			6000, // thresholdBips (3/5 = 6000 bips = 60% participation required)
+			6000, // thresholdBips (3/5 = 6000 bips = 60% participation required),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -571,6 +791,8 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -626,8 +848,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,    // operatorSetId
 			6000, // thresholdBips (3/5 = 6000 bips)
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -652,7 +876,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		// - Operator 4: submits digest B (B now has 2 votes, but A should remain most common as it got 2 first)
 
 		// Operator 0 submits digest A
-		taskResult0, err := createSignedECDSATaskResult(taskId, operators[0], 1, payloadA, privateKeys[0])
+		taskResult0, err := createSignedECDSATaskResult(taskId, operators[0], 1, payloadA, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
@@ -662,7 +886,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 1 submits digest B
-		taskResult1, err := createSignedECDSATaskResult(taskId, operators[1], 1, payloadB, privateKeys[1])
+		taskResult1, err := createSignedECDSATaskResult(taskId, operators[1], 1, payloadB, privateKeys[1], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
@@ -672,7 +896,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 2 submits digest A
-		taskResult2, err := createSignedECDSATaskResult(taskId, operators[2], 1, payloadA, privateKeys[2])
+		taskResult2, err := createSignedECDSATaskResult(taskId, operators[2], 1, payloadA, privateKeys[2], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
@@ -683,7 +907,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.mostCommonDigest].response.TaskResult.Output)
 
 		// Operator 3 submits digest C
-		taskResult3, err := createSignedECDSATaskResult(taskId, operators[3], 1, payloadC, privateKeys[3])
+		taskResult3, err := createSignedECDSATaskResult(taskId, operators[3], 1, payloadC, privateKeys[3], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
@@ -693,7 +917,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
 
 		// Operator 4 submits digest B
-		taskResult4, err := createSignedECDSATaskResult(taskId, operators[4], 1, payloadB, privateKeys[4])
+		taskResult4, err := createSignedECDSATaskResult(taskId, operators[4], 1, payloadB, privateKeys[4], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
@@ -747,8 +971,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold (10000 bips)
+			10000, // 100% threshold (10000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -767,6 +993,8 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -787,6 +1015,9 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 }
 
 func Test_OutputDigestSecurityValidation(t *testing.T) {
+	l1CC, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
 	t.Run("BN254 - Malicious OutputDigest Ignored", func(t *testing.T) {
 		// Create test operator
 		privKey, pubKey, err := bn254.GenerateKeyPair()
@@ -808,8 +1039,10 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold (10000 bips)
+			10000, // 100% threshold (10000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -820,7 +1053,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		legitimateOutput := []byte("legitimate-response")
 
 		// Create a properly signed TaskResult
-		taskResult, err := createSignedBN254TaskResult(taskId, operators[0], 1, legitimateOutput, privKey)
+		taskResult, err := createSignedBN254TaskResult(taskId, operators[0], 1, legitimateOutput, privKey, testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		// Calculate the legitimate output digest (for consensus)
@@ -844,10 +1077,19 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		assert.Equal(t, legitimateOutput, cert.TaskResponse)
 		assert.Equal(t, legitimateOutputDigest, cert.TaskResponseDigest)
 
-		// Verify the aggregated signature - all operators sign the same output digest
+		// Verify the aggregated signature - all operators sign the certificate digest
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, legitimateOutputDigest)
+
+		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+			context.Background(),
+			testReferenceTimestamp,
+			legitimateOutputDigest,
+		)
+		require.NoError(t, err)
+
+		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
 		require.NoError(t, err)
 		assert.True(t, verified, "Certificate signature should be valid")
 	})
@@ -874,8 +1116,10 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold (10000 bips)
+			10000, // 100% threshold (10000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -886,7 +1130,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		legitimateOutput := []byte("legitimate-response")
 
 		// Create a properly signed TaskResult
-		taskResult, err := createSignedECDSATaskResult(taskId, operators[0], 1, legitimateOutput, privKey)
+		taskResult, err := createSignedECDSATaskResult(taskId, operators[0], 1, legitimateOutput, privKey, testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		// Calculate the legitimate output digest (for consensus)
@@ -913,6 +1157,9 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 }
 
 func Test_NonSignerOrdering(t *testing.T) {
+	l1CC, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
 	t.Run("BN254 - Non-Signers Sorted by OperatorIndex", func(t *testing.T) {
 		// Create test operators with specific operator indices in non-sequential order
 		// This tests that sorting is by OperatorIndex, not by address or order of creation
@@ -939,8 +1186,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			6000, // 60% threshold (3/5 operators)
+			6000, // 60% threshold (3/5 operators),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -963,6 +1212,8 @@ func Test_NonSignerOrdering(t *testing.T) {
 				1, // operatorSetId
 				commonPayload,
 				privateKeys[pos],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -1023,8 +1274,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			10000, // 100% threshold
+			10000, // 100% threshold,
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1041,6 +1294,8 @@ func Test_NonSignerOrdering(t *testing.T) {
 				1,
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 			err = agg.ProcessNewSignature(context.Background(), taskResult)
@@ -1077,8 +1332,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			2500, // 25% threshold (can be met with 0 signers if we want to test)
+			2500, // 25% threshold (can be met with 0 signers if we want to test),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1136,8 +1393,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			6667, // 66.67% threshold (2/3)
+			6667, // 66.67% threshold (2/3),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1154,6 +1413,8 @@ func Test_NonSignerOrdering(t *testing.T) {
 				1,
 				commonPayload,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 			err = agg.ProcessNewSignature(context.Background(), taskResult)
@@ -1171,6 +1432,10 @@ func Test_NonSignerOrdering(t *testing.T) {
 }
 
 func Test_DigestBasedAggregation(t *testing.T) {
+	// Setup test environment with Anvil and contract caller
+	l1CC, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
 	t.Run("BN254 - Different Messages Only Aggregate Same Digest", func(t *testing.T) {
 		// Create 3 test operators
 		operators := make([]*Operator[signing.PublicKey], 3)
@@ -1196,8 +1461,10 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,    // operatorSetId
-			6667, // thresholdBips (2/3 = 66.67%)
+			6667, // thresholdBips (2/3 = 66.67%),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1217,6 +1484,8 @@ func Test_DigestBasedAggregation(t *testing.T) {
 				1, // operatorSetId
 				messageA,
 				privateKeys[i],
+				testReferenceTimestamp,
+				l1CC,
 			)
 			require.NoError(t, err)
 
@@ -1231,6 +1500,8 @@ func Test_DigestBasedAggregation(t *testing.T) {
 			1, // operatorSetId
 			messageB,
 			privateKeys[2],
+			testReferenceTimestamp,
+			l1CC,
 		)
 		require.NoError(t, err)
 
@@ -1263,10 +1534,19 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
 
-		// The aggregated signature should verify against digest A (not B)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, digestA)
+		// Calculate the certificate digest that was actually signed
+		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+			context.Background(),
+			testReferenceTimestamp,
+			cert.TaskResponseDigest,
+		)
 		require.NoError(t, err)
-		assert.True(t, verified, "Aggregated signature should be valid for message A")
+
+		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
+		// The aggregated signature should verify against the certificate digest
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
+		require.NoError(t, err)
+		assert.True(t, verified, "Aggregated signature should be valid for certificate digest")
 
 		// Additional verification: check digest groups to ensure proper segregation
 		digestB := util.GetKeccak256Digest(messageB)
@@ -1286,6 +1566,10 @@ func Test_DigestBasedAggregation(t *testing.T) {
 }
 
 func Test_TaskIDMismatchValidation(t *testing.T) {
+	// Setup test environment with Anvil and contract caller
+	l1CC, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
 	t.Run("BN254 - Task ID Mismatch", func(t *testing.T) {
 		// Create test operators with key pairs
 		operators := make([]*Operator[signing.PublicKey], 2)
@@ -1309,8 +1593,10 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		agg, err := NewBN254TaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			5000, // 50% threshold (5000 bips)
+			5000, // 50% threshold (5000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1323,7 +1609,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		payload := []byte("test-response")
 
 		// Create a TaskResult with mismatched task ID - note we sign with the wrong ID
-		taskResult, err := createSignedBN254TaskResult(mismatchedTaskId, operators[0], 1, payload, privateKeys[0])
+		taskResult, err := createSignedBN254TaskResult(mismatchedTaskId, operators[0], 1, payload, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		// Process the signature with mismatched task ID
@@ -1340,7 +1626,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		assert.False(t, agg.SigningThresholdMet())
 
 		// Now submit with correct task ID to verify aggregator works properly
-		correctTaskResult, err := createSignedBN254TaskResult(taskId, operators[0], 1, payload, privateKeys[0])
+		correctTaskResult, err := createSignedBN254TaskResult(taskId, operators[0], 1, payload, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		err = agg.ProcessNewSignature(context.Background(), correctTaskResult)
@@ -1377,8 +1663,10 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		agg, err := NewECDSATaskResultAggregator(
 			context.Background(),
 			taskId,
+			testReferenceTimestamp,
 			1,
-			5000, // 50% threshold (5000 bips)
+			5000, // 50% threshold (5000 bips),
+			l1CC,
 			taskData,
 			&deadline,
 			operators,
@@ -1391,7 +1679,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		payload := []byte("test-response")
 
 		// Create a TaskResult with mismatched task ID - note we sign with the wrong ID
-		taskResult, err := createSignedECDSATaskResult(mismatchedTaskId, operators[0], 1, payload, privateKeys[0])
+		taskResult, err := createSignedECDSATaskResult(mismatchedTaskId, operators[0], 1, payload, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		// Process the signature with mismatched task ID
@@ -1408,7 +1696,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		assert.False(t, agg.SigningThresholdMet())
 
 		// Now submit with correct task ID to verify aggregator works properly
-		correctTaskResult, err := createSignedECDSATaskResult(taskId, operators[0], 1, payload, privateKeys[0])
+		correctTaskResult, err := createSignedECDSATaskResult(taskId, operators[0], 1, payload, privateKeys[0], testReferenceTimestamp, l1CC)
 		require.NoError(t, err)
 
 		err = agg.ProcessNewSignature(context.Background(), correctTaskResult)

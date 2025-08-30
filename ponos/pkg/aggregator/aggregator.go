@@ -40,6 +40,7 @@ type AggregatorConfig struct {
 	Chains           []*aggregatorConfig.Chain
 	L1ChainId        config.ChainId
 	Authentication   *auth.Config
+	TLSEnabled       bool
 }
 
 // AvsExecutionManagerInfo encapsulates all information related to a running AVS
@@ -254,6 +255,7 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
 		L1ChainId:                a.config.L1ChainId,
 		AggregatorAddress:        a.config.Address,
+		TlsEnabled:               a.config.TLSEnabled,
 	},
 		a.chainContractCallers,
 		a.signers,

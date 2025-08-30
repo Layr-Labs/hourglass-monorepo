@@ -1,9 +1,9 @@
 ---
 grpcPort: 9090
 operator:
-  address: "0xexecutor123..."
+  address: "0x6ca766d180398847cEb1a58f03e029D65d88a878"
   operatorPrivateKey:
-    privateKey: "..."
+    privateKey: "0x71d173dbc3f00534ddd9bb0796c7df160c7d1af30e5aeeb601689c2026c244f6"
   signingKeys:
     bls:
       keystore: |
@@ -16,26 +16,26 @@ operator:
                 "n": 262144,
                 "p": 1,
                 "r": 8,
-                "salt": "be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"
+                "salt": "ab09c61a936e1ad3fba62fa5798fe0cace021765b7da485662db23c7bb42df55"
               },
               "message": ""
             },
             "checksum": {
               "function": "sha256",
               "params": {},
-              "message": "28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"
+              "message": "efc2d0baa038a0e5be02977b11e7cf55101abb348902b1b27e724bea89d96ace"
             },
             "cipher": {
               "function": "aes-128-ctr",
               "params": {
-                "iv": "cbaff55d36de018603dc9a336ac3bdc7"
+                "iv": "836eb161c0f87bb3ecccd81f9e8c7d9c"
               },
-              "message": "3d261076c91fdc6b1de390d0136b22c2a79b83b2838d55dd646218b7cec58396"
+              "message": "3b288503f5ad1a7620fce9514b14f2dddb26427a5550f975a907c3de4190b985"
             }
           },
-          "pubkey": "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9",
+          "pubkey": "1a42c113530a95717e8d2b9d038d8ef87a028b9fd5ffc63e513742ec6e1c3aab0ccd2c8b00446a25fae666807b17e0c6fc18ef63bb754e44a8f81f8a6f6c6f171d17e059c183fc3f560fe537e3815911cbdefc80bc01aa89a536036264fec88d109c5a3f39e8b4b9a815172ad769f09922aba0879e2529d926a4b1476760c66b",
           "path": "m/1/0/0",
-          "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
+          "uuid": "34a93605-4399-409d-b2e6-bc51d8fadf21",
           "version": 4,
           "curveType": "bn254"
         }

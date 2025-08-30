@@ -3,6 +3,7 @@ package mailbox
 import (
 	"context"
 	"fmt"
+	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
@@ -215,6 +216,69 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	allOperatorSetIds := []uint32{aggOpsetId, execOpsetId}
 
+	t.Logf("------------------------------------------- Configuring operator sets -------------------------------------------")
+
+	// Configure operator sets with their curve types
+	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
+
+	// Create AVS config caller for operator set configuration
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS private key signer: %v", err)
+	}
+
+	avsConfigCaller, err := caller.NewContractCaller(l1EthClient, avsPrivateKeySigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS config contract caller: %v", err)
+	}
+
+	// Configure BN254 operator set for aggregator
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx, avsAddr, aggOpsetId, config.CurveTypeBN254)
+	if err != nil {
+		t.Fatalf("Failed to configure BN254 operator set: %v", err)
+	}
+	t.Logf("Configured operator set %d with BN254 curve type", aggOpsetId)
+
+	// Configure ECDSA operator set for executor
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx, avsAddr, execOpsetId, config.CurveTypeECDSA)
+	if err != nil {
+		t.Fatalf("Failed to configure ECDSA operator set: %v", err)
+	}
+	t.Logf("Configured operator set %d with ECDSA curve type", execOpsetId)
+
+	// Create generation reservations for both operator sets
+	maxStalenessPeriod := uint32(0) // 0 allows certificates to always be valid regardless of referenceTimestamp
+
+	// BN254 table calculator for aggregator
+	bn254CalculatorAddr := common.HexToAddress(caller.BN254TableCalculatorAddress)
+	_, err = avsConfigCaller.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		aggOpsetId,
+		bn254CalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for BN254 operator set: %v", err)
+	}
+	t.Logf("Created generation reservation for operator set %d with BN254 table calculator", aggOpsetId)
+
+	// ECDSA table calculator for executor
+	ecdsaCalculatorAddr := common.HexToAddress(caller.ECDSATableCalculatorAddress)
+	_, err = avsConfigCaller.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		execOpsetId,
+		ecdsaCalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for ECDSA operator set: %v", err)
+	}
+	t.Logf("Created generation reservation for operator set %d with ECDSA table calculator", execOpsetId)
+
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
 	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
 
@@ -296,7 +360,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsTaskHookAddress = chainConfig.AVSTaskHookAddressL2
 	}
 
-	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, mailboxEthClient, l)
+	avsPrivateKeySigner, err = transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, mailboxEthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS private key signer: %v", err)
 	}
@@ -401,8 +465,10 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			resultAgg, err := aggregation.NewECDSATaskResultAggregator(
 				ctx,
 				task.TaskId,
+				operatorPeersWeight.RootReferenceTimestamp,
 				task.OperatorSetId,
 				6667,
+				l1CC,
 				task.Payload,
 				task.DeadlineUnixSeconds,
 				operators,
@@ -430,10 +496,38 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			}
 
 			signer := inMemorySigner.NewInMemorySigner(execKeysECDSA.PrivateKey, config.CurveTypeECDSA)
+			// Log the actual signing address derived from the private key
+			if ecdsaPK, ok := execKeysECDSA.PrivateKey.(*ecdsa.PrivateKey); ok {
+				signerAddress, _ := ecdsaPK.DeriveAddress()
+				t.Logf("Signer address derived from private key: %s", signerAddress.Hex())
+			}
 
-			// Step 1: Sign the result (signs the hash of the output)
+			// Step 1: Sign the result using certificate digest (matching the executor)
 			outputDigest := util.GetKeccak256Digest(outputResult)
-			resultSig, err := signer.SignMessageForSolidity(outputDigest[:])
+
+			// Calculate the certificate digest exactly as the executor does
+			certificateDigestBytes, err := l1CC.CalculateECDSACertificateDigestBytes(
+				ctx,
+				operatorPeersWeight.RootReferenceTimestamp,
+				outputDigest,
+			)
+			if err != nil {
+				hasErrors = true
+				l.Sugar().Errorf("Failed to calculate certificate digest: %v", err)
+				cancel()
+				return
+			}
+
+			l.Sugar().Debugw("Signing result",
+				"taskId", taskResult.TaskId,
+				"operatorAddress", taskResult.OperatorAddress,
+				"outputLength", len(outputResult),
+				"outputDigest", fmt.Sprintf("%x", outputDigest),
+				"certificateDigest", fmt.Sprintf("%x", certificateDigestBytes),
+				"referenceTimestamp", operatorPeersWeight.RootReferenceTimestamp,
+			)
+
+			resultSig, err := signer.SignMessageForSolidity(certificateDigestBytes)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to sign result: %v", err)
@@ -441,6 +535,12 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				return
 			}
 			taskResult.ResultSignature = resultSig
+
+			l.Sugar().Debugw("Result signature created",
+				"taskId", taskResult.TaskId,
+				"resultSigLength", len(resultSig),
+				"resultSigHex", fmt.Sprintf("%x", resultSig),
+			)
 
 			// Step 2: Sign the auth data (unique per operator)
 			resultSigDigest := util.GetKeccak256Digest(taskResult.ResultSignature)
@@ -452,8 +552,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				ResultSigDigest: resultSigDigest,
 			}
 			authBytes := authData.ToSigningBytes()
-			authDigest := util.GetKeccak256Digest(authBytes)
-			authSig, err := signer.SignMessageForSolidity(authDigest[:])
+			authSig, err := signer.SignMessage(authBytes)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to sign auth data: %v", err)
@@ -461,6 +560,12 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				return
 			}
 			taskResult.AuthSignature = authSig
+
+			l.Sugar().Debugw("Auth signature created",
+				"taskId", taskResult.TaskId,
+				"authSigLength", len(authSig),
+				"authSigHex", fmt.Sprintf("%x", authSig),
+			)
 
 			fmt.Printf("TaskResult %+v\n", taskResult)
 			err = resultAgg.ProcessNewSignature(ctx, taskResult)
@@ -482,7 +587,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			time.Sleep(4 * time.Second)
 
 			fmt.Printf("Submitting task result to AVS\n\n\n")
-			receipt, err := avsCc.SubmitECDSATaskResult(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+			receipt, err := avsCc.SubmitECDSATaskResult(ctx, cert.ToSubmitParams(), operatorPeersWeight.RootReferenceTimestamp)
 			if err != nil {
 				hasErrors = true
 				l.Sugar().Errorf("Failed to submit task result: %v", err)
@@ -527,7 +632,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 }
 
 func Test_Mailbox(t *testing.T) {
-	t.Skip("Skipping temporarily until BN254CertificateVerifier audit fixes are in.")
 	t.Run("BN254 & ECDSA - L1", func(t *testing.T) {
 		testL1MailboxForCurve(t, config.CurveTypeECDSA, NetworkTarget_L1)
 	})

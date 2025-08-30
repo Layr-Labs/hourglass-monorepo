@@ -99,6 +99,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
+		// BN254 test only tests aggregator (operator set 0 is for BN254 aggregators)
 		testCases := []struct {
 			privateKey   string
 			address      string
@@ -108,13 +109,8 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			{
 				privateKey:   chainConfig.OperatorAccountPrivateKey,
 				address:      chainConfig.OperatorAccountAddress,
-				operatorSets: []uint32{0},
+				operatorSets: []uint32{0}, // Operator set 0 is for BN254 aggregators
 				operatorType: "aggregator",
-			}, {
-				privateKey:   chainConfig.ExecOperatorAccountPk,
-				address:      chainConfig.ExecOperatorAccountAddress,
-				operatorSets: []uint32{1},
-				operatorType: "executor",
 			},
 		}
 
@@ -172,28 +168,24 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			// create a peeringDataFetcher and get the data
 			pdf := NewPeeringDataFetcher(operatorCc, l)
 
+			// Check AVS config first
+			avsConfig, err := operatorCc.GetAVSConfig(chainConfig.AVSAccountAddress, 0)
+			if err != nil {
+				t.Fatalf("Failed to get AVS config: %v", err)
+			}
+			t.Logf("AVS Config - AggregatorOperatorSetId: %d, ExecutorOperatorSetIds: %v",
+				avsConfig.AggregatorOperatorSetId, avsConfig.ExecutorOperatorSetIds)
+
+			// BN254 test only has aggregator operators
 			var peers []*peering.OperatorPeerInfo
-			if tc.operatorType == "executor" {
-				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress, 0)
-				if err != nil {
-					t.Fatalf("Failed to list executor operators: %v", err)
-				}
-				assert.Equal(t, 1, len(peers))
-				for _, peer := range peers {
-					t.Logf("Executor Peer: %+v\n", peer)
-				}
-				assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
+			peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress, 0)
+			if err != nil {
+				t.Fatalf("Failed to list aggregator operators: %v", err)
+			}
+			assert.Equal(t, 1, len(peers))
 
-			} else if tc.operatorType == "aggregator" {
-				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress, 0)
-				if err != nil {
-					t.Fatalf("Failed to list aggregator operators: %v", err)
-				}
-				assert.Equal(t, 1, len(peers))
-
-				for _, peer := range peers {
-					t.Logf("Aggregator Peer: %+v\n", peer)
-				}
+			for _, peer := range peers {
+				t.Logf("Aggregator Peer: %+v\n", peer)
 			}
 
 			testMessage := []byte("test message")
@@ -247,19 +239,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			BlockType: ethereum.BlockType_Latest,
 		}, l)
 
-		// aggregator operator
-		aggOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.OperatorAccountPrivateKey)
-		if err != nil {
-			l.Sugar().Fatalf("failed to convert private key: %v", err)
-		}
-		aggOperatorAddress := cryptoUtils.DeriveAddress(aggOperatorPrivateKey.PublicKey)
-		assert.True(t, strings.EqualFold(aggOperatorAddress.String(), chainConfig.OperatorAccountAddress))
-
-		aggOperatorSigningKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(chainConfig.OperatorAccountPrivateKey)
-		if err != nil {
-			l.Sugar().Fatalf("failed to convert private key: %v", err)
-		}
-
 		// executor operator
 		execOperatorPrivateKey, err := cryptoUtils.StringToECDSAPrivateKey(chainConfig.ExecOperatorAccountPk)
 		if err != nil {
@@ -304,6 +283,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
+		// ECDSA test only tests executor (operator set 1 is for ECDSA executors)
 		testCases := []struct {
 			txPrivateKey      string
 			operatorAddress   string
@@ -312,15 +292,9 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			privateSigningKey *cryptoLibsEcdsa.PrivateKey
 		}{
 			{
-				txPrivateKey:      chainConfig.OperatorAccountPrivateKey,
-				operatorAddress:   chainConfig.OperatorAccountAddress,
-				operatorSets:      []uint32{0},
-				operatorType:      "aggregator",
-				privateSigningKey: aggOperatorSigningKey,
-			}, {
 				txPrivateKey:      chainConfig.ExecOperatorAccountPk,
 				operatorAddress:   chainConfig.ExecOperatorAccountAddress,
-				operatorSets:      []uint32{1},
+				operatorSets:      []uint32{1}, // Operator set 1 is for ECDSA executors
 				operatorType:      "executor",
 				privateSigningKey: execOperatorSigningKey,
 			},
@@ -378,32 +352,26 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			// create a peeringDataFetcher and get the data
 			pdf := NewPeeringDataFetcher(operatorCc, l)
 
-			var peers []*peering.OperatorPeerInfo
-			if tc.operatorType == "executor" {
-				peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress, 0)
-				if err != nil {
-					t.Fatalf("Failed to list executor operators: %v", err)
-				}
-				assert.Equal(t, 1, len(peers))
-				for _, peer := range peers {
-					t.Logf("Executor Peer: %+v\n", peer)
-				}
-				assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
-
-			} else if tc.operatorType == "aggregator" {
-				peers, err = pdf.ListAggregatorOperators(ctx, chainConfig.AVSAccountAddress, 0)
-				if err != nil {
-					t.Fatalf("Failed to list aggregator operators: %v", err)
-				}
-				assert.Equal(t, 1, len(peers))
-
-				for _, peer := range peers {
-					t.Logf("Aggregator Peer: %+v\n", peer)
-					for _, os := range peer.OperatorSets {
-						t.Logf("\tOperator Set: %+v\n", os)
-					}
-				}
+			// Check AVS config first
+			avsConfig, err := operatorCc.GetAVSConfig(chainConfig.AVSAccountAddress, 0)
+			if err != nil {
+				t.Fatalf("Failed to get AVS config: %v", err)
 			}
+			t.Logf("AVS Config - AggregatorOperatorSetId: %d, ExecutorOperatorSetIds: %v",
+				avsConfig.AggregatorOperatorSetId, avsConfig.ExecutorOperatorSetIds)
+
+			// ECDSA test only has executor operators
+			var peers []*peering.OperatorPeerInfo
+			peers, err = pdf.ListExecutorOperators(ctx, chainConfig.AVSAccountAddress, 0)
+			if err != nil {
+				t.Fatalf("Failed to list executor operators: %v", err)
+			}
+			t.Logf("Listed %d executor operators", len(peers))
+			assert.Equal(t, 1, len(peers))
+			for _, peer := range peers {
+				t.Logf("Executor Peer: %+v\n", peer)
+			}
+			assert.Equal(t, peers[0].OperatorSets[0].NetworkAddress, socket)
 
 			testMessage := []byte("test message")
 

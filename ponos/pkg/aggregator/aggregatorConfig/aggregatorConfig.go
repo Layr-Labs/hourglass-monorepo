@@ -107,6 +107,8 @@ func (sc *StorageConfig) Validate() field.ErrorList {
 type AggregatorConfig struct {
 	Debug bool `json:"debug" yaml:"debug"`
 
+	TLSEnabled bool `json:"tlsEnabled" yaml:"tlsEnabled"`
+
 	ManagementServerGrpcPort int `json:"managementServerGrpcPort" yaml:"managementServerGrpcPort"`
 
 	// Operator represents who is actually running the aggregator for the AVS
