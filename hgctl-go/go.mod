@@ -7,7 +7,7 @@ replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../ponos
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Layr-Labs/crypto-libs v0.0.4
-	github.com/Layr-Labs/eigenlayer-contracts v1.7.0-rc.3.0.20250815165827-cd5612ec76e3
+	github.com/Layr-Labs/eigenlayer-contracts v1.8.0-testnet-final
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
@@ -46,7 +46,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
