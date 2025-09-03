@@ -269,7 +269,7 @@ func KillAnvil(cmd *exec.Cmd) error {
 func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 	transportBlsPrivateKey := os.Getenv("HOURGLASS_TRANSPORT_BLS_KEY")
 	if transportBlsPrivateKey == "" {
-		transportBlsPrivateKey = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
+		panic("HOURGLASS_TRANSPORT_BLS_KEY environment variable is not set")
 	}
 	transportEcdsaPrivateKey := transportBlsPrivateKey
 	chainIdsToIgnore := []*big.Int{

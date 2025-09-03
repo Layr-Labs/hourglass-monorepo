@@ -99,7 +99,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
-		// BN254 test only tests aggregator (operator set 0 is for BN254 aggregators)
 		testCases := []struct {
 			privateKey   string
 			address      string
@@ -109,7 +108,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			{
 				privateKey:   chainConfig.OperatorAccountPrivateKey,
 				address:      chainConfig.OperatorAccountAddress,
-				operatorSets: []uint32{0}, // Operator set 0 is for BN254 aggregators
+				operatorSets: []uint32{0},
 				operatorType: "aggregator",
 			},
 		}
@@ -283,7 +282,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
-		// ECDSA test only tests executor (operator set 1 is for ECDSA executors)
 		testCases := []struct {
 			txPrivateKey      string
 			operatorAddress   string
@@ -294,7 +292,7 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			{
 				txPrivateKey:      chainConfig.ExecOperatorAccountPk,
 				operatorAddress:   chainConfig.ExecOperatorAccountAddress,
-				operatorSets:      []uint32{1}, // Operator set 1 is for ECDSA executors
+				operatorSets:      []uint32{1},
 				operatorType:      "executor",
 				privateSigningKey: execOperatorSigningKey,
 			},
