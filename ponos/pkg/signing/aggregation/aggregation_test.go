@@ -116,12 +116,13 @@ func createSignedBN254TaskResult(
 	// Step 1: Sign the result (same for all operators)
 	// Calculate the certificate digest that includes the reference timestamp
 	outputDigest := util.GetKeccak256Digest(output)
-	certDigestBytes, err := l1ContractCaller.CalculateBN254CertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
+	certDigest, err := l1ContractCaller.CalculateBN254CertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
 	if err != nil {
 		return nil, err
 	}
-	certDigestHash := util.GetKeccak256Digest(certDigestBytes)
-	resultSig, err := privateKey.SignSolidityCompatible(certDigestHash)
+	var certDigestCopy [32]byte
+	copy(certDigestCopy[:], certDigest[:])
+	resultSig, err := privateKey.SignSolidityCompatible(certDigestCopy)
 	if err != nil {
 		return nil, err
 	}
@@ -139,9 +140,9 @@ func createSignedBN254TaskResult(
 	authBytes := authData.ToSigningBytes()
 	authDigest := util.GetKeccak256Digest(authBytes)
 
-	resultHashSlice := make([]byte, 32)
-	copy(resultHashSlice, authDigest[:])
-	authSig, err := privateKey.Sign(resultHashSlice)
+	authDigestCopy := make([]byte, 32)
+	copy(authDigestCopy, authDigest[:])
+	authSig, err := privateKey.Sign(authDigestCopy)
 
 	if err != nil {
 		return nil, err
@@ -350,15 +351,16 @@ func Test_Aggregation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Calculate the certificate digest that was actually signed
-		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+		certDigest, err := l1CC.CalculateBN254CertificateDigestBytes(
 			context.Background(),
 			testReferenceTimestamp,
 			cert.TaskResponseDigest,
 		)
 		require.NoError(t, err)
 
-		certDigest := util.GetKeccak256Digest(certDigestBytes)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigest)
+		var certDigestCopy [32]byte
+		copy(certDigestCopy[:], certDigest[:])
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestCopy)
 		require.NoError(t, err)
 		assert.True(t, verified, "Aggregated signature verification failed")
 
@@ -659,15 +661,16 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
 
-		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+		certDigest, err := l1CC.CalculateBN254CertificateDigestBytes(
 			context.Background(),
 			testReferenceTimestamp,
 			cert.TaskResponseDigest,
 		)
 		require.NoError(t, err)
 
-		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
+		var certDigestCopy [32]byte
+		copy(certDigestCopy[:], certDigest[:])
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestCopy)
 		require.NoError(t, err)
 		assert.True(t, verified, "Single operator signature verification failed")
 
@@ -1081,15 +1084,16 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
 
-		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+		certDigest, err := l1CC.CalculateBN254CertificateDigestBytes(
 			context.Background(),
 			testReferenceTimestamp,
-			legitimateOutputDigest,
+			cert.TaskResponseDigest,
 		)
 		require.NoError(t, err)
 
-		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
+		var certDigestCopy [32]byte
+		copy(certDigestCopy[:], certDigest[:])
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestCopy)
 		require.NoError(t, err)
 		assert.True(t, verified, "Certificate signature should be valid")
 	})
@@ -1534,17 +1538,16 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		signersPubKey, err := bn254.NewPublicKeyFromBytes(cert.SignersPublicKey.Marshal())
 		require.NoError(t, err)
 
-		// Calculate the certificate digest that was actually signed
-		certDigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+		certDigest, err := l1CC.CalculateBN254CertificateDigestBytes(
 			context.Background(),
 			testReferenceTimestamp,
 			cert.TaskResponseDigest,
 		)
 		require.NoError(t, err)
 
-		certDigestHash := util.GetKeccak256Digest(certDigestBytes)
-		// The aggregated signature should verify against the certificate digest
-		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestHash)
+		var certDigestCopy [32]byte
+		copy(certDigestCopy[:], certDigest[:])
+		verified, err := cert.SignersSignature.VerifySolidityCompatible(signersPubKey, certDigestCopy)
 		require.NoError(t, err)
 		assert.True(t, verified, "Aggregated signature should be valid for certificate digest")
 
