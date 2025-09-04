@@ -6,7 +6,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -93,7 +92,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
-	logsChan := make(chan *chainPoller.LogWithBlock)
+	taskQueue := make(chan *types.Task)
 
 	var pollerConfig *EVMChainPoller.EVMChainPollerConfig
 	var pollerEthClient *ethereum.Client
@@ -102,6 +101,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			ChainId:              config.ChainId_EthereumAnvil,
 			PollingInterval:      time.Duration(10) * time.Second,
 			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
+			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l1EthereumClient
 	} else {
@@ -109,13 +109,14 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			ChainId:              config.ChainId_BaseSepoliaAnvil,
 			PollingInterval:      time.Duration(10) * time.Second,
 			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseSepoliaAnvil),
+			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l2EthereumClient
 	}
 
 	// Create an in-memory store for the poller
 	aggStore := aggregatorMemory.NewInMemoryAggregatorStore()
-	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, logsChan, tlp, pollerConfig, aggStore, l)
+	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, taskQueue, tlp, pollerConfig, imContractStore, aggStore, l)
 
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {
@@ -408,16 +409,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	hasErrors := false
 	go func() {
-		for logWithBlock := range logsChan {
-			fmt.Printf("Received logWithBlock: %+v\n", logWithBlock.Log)
-			if logWithBlock.Log.EventName != "TaskCreated" {
-				continue
-			}
-			t.Logf("Found created task log: %+v", logWithBlock.Log)
-			assert.Equal(t, "TaskCreated", logWithBlock.Log.EventName)
-
-			task, err := types.NewTaskFromLog(logWithBlock.Log, logWithBlock.Block, eigenlayerContractAddrs.TaskMailbox)
-			assert.Nil(t, err)
+		for task := range taskQueue {
+			fmt.Printf("Received task: %+v\n", task)
+			t.Logf("Processing task: %+v", task)
 
 			assert.Equal(t, common.HexToAddress(chainConfig.AVSAccountAddress), common.HexToAddress(task.AVSAddress))
 			assert.True(t, len(task.TaskId) > 0)
@@ -580,7 +574,12 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				cancel()
 				return
 			}
-			signedAt := time.Unix(int64(logWithBlock.Block.Timestamp.Value()), 0).Add(10 * time.Second)
+			// Use task's deadline or current time plus offset for signing time
+			signedAt := time.Now().Add(10 * time.Second)
+			if task.DeadlineUnixSeconds != nil {
+				// Use a time before the deadline
+				signedAt = task.DeadlineUnixSeconds.Add(-10 * time.Second)
+			}
 			cert.SignedAt = &signedAt
 			fmt.Printf("cert: %+v\n", cert)
 

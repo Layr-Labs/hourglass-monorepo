@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -136,7 +135,6 @@ func NewAvsExecutionManager(
 	return manager, nil
 }
 
-// Start starts the AvsExecutionManager
 func (em *AvsExecutionManager) Start(ctx context.Context) error {
 
 	em.logger.Sugar().Infow("Starting AvsExecutionManager",
@@ -249,7 +247,7 @@ func (em *AvsExecutionManager) startPollers(ctx context.Context) error {
 	em.pollersMutex.RLock()
 	defer em.pollersMutex.RUnlock()
 
-	if em.chainPollers == nil || len(em.chainPollers) == 0 {
+	if len(em.chainPollers) == 0 {
 		em.logger.Sugar().Infow("No chain pollers configured for AVS",
 			zap.String("avsAddress", em.config.AvsAddress))
 		return nil
@@ -822,12 +820,4 @@ func hasExpectedContractCallersForChains(supportedChains []config.ChainId, contr
 		}
 	}
 	return nil
-}
-
-func (em *AvsExecutionManager) getListOfContractAddresses() []string {
-	addrs := make([]string, 0, len(em.config.MailboxContractAddresses))
-	for _, addr := range em.config.MailboxContractAddresses {
-		addrs = append(addrs, strings.ToLower(addr))
-	}
-	return addrs
 }
