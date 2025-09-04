@@ -46,6 +46,7 @@ func NewEVMChainPoller(
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) *EVMChainPoller {
+
 	if store == nil {
 		panic("store is required")
 	}
@@ -67,6 +68,7 @@ func NewEVMChainPoller(
 }
 
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
+
 	sugar := ecp.logger.Sugar()
 	sugar.Infow("Starting Ethereum L1Chain Listener",
 		zap.Any("chainId", ecp.config.ChainId),
@@ -103,6 +105,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 }
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
+
 	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener poll loop")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -138,16 +141,19 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 }
 
 func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {
+
 	logAddr := strings.ToLower(log.Address.Value())
 	for _, ic := range ecp.config.InterestingContracts {
 		if strings.EqualFold(ic, logAddr) {
 			return true
 		}
 	}
+
 	return false
 }
 
 func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
+
 	latestBlockNum, err := ecp.ethClient.GetLatestBlock(ctx)
 	if err != nil {
 		return nil
@@ -218,6 +224,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 }
 
 func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
+
 	ecp.logger.Sugar().Infow("Fetching Ethereum block with logs",
 		zap.Uint64("blockNumber", blockNum),
 	)
@@ -299,6 +306,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 }
 
 func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
+
 	contracts := make([]string, 0)
 	for _, contract := range ecp.config.InterestingContracts {
 		if contract != "" {
@@ -309,6 +317,7 @@ func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
 }
 
 func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber uint64) ([]*ethereum.EthereumEventLog, error) {
+
 	var wg sync.WaitGroup
 
 	// TODO: make this configurable in the future
@@ -386,6 +395,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 
 // handleLog processes logs from the chain poller
 func (ecp *EVMChainPoller) handleLog(ctx context.Context, lwb *chainPoller.LogWithBlock) error {
+
 	ecp.logger.Sugar().Infow("Received log from chain poller",
 		zap.Any("log", lwb),
 	)
@@ -419,6 +429,7 @@ func (ecp *EVMChainPoller) handleLog(ctx context.Context, lwb *chainPoller.LogWi
 }
 
 func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.LogWithBlock) error {
+
 	lg := lwb.Log
 
 	ecp.logger.Sugar().Infow("Received TaskCreated event",
