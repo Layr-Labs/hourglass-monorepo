@@ -13,7 +13,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -289,40 +288,6 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 	}
 
 	return taskConfig, nil
-}
-
-// HandleLog processes logs from the chain poller
-func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
-	em.logger.Sugar().Infow("Received log from chain poller",
-		zap.Any("log", lwb),
-	)
-	lg := lwb.Log
-
-	mailboxContract, _ := em.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
-
-	// Handle new task created
-	if lg.EventName == "TaskCreated" {
-		if mailboxContract == nil {
-			em.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
-				zap.String("eventName", lg.EventName),
-				zap.String("contractAddress", lg.Address),
-				zap.Uint("chainId", uint(lwb.Block.ChainId)),
-				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
-				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
-			)
-			return nil
-		}
-		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
-			return em.processTask(lwb)
-		}
-	}
-
-	em.logger.Sugar().Infow("Ignoring log",
-		zap.String("eventName", lg.EventName),
-		zap.String("contractAddress", lg.Address),
-		zap.Strings("addresses", em.getListOfContractAddresses()),
-	)
-	return nil
 }
 
 func (em *AvsExecutionManager) getAggregatorTaskConfig(_ context.Context, blockNumber uint64) (*AvsConfig, error) {
@@ -732,47 +697,6 @@ func (em *AvsExecutionManager) processECDSATask(
 
 		return nil
 	}
-}
-
-func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error {
-	lg := lwb.Log
-	em.logger.Sugar().Infow("Received TaskCreated event",
-		zap.String("eventName", lg.EventName),
-		zap.String("contractAddress", lg.Address),
-	)
-	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
-	if err != nil {
-		return fmt.Errorf("failed to convert task: %w", err)
-	}
-	em.logger.Sugar().Infow("Converted task",
-		zap.Any("task", task),
-	)
-
-	if task.AVSAddress != strings.ToLower(em.config.AvsAddress) {
-		em.logger.Sugar().Infow("Ignoring task for different AVS address",
-			zap.String("taskAvsAddress", task.AVSAddress),
-			zap.String("currentAvsAddress", em.config.AvsAddress),
-		)
-		return nil
-	}
-
-	// Save task to storage
-	ctx := context.Background()
-	if err := em.store.SavePendingTask(ctx, task); err != nil {
-		em.logger.Sugar().Errorw("Failed to save task to storage",
-			"error", err,
-			"taskId", task.TaskId,
-		)
-		// Continue processing even if storage fails
-	} else {
-		em.logger.Sugar().Infow("Saved task to storage",
-			"taskId", task.TaskId,
-		)
-	}
-
-	em.taskQueue <- task
-	em.logger.Sugar().Infow("Added task to queue")
-	return nil
 }
 
 func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId) (contractCaller.IContractCaller, error) {

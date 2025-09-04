@@ -13,7 +13,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
@@ -192,10 +191,6 @@ func (a *Aggregator) Initialize() error {
 		zap.Int("numChains", len(a.config.Chains)),
 		zap.Bool("authEnabled", a.authVerifier != nil),
 	)
-
-	if err := a.initializePollers(); err != nil {
-		return fmt.Errorf("failed to initialize pollers: %w", err)
-	}
 
 	callers, err := a.initializeContractCallers()
 	if err != nil {
@@ -408,37 +403,37 @@ func (a *Aggregator) getValidChainsForAvs(chainIds []uint) ([]config.ChainId, er
 	}), nil
 }
 
-func (a *Aggregator) initializePollers() error {
-	a.logger.Sugar().Infow("Initializing chain pollers...",
-		zap.Any("chains", a.config.Chains),
-	)
-
-	for _, chain := range a.config.Chains {
-		if _, ok := a.chainPollers[chain.ChainId]; ok {
-			a.logger.Sugar().Warnw("L1Chain poller already exists for chain", "chainId", chain.ChainId)
-			continue
-		}
-		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-			BaseUrl:   chain.RpcURL,
-			BlockType: ethereum.BlockType_Latest,
-		}, a.logger)
-
-		pollInterval := chain.PollIntervalSeconds
-		if pollInterval <= 0 {
-			a.logger.Sugar().Warnw("Invalid poll interval for chain", "chainId", chain.ChainId, "pollInterval", pollInterval)
-			pollInterval = 10 // default to 10 seconds if not set or invalid
-		}
-
-		pCfg := &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:              chain.ChainId,
-			PollingInterval:      time.Duration(pollInterval) * time.Second,
-			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
-		}
-
-		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.store, a.logger)
-	}
-	return nil
-}
+//func (a *Aggregator) initializePollers() error {
+//	a.logger.Sugar().Infow("Initializing chain pollers...",
+//		zap.Any("chains", a.config.Chains),
+//	)
+//
+//	for _, chain := range a.config.Chains {
+//		if _, ok := a.chainPollers[chain.ChainId]; ok {
+//			a.logger.Sugar().Warnw("L1Chain poller already exists for chain", "chainId", chain.ChainId)
+//			continue
+//		}
+//		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+//			BaseUrl:   chain.RpcURL,
+//			BlockType: ethereum.BlockType_Latest,
+//		}, a.logger)
+//
+//		pollInterval := chain.PollIntervalSeconds
+//		if pollInterval <= 0 {
+//			a.logger.Sugar().Warnw("Invalid poll interval for chain", "chainId", chain.ChainId, "pollInterval", pollInterval)
+//			pollInterval = 10 // default to 10 seconds if not set or invalid
+//		}
+//
+//		pCfg := &EVMChainPoller.EVMChainPollerConfig{
+//			ChainId:              chain.ChainId,
+//			PollingInterval:      time.Duration(pollInterval) * time.Second,
+//			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
+//		}
+//
+//		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.store, a.logger)
+//	}
+//	return nil
+//}
 
 func InitializeContractCaller(
 	chain *aggregatorConfig.Chain,
@@ -484,6 +479,7 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 
 // Start starts the aggregator and its components
 func (a *Aggregator) Start(ctx context.Context) error {
+	// TODO: fix this cancellation leak
 	ctx, cancel := context.WithCancel(ctx)
 
 	// Store the root context for AVS lifecycle management
@@ -503,14 +499,6 @@ func (a *Aggregator) Start(ctx context.Context) error {
 			zap.String("address", avs.Address),
 		)
 	}
-
-	// consume the events channel
-	go func() {
-		if err := a.processEventsChan(ctx); err != nil {
-			a.logger.Sugar().Errorw("Aggregator failed to process events channel", "error", err)
-			cancel()
-		}
-	}()
 
 	// start polling for blocks
 	for _, poller := range a.chainPollers {
@@ -533,22 +521,6 @@ func (a *Aggregator) Start(ctx context.Context) error {
 	<-ctx.Done()
 	a.logger.Sugar().Infow("Aggregator context done, stopping")
 	return nil
-}
-
-func (a *Aggregator) processEventsChan(ctx context.Context) error {
-	a.logger.Sugar().Infow("Starting to process events channel...")
-	for {
-		select {
-		case <-ctx.Done():
-			a.logger.Sugar().Info("Aggregator context done, stopping event processing")
-			return nil
-		case logWithBlock := <-a.chainEventsChan:
-			if err := a.processLog(logWithBlock); err != nil {
-				a.logger.Sugar().Errorw("Error processing log", "error", err)
-				return err
-			}
-		}
-	}
 }
 
 func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {

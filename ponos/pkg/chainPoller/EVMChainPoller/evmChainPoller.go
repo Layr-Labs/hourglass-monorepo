@@ -2,6 +2,7 @@ package EVMChainPoller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -26,7 +28,7 @@ type EVMChainPollerConfig struct {
 type EVMChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
-	chainEventsChan   chan *chainPoller.LogWithBlock
+	taskQueue         chan *types.Task
 	logParser         *transactionLogParser.TransactionLogParser
 	config            *EVMChainPollerConfig
 	logger            *zap.Logger
@@ -35,7 +37,7 @@ type EVMChainPoller struct {
 
 func NewEVMChainPoller(
 	ethClient *ethereum.Client,
-	chainEventsChan chan *chainPoller.LogWithBlock,
+	taskQueue chan *types.Task,
 	logParser *transactionLogParser.TransactionLogParser,
 	config *EVMChainPollerConfig,
 	store storage.AggregatorStore,
@@ -51,12 +53,12 @@ func NewEVMChainPoller(
 		zap.Uint("chainId", uint(config.ChainId)),
 	)
 	return &EVMChainPoller{
-		ethClient:       ethClient,
-		logger:          pollerLogger,
-		chainEventsChan: chainEventsChan,
-		logParser:       logParser,
-		config:          config,
-		store:           store,
+		ethClient: ethClient,
+		logger:    pollerLogger,
+		taskQueue: taskQueue,
+		logParser: logParser,
+		config:    config,
+		store:     store,
 	}
 }
 
@@ -69,7 +71,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 
 	// Load last processed block from storage
 	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
-	if err != nil && err != storage.ErrNotFound {
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		sugar.Warnw("Failed to get last processed block from storage",
 			"error", err,
 			"chainId", ecp.config.ChainId,
@@ -246,21 +248,9 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 			RawLog: log,
 			Log:    decodedLog,
 		}
-		select {
-		case ecp.chainEventsChan <- lwb:
-			ecp.logger.Sugar().Infow("Enqueued log for processing",
-				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
-			)
-		case <-time.After(100 * time.Millisecond):
-			ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
-				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
-			)
+		err = ecp.handleLog(lwb)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 	ecp.logger.Sugar().Debugw("Processed logs",
@@ -369,4 +359,98 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	)
 
 	return allLogs, nil
+}
+
+// handleLog processes logs from the chain poller
+func (ecp *EVMChainPoller) handleLog(lwb *chainPoller.LogWithBlock) error {
+	ecp.logger.Sugar().Infow("Received log from chain poller",
+		zap.Any("log", lwb),
+	)
+	lg := lwb.Log
+
+	mailboxContract, _ := ecp.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
+
+	// Handle new task created
+	if lg.EventName == "TaskCreated" {
+		if mailboxContract == nil {
+			ecp.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
+				zap.String("eventName", lg.EventName),
+				zap.String("contractAddress", lg.Address),
+				zap.Uint("chainId", uint(lwb.Block.ChainId)),
+				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+			)
+			return nil
+		}
+		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
+			return ecp.processTask(lwb)
+		}
+	}
+
+	ecp.logger.Sugar().Infow("Ignoring log",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+		zap.Strings("addresses", ecp.getListOfContractAddresses()),
+	)
+	return nil
+}
+
+func (ecp *EVMChainPoller) processTask(lwb *chainPoller.LogWithBlock) error {
+	lg := lwb.Log
+
+	ecp.logger.Sugar().Infow("Received TaskCreated event",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+	)
+	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
+	if err != nil {
+		return fmt.Errorf("failed to convert task: %w", err)
+	}
+	ecp.logger.Sugar().Infow("Converted task",
+		zap.Any("task", task),
+	)
+
+	if task.AVSAddress != strings.ToLower(ecp.config.AvsAddress) {
+		ecp.logger.Sugar().Infow("Ignoring task for different AVS address",
+			zap.String("taskAvsAddress", task.AVSAddress),
+			zap.String("currentAvsAddress", ecp.config.AvsAddress),
+		)
+		return nil
+	}
+
+	// Save task to storage
+	ctx := context.Background()
+	if err := ecp.store.SavePendingTask(ctx, task); err != nil {
+		ecp.logger.Sugar().Errorw("Failed to save task to storage",
+			"error", err,
+			"taskId", task.TaskId,
+		)
+		// Continue processing even if storage fails
+	} else {
+		ecp.logger.Sugar().Infow("Saved task to storage",
+			"taskId", task.TaskId,
+		)
+	}
+
+	select {
+	case ecp.taskQueue <- task:
+
+		ecp.logger.Sugar().Infow("Enqueued log for processing",
+			zap.Uint64("blockNumber", lwb.Number.Value()),
+			zap.String("transactionHash", log.TransactionHash.Value()),
+			zap.String("logAddress", log.Address.Value()),
+			zap.Uint64("logIndex", log.LogIndex.Value()),
+		)
+	case <-time.After(100 * time.Millisecond):
+
+		ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
+			zap.Uint64("blockNumber", block.Number.Value()),
+			zap.String("transactionHash", log.TransactionHash.Value()),
+			zap.String("logAddress", log.Address.Value()),
+			zap.Uint64("logIndex", log.LogIndex.Value()),
+		)
+
+		return fmt.Errorf("failed to enqueue log (channel full or closed)")
+	}
+	return nil
 }
