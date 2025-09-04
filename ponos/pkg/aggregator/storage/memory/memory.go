@@ -16,7 +16,7 @@ import (
 type InMemoryAggregatorStore struct {
 	mu                  sync.RWMutex
 	closed              bool
-	lastProcessedBlocks map[config.ChainId]uint64
+	lastProcessedBlocks map[string]uint64
 	tasks               map[string]*storage.TaskRecord
 	operatorSetConfigs  map[string]*storage.OperatorSetTaskConfig
 	avsConfigs          map[string]*storage.AvsConfig
@@ -25,15 +25,20 @@ type InMemoryAggregatorStore struct {
 // NewInMemoryAggregatorStore creates a new in-memory aggregator store
 func NewInMemoryAggregatorStore() *InMemoryAggregatorStore {
 	return &InMemoryAggregatorStore{
-		lastProcessedBlocks: make(map[config.ChainId]uint64),
+		lastProcessedBlocks: make(map[string]uint64),
 		tasks:               make(map[string]*storage.TaskRecord),
 		operatorSetConfigs:  make(map[string]*storage.OperatorSetTaskConfig),
 		avsConfigs:          make(map[string]*storage.AvsConfig),
 	}
 }
 
-// GetLastProcessedBlock returns the last processed block for a chain
-func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, chainId config.ChainId) (uint64, error) {
+// makeBlockKey creates a composite key for last processed block storage
+func makeBlockKey(avsAddress string, chainId config.ChainId) string {
+	return fmt.Sprintf("%s:%d", avsAddress, chainId)
+}
+
+// GetLastProcessedBlock returns the last processed block for a chain for a specific AVS
+func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -41,7 +46,8 @@ func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, cha
 		return 0, storage.ErrStoreClosed
 	}
 
-	blockNum, exists := s.lastProcessedBlocks[chainId]
+	key := makeBlockKey(avsAddress, chainId)
+	blockNum, exists := s.lastProcessedBlocks[key]
 	if !exists {
 		return 0, storage.ErrNotFound
 	}
@@ -49,8 +55,8 @@ func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, cha
 	return blockNum, nil
 }
 
-// SetLastProcessedBlock sets the last processed block for a chain
-func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, chainId config.ChainId, blockNum uint64) error {
+// SetLastProcessedBlock sets the last processed block for a chain for a specific AVS
+func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -58,7 +64,8 @@ func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, cha
 		return storage.ErrStoreClosed
 	}
 
-	s.lastProcessedBlocks[chainId] = blockNum
+	key := makeBlockKey(avsAddress, chainId)
+	s.lastProcessedBlocks[key] = blockNum
 	return nil
 }
 
