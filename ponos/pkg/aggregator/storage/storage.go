@@ -10,9 +10,9 @@ import (
 
 // AggregatorStore defines the interface for aggregator state persistence
 type AggregatorStore interface {
-	// Chain polling state management
-	GetLastProcessedBlock(ctx context.Context, chainId config.ChainId) (uint64, error)
-	SetLastProcessedBlock(ctx context.Context, chainId config.ChainId, blockNum uint64) error
+	// Chain polling state management - namespaced by AVS address
+	GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error)
+	SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error
 
 	// Task management
 	SavePendingTask(ctx context.Context, task *types.Task) error

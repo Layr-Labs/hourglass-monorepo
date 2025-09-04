@@ -76,7 +76,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	)
 
 	// Load last processed block from storage
-	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
+	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
 	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		sugar.Warnw("Failed to get last processed block from storage",
 			"error", err,
@@ -289,7 +289,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 	ecp.lastObservedBlock = block
 
 	// Save last processed block to storage
-	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.ChainId, block.Number.Value()); err != nil {
+	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.AvsAddress, ecp.config.ChainId, block.Number.Value()); err != nil {
 		ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
 			"error", err,
 			"chainId", ecp.config.ChainId,
