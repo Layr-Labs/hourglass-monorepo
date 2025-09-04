@@ -99,6 +99,41 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
+		// First, create the AVS private key signer and contract caller for operator set configuration
+		avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
+		if err != nil {
+			t.Fatalf("Failed to create AVS private key signer: %v", err)
+		}
+
+		avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
+		if err != nil {
+			t.Fatalf("failed to create contract caller: %v", err)
+		}
+
+		// Configure operator set with BN254 curve type
+		_, err = avsCc.ConfigureAVSOperatorSet(
+			ctx,
+			common.HexToAddress(chainConfig.AVSAccountAddress),
+			0, // aggregator operator set
+			config.CurveTypeBN254,
+		)
+		if err != nil {
+			t.Fatalf("Failed to configure AVS operator set: %v", err)
+		}
+
+		// Create generation reservation for BN254 operator set
+		_, err = avsCc.CreateGenerationReservation(
+			ctx,
+			common.HexToAddress(chainConfig.AVSAccountAddress),
+			0, // operator set id
+			common.HexToAddress(caller.BN254TableCalculatorAddress),
+			common.HexToAddress(chainConfig.AVSAccountAddress), // AVS is the owner
+			0, // maxStalenessPeriod - 0 means always valid
+		)
+		if err != nil {
+			t.Fatalf("Failed to create generation reservation: %v", err)
+		}
+
 		testCases := []struct {
 			privateKey   string
 			address      string
@@ -115,15 +150,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create AVS private key signer: %v", err)
-			}
-
-			avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
-			if err != nil {
-				t.Fatalf("failed to create contract caller: %v", err)
-			}
 
 			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.privateKey, ethClient, l)
 			if err != nil {
@@ -282,6 +308,41 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		}
 		t.Logf("Core contracts: %+v", coreContracts)
 
+		// First, create the AVS private key signer and contract caller for operator set configuration
+		avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
+		if err != nil {
+			t.Fatalf("Failed to create AVS private key signer: %v", err)
+		}
+
+		avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
+		if err != nil {
+			t.Fatalf("failed to create contract caller: %v", err)
+		}
+
+		// Configure operator set with ECDSA curve type for executor
+		_, err = avsCc.ConfigureAVSOperatorSet(
+			ctx,
+			common.HexToAddress(chainConfig.AVSAccountAddress),
+			1, // executor operator set
+			config.CurveTypeECDSA,
+		)
+		if err != nil {
+			t.Fatalf("Failed to configure AVS operator set: %v", err)
+		}
+
+		// Create generation reservation for ECDSA operator set
+		_, err = avsCc.CreateGenerationReservation(
+			ctx,
+			common.HexToAddress(chainConfig.AVSAccountAddress),
+			1, // operator set id
+			common.HexToAddress(caller.ECDSATableCalculatorAddress),
+			common.HexToAddress(chainConfig.AVSAccountAddress), // AVS is the owner
+			0, // maxStalenessPeriod - 0 means always valid
+		)
+		if err != nil {
+			t.Fatalf("Failed to create generation reservation: %v", err)
+		}
+
 		testCases := []struct {
 			txPrivateKey      string
 			operatorAddress   string
@@ -300,15 +361,6 @@ func Test_PeeringDataFetcher(t *testing.T) {
 
 		hasErrors := false
 		for _, tc := range testCases {
-			avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
-			if err != nil {
-				t.Fatalf("Failed to create AVS private key signer: %v", err)
-			}
-
-			avsCc, err := caller.NewContractCaller(ethClient, avsPrivateKeySigner, l)
-			if err != nil {
-				t.Fatalf("failed to create contract caller: %v", err)
-			}
 
 			operatorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(tc.txPrivateKey, ethClient, l)
 			if err != nil {
