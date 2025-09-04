@@ -12,7 +12,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/avsExecutionManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/auth"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
@@ -25,11 +25,16 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+const (
+	defaultPollIntervalSeconds = 10
 )
 
 type AggregatorConfig struct {
@@ -57,9 +62,6 @@ type Aggregator struct {
 	// This ensures AVSs registered via API calls have proper lifecycle management tied to aggregator shutdown
 	rootCtx context.Context
 
-	// chainPollers is a map of chainId to its chain poller
-	chainPollers map[config.ChainId]chainPoller.IChainPoller
-
 	// transactionLogParser is used to decode logs from the chain
 	transactionLogParser *transactionLogParser.TransactionLogParser
 
@@ -79,10 +81,6 @@ type Aggregator struct {
 	peeringDataFetcher peering.IPeeringDataFetcher
 
 	signers signer.Signers
-
-	// chainEventsChan is a channel for receiving events from the chain pollers and
-	// sequentially processing them
-	chainEventsChan chan *chainPoller.LogWithBlock
 
 	managementRpcServer *rpcServer.RpcServer
 
@@ -130,42 +128,9 @@ func NewAggregator(
 		return nil, fmt.Errorf("store is required")
 	}
 
-	// Initialize auth verifier for management APIs
-	var authVerifier *auth.Verifier
-	if cfg.Authentication != nil {
-		logger.Sugar().Infow("Authentication configuration loaded",
-			zap.Bool("enabled", cfg.Authentication.IsEnabled),
-		)
-		if cfg.Authentication.IsEnabled {
-			logger.Sugar().Infow("Authentication is enabled, initializing verifier")
-			var authSigner signer.ISigner
-			if signers.ECDSASigner != nil {
-				authSigner = signers.ECDSASigner
-				logger.Sugar().Infow("Using ECDSA signer for authentication")
-			} else if signers.BLSSigner != nil {
-				authSigner = signers.BLSSigner
-				logger.Sugar().Infow("Using BLS signer for authentication")
-			} else {
-				logger.Sugar().Warnw("Authentication enabled but no signer available")
-			}
+	authVerifier := getAuthVerifier(cfg, signers, logger)
 
-			if authSigner != nil {
-				logger.Sugar().Infow("Creating authentication verifier",
-					zap.String("address", cfg.Address),
-					zap.Duration("tokenExpiry", 5*time.Minute),
-				)
-				tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
-				authVerifier = auth.NewVerifier(tokenManager, authSigner)
-				logger.Sugar().Infow("Authentication verifier created successfully")
-			}
-		} else {
-			logger.Sugar().Infow("Authentication is disabled via configuration")
-		}
-	} else {
-		logger.Sugar().Infow("No authentication configuration provided, authentication disabled")
-	}
-
-	agg := &Aggregator{
+	return &Aggregator{
 		contractStore:        contractStore,
 		transactionLogParser: tlp,
 		config:               cfg,
@@ -174,16 +139,12 @@ func NewAggregator(
 		peeringDataFetcher:   peeringDataFetcher,
 		store:                store,
 		chainContractCallers: make(map[config.ChainId]contractCaller.IContractCaller),
-		chainPollers:         make(map[config.ChainId]chainPoller.IChainPoller),
-		chainEventsChan:      make(chan *chainPoller.LogWithBlock, 10000),
 		avsManagers:          make(map[string]*AvsExecutionManagerInfo),
 		managementRpcServer:  managementRpcServer,
 		authVerifier:         authVerifier,
-	}
-	return agg, nil
+	}, nil
 }
 
-// Initialize sets up chain pollers and AVSExecutionManagers
 func (a *Aggregator) Initialize() error {
 	a.logger.Sugar().Infow("Starting aggregator initialization",
 		zap.String("address", a.config.Address),
@@ -209,14 +170,7 @@ func (a *Aggregator) Initialize() error {
 
 	a.registerHandlers()
 
-	// Get count with read lock for logging
-	a.avsMutex.RLock()
-	numAVSs := len(a.avsManagers)
-	a.avsMutex.RUnlock()
-
 	a.logger.Sugar().Infow("Aggregator initialization completed successfully",
-		zap.Int("numAVSsRegistered", numAVSs),
-		zap.Int("numChainPollers", len(a.chainPollers)),
 		zap.Bool("managementServerReady", a.managementRpcServer != nil),
 	)
 
@@ -224,7 +178,7 @@ func (a *Aggregator) Initialize() error {
 }
 
 func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
-	// Check if already exists (with read lock)
+
 	a.avsMutex.RLock()
 	if _, ok := a.avsManagers[avs.Address]; ok {
 		a.avsMutex.RUnlock()
@@ -232,7 +186,6 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	}
 	a.avsMutex.RUnlock()
 
-	// Create AVS components outside the lock (potentially expensive operations)
 	supportedChains, err := a.getValidChainsForAvs(avs.ChainIds)
 	if err != nil {
 		return fmt.Errorf("failed to get valid chains for AVS %s: %w", avs.Address, err)
@@ -244,93 +197,61 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		L1ChainId:  a.config.L1ChainId,
 	}, a.chainContractCallers, a.peeringDataFetcher, a.logger)
 
-	aem, err := avsExecutionManager.NewAvsExecutionManager(&avsExecutionManager.AvsExecutionManagerConfig{
+	taskQueue := make(chan *types.Task)
+	chainPollers := a.getChainPollers(supportedChains, avs.Address, taskQueue)
+
+	avsExeConfig := &avsExecutionManager.AvsExecutionManagerConfig{
 		AvsAddress:               avs.Address,
 		SupportedChainIds:        supportedChains,
 		MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
 		L1ChainId:                a.config.L1ChainId,
 		AggregatorAddress:        a.config.Address,
+<<<<<<< HEAD
 		TlsEnabled:               a.config.TLSEnabled,
 	},
+=======
+	}
+
+	aem, err := avsExecutionManager.NewAvsExecutionManager(
+		avsExeConfig,
+>>>>>>> 0eccd65 (Refactored task handling to EVMChainPoller and making it aware of AvsAddress)
 		a.chainContractCallers,
 		a.signers,
 		a.contractStore,
 		om,
+		taskQueue,
+		chainPollers,
 		a.store,
 		a.logger,
 	)
+
 	if err != nil {
 		return fmt.Errorf("failed to create AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
 	// Use root context instead of passed context to ensure proper lifecycle management
-	// This prevents AVSs registered via API from stopping when the gRPC request completes
 	if a.rootCtx == nil {
 		return fmt.Errorf("aggregator not started, cannot register AVS %s", avs.Address)
 	}
 
-	// Create child context from root context for AVS lifecycle
 	avsCtx, avsCancel := context.WithCancel(a.rootCtx)
 
-	// Add to map with exclusive lock (double-check pattern)
-	a.avsMutex.Lock()
-
-	// Double-check that it wasn't added while we were creating the AEM
-	if _, ok := a.avsManagers[avs.Address]; ok {
-		a.avsMutex.Unlock()
-		avsCancel() // Clean up context
-		return fmt.Errorf("AVS Execution Manager for %s already exists", avs.Address)
-	}
-
-	avsInfo := &AvsExecutionManagerInfo{
-		Address:          avs.Address,
-		ExecutionManager: aem,
-		CancelFunc:       avsCancel,
-	}
-	a.avsManagers[avs.Address] = avsInfo
-	a.avsMutex.Unlock()
-
-	a.logger.Sugar().Infow("Starting AVS execution manager",
-		zap.String("avsAddress", avs.Address))
-
-	if err := aem.Init(avsCtx); err != nil {
-		a.avsMutex.Lock()
-		delete(a.avsManagers, avs.Address)
-		a.avsMutex.Unlock()
+	err = a.storeAvsManager(avs.Address, aem, avsCancel)
+	if err != nil {
 		avsCancel()
-		return fmt.Errorf("failed to initialize AVS Execution Manager for %s: %w", avs.Address, err)
+		return err
 	}
 
-	// Create error channel for startup result with timeout
-	startErr := make(chan error, 1)
-
-	go func() {
-		startErr <- aem.Start(avsCtx)
-	}()
-
-	startCtx, startCancel := context.WithTimeout(avsCtx, 500*time.Millisecond)
-	defer startCancel()
-
-	select {
-	case err := <-startErr:
-		if err != nil {
-			a.avsMutex.Lock()
-			delete(a.avsManagers, avs.Address)
-			a.avsMutex.Unlock()
-			avsCancel()
-			return fmt.Errorf("failed to start AVS Execution Manager for %s: %w", avs.Address, err)
-		}
-		// If err is nil, the Start method returned successfully (shouldn't normally happen)
-		a.logger.Sugar().Infow("AVS execution manager returned without error (unexpected)",
-			zap.String("avsAddress", avs.Address))
-	case <-startCtx.Done():
-		// Timeout occurred - this means startup succeeded and AVS is running in background
-		a.logger.Sugar().Infow("AVS execution manager startup completed (timeout indicates success)",
-			zap.String("avsAddress", avs.Address))
+	err = aem.Start(avsCtx)
+	if err != nil {
+		a.removeAvsManager(avs.Address)
+		avsCancel()
+		return fmt.Errorf("failed to start AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
 	a.logger.Sugar().Infow("AVS execution manager started successfully",
 		zap.String("avsAddress", avs.Address))
+
 	return nil
 }
 
@@ -339,7 +260,6 @@ func (a *Aggregator) deregisterAvs(avsAddress string) error {
 		zap.String("avsAddress", avsAddress),
 	)
 
-	// Get AVS info and check existence with exclusive lock
 	a.avsMutex.Lock()
 
 	avsInfo, exists := a.avsManagers[avsAddress]
@@ -348,13 +268,11 @@ func (a *Aggregator) deregisterAvs(avsAddress string) error {
 		return fmt.Errorf("AVS %s is not registered", avsAddress)
 	}
 
-	// Remove from map immediately and get cancel function
 	delete(a.avsManagers, avsAddress)
 	cancelFunc := avsInfo.CancelFunc
 
 	a.avsMutex.Unlock()
 
-	// Call cancel function outside the lock to avoid blocking other operations
 	if cancelFunc != nil {
 		a.logger.Sugar().Infow("Cancelling AVS context to stop execution manager gracefully",
 			zap.String("avsAddress", avsAddress),
@@ -403,38 +321,6 @@ func (a *Aggregator) getValidChainsForAvs(chainIds []uint) ([]config.ChainId, er
 	}), nil
 }
 
-//func (a *Aggregator) initializePollers() error {
-//	a.logger.Sugar().Infow("Initializing chain pollers...",
-//		zap.Any("chains", a.config.Chains),
-//	)
-//
-//	for _, chain := range a.config.Chains {
-//		if _, ok := a.chainPollers[chain.ChainId]; ok {
-//			a.logger.Sugar().Warnw("L1Chain poller already exists for chain", "chainId", chain.ChainId)
-//			continue
-//		}
-//		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-//			BaseUrl:   chain.RpcURL,
-//			BlockType: ethereum.BlockType_Latest,
-//		}, a.logger)
-//
-//		pollInterval := chain.PollIntervalSeconds
-//		if pollInterval <= 0 {
-//			a.logger.Sugar().Warnw("Invalid poll interval for chain", "chainId", chain.ChainId, "pollInterval", pollInterval)
-//			pollInterval = 10 // default to 10 seconds if not set or invalid
-//		}
-//
-//		pCfg := &EVMChainPoller.EVMChainPollerConfig{
-//			ChainId:              chain.ChainId,
-//			PollingInterval:      time.Duration(pollInterval) * time.Second,
-//			InterestingContracts: a.contractStore.ListContractAddressesForChain(chain.ChainId),
-//		}
-//
-//		a.chainPollers[chain.ChainId] = EVMChainPoller.NewEVMChainPoller(ec, a.chainEventsChan, a.transactionLogParser, pCfg, a.store, a.logger)
-//	}
-//	return nil
-//}
-
 func InitializeContractCaller(
 	chain *aggregatorConfig.Chain,
 	privateKeyConfig *config.ECDSAKeyConfig,
@@ -461,8 +347,10 @@ func InitializeContractCaller(
 }
 
 func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCaller.IContractCaller, error) {
-	a.logger.Sugar().Infow("Initializing contract callers...")
+
+	a.logger.Sugar().Infow("Initializing contract callers")
 	contractCallers := make(map[config.ChainId]contractCaller.IContractCaller)
+
 	for _, chain := range a.config.Chains {
 
 		cc, err := InitializeContractCaller(chain, a.config.PrivateKeyConfig, a.logger)
@@ -479,34 +367,23 @@ func (a *Aggregator) initializeContractCallers() (map[config.ChainId]contractCal
 
 // Start starts the aggregator and its components
 func (a *Aggregator) Start(ctx context.Context) error {
-	// TODO: fix this cancellation leak
-	ctx, cancel := context.WithCancel(ctx)
 
-	// Store the root context for AVS lifecycle management
 	a.rootCtx = ctx
 
-	// Register AVSs from config - this will create, init, and start them
 	for _, avs := range a.config.AVSs {
+
 		a.logger.Sugar().Infow("Registering and starting AVS from config",
 			zap.String("address", avs.Address),
 			zap.Any("chainIds", avs.ChainIds),
 		)
+
 		if err := a.registerAvs(avs); err != nil {
-			cancel()
 			return fmt.Errorf("failed to register AVS %s: %w", avs.Address, err)
 		}
+
 		a.logger.Sugar().Infow("AVS registered and started successfully",
 			zap.String("address", avs.Address),
 		)
-	}
-
-	// start polling for blocks
-	for _, poller := range a.chainPollers {
-		a.logger.Sugar().Infow("Starting chain poller", "poller", poller)
-		if err := poller.Start(ctx); err != nil {
-			a.logger.Sugar().Errorw("L1Chain poller failed to start", "error", err)
-			cancel()
-		}
 	}
 
 	if err := a.managementRpcServer.Start(ctx); err != nil {
@@ -520,51 +397,23 @@ func (a *Aggregator) Start(ctx context.Context) error {
 
 	<-ctx.Done()
 	a.logger.Sugar().Infow("Aggregator context done, stopping")
+
 	return nil
-}
-
-func (a *Aggregator) processLog(lwb *chainPoller.LogWithBlock) error {
-	a.logger.Sugar().Debugw("Processing log",
-		zap.String("eventName", lwb.Log.EventName),
-		zap.Any("lwb", lwb),
-	)
-
-	// Get all AVS execution managers with read lock
-	a.avsMutex.RLock()
-	avsList := make([]*avsExecutionManager.AvsExecutionManager, 0, len(a.avsManagers))
-	for _, avsInfo := range a.avsManagers {
-		avsList = append(avsList, avsInfo.ExecutionManager)
-	}
-	a.avsMutex.RUnlock()
-
-	// Process logs outside the lock to avoid blocking other operations
-	for _, avs := range avsList {
-		if err := avs.HandleLog(lwb); err != nil {
-			a.logger.Error("Error processing log in AVS Execution Manager", zap.Error(err))
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *Aggregator) registerHandlers() {
-	aggregatorV1.RegisterAggregatorManagementServiceServer(a.managementRpcServer.GetGrpcServer(), a)
 }
 
 func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
-	// If auth is not enabled, check if auth was provided
+
 	if a.authVerifier == nil {
-		// If auth was provided but not enabled, return unimplemented
+
 		if auth != nil {
 			a.logger.Sugar().Warnw("Authentication provided but not enabled")
 			return status.Error(codes.Unimplemented, "authentication is not enabled")
 		}
-		// No auth required and none provided - OK
+
 		a.logger.Sugar().Debugw("Authentication verifier not configured, skipping verification")
 		return nil
 	}
 
-	// Auth is enabled, verify it
 	if err := a.authVerifier.VerifyAuthentication(auth); err != nil {
 		a.logger.Sugar().Warnw("Authentication verification failed",
 			zap.Error(err),
@@ -573,4 +422,133 @@ func (a *Aggregator) verifyAuth(auth *commonV1.AuthSignature) error {
 	}
 	a.logger.Sugar().Debugw("Authentication verification successful")
 	return nil
+}
+
+// getAuthVerifier creates and returns an authentication verifier based on configuration
+func getAuthVerifier(cfg *AggregatorConfig, signers signer.Signers, logger *zap.Logger) *auth.Verifier {
+	if cfg.Authentication == nil {
+		logger.Sugar().Infow("No authentication configuration provided, authentication disabled")
+		return nil
+	}
+
+	logger.Sugar().Infow("Authentication configuration loaded",
+		zap.Bool("enabled", cfg.Authentication.IsEnabled),
+	)
+
+	if !cfg.Authentication.IsEnabled {
+		logger.Sugar().Infow("Authentication is disabled via configuration")
+		return nil
+	}
+
+	logger.Sugar().Infow("Authentication is enabled, initializing verifier")
+
+	var authSigner signer.ISigner
+	if signers.ECDSASigner != nil {
+		authSigner = signers.ECDSASigner
+		logger.Sugar().Infow("Using ECDSA signer for authentication")
+	} else if signers.BLSSigner != nil {
+		authSigner = signers.BLSSigner
+		logger.Sugar().Infow("Using BLS signer for authentication")
+	} else {
+		logger.Sugar().Warnw("Authentication enabled but no signer available")
+		return nil
+	}
+
+	logger.Sugar().Infow("Creating authentication verifier",
+		zap.String("address", cfg.Address),
+		zap.Duration("tokenExpiry", 5*time.Minute),
+	)
+	tokenManager := auth.NewChallengeTokenManager(cfg.Address, 5*time.Minute)
+	authVerifier := auth.NewVerifier(tokenManager, authSigner)
+	logger.Sugar().Infow("Authentication verifier created successfully")
+
+	return authVerifier
+}
+
+// getChainPollers creates and returns a map of chain pollers for the given AVS
+func (a *Aggregator) getChainPollers(supportedChains []config.ChainId, avsAddress string, taskQueue chan *types.Task) map[config.ChainId]*EVMChainPoller.EVMChainPoller {
+	chainPollers := make(map[config.ChainId]*EVMChainPoller.EVMChainPoller)
+
+	for _, chainId := range supportedChains {
+		chain := a.getChainConfig(chainId)
+		if chain == nil {
+			a.logger.Sugar().Warnw("Chain config not found for chainId", "chainId", chainId)
+			continue
+		}
+
+		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
+			BaseUrl:   chain.RpcURL,
+			BlockType: ethereum.BlockType_Latest,
+		}, a.logger)
+
+		pollInterval := chain.PollIntervalSeconds
+		if pollInterval <= 0 {
+			a.logger.Sugar().Warnw("Invalid poll interval for chain", "chainId", chainId, "pollInterval", pollInterval)
+			pollInterval = defaultPollIntervalSeconds
+		}
+
+		pollerConfig := &EVMChainPoller.EVMChainPollerConfig{
+			ChainId:              chainId,
+			AvsAddress:           avsAddress,
+			PollingInterval:      time.Duration(pollInterval) * time.Second,
+			InterestingContracts: a.contractStore.ListContractAddressesForChain(chainId),
+		}
+
+		poller := EVMChainPoller.NewEVMChainPoller(
+			ec,
+			taskQueue,
+			a.transactionLogParser,
+			pollerConfig,
+			a.contractStore,
+			a.store,
+			a.logger,
+		)
+		chainPollers[chainId] = poller
+
+		a.logger.Sugar().Infow("Created poller for AVS on chain",
+			"avsAddress", avsAddress,
+			"chainId", chainId)
+	}
+
+	return chainPollers
+}
+
+// storeAvsManager stores the AVS manager in the map with proper mutex handling
+func (a *Aggregator) storeAvsManager(avsAddress string, aem *avsExecutionManager.AvsExecutionManager, cancelFunc context.CancelFunc) error {
+	a.avsMutex.Lock()
+	defer a.avsMutex.Unlock()
+
+	if _, ok := a.avsManagers[avsAddress]; ok {
+		return fmt.Errorf("AVS Execution Manager for %s already exists", avsAddress)
+	}
+
+	avsInfo := &AvsExecutionManagerInfo{
+		Address:          avsAddress,
+		ExecutionManager: aem,
+		CancelFunc:       cancelFunc,
+	}
+	a.avsManagers[avsAddress] = avsInfo
+
+	return nil
+}
+
+// removeAvsManager removes the AVS manager from the map with proper mutex handling
+func (a *Aggregator) removeAvsManager(avsAddress string) {
+	a.avsMutex.Lock()
+	defer a.avsMutex.Unlock()
+
+	delete(a.avsManagers, avsAddress)
+}
+
+func (a *Aggregator) getChainConfig(chainId config.ChainId) *aggregatorConfig.Chain {
+	for _, chain := range a.config.Chains {
+		if chain.ChainId == chainId {
+			return chain
+		}
+	}
+	return nil
+}
+
+func (a *Aggregator) registerHandlers() {
+	aggregatorV1.RegisterAggregatorManagementServiceServer(a.managementRpcServer.GetGrpcServer(), a)
 }

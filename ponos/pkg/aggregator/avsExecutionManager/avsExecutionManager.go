@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -42,11 +43,6 @@ type OperatorSet struct {
 
 type ConsensusType uint8
 
-const (
-	ConsensusTypeNone                     ConsensusType = 0
-	ConsensusTypeStakeProportionThreshold ConsensusType = 1
-)
-
 type OperatorSetTaskConsensus struct {
 	ConsensusType ConsensusType
 	Threshold     uint16
@@ -69,6 +65,8 @@ type AvsConfig struct {
 type AvsExecutionManager struct {
 	logger *zap.Logger
 
+	avsConfig *AvsConfig
+
 	config *AvsExecutionManagerConfig
 
 	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
@@ -83,11 +81,13 @@ type AvsExecutionManager struct {
 
 	inflightTasks sync.Map
 
+	store storage.AggregatorStore
+
+	chainPollers map[config.ChainId]*EVMChainPoller.EVMChainPoller
+
 	avsConfigMutex sync.Mutex
 
-	avsConfig *AvsConfig
-
-	store storage.AggregatorStore
+	pollersMutex sync.RWMutex
 }
 
 func NewAvsExecutionManager(
@@ -96,6 +96,8 @@ func NewAvsExecutionManager(
 	signers signer.Signers,
 	cs contractStore.IContractStore,
 	om *operatorManager.OperatorManager,
+	taskQueue chan *types.Task,
+	chainPollers map[config.ChainId]*EVMChainPoller.EVMChainPoller,
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) (*AvsExecutionManager, error) {
@@ -128,24 +130,56 @@ func NewAvsExecutionManager(
 		operatorManager:      om,
 		store:                store,
 		inflightTasks:        sync.Map{},
-		taskQueue:            make(chan *types.Task, 10000),
+		taskQueue:            taskQueue,
+		chainPollers:         chainPollers,
 	}
 	return manager, nil
 }
 
-// Init initializes the AvsExecutionManager before starting
-func (em *AvsExecutionManager) Init(ctx context.Context) error {
-	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
+// Start starts the AvsExecutionManager
+func (em *AvsExecutionManager) Start(ctx context.Context) error {
+
+	em.logger.Sugar().Infow("Starting AvsExecutionManager",
+		zap.String("contractAddress", em.config.AvsAddress),
+		zap.Any("supportedChainIds", em.config.SupportedChainIds),
 		zap.String("avsAddress", em.config.AvsAddress),
 	)
 
-	// Recover pending tasks from storage
 	if err := em.recoverPendingTasks(ctx); err != nil {
 		em.logger.Sugar().Warnw("Failed to recover pending tasks",
 			"error", err,
 			"avsAddress", em.config.AvsAddress)
 		// Continue anyway - this is not a fatal error
 	}
+
+	if err := em.startPollers(ctx); err != nil {
+		return fmt.Errorf("failed to start pollers: %w", err)
+	}
+
+	go func() {
+		for {
+			select {
+			case task := <-em.taskQueue:
+
+				em.logger.Sugar().Infow("Received task from queue",
+					zap.String("taskId", task.TaskId),
+				)
+				if err := em.handleTask(ctx, task); err != nil {
+					em.logger.Sugar().Errorw("Failed to handle task",
+						"taskId", task.TaskId,
+						"error", err,
+					)
+				}
+			case <-ctx.Done():
+
+				em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
+				if ctx.Err() != nil {
+					em.logger.Sugar().Errorw("Error stopping AvsExecutionManager")
+				}
+				return
+			}
+		}
+	}()
 
 	return nil
 }
@@ -167,14 +201,13 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 
 	recovered := 0
 	for _, task := range pendingTasks {
-		// Check if task has already expired
+
 		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
 			em.logger.Sugar().Warnw("Skipping expired task during recovery",
 				"taskId", task.TaskId,
 				"deadline", task.DeadlineUnixSeconds.Unix(),
 				"currentTime", time.Now().Unix())
 
-			// Mark expired tasks as failed
 			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); err != nil {
 				em.logger.Sugar().Warnw("Failed to mark expired task as failed",
 					"error", err,
@@ -183,14 +216,12 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 			continue
 		}
 
-		// Check if task is already in flight
 		if _, exists := em.inflightTasks.Load(task.TaskId); exists {
 			em.logger.Sugar().Warnw("Task already in flight, skipping recovery",
 				"taskId", task.TaskId)
 			continue
 		}
 
-		// Re-queue the task
 		select {
 		case em.taskQueue <- task:
 			recovered++
@@ -213,30 +244,48 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 	return nil
 }
 
-// Start starts the AvsExecutionManager
-func (em *AvsExecutionManager) Start(ctx context.Context) error {
-	em.logger.Sugar().Infow("Starting AvsExecutionManager",
-		zap.String("contractAddress", em.config.AvsAddress),
-		zap.Any("supportedChainIds", em.config.SupportedChainIds),
-		zap.String("avsAddress", em.config.AvsAddress),
-	)
-	for {
-		select {
-		case task := <-em.taskQueue:
-			em.logger.Sugar().Infow("Received task from queue",
-				zap.String("taskId", task.TaskId),
-			)
-			if err := em.handleTask(ctx, task); err != nil {
-				em.logger.Sugar().Errorw("Failed to handle task",
-					"taskId", task.TaskId,
-					"error", err,
-				)
-			}
-		case <-ctx.Done():
-			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
-			return ctx.Err()
-		}
+// startPollers starts all chain pollers for this AVS
+func (em *AvsExecutionManager) startPollers(ctx context.Context) error {
+	em.pollersMutex.RLock()
+	defer em.pollersMutex.RUnlock()
+
+	if em.chainPollers == nil || len(em.chainPollers) == 0 {
+		em.logger.Sugar().Infow("No chain pollers configured for AVS",
+			zap.String("avsAddress", em.config.AvsAddress))
+		return nil
 	}
+
+	wg := sync.WaitGroup{}
+	errChan := make(chan error, len(em.chainPollers))
+
+	for chainId, poller := range em.chainPollers {
+		wg.Add(1)
+		em.logger.Sugar().Infow("Starting poller for chain",
+			zap.Uint("chainId", uint(chainId)),
+			zap.String("avsAddress", em.config.AvsAddress))
+
+		go func(p *EVMChainPoller.EVMChainPoller, cId config.ChainId) {
+			if err := p.Start(ctx); err != nil {
+				em.logger.Sugar().Errorw("Poller stopped with error",
+					zap.Error(err),
+					zap.Uint("chainId", uint(cId)),
+					zap.String("avsAddress", em.config.AvsAddress))
+				errChan <- err
+			}
+			wg.Done()
+		}(poller, chainId)
+	}
+
+	wg.Wait()
+	if err := <-errChan; err != nil {
+		return fmt.Errorf("failed to start pollers: %w", err)
+	}
+
+	em.logger.Sugar().Infow("Started all chain pollers",
+		zap.Int("count", len(em.chainPollers)),
+		zap.String("avsAddress", em.config.AvsAddress))
+
+	return nil
 }
 
 func (em *AvsExecutionManager) getOperatorSetTaskConfig(
