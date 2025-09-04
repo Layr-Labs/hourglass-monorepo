@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,16 @@ type AggregatedECDSACertificate struct {
 
 	// the time the certificate was signed
 	SignedAt *time.Time
+}
+
+// ToSubmitParams converts the certificate to contract submission parameters
+func (cert *AggregatedECDSACertificate) ToSubmitParams() *contractCaller.ECDSATaskResultParams {
+	return &contractCaller.ECDSATaskResultParams{
+		TaskId:             cert.TaskId,
+		TaskResponse:       cert.TaskResponse,
+		TaskResponseDigest: cert.TaskResponseDigest,
+		SignersSignatures:  cert.SignersSignatures,
+	}
 }
 
 func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
@@ -61,10 +72,6 @@ func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
 	}
 
 	return finalSignature, nil
-}
-
-func (cert *AggregatedECDSACertificate) GetTaskMessageHash() [32]byte {
-	return util.GetKeccak256Digest(cert.TaskResponse)
 }
 
 type ReceivedECDSAResponseWithDigest struct {
@@ -112,6 +119,7 @@ type aggregatedECDSAOperators struct {
 type ECDSATaskResultAggregator struct {
 	mu                 sync.Mutex
 	TaskId             string
+	ReferenceTimestamp uint32
 	OperatorSetId      uint32
 	ThresholdBips      uint16
 	TaskData           []byte
@@ -122,20 +130,27 @@ type ECDSATaskResultAggregator struct {
 	AggregatePublicKeys []common.Address
 
 	aggregatedOperators *aggregatedECDSAOperators
+	L1ContractCaller    contractCaller.IContractCaller
+
 	// Add more fields as needed for aggregation
 }
 
 func NewECDSATaskResultAggregator(
 	_ context.Context,
 	taskId string,
+	referenceTimestamp uint32,
 	operatorSetId uint32,
 	thresholdBips uint16,
+	l1ContractCaller contractCaller.IContractCaller,
 	taskData []byte,
 	taskExpirationTime *time.Time,
 	operators []*Operator[common.Address],
 ) (*ECDSATaskResultAggregator, error) {
 	if len(taskId) == 0 {
 		return nil, ErrInvalidTaskId
+	}
+	if referenceTimestamp == 0 {
+		return nil, ErrInvalidReferenceTimestamp
 	}
 	if len(operators) == 0 {
 		return nil, ErrNoOperatorAddresses
@@ -150,12 +165,14 @@ func NewECDSATaskResultAggregator(
 
 	cert := &ECDSATaskResultAggregator{
 		TaskId:              taskId,
+		ReferenceTimestamp:  referenceTimestamp,
 		OperatorSetId:       operatorSetId,
 		ThresholdBips:       thresholdBips,
 		TaskData:            taskData,
 		TaskExpirationTime:  taskExpirationTime,
 		Operators:           operators,
 		AggregatePublicKeys: aggPub,
+		L1ContractCaller:    l1ContractCaller,
 	}
 	return cert, nil
 }
@@ -180,8 +197,10 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 
 	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator[common.Address]) bool {
-		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
+		match := strings.EqualFold(op.Address, taskResponse.OperatorAddress)
+		return match
 	})
+
 	if operator == nil {
 		return fmt.Errorf("operator %s is not in the allowed set", taskResponse.OperatorAddress)
 	}
@@ -189,6 +208,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	if len(taskResponse.ResultSignature) == 0 {
 		return fmt.Errorf("result signature is empty")
 	}
+
 	if len(taskResponse.AuthSignature) == 0 {
 		return fmt.Errorf("auth signature is empty")
 	}
@@ -203,10 +223,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// Calculate output digest for consensus tracking
 	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
-
-	// Verify both signatures
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)
@@ -275,14 +292,32 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 	operator *Operator[common.Address],
 	outputDigest [32]byte,
 ) (*ecdsa.Signature, error) {
+	if !strings.EqualFold(taskResponse.OperatorAddress, operator.Address) {
+		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s",
+			operator.Address, taskResponse.OperatorAddress)
+	}
+
 	// Step 1: Verify the result signature (for storage)
 	resultSig, err := ecdsa.NewSignatureFromBytes(taskResponse.ResultSignature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse result signature: %w", err)
 	}
 
-	// Verify result signature matches output digest
-	if verified, err := resultSig.VerifyWithAddress(outputDigest[:], operator.PublicKey); err != nil {
+	signedOverBytes, err := tra.L1ContractCaller.CalculateECDSACertificateDigestBytes(
+		context.Background(),
+		tra.ReferenceTimestamp,
+		outputDigest,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
+	}
+
+	resultSigHash := util.GetKeccak256Digest(signedOverBytes)
+	resultHashCopy := make([]byte, 32)
+	copy(resultHashCopy, resultSigHash[:])
+
+	if verified, err := resultSig.VerifyWithAddress(resultHashCopy, operator.PublicKey); err != nil {
 		return nil, fmt.Errorf("result signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("result signature verification failed: signature does not match operator public key")
@@ -295,28 +330,23 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 	}
 
 	// Create the auth data that should have been signed
-	resultSigDigest := util.GetKeccak256Digest(taskResponse.ResultSignature)
 	authData := &types.AuthSignatureData{
 		TaskId:          taskResponse.TaskId,
 		AvsAddress:      taskResponse.AvsAddress,
 		OperatorAddress: taskResponse.OperatorAddress,
 		OperatorSetId:   taskResponse.OperatorSetId,
-		ResultSigDigest: resultSigDigest,
+		ResultSigDigest: util.GetKeccak256Digest(resultSig.Bytes()),
 	}
-	authBytes := authData.ToSigningBytes()
-	authDigest := util.GetKeccak256Digest(authBytes)
 
-	// Verify auth signature
-	if verified, err := authSig.VerifyWithAddress(authDigest[:], operator.PublicKey); err != nil {
+	authBytes := authData.ToSigningBytes()
+	authBytesDigest := util.GetKeccak256Digest(authBytes)
+	authHashCopy := make([]byte, 32)
+	copy(authHashCopy, authBytesDigest[:])
+
+	if verified, err := authSig.VerifyWithAddress(authHashCopy, operator.PublicKey); err != nil {
 		return nil, fmt.Errorf("auth signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("auth signature verification failed: signature does not match operator public key")
-	}
-
-	// Additional validation: ensure claimed operator matches expected
-	if !strings.EqualFold(taskResponse.OperatorAddress, operator.Address) {
-		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s",
-			operator.Address, taskResponse.OperatorAddress)
 	}
 
 	return resultSig, nil

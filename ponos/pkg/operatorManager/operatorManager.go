@@ -207,7 +207,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		operatorWeights[operator.String()] = weight
 	}
 
-	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress, sourceBlockNumber)
+	operators, err := om.peeringDataFetcher.ListExecutorOperators(ctx, om.config.AvsAddress, blockForTableData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
 	}
@@ -234,7 +234,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
 	}
 
-	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId, sourceBlockNumber)
+	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId, blockForTableData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}

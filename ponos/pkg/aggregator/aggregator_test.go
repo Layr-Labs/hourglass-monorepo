@@ -50,6 +50,15 @@ const (
 	L1WsUrl  = "ws://127.0.0.1:8545"
 )
 
+// SignatureModeConfig defines the signature curve configuration for testing
+type SignatureModeConfig struct {
+	Name              string
+	AggregatorCurve   config.CurveType
+	ExecutorCurve     config.CurveType
+	AggregatorOpsetId uint32
+	ExecutorOpsetId   uint32
+}
+
 // Test_Aggregator is an integration test for the Aggregator component of the system.
 //
 // This test is designed to simulate an E2E on-chain flow with all components.
@@ -58,17 +67,38 @@ const (
 // - The aggregator is started with a poller calling a local anvil node
 // - The test pushes a message to the mailbox and waits for the TaskVerified event to be emitted
 func Test_Aggregator(t *testing.T) {
-	t.Skip("Skipping temporarily until BN254CertificateVerifier audit fixes are in.")
-	t.Run("Docker", func(t *testing.T) {
-		runAggregatorTest(t, "docker")
-	})
+	// Define test configurations for both signature modes
+	signatureConfigs := []SignatureModeConfig{
+		{
+			Name:              "BN254_Aggregator_ECDSA_Executor",
+			AggregatorCurve:   config.CurveTypeBN254,
+			ExecutorCurve:     config.CurveTypeECDSA,
+			AggregatorOpsetId: 0,
+			ExecutorOpsetId:   1,
+		},
+		{
+			Name:              "ECDSA_Aggregator_BN254_Executor",
+			AggregatorCurve:   config.CurveTypeECDSA,
+			ExecutorCurve:     config.CurveTypeBN254,
+			AggregatorOpsetId: 0,
+			ExecutorOpsetId:   1,
+		},
+	}
 
-	t.Run("Kubernetes", func(t *testing.T) {
-		runAggregatorTest(t, "kubernetes")
-	})
+	for _, sigConfig := range signatureConfigs {
+		t.Run(sigConfig.Name, func(t *testing.T) {
+			t.Run("Docker", func(t *testing.T) {
+				runAggregatorTest(t, "docker", sigConfig)
+			})
+
+			t.Run("Kubernetes", func(t *testing.T) {
+				runAggregatorTest(t, "kubernetes", sigConfig)
+			})
+		})
+	}
 }
 
-func runAggregatorTest(t *testing.T, mode string) {
+func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -155,16 +185,21 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// ------------------------------------------------------------------------
 	// Executor setup
 	// ------------------------------------------------------------------------
-	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode)))
+	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode, sigConfig.ExecutorCurve)))
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
 	}
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
-	execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
-		PrivateKey: chainConfig.ExecOperatorAccountPk,
+	// Set signing keys based on the curve type
+	if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
+		execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+			PrivateKey: chainConfig.ExecOperatorAccountPk,
+		}
 	}
+	// BLS keys are already set in the YAML config when needed
+
 	execConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.ExecOperatorAccountPk,
 	}
@@ -177,16 +212,16 @@ func runAggregatorTest(t *testing.T, mode string) {
 		execConfig.Kubernetes.KubeConfigPath = cluster.KubeConfig
 	}
 
-	_, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
+	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, sigConfig.ExecutorCurve)
 	if err != nil {
 		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
-	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, config.CurveTypeECDSA)
+	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, sigConfig.ExecutorCurve)
 
 	// ------------------------------------------------------------------------
-	// Aggregator setup
+	// 	Aggregator setup
 	// ------------------------------------------------------------------------
-	aggConfigYaml := getAggregatorConfigYaml(L1RPCUrl, L2RPCUrl)
+	aggConfigYaml := getAggregatorConfigYaml(L1RPCUrl, L2RPCUrl, sigConfig.AggregatorCurve)
 
 	aggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggConfigYaml))
 	if err != nil {
@@ -197,6 +232,18 @@ func runAggregatorTest(t *testing.T, mode string) {
 	aggConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
+
+	// Set signing keys based on the curve type for aggregator
+	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {
+		aggConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+			PrivateKey: chainConfig.OperatorAccountPrivateKey,
+		}
+		aggConfig.Operator.SigningKeys.BLS = nil
+	} else {
+		// BLS keys are already set in the YAML config
+		aggConfig.Operator.SigningKeys.ECDSA = nil
+	}
+
 	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
 	aggConfig.Avss[0].ChainIds = []uint{
 		uint(config.ChainId_BaseSepoliaAnvil),
@@ -205,11 +252,12 @@ func runAggregatorTest(t *testing.T, mode string) {
 		fmt.Printf("Agg chain: %+v\n", chain)
 	}
 
-	aggBn254PrivateSigningKey, _, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(aggConfig.Operator, config.CurveTypeBN254)
+	aggBn254PrivateSigningKey, aggEcdsaPrivateSigningKey, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(aggConfig.Operator, sigConfig.AggregatorCurve)
 	if err != nil {
 		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
-	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, config.CurveTypeBN254)
+
+	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, sigConfig.AggregatorCurve)
 
 	// ------------------------------------------------------------------------
 	// L1Chain & l1Anvil setup
@@ -326,32 +374,104 @@ func runAggregatorTest(t *testing.T, mode string) {
 	)
 
 	// ------------------------------------------------------------------------
+	// Configure operator sets dynamically based on test configuration
+	// ------------------------------------------------------------------------
+	t.Logf("------------------------------------------- Configuring operator sets dynamically -------------------------------------------")
+
+	// Create AVS contract caller for configuring operator sets
+	avsConfigPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS config private key signer: %v", err)
+	}
+
+	avsConfigCaller, err := caller.NewContractCaller(l1EthClient, avsConfigPrivateKeySigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS config caller: %v", err)
+	}
+
+	// Configure aggregator operator set with its curve type
+	t.Logf("Configuring operator set %d with curve type %s for aggregator", sigConfig.AggregatorOpsetId, sigConfig.AggregatorCurve)
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		sigConfig.AggregatorOpsetId,
+		sigConfig.AggregatorCurve)
+	if err != nil {
+		t.Fatalf("Failed to configure aggregator operator set %d: %v", sigConfig.AggregatorOpsetId, err)
+	}
+
+	// Configure executor operator set with its curve type
+	t.Logf("Configuring operator set %d with curve type %s for executor", sigConfig.ExecutorOpsetId, sigConfig.ExecutorCurve)
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		sigConfig.ExecutorOpsetId,
+		sigConfig.ExecutorCurve)
+	if err != nil {
+		t.Fatalf("Failed to configure executor operator set %d: %v", sigConfig.ExecutorOpsetId, err)
+	}
+
+	t.Logf("Successfully configured operator sets dynamically")
+
+	// ------------------------------------------------------------------------
+	// Validate operator signing keys match configured curve types
+	// ------------------------------------------------------------------------
+	// Validate aggregator keys
+	if sigConfig.AggregatorCurve == config.CurveTypeBN254 && aggConfig.Operator.SigningKeys.BLS == nil {
+		t.Fatalf("BLS signing key required for BN254 curve but not configured for aggregator")
+	}
+	if sigConfig.AggregatorCurve == config.CurveTypeECDSA && aggConfig.Operator.SigningKeys.ECDSA == nil {
+		t.Fatalf("ECDSA signing key required but not configured for aggregator")
+	}
+
+	// Validate executor keys
+	if sigConfig.ExecutorCurve == config.CurveTypeBN254 && execConfig.Operator.SigningKeys.BLS == nil {
+		t.Fatalf("BLS signing key required for BN254 curve but not configured for executor")
+	}
+	if sigConfig.ExecutorCurve == config.CurveTypeECDSA && execConfig.Operator.SigningKeys.ECDSA == nil {
+		t.Fatalf("ECDSA signing key required but not configured for executor")
+	}
+
+	t.Logf("Operator signing keys validated successfully")
+
+	// ------------------------------------------------------------------------
 	// register peering data
 	// ------------------------------------------------------------------------
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
 	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
-	aggOpsetId := uint32(0)
-	execOpsetId := uint32(1)
-	allOperatorSetIds := []uint32{aggOpsetId, execOpsetId}
+	allOperatorSetIds := []uint32{sigConfig.AggregatorOpsetId, sigConfig.ExecutorOpsetId}
+
+	// Select the correct signing key based on curve type
+	var aggSigningKey interface{}
+	if sigConfig.AggregatorCurve == config.CurveTypeBN254 {
+		aggSigningKey = aggBn254PrivateSigningKey
+	} else {
+		aggSigningKey = aggEcdsaPrivateSigningKey
+	}
+
+	var execSigningKey interface{}
+	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
+		execSigningKey = execBn254PrivateSigningKey
+	} else {
+		execSigningKey = execEcdsaPrivateSigningKey
+	}
 
 	err = testUtils.SetupOperatorPeering(
 		ctx,
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		// aggregator is BN254
+		// aggregator with configured curve
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
-			SigningPrivateKey:     aggBn254PrivateSigningKey,
-			Curve:                 config.CurveTypeBN254,
-			OperatorSetIds:        []uint32{aggOpsetId},
+			SigningPrivateKey:     aggSigningKey,
+			Curve:                 sigConfig.AggregatorCurve,
+			OperatorSetIds:        []uint32{sigConfig.AggregatorOpsetId},
 		},
-		// executor is ecdsa
+		// executor with configured curve
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
-			SigningPrivateKey:     execEcdsaPrivateSigningKey,
-			Curve:                 config.CurveTypeECDSA,
-			OperatorSetIds:        []uint32{execOpsetId},
+			SigningPrivateKey:     execSigningKey,
+			Curve:                 sigConfig.ExecutorCurve,
+			OperatorSetIds:        []uint32{sigConfig.ExecutorOpsetId},
 		},
 		"localhost:9000",
 		l,
@@ -368,7 +488,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 			StakerAddress:      chainConfig.AggStakerAccountAddress,
 			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
 			OperatorAddress:    chainConfig.OperatorAccountAddress,
-			OperatorSetId:      0,
+			OperatorSetId:      sigConfig.AggregatorOpsetId,
 			StrategyAddress:    testUtils.Strategy_WETH,
 		},
 		&testUtils.StakerDelegationConfig{
@@ -376,7 +496,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 			StakerAddress:      chainConfig.ExecStakerAccountAddress,
 			OperatorPrivateKey: chainConfig.ExecOperatorAccountPk,
 			OperatorAddress:    chainConfig.ExecOperatorAccountAddress,
-			OperatorSetId:      1,
+			OperatorSetId:      sigConfig.ExecutorOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
 		chainConfig.AVSAccountAddress,
@@ -388,6 +508,59 @@ func runAggregatorTest(t *testing.T, mode string) {
 	}
 
 	t.Logf("All operator set IDs: %v", allOperatorSetIds)
+
+	// Create generation reservations for each operator set
+	t.Logf("------------------------ Creating generation reservations ------------------------")
+
+	// Create a temporary AVS contract caller to set up the generation reservations
+	avsCcL1TempSigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS L1 private key signer for generation reservation setup: %v", err)
+	}
+
+	avsCcL1Temp, err := caller.NewContractCaller(l1EthClient, avsCcL1TempSigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS contract caller for generation reservation setup: %v", err)
+	}
+
+	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
+	maxStalenessPeriod := uint32(604800) // 1 week in seconds
+
+	// Create generation reservation for aggregator operator set based on its curve type
+	aggCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.AggregatorCurve)
+	t.Logf("Creating generation reservation with %s table calculator %s for aggregator operator set %d",
+		sigConfig.AggregatorCurve, aggCalculatorAddr.Hex(), sigConfig.AggregatorOpsetId)
+	_, err = avsCcL1Temp.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		sigConfig.AggregatorOpsetId,
+		aggCalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Logf("Warning: Failed to create generation reservation for aggregator operator set %d: %v", sigConfig.AggregatorOpsetId, err)
+	}
+
+	// Create generation reservation for executor operator set based on its curve type
+	execCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.ExecutorCurve)
+	t.Logf("Creating generation reservation with %s table calculator %s for executor operator set %d",
+		sigConfig.ExecutorCurve, execCalculatorAddr.Hex(), sigConfig.ExecutorOpsetId)
+	_, err = avsCcL1Temp.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		sigConfig.ExecutorOpsetId,
+		execCalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Logf("Warning: Failed to create generation reservation for executor operator set %d: %v", sigConfig.ExecutorOpsetId, err)
+	}
+
+	// Wait for transactions to be mined
+	time.Sleep(time.Second * 3)
+
 	// update current block to account for transport
 	currentBlock, err := l1EthClient.BlockNumber(ctx)
 	if err != nil {
@@ -418,8 +591,8 @@ func runAggregatorTest(t *testing.T, mode string) {
 		ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		common.HexToAddress(chainConfig.AVSTaskHookAddressL1),
-		[]uint32{execOpsetId},
-		[]config.CurveType{config.CurveTypeECDSA},
+		[]uint32{sigConfig.ExecutorOpsetId},
+		[]config.CurveType{sigConfig.ExecutorCurve},
 		avsCcL1,
 	)
 	if err != nil {
@@ -439,8 +612,8 @@ func runAggregatorTest(t *testing.T, mode string) {
 		ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		common.HexToAddress(chainConfig.AVSTaskHookAddressL2),
-		[]uint32{execOpsetId},
-		[]config.CurveType{config.CurveTypeECDSA},
+		[]uint32{sigConfig.ExecutorOpsetId},
+		[]config.CurveType{sigConfig.ExecutorCurve},
 		avsCcL2,
 	)
 	if err != nil {
@@ -460,12 +633,20 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// ------------------------------------------------------------------------
 	// Create executor normally for both modes - it runs in the test process
 	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
-	signers := signer.Signers{
-		ECDSASigner: execSigner,
+	// Set up executor signers based on curve type
+	var execSigners signer.Signers
+	if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
+		execSigners = signer.Signers{
+			ECDSASigner: execSigner,
+		}
+	} else {
+		execSigners = signer.Signers{
+			BLSSigner: execSigner,
+		}
 	}
 	// Use in-memory storage for the executor
 	execStore := executorMemory.NewInMemoryExecutorStore()
-	realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, signers, execPdf, l1ExecCc, execStore)
+	realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, execSigners, execPdf, l1ExecCc, execStore)
 	if err != nil {
 		t.Fatalf("Failed to create executor: %v", err)
 	}
@@ -486,6 +667,18 @@ func runAggregatorTest(t *testing.T, mode string) {
 	// Create in-memory storage for testing
 	aggStore := memory.NewInMemoryAggregatorStore()
 
+	// Set up aggregator signers based on curve type
+	var aggSigners signer.Signers
+	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {
+		aggSigners = signer.Signers{
+			ECDSASigner: aggSigner,
+		}
+	} else {
+		aggSigners = signer.Signers{
+			BLSSigner: aggSigner,
+		}
+	}
+
 	agg, err := NewAggregatorWithManagementRpcServer(
 		9002,
 		&AggregatorConfig{
@@ -498,9 +691,7 @@ func runAggregatorTest(t *testing.T, mode string) {
 		imContractStore,
 		tlp,
 		aggPdf,
-		signer.Signers{
-			BLSSigner: aggSigner,
-		},
+		aggSigners,
 		aggStore,
 		l,
 	)
@@ -610,8 +801,8 @@ func runAggregatorTest(t *testing.T, mode string) {
 	select {
 	case <-ctx.Done():
 		t.Logf("Context done: %v", ctx.Err())
-	case <-time.After(150 * time.Second):
-		t.Logf("Timeout after 150 seconds")
+	case <-time.After(250 * time.Second):
+		t.Logf("Timeout after 250 seconds")
 		cancel()
 	}
 	fmt.Printf("Test completed\n")
@@ -626,8 +817,8 @@ func runAggregatorTest(t *testing.T, mode string) {
 
 // loadPerformerImage loads the performer image referenced in executorConfigYaml into the Kind cluster
 func loadPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
-	// Parse executor config to extract image info
-	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml("kubernetes")))
+	// Parse executor config to extract image info (use ECDSA as default for loading image)
+	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml("kubernetes", config.CurveTypeECDSA)))
 	if err != nil {
 		return fmt.Errorf("failed to parse executor config: %v", err)
 	}
@@ -668,30 +859,20 @@ func installPerformerCRD(ctx context.Context, cluster *testUtils.KindCluster, pr
 	return nil
 }
 
-// getAggregatorConfigYaml returns the aggregator configuration with configurable RPC URLs
-func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string) string {
-	return fmt.Sprintf(`
----
-chains:
-  - name: ethereum
-    network: sepolia
-    chainId: 31337
-    rpcUrl: %s
-    pollIntervalSeconds: 5
-  - name: base
-    network: sepolia
-    chainId: 31338
-    rpcUrl: %s
-    pollIntervalSeconds: 5
-l1ChainId: 31337
-operator:
-  address: "0x1234aggregator"
-  operatorPrivateKey:
-    privateKey: "0x..."
-  signingKeys:
+// getAggregatorConfigYaml returns the aggregator configuration with configurable RPC URLs and curve type
+func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string, curveType config.CurveType) string {
+	// Build signing keys section based on curve type
+	var signingKeysSection string
+	if curveType == config.CurveTypeECDSA {
+		signingKeysSection = `  signingKeys:
+    ecdsa:
+      privateKey: "0x89d7404a597f6210a673cd0d07ae3c43df0344d233a0957f7682afdd2922e3e0"`
+	} else {
+		// BN254 keystore - using the actual test keystore from testKeys/aggregator
+		signingKeysSection = `  signingKeys:
     bls:
       password: ""
-      keystore: | 
+      keystore: |
         {
           "crypto": {
             "kdf": {
@@ -723,93 +904,39 @@ operator:
           "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
           "version": 4,
           "curveType": "bn254"
-        }
+        }`
+	}
+
+	return fmt.Sprintf(`
+---
+chains:
+  - name: ethereum
+    network: sepolia
+    chainId: 31337
+    rpcUrl: %s
+    pollIntervalSeconds: 5
+  - name: base
+    network: sepolia
+    chainId: 31338
+    rpcUrl: %s
+    pollIntervalSeconds: 5
+l1ChainId: 31337
+operator:
+  address: "0xf701291C8276DFbc3A7ea29c13A16304Dbc9F845"
+  operatorPrivateKey:
+    privateKey: "0x97c00ea4a86647f8b5c885ec3a685999c4b59e8693dbe26172748084ba0deec7"
+%s
 avss:
-  - address: "0xavs1..."
+  - address: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
     responseTimeout: 3000
     chainIds: [31338]
-    avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-`, l1RpcUrl, l2RpcUrl)
+    avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
+`, l1RpcUrl, l2RpcUrl, signingKeysSection)
 }
 
-func getExecutorConfigYaml(mode string) string {
-	if mode == "kubernetes" {
-		return `
----
-grpcPort: 9000
-operator:
-  address: "0xoperator..."
-  operatorPrivateKey:
-    privateKey: "..."
-  signingKeys:
-    bls:
-      keystore: |
-        {
-          "crypto": {
-            "kdf": {
-              "function": "scrypt",
-              "params": {
-                "dklen": 32,
-                "n": 262144,
-                "p": 1,
-                "r": 8,
-                "salt": "be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"
-              },
-              "message": ""
-            },
-            "checksum": {
-              "function": "sha256",
-              "params": {},
-              "message": "28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"
-            },
-            "cipher": {
-              "function": "aes-128-ctr",
-              "params": {
-                "iv": "cbaff55d36de018603dc9a336ac3bdc7"
-              },
-              "message": "3d261076c91fdc6b1de390d0136b22c2838d55dd646218b7cec58396"
-            }
-          },
-          "pubkey": "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9",
-          "path": "m/1/0/0",
-          "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
-          "version": 4,
-          "curveType": "bn254"
-        }
-      password: ""
-l1Chain:
-  rpcUrl: "http://localhost:8545"
-  chainId: 31337
-kubernetes:
-  namespace: "default"
-  operatorNamespace: "hourglass-system"
-  crdGroup: "hourglass.eigenlayer.io"
-  crdVersion: "v1alpha1"
-  connectionTimeout: 30s
-  inCluster: false
-  kubeConfigPath: "/tmp/kind-kubeconfig"
-avsPerformers:
-- image:
-    repository: "hello-performer"
-    tag: "latest"
-  processType: "server"
-  avsAddress: "0xavs1..."
-  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
-  deploymentMode: "kubernetes"
-  kubernetes:
-    endpointOverride: "localhost:30080"
-`
-	} else {
-		return `
----
-grpcPort: 9000
-operator:
-  address: "0xoperator..."
-  operatorPrivateKey:
-    privateKey: "..."
-  signingKeys:
-    bls:
-      keystore: |
+func getExecutorConfigYaml(mode string, curveType config.CurveType) string {
+	// BLS keystore for when executor uses BN254 - using the actual test keystore
+	blsKeystore := `
         {
           "crypto": {
             "kdf": {
@@ -841,8 +968,62 @@ operator:
           "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
           "version": 4,
           "curveType": "bn254"
-        }
+        }`
+
+	// Build signing keys section based on curve type
+	var signingKeysSection string
+	if curveType == config.CurveTypeECDSA {
+		signingKeysSection = `  signingKeys:
+    ecdsa:
+      privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"`
+	} else {
+		signingKeysSection = fmt.Sprintf(`  signingKeys:
+    bls:
       password: ""
+      keystore: |%s`, blsKeystore)
+	}
+
+	if mode == "kubernetes" {
+		return fmt.Sprintf(`
+---
+grpcPort: 9000
+operator:
+  address: "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e"
+  operatorPrivateKey:
+    privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+%s
+l1Chain:
+  rpcUrl: "http://localhost:8545"
+  chainId: 31337
+kubernetes:
+  namespace: "default"
+  operatorNamespace: "hourglass-system"
+  crdGroup: "hourglass.eigenlayer.io"
+  crdVersion: "v1alpha1"
+  connectionTimeout: 30s
+  inCluster: false
+  kubeConfigPath: "/tmp/kind-kubeconfig"
+avsPerformers:
+- image:
+    repository: "hello-performer"
+    tag: "latest"
+  processType: "server"
+  avsAddress: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
+  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
+  deploymentMode: "kubernetes"
+  kubernetes:
+    endpointOverride: "localhost:30080"
+`, signingKeysSection)
+	} else {
+		return fmt.Sprintf(`
+---
+debug: true
+grpcPort: 9000
+operator:
+  address: "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e"
+  operatorPrivateKey:
+    privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+%s
 l1Chain:
   rpcUrl: "http://localhost:8545"
   chainId: 31337
@@ -851,10 +1032,10 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xavs1..."
-  avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
+  avsAddress: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
+  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "docker"
-`
+`, signingKeysSection)
 	}
 }
 

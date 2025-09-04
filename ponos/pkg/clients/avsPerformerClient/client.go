@@ -14,8 +14,8 @@ type PerformerClient struct {
 	PerformerClient performerV1.PerformerServiceClient
 }
 
-func NewAvsPerformerClient(fullUrl string, insecureConn bool) (*PerformerClient, error) {
-	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, insecureConn, clients.DefaultRetryConfig())
+func NewAvsPerformerClient(fullUrl string, tlsEnabled bool) (*PerformerClient, error) {
+	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, tlsEnabled, clients.DefaultRetryConfig())
 	if err != nil {
 		return nil, err
 	}

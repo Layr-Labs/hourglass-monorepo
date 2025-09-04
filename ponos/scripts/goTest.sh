@@ -53,4 +53,5 @@ sleep 3
 
 # run the tests
 # GOFLAGS="-count=1" $(GO) test -v -p 1 -parallel 1 ./...
-go test $@
+# Set a longer timeout for integration tests (default is 10m)
+go test -timeout 30m $@

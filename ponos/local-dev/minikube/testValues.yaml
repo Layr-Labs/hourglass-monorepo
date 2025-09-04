@@ -11,13 +11,13 @@ aggregator:
         debug: false
     
         operator:
-          address: "0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc"
+          address: "0xf701291C8276DFbc3A7ea29c13A16304Dbc9F845"
           operatorPrivateKey:
-            privateKey: "0x3dd7c381f27775d9945f0fcf5bb914484c4d01681824603c71dd762259f43214"
+            privateKey: "0x97c00ea4a86647f8b5c885ec3a685999c4b59e8693dbe26172748084ba0deec7"
           signingKeys:
             bls:
               keystore: |
-                {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"},"message":""},"checksum":{"function":"sha256","params":{},"message":"2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"},"cipher":{"function":"aes-128-ctr","params":{"iv":"677edd29eff1f8635a51f66f71bc5c83"},"message":"162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"}},"pubkey":"2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169","path":"m/1/0/0","uuid":"3b7d7ab3-4472-417f-8f2f-8b2a7011a463","version":4,"curveType":"bn254"}
+                {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"1222b66e6092fbe30eadbd301b1f94492ebc4b0953d6e9c817bfac8b82151219"},"message":""},"checksum":{"function":"sha256","params":{},"message":"44e5e3a0593df13d20c43168e883838890fec6e48d1b8bc5e36d21e3fd45633a"},"cipher":{"function":"aes-128-ctr","params":{"iv":"5a728603d2f7b0710e8b93af0b1ec9fc"},"message":"028c58531a51151f268a6166bf62eb72dca5fa169fefdfa6b2ce5033b4f70d23"}},"pubkey":"110936c375f725bb6474b0facf2c243b8fa97f7066c51111049875d2674771402a1cd975e6b9d9bebf7e3e5f9d840e85d35afa22d3e6f6870f991f54fb137b132723a3d2d285a3d48ef9308a40e5a57d895816ed875e32152e4478d6d039e6c4114709c9fc9fdf80454b628307aea4f326d573a84ef5018d4551cf0879359650","path":"m/1/0/0","uuid":"5e02731b-11d3-41f5-bcfc-f3594f29dcb3","version":4,"curveType":"bn254"}
               password: ""
         
         l1ChainId: 31337
@@ -52,13 +52,13 @@ executor:
         grpcPort: 9000
         managementServerGrpcPort: 9001
         operator:
-          address: "0x9B18A6D836e9b2b6541fA9c7247f46b4a4a2F2Fc"
+          address: "0x6ca766d180398847cEb1a58f03e029D65d88a878"
           operatorPrivateKey:
-            privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+            privateKey: "0x71d173dbc3f00534ddd9bb0796c7df160c7d1af30e5aeeb601689c2026c244f6"
           signingKeys:
             bls:
               keystore: |
-                {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"},"message":""},"checksum":{"function":"sha256","params":{},"message":"28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"},"cipher":{"function":"aes-128-ctr","params":{"iv":"cbaff55d36de018603dc9a336ac3bdc7"},"message":"3d261076c91fdc6b1de390d0136b22c2a79b83b2838d55dd646218b7cec58396"}},"pubkey":"11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9","path":"m/1/0/0","uuid":"8df75d34-4383-4ff4-a3c0-c47717c72e86","version":4,"curveType":"bn254"}
+                {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"ab09c61a936e1ad3fba62fa5798fe0cace021765b7da485662db23c7bb42df55"},"message":""},"checksum":{"function":"sha256","params":{},"message":"efc2d0baa038a0e5be02977b11e7cf55101abb348902b1b27e724bea89d96ace"},"cipher":{"function":"aes-128-ctr","params":{"iv":"836eb161c0f87bb3ecccd81f9e8c7d9c"},"message":"3b288503f5ad1a7620fce9514b14f2dddb26427a5550f975a907c3de4190b985"}},"pubkey":"1a42c113530a95717e8d2b9d038d8ef87a028b9fd5ffc63e513742ec6e1c3aab0ccd2c8b00446a25fae666807b17e0c6fc18ef63bb754e44a8f81f8a6f6c6f171d17e059c183fc3f560fe537e3815911cbdefc80bc01aa89a536036264fec88d109c5a3f39e8b4b9a815172ad769f09922aba0879e2529d926a4b1476760c66b","path":"m/1/0/0","uuid":"34a93605-4399-409d-b2e6-bc51d8fadf21","version":4,"curveType":"bn254"}
               password: ""
         l1Chain:
           rpcUrl: "http://host.docker.internal:8545"

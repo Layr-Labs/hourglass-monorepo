@@ -196,7 +196,7 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 	)
 
 	// Create performer client
-	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, true)
+	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, false)
 	if err != nil {
 		// Clean up on failure
 		aps.cleanupFailedContainer(updatedInfo.ID, "failed to create performer client")
@@ -501,7 +501,7 @@ func (aps *AvsContainerPerformer) recreatePerformerClientForContainer(ctx contex
 	}
 
 	// Create new performer client
-	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, true)
+	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, false)
 	if err != nil {
 		aps.logger.Error("Failed to recreate performer client after restart",
 			zap.String("avsAddress", aps.config.AvsAddress),

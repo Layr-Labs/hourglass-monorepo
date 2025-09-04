@@ -44,13 +44,13 @@ func DefaultRetryConfig() *RetryConfig {
 }
 
 // NewGrpcClientWithRetry creates a gRPC client and forcing connection
-func NewGrpcClientWithRetry(url string, insecureConn bool, retryConfig *RetryConfig) (*grpc.ClientConn, error) {
+func NewGrpcClientWithRetry(url string, tlsEnabled bool, retryConfig *RetryConfig) (*grpc.ClientConn, error) {
 	if retryConfig == nil {
 		retryConfig = DefaultRetryConfig()
 	}
 
 	var creds grpc.DialOption
-	if strings.Contains(url, "localhost:") || strings.Contains(url, "127.0.0.1:") || insecureConn {
+	if strings.Contains(url, "localhost:") || strings.Contains(url, "127.0.0.1:") || !tlsEnabled {
 		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
 		creds = grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: false}))

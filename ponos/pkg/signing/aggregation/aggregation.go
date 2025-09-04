@@ -32,7 +32,8 @@ func (o *Operator[PubKeyT]) GetAddress() common.Address {
 
 // Error variables for input validation
 var (
-	ErrInvalidTaskId       = fmt.Errorf("taskId must not be empty")
-	ErrNoOperatorAddresses = fmt.Errorf("operatorAddresses must not be empty")
-	ErrInvalidThreshold    = fmt.Errorf("thresholdPercentage must be between 1 and 100")
+	ErrInvalidTaskId             = fmt.Errorf("taskId must not be empty")
+	ErrNoOperatorAddresses       = fmt.Errorf("operatorAddresses must not be empty")
+	ErrInvalidThreshold          = fmt.Errorf("thresholdPercentage must be between 1 and 100")
+	ErrInvalidReferenceTimestamp = fmt.Errorf("referenceTimestamp must be positive")
 )

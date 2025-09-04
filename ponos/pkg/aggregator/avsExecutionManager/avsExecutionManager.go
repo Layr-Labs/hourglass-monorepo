@@ -33,9 +33,7 @@ type AvsExecutionManagerConfig struct {
 	MailboxContractAddresses map[config.ChainId]string
 	AggregatorAddress        string
 	L1ChainId                config.ChainId
-	// InsecureExecutorConnections when true, disables TLS for executor client connections.
-	// This should only be used for local development. Defaults to false (secure connections).
-	InsecureExecutorConnections bool
+	TlsEnabled               bool
 }
 
 type OperatorSet struct {
@@ -258,9 +256,19 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 		return nil, fmt.Errorf("failed to get l1 reference block number for chain %d: %w", taskChainId, err)
 	}
 
-	opsetConfig, err := cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, l1ReferenceBlockNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator set task config: %w", err)
+	var opsetConfig *contractCaller.TaskMailboxExecutorOperatorSetConfig
+	if task.SourceBlockNumber != l1ReferenceBlockNumber {
+		// The cc is for an L2 -- use the L2 block height
+		opsetConfig, err = cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, task.SourceBlockNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator set task config: %w", err)
+		}
+	} else {
+		// The cc is for an L1 -- use the L1 block height
+		opsetConfig, err = cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, task.L1ReferenceBlockNumber)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get operator set task config: %w", err)
+		}
 	}
 
 	curveType, err := opsetConfig.GetCurveType()
@@ -439,15 +447,23 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get curve type for operator set: %w", err)
 	}
 
+	// Get the L1 contract caller
+	l1Cc, ok := em.chainContractCallers[em.config.L1ChainId]
+	if !ok {
+		return fmt.Errorf("no L1 contract caller found")
+	}
+
+	// TODO: pass in the known values we indexed to verify against the response during aggregation
 	if opsetCurveType == config.CurveTypeBN254 {
 		ts, err := taskSession.NewBN254TaskSession(
 			ctx,
 			cancel,
 			task,
+			l1Cc,
 			em.config.AggregatorAddress,
 			signerToUse,
 			operatorPeersWeight,
-			em.config.InsecureExecutorConnections,
+			em.config.TlsEnabled,
 			em.logger,
 		)
 		if err != nil {
@@ -463,10 +479,11 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			ctx,
 			cancel,
 			task,
+			l1Cc,
 			em.config.AggregatorAddress,
 			signerToUse,
 			operatorPeersWeight,
-			em.config.InsecureExecutorConnections,
+			em.config.TlsEnabled,
 			em.logger,
 		)
 		if err != nil {
@@ -529,7 +546,9 @@ func (em *AvsExecutionManager) processBN254Task(
 			zap.String("taskResponseDigest", hexutil.Encode(cert.TaskResponseDigest[:])),
 		)
 
-		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		// Convert certificate to submission parameters
+		params := cert.ToSubmitParams()
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, params, operatorPeersWeight.RootReferenceTimestamp)
 		if err != nil {
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
@@ -639,7 +658,9 @@ func (em *AvsExecutionManager) processECDSATask(
 			zap.String("taskResponseDigest", hexutil.Encode(cert.TaskResponseDigest[:])),
 		)
 
-		receipt, err := chainCC.SubmitECDSATaskResultRetryable(ctx, cert, operatorPeersWeight.RootReferenceTimestamp)
+		// Convert certificate to submission parameters
+		params := cert.ToSubmitParams()
+		receipt, err := chainCC.SubmitECDSATaskResultRetryable(ctx, params, operatorPeersWeight.RootReferenceTimestamp)
 		if err != nil {
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)

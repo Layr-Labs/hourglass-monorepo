@@ -1,9 +1,11 @@
 package caller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
@@ -22,7 +24,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/TaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signing/aggregation"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -32,6 +33,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
+)
+
+// Table calculator contract addresses
+const (
+	BN254TableCalculatorAddress = "0x797d076aB96a5d4104062C15c727447fD8b71eB0"
+	ECDSATableCalculatorAddress = "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38"
 )
 
 type ContractCaller struct {
@@ -130,23 +137,23 @@ func NewContractCaller(
 
 func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedBN254Certificate,
+	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitBN254TaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
-					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.String("taskId", hexutil.Encode(params.TaskId)),
 					zap.Error(err),
 				)
 				return nil, fmt.Errorf("failed to submit task result: %w", err)
 			}
 			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
 				zap.Error(err),
-				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.String("taskId", hexutil.Encode(params.TaskId)),
 				zap.Int("attempt", i+1),
 			)
 			time.Sleep(time.Second * time.Duration(backoff))
@@ -159,7 +166,7 @@ func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 
 func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedBN254Certificate,
+	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
@@ -167,11 +174,11 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
-	if len(aggCert.TaskId) != 32 {
-		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+	if len(params.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(params.TaskId))
 	}
 	var taskId [32]byte
-	copy(taskId[:], aggCert.TaskId)
+	copy(taskId[:], params.TaskId)
 	cc.logger.Sugar().Infow("submitting task result",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
 		zap.String("mailboxAddress", cc.coreContracts.TaskMailbox),
@@ -180,7 +187,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 	// Convert signature to G1 point in precompile format
 	g1Point := &bn254.G1Point{
-		G1Affine: aggCert.SignersSignature.GetG1Point(),
+		G1Affine: params.SignersSignature.GetG1Point(),
 	}
 	g1Bytes, err := g1Point.ToPrecompileFormat()
 	if err != nil {
@@ -188,16 +195,16 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	}
 
 	// Convert public key to G2 point in precompile format
-	g2Bytes, err := aggCert.SignersPublicKey.ToPrecompileFormat()
+	g2Bytes, err := params.SignersPublicKey.ToPrecompileFormat()
 	if err != nil {
 		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
 	}
 
-	digest := aggCert.TaskResponseDigest
+	digest := params.TaskResponseDigest
 
 	// Populate NonSignerWitnesses from the sorted non-signer operators
-	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(aggCert.NonSignerOperators))
-	for _, nonSigner := range aggCert.NonSignerOperators {
+	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(params.NonSignerOperators))
+	for _, nonSigner := range params.NonSignerOperators {
 		// For now, we only provide the operator index
 		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
 			OperatorIndex: nonSigner.OperatorIndex,
@@ -206,8 +213,8 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 			// The contract needs these values to properly calculate non-signer operations
 			OperatorInfo: ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
 				Pubkey: ITaskMailbox.BN254G1Point{
-					X: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[0:32]),
-					Y: new(big.Int).SetBytes(nonSigner.PublicKey.Bytes()[32:64]),
+					X: new(big.Int).SetBytes(nonSigner.PublicKey[0:32]),
+					Y: new(big.Int).SetBytes(nonSigner.PublicKey[32:64]),
 				},
 			},
 		}
@@ -239,7 +246,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
 	}
 
-	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
+	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, params.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
@@ -249,23 +256,23 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 func (cc *ContractCaller) SubmitECDSATaskResultRetryable(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedECDSACertificate,
+	params *contractCaller.ECDSATaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitECDSATaskResult(ctx, aggCert, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitECDSATaskResult(ctx, params, globalTableRootReferenceTimestamp)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
-					zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+					zap.String("taskId", hexutil.Encode(params.TaskId)),
 					zap.Error(err),
 				)
 				return nil, fmt.Errorf("failed to submit task result: %w", err)
 			}
 			cc.logger.Sugar().Errorw("failed to submit task result, retrying",
 				zap.Error(err),
-				zap.String("taskId", hexutil.Encode(aggCert.TaskId)),
+				zap.String("taskId", hexutil.Encode(params.TaskId)),
 				zap.Int("attempt", i+1),
 			)
 			time.Sleep(time.Second * time.Duration(backoff))
@@ -278,7 +285,7 @@ func (cc *ContractCaller) SubmitECDSATaskResultRetryable(
 
 func (cc *ContractCaller) SubmitECDSATaskResult(
 	ctx context.Context,
-	aggCert *aggregation.AggregatedECDSACertificate,
+	params *contractCaller.ECDSATaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
 ) (*types.Receipt, error) {
 	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
@@ -286,13 +293,14 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
-	if len(aggCert.TaskId) != 32 {
-		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
+	if len(params.TaskId) != 32 {
+		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(params.TaskId))
 	}
 	var taskId [32]byte
-	copy(taskId[:], aggCert.TaskId)
+	copy(taskId[:], params.TaskId)
 
-	finalSig, err := aggCert.GetFinalSignature()
+	// Get final signature from params - concatenate signatures in sorted order
+	finalSig, err := cc.getFinalECDSASignature(params.SignersSignatures)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final signature: %w", err)
 	}
@@ -306,7 +314,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 
 	cert := ITaskMailbox.IECDSACertificateVerifierTypesECDSACertificate{
 		ReferenceTimestamp: globalTableRootReferenceTimestamp,
-		MessageHash:        aggCert.GetTaskMessageHash(),
+		MessageHash:        params.TaskResponseDigest,
 		Sig:                finalSig,
 	}
 
@@ -315,12 +323,43 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 		return nil, fmt.Errorf("failed to call GetECDSACertificateBytes: %w", err)
 	}
 
-	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
+	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, params.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
 	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
+}
+
+// getFinalECDSASignature concatenates ECDSA signatures in sorted order by address
+func (cc *ContractCaller) getFinalECDSASignature(signatures map[common.Address][]byte) ([]byte, error) {
+	if len(signatures) == 0 {
+		return nil, fmt.Errorf("no signatures found")
+	}
+
+	// Collect addresses
+	addresses := make([]common.Address, 0, len(signatures))
+	for addr := range signatures {
+		addresses = append(addresses, addr)
+	}
+
+	// Sort by raw bytes
+	sort.Slice(addresses, func(i, j int) bool {
+		return bytes.Compare(addresses[i][:], addresses[j][:]) < 0
+	})
+
+	// Concatenate signatures in sorted order
+	var finalSignature []byte
+	for _, addr := range addresses {
+		sig := signatures[addr]
+		if len(sig) != 65 {
+			return nil, fmt.Errorf("signature for address %s has invalid length: expected 65, got %d",
+				addr.Hex(), len(sig))
+		}
+		finalSignature = append(finalSignature, sig...)
+	}
+
+	return finalSignature, nil
 }
 
 func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(
@@ -1128,34 +1167,17 @@ func (cc *ContractCaller) ModifyAllocations(
 
 func (cc *ContractCaller) VerifyECDSACertificate(
 	ctx context.Context,
+	messageHash [32]byte,
+	signature []byte,
 	avsAddress common.Address,
 	operatorSetId uint32,
-	aggCert *aggregation.AggregatedECDSACertificate,
 	globalTableRootReferenceTimestamp uint32,
 	threshold uint16,
 ) (bool, []common.Address, error) {
-	if len(aggCert.TaskId) != 32 {
-		return false, nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(aggCert.TaskId))
-	}
-	var taskId [32]byte
-	copy(taskId[:], aggCert.TaskId)
-
-	finalSig, err := aggCert.GetFinalSignature()
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get final signature: %w", err)
-	}
-
-	cc.logger.Sugar().Infow("verifying ECDSA certificate",
-		zap.String("taskId", hexutil.Encode(taskId[:])),
-		zap.String("mailboxAddress", cc.coreContracts.TaskMailbox),
-		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
-		zap.String("finalSig", hexutil.Encode(finalSig[:])),
-	)
-
 	cert := IECDSACertificateVerifier.IECDSACertificateVerifierTypesECDSACertificate{
 		ReferenceTimestamp: globalTableRootReferenceTimestamp,
-		MessageHash:        aggCert.GetTaskMessageHash(),
-		Sig:                finalSig,
+		MessageHash:        messageHash,
+		Sig:                signature,
 	}
 
 	return cc.ecdsaCertVerifier.VerifyCertificateProportion(
@@ -1167,4 +1189,112 @@ func (cc *ContractCaller) VerifyECDSACertificate(
 		cert,
 		[]uint16{threshold},
 	)
+}
+
+func (cc *ContractCaller) GetOperatorRegistrationMessageHash(
+	ctx context.Context,
+	operatorAddress common.Address,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	keyData []byte,
+) ([32]byte, error) {
+	return cc.keyRegistrar.GetBN254KeyRegistrationMessageHash(&bind.CallOpts{Context: ctx}, operatorAddress, IKeyRegistrar.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}, keyData)
+}
+
+// CreateGenerationReservation creates a generation reservation for an operator set with table calculator and config
+func (cc *ContractCaller) CreateGenerationReservation(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	operatorTableCalculatorAddress common.Address,
+	owner common.Address,
+	maxStalenessPeriod uint32,
+) (*types.Receipt, error) {
+	txOpts, err := cc.buildTransactionOpts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	operatorSet := ICrossChainRegistry.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}
+
+	config := ICrossChainRegistry.ICrossChainRegistryTypesOperatorSetConfig{
+		Owner:              owner,
+		MaxStalenessPeriod: maxStalenessPeriod,
+	}
+
+	cc.logger.Sugar().Infow("Creating generation reservation",
+		zap.String("avsAddress", avsAddress.String()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("calculatorAddress", operatorTableCalculatorAddress.String()),
+		zap.String("owner", owner.String()),
+		zap.Uint32("maxStalenessPeriod", maxStalenessPeriod),
+	)
+
+	tx, err := cc.crossChainRegistry.CreateGenerationReservation(
+		txOpts,
+		operatorSet,
+		operatorTableCalculatorAddress,
+		config,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.signAndSendTransaction(ctx, tx, "CreateGenerationReservation")
+}
+
+// SetOperatorTableCalculator sets the operator table calculator for an operator set (requires existing reservation)
+func (cc *ContractCaller) SetOperatorTableCalculator(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	operatorTableCalculatorAddress common.Address,
+) (*types.Receipt, error) {
+	txOpts, err := cc.buildTransactionOpts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	operatorSet := ICrossChainRegistry.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}
+
+	cc.logger.Sugar().Infow("Setting operator table calculator",
+		zap.String("avsAddress", avsAddress.String()),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("calculatorAddress", operatorTableCalculatorAddress.String()),
+	)
+
+	tx, err := cc.crossChainRegistry.SetOperatorTableCalculator(
+		txOpts,
+		operatorSet,
+		operatorTableCalculatorAddress,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	return cc.signAndSendTransaction(ctx, tx, "SetOperatorTableCalculator")
+}
+
+// GetTableCalculatorAddress returns the appropriate table calculator address for a given curve type
+func (cc *ContractCaller) GetTableCalculatorAddress(curveType config.CurveType) common.Address {
+	switch curveType {
+	case config.CurveTypeBN254:
+		return common.HexToAddress(BN254TableCalculatorAddress)
+	case config.CurveTypeECDSA:
+		return common.HexToAddress(ECDSATableCalculatorAddress)
+	default:
+		cc.logger.Sugar().Warnw("Unknown curve type for table calculator",
+			zap.String("curveType", curveType.String()),
+		)
+		return common.Address{}
+	}
 }

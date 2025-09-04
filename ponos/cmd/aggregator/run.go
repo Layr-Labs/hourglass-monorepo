@@ -138,6 +138,7 @@ var runCmd = &cobra.Command{
 				PrivateKeyConfig: Config.Operator.OperatorPrivateKey,
 				L1ChainId:        Config.L1ChainId,
 				Authentication:   authConfig,
+				TLSEnabled:       Config.TLSEnabled,
 			},
 			imContractStore,
 			tlp,

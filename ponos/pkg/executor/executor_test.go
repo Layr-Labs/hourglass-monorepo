@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strconv"
 	"sync"
@@ -149,6 +150,71 @@ func testWithKeyType(
 	aggOpsetId := uint32(0)
 	execOpsetId := uint32(1)
 
+	t.Logf("------------------------------------------- Configuring operator sets -------------------------------------------")
+
+	// Configure operator sets with their curve types
+	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
+
+	// Create AVS config caller for operator set configuration
+	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS private key signer: %v", err)
+	}
+
+	avsConfigCaller, err := caller.NewContractCaller(l1EthClient, avsPrivateKeySigner, l)
+	if err != nil {
+		t.Fatalf("Failed to create AVS config contract caller: %v", err)
+	}
+
+	// Configure BN254 operator set for aggregator
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx, avsAddr, aggOpsetId, config.CurveTypeBN254)
+	if err != nil {
+		t.Fatalf("Failed to configure BN254 operator set: %v", err)
+	}
+	t.Logf("Configured operator set %d with BN254 curve type", aggOpsetId)
+
+	// Configure ECDSA operator set for executor
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx, avsAddr, execOpsetId, config.CurveTypeECDSA)
+	if err != nil {
+		t.Fatalf("Failed to configure ECDSA operator set: %v", err)
+	}
+	t.Logf("Configured operator set %d with ECDSA curve type", execOpsetId)
+
+	// Create generation reservations for both operator sets
+	maxStalenessPeriod := uint32(0) // 0 allows certificates to always be valid regardless of referenceTimestamp
+
+	// BN254 table calculator for aggregator
+	bn254CalculatorAddr := common.HexToAddress(caller.BN254TableCalculatorAddress)
+	_, err = avsConfigCaller.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		aggOpsetId,
+		bn254CalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for BN254 operator set: %v", err)
+	}
+	t.Logf("Created generation reservation for operator set %d with BN254 table calculator", aggOpsetId)
+
+	// ECDSA table calculator for executor
+	ecdsaCalculatorAddr := common.HexToAddress(caller.ECDSATableCalculatorAddress)
+	_, err = avsConfigCaller.CreateGenerationReservation(
+		ctx,
+		avsAddr,
+		execOpsetId,
+		ecdsaCalculatorAddr,
+		avsAddr, // AVS is the owner
+		maxStalenessPeriod,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for ECDSA operator set: %v", err)
+	}
+	t.Logf("Created generation reservation for operator set %d with ECDSA table calculator", execOpsetId)
+
+	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
+
 	err = testUtils.SetupOperatorPeering(
 		ctx,
 		chainConfig,
@@ -240,45 +306,50 @@ func testWithKeyType(
 	if err != nil {
 		t.Fatalf("Failed to get L1 block strBlockNumber: %v", err)
 	}
+
 	// Parse hex string (e.g., "0x86d4dd") to uint64
 	blockNumber, err := strconv.ParseUint(strBlockNumber[2:], 16, 64)
 	if err != nil {
 		t.Fatalf("Failed to parse L1 block strBlockNumber %s: %v", strBlockNumber, err)
 	}
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
+
 	encodedMessage := util.EncodeTaskSubmissionMessage(
 		taskId,
 		simAggConfig.Avss[0].Address,
 		chainConfig.ExecOperatorAccountAddress,
-		1,
+		42,
 		blockNumber,
+		1,
 		payloadJsonBytes,
 	)
 
-	// For BN254, we need to sign directly without hashing
+	// For BN254, we need to hash the message before signing to match the production behavior
 	var payloadSig []byte
 	if simAggConfig.Operator.SigningKeys.BLS != nil {
-		// BN254 signing - sign the raw message
+		// BN254 signing - sign the hashed message
 		bn254Key := aggBn254PrivateSigningKey
-		sig, err := bn254Key.Sign(encodedMessage)
+		bn254Signer := inMemorySigner.NewInMemorySigner(bn254Key, config.CurveTypeBN254)
+		signature, err := bn254Signer.SignMessage(encodedMessage[:])
 		if err != nil {
 			t.Fatalf("Failed to sign task payload with BN254: %v", err)
 		}
-		payloadSig = sig.Bytes()
+		payloadSig = signature
 	} else {
 		t.Fatalf("signer should be BLS")
 	}
 
 	// send the task to the executor
 	taskResult, err := execClient.SubmitTask(ctx, &executorV1.TaskSubmission{
-		TaskId:            taskId,
-		AggregatorAddress: simAggConfig.Operator.Address,
-		AvsAddress:        simAggConfig.Avss[0].Address,
-		ExecutorAddress:   chainConfig.ExecOperatorAccountAddress,
-		Payload:           payloadJsonBytes,
-		Signature:         payloadSig,
-		TaskBlockNumber:   blockNumber,
-		OperatorSetId:     1,
+		TaskId:             taskId,
+		AggregatorAddress:  simAggConfig.Operator.Address,
+		AvsAddress:         simAggConfig.Avss[0].Address,
+		ExecutorAddress:    chainConfig.ExecOperatorAccountAddress,
+		Payload:            payloadJsonBytes,
+		Signature:          payloadSig,
+		TaskBlockNumber:    blockNumber,
+		ReferenceTimestamp: 42,
+		OperatorSetId:      1,
 	})
 	if err != nil {
 		cancel()
@@ -347,9 +418,9 @@ const (
 ---
 grpcPort: 9090
 operator:
-  address: "0x9b18a6d836e9b2b6541fa9c7247f46b4a4a2f2fc"
+  address: "0x6ca766d180398847cEb1a58f03e029D65d88a878"
   operatorPrivateKey:
-    privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+    privateKey: "0x71d173dbc3f00534ddd9bb0796c7df160c7d1af30e5aeeb601689c2026c244f6"
   signingKeys:
     bls:
       keystore: |
@@ -362,26 +433,26 @@ operator:
                 "n": 262144,
                 "p": 1,
                 "r": 8,
-                "salt": "be920dab5644b5036299788e5a4082fd03c978cc35903b528af754fe7aeccb41"
+                "salt": "ab09c61a936e1ad3fba62fa5798fe0cace021765b7da485662db23c7bb42df55"
               },
               "message": ""
             },
             "checksum": {
               "function": "sha256",
               "params": {},
-              "message": "28566410c36025d243d0ea9e061ccb46651f09d63ebba598752db2f781d040da"
+              "message": "efc2d0baa038a0e5be02977b11e7cf55101abb348902b1b27e724bea89d96ace"
             },
             "cipher": {
               "function": "aes-128-ctr",
               "params": {
-                "iv": "cbaff55d36de018603dc9a336ac3bdc7"
+                "iv": "836eb161c0f87bb3ecccd81f9e8c7d9c"
               },
-              "message": "3d261076c91fdc6b1de390d0136b22c2a79b83b2838d55dd646218b7cec58396"
+              "message": "3b288503f5ad1a7620fce9514b14f2dddb26427a5550f975a907c3de4190b985"
             }
           },
-          "pubkey": "11d5ec232840a49a1b48d4a6dc0b2e2cb6d5d4d7fc0ef45233f91b98a384d7090f19ac8105e5eaab41aea1ce0021511627a0063ef06f5815cc38bcf0ef4a671e292df403d6a7d6d331b6992dc5b2a06af62bb9c61d7a037a0cd33b88a87950412746cea67ee4b7d3cf0d9f97fdd5bca4690895df14930d78f28db3ff287acea9",
+          "pubkey": "1a42c113530a95717e8d2b9d038d8ef87a028b9fd5ffc63e513742ec6e1c3aab0ccd2c8b00446a25fae666807b17e0c6fc18ef63bb754e44a8f81f8a6f6c6f171d17e059c183fc3f560fe537e3815911cbdefc80bc01aa89a536036264fec88d109c5a3f39e8b4b9a815172ad769f09922aba0879e2529d926a4b1476760c66b",
           "path": "m/1/0/0",
-          "uuid": "8df75d34-4383-4ff4-a3c0-c47717c72e86",
+          "uuid": "34a93605-4399-409d-b2e6-bc51d8fadf21",
           "version": 4,
           "curveType": "bn254"
         }
@@ -406,13 +477,13 @@ chains:
     chainId: 31337
     rpcUrl: https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID
 operator:
-  address: "0x9b18a6d836e9b2b6541fa9c7247f46b4a4a2f2fc"
+  address: "0xf701291C8276DFbc3A7ea29c13A16304Dbc9F845"
   operatorPrivateKey:
-    privateKey: "0x40a4c2aa3c75c735a5e3deaeb77cf5b6ea73bf12771f634e07a82d501f420849"
+    privateKey: "0x97c00ea4a86647f8b5c885ec3a685999c4b59e8693dbe26172748084ba0deec7"
   signingKeys:
     bls:
       password: ""
-      keystore: | 
+      keystore: |
         {
           "crypto": {
             "kdf": {
@@ -422,26 +493,26 @@ operator:
                 "n": 262144,
                 "p": 1,
                 "r": 8,
-                "salt": "dfca382309f4848f5b19e68b210a4352483ac2932ed85fd33dcf18a65cf6df00"
+                "salt": "adf064e1f09d1001adef3fa51c40e0ed676103ca380ec30914d45d1e4a8ef1a3"
               },
               "message": ""
             },
             "checksum": {
               "function": "sha256",
               "params": {},
-              "message": "2a199250fa26519cf2126a1412146401841dcf01bf3b7247400e0a7a76c4250b"
+              "message": "dfc02d55ef7787fc6a01a76b247074dfed2750ec1e20fa19735d6d740ea78427"
             },
             "cipher": {
               "function": "aes-128-ctr",
               "params": {
-                "iv": "677edd29eff1f8635a51f66f71bc5c83"
+                "iv": "14657c17d26112862db3b54ec5b214bd"
               },
-              "message": "162d9d639a04c1ba85eca100875408dcc19fcd4c3d046137a73c777dde1f8347"
+              "message": "c65fff42226fade000cdde6f01894362e0f8908aa37a50e5434c2e2cd2d070b2"
             }
           },
-          "pubkey": "2d9070dd755001e31106e8fd58e12f391d09748e5e729512847a944f59966c3311647e4f059bc95ca7f82ecf104758658faa6c3fd18e520c84ba494659b0c6aa015b70ece5cf79963f6295b2db088213732f8bd5c2c456039cd76991e8f24fc225de170c25e59665e9ed95313f43f0bfc93122445e048c9a91fbdea84c71d169",
+          "pubkey": "110936c375f725bb6474b0facf2c243b8fa97f7066c51111049875d2674771402a1cd975e6b9d9bebf7e3e5f9d840e85d35afa22d3e6f6870f991f54fb137b132723a3d2d285a3d48ef9308a40e5a57d895816ed875e32152e4478d6d039e6c4114709c9fc9fdf80454b628307aea4f326d573a84ef5018d4551cf0879359650",
           "path": "m/1/0/0",
-          "uuid": "3b7d7ab3-4472-417f-8f2f-8b2a7011a463",
+          "uuid": "894ceb28-b902-4062-be20-2e4d66606936",
           "version": 4,
           "curveType": "bn254"
         }

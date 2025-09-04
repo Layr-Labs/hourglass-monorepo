@@ -85,16 +85,6 @@ func RegisterOperatorToOperatorSets(
 	}
 
 	for _, operatorSetId := range operatorSetIds {
-		tx, err := avsContractCaller.ConfigureAVSOperatorSet(ctx, avsAddress, operatorSetId, operator.Curve)
-		if err != nil {
-			return nil, err
-		}
-		l.Sugar().Infow("Configured AVS operator set",
-			zap.String("avsAddress", avsAddress.String()),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.String("txHash", tx.TxHash.String()),
-		)
-
 		setCurveType, err := avsContractCaller.GetOperatorSetCurveType(avsAddress.String(), operatorSetId, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set curve type: %w", err)

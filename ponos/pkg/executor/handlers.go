@@ -461,8 +461,10 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 
 	// Calculate the bytes that need to be signed for the result signature
 	// This uses the contract's certificate digest calculation
-	var signedOverBytes []byte
+	var digestToSign []byte
 	var signerToUse signer.ISigner
+
+	outputDigest := util.GetKeccak256Digest(result.Result)
 
 	if curveType == config.CurveTypeBN254 {
 		if e.bn254Signer == nil {
@@ -471,10 +473,10 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		signerToUse = e.bn254Signer
 
 		// Use the contract's BN254 certificate digest calculation
-		signedOverBytes, err = e.l1ContractCaller.CalculateBN254CertificateDigestBytes(
+		digestToSign, err = e.l1ContractCaller.CalculateBN254CertificateDigestBytes(
 			context.Background(),
 			task.ReferenceTimestamp,
-			util.GetKeccak256Digest(result.Result),
+			outputDigest,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate BN254 certificate digest: %w", err)
@@ -487,10 +489,10 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		signerToUse = e.ecdsaSigner
 
 		// Use the contract's ECDSA certificate digest calculation
-		signedOverBytes, err = e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
+		digestToSign, err = e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
 			context.Background(),
 			task.ReferenceTimestamp,
-			util.GetKeccak256Digest(result.Result),
+			outputDigest,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)
@@ -501,7 +503,7 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 	}
 
 	// Step 1: Create the result signature by signing the certificate digest
-	resultSig, err := signerToUse.SignMessageForSolidity(signedOverBytes)
+	resultSig, err := signerToUse.SignMessageForSolidity(digestToSign)
 	if err != nil {
 		e.logger.Error("Failed to sign result",
 			zap.String("taskId", task.TaskID),
@@ -521,8 +523,10 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		OperatorSetId:   task.OperatorSetId,
 		ResultSigDigest: resultSigDigest,
 	}
+
+	// Step 3: Sign over the auth bytes for verification by the Aggregator
 	authBytes := authData.ToSigningBytes()
-	authSig, err := signerToUse.SignMessageForSolidity(authBytes)
+	authSig, err := signerToUse.SignMessage(authBytes)
 	if err != nil {
 		e.logger.Error("Failed to sign auth data",
 			zap.String("taskId", task.TaskID),
@@ -532,7 +536,6 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 		return nil, nil, fmt.Errorf("failed to sign auth data: %w", err)
 	}
 
-	// Return both signatures
 	return resultSig, authSig, nil
 }
 
@@ -803,8 +806,9 @@ func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmissio
 		task.TaskId,
 		task.AvsAddress,
 		e.config.Operator.Address,
-		task.OperatorSetId,
+		task.ReferenceTimestamp,
 		task.TaskBlockNumber,
+		task.OperatorSetId,
 		task.Payload,
 	)
 }
@@ -875,7 +879,9 @@ func (e *Executor) validateTaskSignature(task *executorV1.TaskSubmission) error 
 	var verified bool
 	switch aggOpSet.CurveType {
 	case config.CurveTypeBN254:
-		verified, err = sig.Verify(aggOpSet.WrappedPublicKey.PublicKey, messageToVerify)
+		// For BN254, we need to hash the message before verification to match how it was signed
+		messageHash := util.GetKeccak256Digest(messageToVerify)
+		verified, err = sig.Verify(aggOpSet.WrappedPublicKey.PublicKey, messageHash[:])
 		if err != nil {
 			e.logger.Sugar().Errorw("Error verifying BN254 signature",
 				zap.String("aggregatorAddress", task.AggregatorAddress),
