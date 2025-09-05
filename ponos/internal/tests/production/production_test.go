@@ -175,9 +175,10 @@ func TestProductionRecovery(t *testing.T) {
 	numTasks := 10000
 
 	// Write initial data
+	avsAddress := "0xtest"
 	for i := 0; i < numTasks; i++ {
 		if i%100 == 0 {
-			require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, uint64(i)))
+			require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)))
 		}
 
 		task := &types.Task{
@@ -202,7 +203,7 @@ func TestProductionRecovery(t *testing.T) {
 	}
 
 	// Get state before close
-	lastBlock, err := store.GetLastProcessedBlock(ctx, chainId)
+	lastBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 
 	pendingTasks, err := store.ListPendingTasks(ctx)
@@ -218,7 +219,7 @@ func TestProductionRecovery(t *testing.T) {
 	defer store2.Close()
 
 	// Verify recovery
-	recoveredBlock, err := store2.GetLastProcessedBlock(ctx, chainId)
+	recoveredBlock, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	require.Equal(t, lastBlock, recoveredBlock)
 
@@ -227,7 +228,7 @@ func TestProductionRecovery(t *testing.T) {
 	require.Equal(t, pendingCount, len(recoveredPending))
 
 	// Verify can continue operations
-	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock+1000))
+	require.NoError(t, store2.SetLastProcessedBlock(ctx, avsAddress, chainId, lastBlock+1000))
 
 	newTask := &types.Task{
 		TaskId:                 "post-recovery-task",
@@ -343,12 +344,13 @@ func TestProductionScale(t *testing.T) {
 	t.Logf("Testing with %d chains, %d tasks per chain", numChains, numTasksPerChain)
 
 	// Populate chains
+	avsAddress := "0xtest"
 	for c := 1; c <= numChains; c++ {
 		chainId := config.ChainId(c)
 
 		// Set block heights
 		for block := uint64(0); block < uint64(numTasksPerChain/100); block += 100 {
-			require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, block))
+			require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, block))
 		}
 
 		// Create tasks

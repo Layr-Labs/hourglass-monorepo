@@ -199,11 +199,12 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 
 func benchmarkSetLastProcessedBlock(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
+	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := store.SetLastProcessedBlock(ctx, chainId, uint64(i)); err != nil {
+		if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -302,8 +303,9 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 						b.Error(err)
 					}
 				case 3: // Update block
+					avsAddress := "0xtest"
 					chainId := config.ChainId(goroutineId%3 + 1)
-					if err := store.SetLastProcessedBlock(ctx, chainId, uint64(i)); err != nil {
+					if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)); err != nil {
 						b.Error(err)
 					}
 				}

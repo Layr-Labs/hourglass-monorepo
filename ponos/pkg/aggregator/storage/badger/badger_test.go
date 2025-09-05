@@ -69,7 +69,8 @@ func TestBadgerAggregatorStore_Persistence(t *testing.T) {
 		require.NoError(t, err)
 
 		// Set last processed block
-		err = store.SetLastProcessedBlock(ctx, config.ChainId(1), 12345)
+		avsAddress := "0xtest"
+		err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12345)
 		require.NoError(t, err)
 
 		// Close store
@@ -89,7 +90,8 @@ func TestBadgerAggregatorStore_Persistence(t *testing.T) {
 		assert.Equal(t, taskId, retrievedTask.TaskId)
 
 		// Verify block number
-		blockNum, err := store.GetLastProcessedBlock(ctx, config.ChainId(1))
+		avsAddress := "0xtest"
+		blockNum, err := store.GetLastProcessedBlock(ctx, avsAddress, config.ChainId(1))
 		require.NoError(t, err)
 		assert.Equal(t, uint64(12345), blockNum)
 	}
