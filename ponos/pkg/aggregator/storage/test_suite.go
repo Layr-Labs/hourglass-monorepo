@@ -31,42 +31,58 @@ func (s *TestSuite) testChainPollingState(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	avsAddress := "0xavs123"
 	chainId := config.ChainId(1)
 
 	// Test getting non-existent block
-	_, err = store.GetLastProcessedBlock(ctx, chainId)
+	_, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	assert.ErrorIs(t, err, ErrNotFound)
 
 	// Test setting and getting block
 	blockNum := uint64(12345)
-	err = store.SetLastProcessedBlock(ctx, chainId, blockNum)
+	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
 	require.NoError(t, err)
 
-	retrieved, err := store.GetLastProcessedBlock(ctx, chainId)
+	retrieved, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	assert.Equal(t, blockNum, retrieved)
 
 	// Test updating block
 	newBlockNum := uint64(12346)
-	err = store.SetLastProcessedBlock(ctx, chainId, newBlockNum)
+	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, newBlockNum)
 	require.NoError(t, err)
 
-	retrieved, err = store.GetLastProcessedBlock(ctx, chainId)
+	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	assert.Equal(t, newBlockNum, retrieved)
 
-	// Test multiple chains
+	// Test multiple chains for same AVS
 	chainId2 := config.ChainId(2)
 	blockNum2 := uint64(54321)
-	err = store.SetLastProcessedBlock(ctx, chainId2, blockNum2)
+	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId2, blockNum2)
 	require.NoError(t, err)
 
-	retrieved2, err := store.GetLastProcessedBlock(ctx, chainId2)
+	retrieved2, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId2)
 	require.NoError(t, err)
 	assert.Equal(t, blockNum2, retrieved2)
 
 	// Ensure first chain is unchanged
-	retrieved, err = store.GetLastProcessedBlock(ctx, chainId)
+	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
+	require.NoError(t, err)
+	assert.Equal(t, newBlockNum, retrieved)
+
+	// Test different AVS on same chain
+	avsAddress2 := "0xavs456"
+	blockNum3 := uint64(99999)
+	err = store.SetLastProcessedBlock(ctx, avsAddress2, chainId, blockNum3)
+	require.NoError(t, err)
+
+	retrieved3, err := store.GetLastProcessedBlock(ctx, avsAddress2, chainId)
+	require.NoError(t, err)
+	assert.Equal(t, blockNum3, retrieved3)
+
+	// Ensure original AVS on same chain is unchanged
+	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	assert.Equal(t, newBlockNum, retrieved)
 }
@@ -261,7 +277,8 @@ func (s *TestSuite) testLifecycle(t *testing.T) {
 	ctx := context.Background()
 
 	// Add some data
-	err = store.SetLastProcessedBlock(ctx, config.ChainId(1), 12345)
+	avsAddress := "0xavs123"
+	err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12345)
 	require.NoError(t, err)
 
 	// Close the store
@@ -269,10 +286,10 @@ func (s *TestSuite) testLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Operations after close should fail
-	err = store.SetLastProcessedBlock(ctx, config.ChainId(1), 12346)
+	err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12346)
 	assert.ErrorIs(t, err, ErrStoreClosed)
 
-	_, err = store.GetLastProcessedBlock(ctx, config.ChainId(1))
+	_, err = store.GetLastProcessedBlock(ctx, avsAddress, config.ChainId(1))
 	assert.ErrorIs(t, err, ErrStoreClosed)
 }
 
@@ -285,11 +302,12 @@ func (s *TestSuite) testConcurrentAccess(t *testing.T) {
 	done := make(chan bool)
 	errors := make(chan error, 10)
 
+	avsAddress := "0xavs123"
 	// Concurrent writes to different chains
 	for i := 0; i < 5; i++ {
 		go func(chainId config.ChainId) {
 			for j := 0; j < 10; j++ {
-				err := store.SetLastProcessedBlock(ctx, chainId, uint64(j))
+				err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(j))
 				if err != nil {
 					errors <- err
 					return
@@ -303,7 +321,7 @@ func (s *TestSuite) testConcurrentAccess(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func(chainId config.ChainId) {
 			for j := 0; j < 10; j++ {
-				_, err := store.GetLastProcessedBlock(ctx, chainId)
+				_, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 				if err != nil && err != ErrNotFound {
 					errors <- err
 					return

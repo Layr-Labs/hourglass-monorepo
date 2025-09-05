@@ -161,10 +161,11 @@ func BenchmarkBlockOperations(b *testing.B) {
 
 	b.Run("InMemoryStore/SetBlock", func(b *testing.B) {
 		store := memory.NewInMemoryAggregatorStore()
+		avsAddress := "0xtest"
 		chain := config.ChainId(1)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = store.SetLastProcessedBlock(ctx, chain, uint64(i))
+			_ = store.SetLastProcessedBlock(ctx, avsAddress, chain, uint64(i))
 		}
 	})
 

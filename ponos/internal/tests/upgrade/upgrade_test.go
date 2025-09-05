@@ -78,8 +78,9 @@ func TestRollingUpgrade(t *testing.T) {
 			aggStore1, execStore1, cleanup1 := tt.storeFactory(t)
 
 			// Populate aggregator state
+			avsAddress := "0xtest"
 			chainId := config.ChainId(1)
-			require.NoError(t, aggStore1.SetLastProcessedBlock(ctx, chainId, 1000))
+			require.NoError(t, aggStore1.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
 
 			task := &types.Task{
 				TaskId:                 "upgrade-task-1",
@@ -142,7 +143,7 @@ func TestRollingUpgrade(t *testing.T) {
 			// Verify state persisted (for BadgerDB)
 			if tt.name == "BadgerDB" {
 				// Check aggregator state
-				block, err := aggStore2.GetLastProcessedBlock(ctx, chainId)
+				block, err := aggStore2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1000), block)
 
@@ -157,7 +158,7 @@ func TestRollingUpgrade(t *testing.T) {
 			}
 
 			// Phase 3: Continue operations
-			require.NoError(t, aggStore2.SetLastProcessedBlock(ctx, chainId, 2000))
+			require.NoError(t, aggStore2.SetLastProcessedBlock(ctx, avsAddress, chainId, 2000))
 
 			newTask := &types.Task{
 				TaskId:                 "upgrade-task-2",
@@ -180,8 +181,9 @@ func TestStorageMigration(t *testing.T) {
 	memStore := aggregatorMemory.NewInMemoryAggregatorStore()
 
 	// Populate with test data
+	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
-	require.NoError(t, memStore.SetLastProcessedBlock(ctx, chainId, 5000))
+	require.NoError(t, memStore.SetLastProcessedBlock(ctx, avsAddress, chainId, 5000))
 
 	tasks := []*types.Task{
 		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, SourceBlockNumber: 4990, L1ReferenceBlockNumber: 4990, ChainId: chainId},
@@ -206,9 +208,9 @@ func TestStorageMigration(t *testing.T) {
 	defer badgerStore.Close()
 
 	// Migrate block heights
-	block, err := memStore.GetLastProcessedBlock(ctx, chainId)
+	block, err := memStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.NoError(t, badgerStore.SetLastProcessedBlock(ctx, chainId, block))
+	require.NoError(t, badgerStore.SetLastProcessedBlock(ctx, avsAddress, chainId, block))
 
 	// Migrate all tasks (both pending and non-pending)
 	for _, task := range tasks {
@@ -230,7 +232,7 @@ func TestStorageMigration(t *testing.T) {
 	memStore.Close()
 
 	// Step 3: Verify migration
-	migratedBlock, err := badgerStore.GetLastProcessedBlock(ctx, chainId)
+	migratedBlock, err := badgerStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5000), migratedBlock)
 
@@ -264,8 +266,9 @@ func TestBackwardCompatibility(t *testing.T) {
 	require.NoError(t, err)
 
 	// Save various data types
+	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
-	require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, 1000))
+	require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
 
 	task := &types.Task{
 		TaskId:                 "compat-task",
@@ -305,7 +308,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	defer store2.Close()
 
 	// Verify all data is readable
-	block, err := store2.GetLastProcessedBlock(ctx, chainId)
+	block, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1000), block)
 
@@ -341,6 +344,7 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	// Simulate ongoing operations
 	done := make(chan bool)
 	go func() {
+		avsAddress := "0xtest"
 		chainId := config.ChainId(1)
 		blockNum := uint64(1000)
 		taskId := 0
@@ -351,7 +355,7 @@ func TestUpgradeUnderLoad(t *testing.T) {
 				return
 			default:
 				// Write operations
-				_ = store1.SetLastProcessedBlock(ctx, chainId, blockNum)
+				_ = store1.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
 				task := &types.Task{
 					TaskId:                 fmt.Sprintf("load-task-%d", taskId),
 					AVSAddress:             "0x123",
@@ -373,8 +377,9 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Get current state
+	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
-	lastBlock1, err := store1.GetLastProcessedBlock(ctx, chainId)
+	lastBlock1, err := store1.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 
 	// Simulate upgrade: close first store
@@ -390,12 +395,12 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	defer store2.Close()
 
 	// Verify state preserved
-	lastBlock2, err := store2.GetLastProcessedBlock(ctx, chainId)
+	lastBlock2, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, lastBlock2, lastBlock1)
 
 	// Verify can continue operations
-	require.NoError(t, store2.SetLastProcessedBlock(ctx, chainId, lastBlock2+100))
+	require.NoError(t, store2.SetLastProcessedBlock(ctx, avsAddress, chainId, lastBlock2+100))
 
 	newTask := &types.Task{
 		TaskId:                 "post-upgrade-task",

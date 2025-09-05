@@ -2,14 +2,16 @@ package EVMChainPoller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -21,26 +23,30 @@ type EVMChainPollerConfig struct {
 	ChainId              config.ChainId
 	PollingInterval      time.Duration
 	InterestingContracts []string
+	AvsAddress           string
 }
 
 type EVMChainPoller struct {
 	ethClient         *ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
-	chainEventsChan   chan *chainPoller.LogWithBlock
+	taskQueue         chan *types.Task
 	logParser         *transactionLogParser.TransactionLogParser
 	config            *EVMChainPollerConfig
+	contractStore     contractStore.IContractStore
 	logger            *zap.Logger
 	store             storage.AggregatorStore
 }
 
 func NewEVMChainPoller(
 	ethClient *ethereum.Client,
-	chainEventsChan chan *chainPoller.LogWithBlock,
+	taskQueue chan *types.Task,
 	logParser *transactionLogParser.TransactionLogParser,
 	config *EVMChainPollerConfig,
+	contractStore contractStore.IContractStore,
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) *EVMChainPoller {
+
 	if store == nil {
 		panic("store is required")
 	}
@@ -51,16 +57,18 @@ func NewEVMChainPoller(
 		zap.Uint("chainId", uint(config.ChainId)),
 	)
 	return &EVMChainPoller{
-		ethClient:       ethClient,
-		logger:          pollerLogger,
-		chainEventsChan: chainEventsChan,
-		logParser:       logParser,
-		config:          config,
-		store:           store,
+		ethClient:     ethClient,
+		logger:        pollerLogger,
+		taskQueue:     taskQueue,
+		logParser:     logParser,
+		config:        config,
+		contractStore: contractStore,
+		store:         store,
 	}
 }
 
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
+
 	sugar := ecp.logger.Sugar()
 	sugar.Infow("Starting Ethereum L1Chain Listener",
 		zap.Any("chainId", ecp.config.ChainId),
@@ -68,8 +76,8 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	)
 
 	// Load last processed block from storage
-	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.ChainId)
-	if err != nil && err != storage.ErrNotFound {
+	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		sugar.Warnw("Failed to get last processed block from storage",
 			"error", err,
 			"chainId", ecp.config.ChainId,
@@ -85,45 +93,67 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 		}
 	}
 
+	if err := ecp.recoverInProgressTasks(ctx); err != nil {
+		sugar.Warnw("Failed to recover in-progress tasks",
+			"error", err,
+			"avsAddress", ecp.config.AvsAddress)
+	}
+
 	go ecp.pollForBlocks(ctx)
+
 	return nil
 }
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
+
 	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener poll loop")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	shouldStop := atomic.Bool{}
-
 	go func() {
-		for !shouldStop.Load() {
-			err := ecp.processNextBlock(ctx)
-			if err != nil {
-				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
-				cancel()
+		ticker := time.NewTicker(ecp.config.PollingInterval)
+		defer ticker.Stop()
+
+		// Process first block immediately
+		if err := ecp.processNextBlock(ctx); err != nil {
+			ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
+			cancel()
+			return
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				ecp.logger.Sugar().Infow("Polling loop context cancelled, stopping")
 				return
+			case <-ticker.C:
+				if err := ecp.processNextBlock(ctx); err != nil {
+					ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
+					cancel()
+					return
+				}
 			}
-			time.Sleep(ecp.config.PollingInterval)
 		}
 	}()
 
 	<-ctx.Done()
-	shouldStop.Store(true)
 	ecp.logger.Sugar().Infow("Ethereum L1Chain Listener context cancelled, exiting poll loop")
 }
 
 func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {
+
 	logAddr := strings.ToLower(log.Address.Value())
 	for _, ic := range ecp.config.InterestingContracts {
 		if strings.EqualFold(ic, logAddr) {
 			return true
 		}
 	}
+
 	return false
 }
 
 func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
+
 	latestBlockNum, err := ecp.ethClient.GetLatestBlock(ctx)
 	if err != nil {
 		return nil
@@ -194,12 +224,17 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 }
 
 func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
+
 	ecp.logger.Sugar().Infow("Fetching Ethereum block with logs",
 		zap.Uint64("blockNumber", blockNum),
 	)
 	block, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if block == nil {
+		return nil, nil, fmt.Errorf("block number %d is nil", blockNum)
 	}
 
 	logs, err := ecp.fetchLogsForInterestingContractsForBlock(block.Number.Value())
@@ -211,9 +246,6 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		return nil, nil, err
 	}
 
-	if block == nil {
-		return nil, nil, nil
-	}
 	block.ChainId = ecp.config.ChainId
 
 	ecp.logger.Sugar().Infow("Block fetched with logs",
@@ -246,21 +278,9 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 			RawLog: log,
 			Log:    decodedLog,
 		}
-		select {
-		case ecp.chainEventsChan <- lwb:
-			ecp.logger.Sugar().Infow("Enqueued log for processing",
-				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
-			)
-		case <-time.After(100 * time.Millisecond):
-			ecp.logger.Sugar().Warnw("Failed to enqueue log (channel full or closed)",
-				zap.Uint64("blockNumber", block.Number.Value()),
-				zap.String("transactionHash", log.TransactionHash.Value()),
-				zap.String("logAddress", log.Address.Value()),
-				zap.Uint64("logIndex", log.LogIndex.Value()),
-			)
+		err = ecp.handleLog(ctx, lwb)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 	ecp.logger.Sugar().Debugw("Processed logs",
@@ -269,7 +289,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 	ecp.lastObservedBlock = block
 
 	// Save last processed block to storage
-	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.ChainId, block.Number.Value()); err != nil {
+	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.AvsAddress, ecp.config.ChainId, block.Number.Value()); err != nil {
 		ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
 			"error", err,
 			"chainId", ecp.config.ChainId,
@@ -286,6 +306,7 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 }
 
 func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
+
 	contracts := make([]string, 0)
 	for _, contract := range ecp.config.InterestingContracts {
 		if contract != "" {
@@ -296,6 +317,7 @@ func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
 }
 
 func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber uint64) ([]*ethereum.EthereumEventLog, error) {
+
 	var wg sync.WaitGroup
 
 	// TODO: make this configurable in the future
@@ -369,4 +391,186 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	)
 
 	return allLogs, nil
+}
+
+// handleLog processes logs from the chain poller
+func (ecp *EVMChainPoller) handleLog(ctx context.Context, lwb *chainPoller.LogWithBlock) error {
+
+	ecp.logger.Sugar().Infow("Received log from chain poller",
+		zap.Any("log", lwb),
+	)
+	lg := lwb.Log
+
+	mailboxContract, _ := ecp.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
+
+	// Handle new task created
+	if lg.EventName == "TaskCreated" {
+		if mailboxContract == nil {
+			ecp.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
+				zap.String("eventName", lg.EventName),
+				zap.String("contractAddress", lg.Address),
+				zap.Uint("chainId", uint(lwb.Block.ChainId)),
+				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+			)
+			return nil
+		}
+		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
+			return ecp.processTask(ctx, lwb)
+		}
+	}
+
+	ecp.logger.Sugar().Infow("Ignoring log",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+		zap.Strings("addresses", ecp.config.InterestingContracts),
+	)
+	return nil
+}
+
+func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.LogWithBlock) error {
+
+	lg := lwb.Log
+
+	ecp.logger.Sugar().Infow("Received TaskCreated event",
+		zap.String("eventName", lg.EventName),
+		zap.String("contractAddress", lg.Address),
+	)
+	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
+	if err != nil {
+		return fmt.Errorf("failed to convert task: %w", err)
+	}
+	ecp.logger.Sugar().Infow("Converted task",
+		zap.Any("task", task),
+	)
+
+	if task.AVSAddress != strings.ToLower(ecp.config.AvsAddress) {
+		ecp.logger.Sugar().Infow("Ignoring task for different AVS address",
+			zap.String("taskAvsAddress", task.AVSAddress),
+			zap.String("currentAvsAddress", ecp.config.AvsAddress),
+		)
+		return nil
+	}
+
+	// Check if task already exists in storage
+	existingTask, err := ecp.store.GetTask(ctx, task.TaskId)
+	if err == nil && existingTask != nil {
+		// Task already exists, skip it to avoid duplicate processing
+		ecp.logger.Sugar().Infow("Task already exists in storage, skipping duplicate",
+			"taskId", task.TaskId)
+		return nil
+	} else if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		ecp.logger.Sugar().Errorw("Failed to check existing task",
+			"error", err,
+			"taskId", task.TaskId)
+		// Continue processing on storage errors
+	}
+
+	if err := ecp.store.SavePendingTask(ctx, task); err != nil {
+		ecp.logger.Sugar().Errorw("Failed to save task to storage",
+			"error", err,
+			"taskId", task.TaskId)
+		// Continue processing even if initial save fails
+	} else {
+		ecp.logger.Sugar().Infow("Saved new task to storage as pending",
+			"taskId", task.TaskId)
+	}
+
+	select {
+	case ecp.taskQueue <- task:
+
+		if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
+			ecp.logger.Sugar().Errorw("Failed to mark task as processing",
+				"error", err,
+				"taskId", task.TaskId)
+		} else {
+			ecp.logger.Sugar().Infow("Marked task as processing",
+				"taskId", task.TaskId)
+		}
+
+	case <-time.After(100 * time.Millisecond):
+		ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
+			zap.String("taskId", task.TaskId),
+			zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+			zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+			zap.String("logAddress", lwb.RawLog.Address.Value()),
+			zap.Uint64("logIndex", lwb.RawLog.LogIndex.Value()),
+		)
+
+		// Failed to queue, leave status as pending for retry
+		return fmt.Errorf("failed to enqueue task (channel full or closed)")
+	}
+
+	ecp.logger.Sugar().Infow("Successfully enqueued task for processing",
+		zap.String("taskId", task.TaskId),
+		zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+		zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+		zap.String("logAddress", lwb.RawLog.Address.Value()),
+		zap.Uint64("logIndex", lwb.RawLog.LogIndex.Value()),
+	)
+
+	return nil
+}
+
+func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
+
+	tasks, err := ecp.store.ListPendingTasksForAVS(ctx, ecp.config.AvsAddress)
+	if err != nil {
+		return fmt.Errorf("failed to list pending tasks for recovery: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		ecp.logger.Sugar().Debugw("No pending tasks to recover",
+			"avsAddress", ecp.config.AvsAddress)
+		return nil
+	}
+
+	recovered := 0
+	expired := 0
+
+	for _, task := range tasks {
+
+		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
+			ecp.logger.Sugar().Warnw("Skipping expired task during recovery",
+				"taskId", task.TaskId,
+				"deadline", task.DeadlineUnixSeconds.Unix())
+
+			if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); err != nil {
+				ecp.logger.Sugar().Warnw("Failed to mark expired task as failed",
+					"error", err,
+					"taskId", task.TaskId)
+			}
+
+			expired++
+			continue
+		}
+
+		// Try to re-queue the task and mark as processing
+		select {
+		case ecp.taskQueue <- task:
+
+			if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
+				ecp.logger.Sugar().Warnw("Failed to mark recovered task as processing",
+					"error", err,
+					"taskId", task.TaskId)
+			}
+			recovered++
+			ecp.logger.Sugar().Infow("Re-queued recovered task",
+				"taskId", task.TaskId,
+				"avsAddress", ecp.config.AvsAddress)
+		case <-time.After(100 * time.Millisecond):
+			ecp.logger.Sugar().Warnw("Task queue full, cannot recover task",
+				"taskId", task.TaskId)
+			// Leave as pending for next recovery attempt
+			break
+		}
+	}
+
+	ecp.logger.Sugar().Infow("Task recovery completed",
+		"totalPending", len(tasks),
+		"recovered", recovered,
+		"expired", expired,
+		"avsAddress", ecp.config.AvsAddress)
+
+	return nil
 }
