@@ -275,13 +275,15 @@ func (em *AvsExecutionManager) startPollers(ctx context.Context) error {
 	}
 
 	wg.Wait()
-	if err := <-errChan; err != nil {
-		return fmt.Errorf("failed to start pollers: %w", err)
-	}
 
-	em.logger.Sugar().Infow("Started all chain pollers",
-		zap.Int("count", len(em.chainPollers)),
-		zap.String("avsAddress", em.config.AvsAddress))
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("failed to start pollers: %w", err)
+	default:
+		em.logger.Sugar().Infow("Started all chain pollers",
+			zap.Int("count", len(em.chainPollers)),
+			zap.String("avsAddress", em.config.AvsAddress))
+	}
 
 	return nil
 }

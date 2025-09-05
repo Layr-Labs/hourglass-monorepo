@@ -283,6 +283,9 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 
 	// Test 6: DeRegisterAvs with authentication
 	t.Run("Authenticated_DeRegisterAvs", func(t *testing.T) {
+		testCtx, testCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer testCancel()
+
 		authClient, err := aggregatorClient.NewAuthenticatedAggregatorClient(
 			serverAddr,
 			aggConfig.Operator.Address,
@@ -294,7 +297,7 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 		// Use a different AVS address to ensure it's not registered
 		unregisteredAvsAddress := "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
-		_, err = authClient.DeRegisterAvs(ctx, &aggregatorV1.DeRegisterAvsRequest{
+		_, err = authClient.DeRegisterAvs(testCtx, &aggregatorV1.DeRegisterAvsRequest{
 			AvsAddress: unregisteredAvsAddress,
 		})
 
