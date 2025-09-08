@@ -258,7 +258,7 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 
 	var opsetConfig *contractCaller.TaskMailboxExecutorOperatorSetConfig
 	executorOpSetBlockNumber := task.SourceBlockNumber
-	
+
 	if task.ChainId == em.config.L1ChainId {
 		executorOpSetBlockNumber = l1ReferenceBlockNumber
 	}
