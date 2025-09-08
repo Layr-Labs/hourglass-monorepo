@@ -257,18 +257,14 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 	}
 
 	var opsetConfig *contractCaller.TaskMailboxExecutorOperatorSetConfig
-	if task.SourceBlockNumber != l1ReferenceBlockNumber {
-		// The cc is for an L2 -- use the L2 block height
-		opsetConfig, err = cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, task.SourceBlockNumber)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get operator set task config: %w", err)
-		}
-	} else {
-		// The cc is for an L1 -- use the L1 block height
-		opsetConfig, err = cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, task.L1ReferenceBlockNumber)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get operator set task config: %w", err)
-		}
+	executorOpSetBlockNumber := task.SourceBlockNumber
+	
+	if task.ChainId == em.config.L1ChainId {
+		executorOpSetBlockNumber = l1ReferenceBlockNumber
+	}
+	opsetConfig, err = cc.GetExecutorOperatorSetTaskConfig(ctx, common.HexToAddress(task.AVSAddress), task.OperatorSetId, executorOpSetBlockNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set config for chain %d: %w", taskChainId, err)
 	}
 
 	curveType, err := opsetConfig.GetCurveType()
