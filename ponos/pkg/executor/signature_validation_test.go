@@ -4,10 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"math/big"
-	"sync"
-	"testing"
-
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	ecdsacrypto "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
@@ -26,6 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"math/big"
+	"sync"
+	"testing"
 )
 
 // TestValidateTaskSignature_ValidECDSA tests validation of a valid ECDSA signature
@@ -979,13 +978,14 @@ func CreateValidTaskSubmission(t *testing.T, aggregatorKey interface{}, executor
 	}
 
 	return &executorV1.TaskSubmission{
-		TaskId:            taskID,
-		AvsAddress:        avsAddress,
-		ExecutorAddress:   executorAddress,
-		AggregatorAddress: aggregatorAddress,
-		OperatorSetId:     operatorSetID,
-		TaskBlockNumber:   12345678,
-		Payload:           payload,
+		TaskId:             taskID,
+		AvsAddress:         avsAddress,
+		ExecutorAddress:    executorAddress,
+		AggregatorAddress:  aggregatorAddress,
+		OperatorSetId:      operatorSetID,
+		TaskBlockNumber:    12345678,
+		Payload:            payload,
+		ReferenceTimestamp: 42,
 	}
 }
 
@@ -995,9 +995,10 @@ func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey
 	message := util.EncodeTaskSubmissionMessage(
 		task.TaskId,
 		task.AvsAddress,
-		executorAddress, // Use the provided executor address
+		executorAddress,
+		task.ReferenceTimestamp,
+		task.TaskBlockNumber,
 		task.OperatorSetId,
-		task.TaskBlockNumber, // Use the task's block number
 		task.Payload,
 	)
 
@@ -1019,7 +1020,8 @@ func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey
 		task.Signature = ecdsaSig.Bytes()
 
 	case *bn254.PrivateKey:
-		sig, err := key.Sign(message)
+		messageHash := crypto.Keccak256Hash(message)
+		sig, err := key.Sign(messageHash.Bytes())
 		require.NoError(t, err)
 		task.Signature = sig.Bytes()
 

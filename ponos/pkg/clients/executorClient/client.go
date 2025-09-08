@@ -5,8 +5,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients"
 )
 
-func NewExecutorClient(fullUrl string, insecureConn bool) (executorV1.ExecutorServiceClient, error) {
-	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, insecureConn, clients.DefaultRetryConfig())
+func NewExecutorClient(fullUrl string, tlsEnabled bool) (executorV1.ExecutorServiceClient, error) {
+	grpcClient, err := clients.NewGrpcClientWithRetry(fullUrl, tlsEnabled, clients.DefaultRetryConfig())
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -44,12 +45,37 @@ type AggregatedBN254Certificate struct {
 	NonSignerOperators []*Operator[signing.PublicKey]
 }
 
+// ToSubmitParams converts the certificate to contract submission parameters
+func (cert *AggregatedBN254Certificate) ToSubmitParams() *contractCaller.BN254TaskResultParams {
+	params := &contractCaller.BN254TaskResultParams{
+		TaskId:             cert.TaskId,
+		TaskResponse:       cert.TaskResponse,
+		TaskResponseDigest: cert.TaskResponseDigest,
+		SignersSignature:   cert.SignersSignature,
+		SignersPublicKey:   cert.SignersPublicKey,
+	}
+
+	// Convert NonSignerOperators
+	params.NonSignerOperators = make([]contractCaller.BN254NonSignerOperator, len(cert.NonSignerOperators))
+	for i, op := range cert.NonSignerOperators {
+		params.NonSignerOperators[i] = contractCaller.BN254NonSignerOperator{
+			OperatorIndex: op.OperatorIndex,
+			PublicKey:     op.PublicKey.Bytes(),
+		}
+	}
+
+	return params
+}
+
 // BN254TaskResultAggregator represents the data needed to initialize a new aggregation task window.
 type BN254TaskResultAggregator struct {
+	ctx                context.Context
 	mu                 sync.Mutex
 	TaskId             string
+	ReferenceTimestamp uint32
 	OperatorSetId      uint32
 	ThresholdBips      uint16
+	l1ContractCaller   contractCaller.IContractCaller
 	TaskData           []byte
 	TaskExpirationTime *time.Time
 	Operators          []*Operator[signing.PublicKey]
@@ -63,16 +89,21 @@ type BN254TaskResultAggregator struct {
 // NewBN254TaskResultAggregator initializes a new aggregation certificate for a task window.
 // All required data must be provided as arguments; no network or chain calls are performed.
 func NewBN254TaskResultAggregator(
-	_ context.Context,
+	ctx context.Context,
 	taskId string,
+	referenceTimestamp uint32,
 	operatorSetId uint32,
 	thresholdBips uint16,
+	l1ContractCaller contractCaller.IContractCaller,
 	taskData []byte,
 	taskExpirationTime *time.Time,
 	operators []*Operator[signing.PublicKey],
 ) (*BN254TaskResultAggregator, error) {
 	if len(taskId) == 0 {
 		return nil, ErrInvalidTaskId
+	}
+	if referenceTimestamp == 0 {
+		return nil, ErrInvalidReferenceTimestamp
 	}
 	if len(operators) == 0 {
 		return nil, ErrNoOperatorAddresses
@@ -89,9 +120,12 @@ func NewBN254TaskResultAggregator(
 	}
 
 	cert := &BN254TaskResultAggregator{
+		ctx:                ctx,
 		TaskId:             taskId,
+		ReferenceTimestamp: referenceTimestamp,
 		OperatorSetId:      operatorSetId,
 		ThresholdBips:      thresholdBips,
+		l1ContractCaller:   l1ContractCaller,
 		TaskData:           taskData,
 		TaskExpirationTime: taskExpirationTime,
 		Operators:          operators,
@@ -271,6 +305,11 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 	operator *Operator[signing.PublicKey],
 	outputDigest [32]byte,
 ) (*bn254.Signature, error) {
+	if !strings.EqualFold(taskResponse.OperatorAddress, operator.Address) {
+		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s",
+			operator.Address, taskResponse.OperatorAddress)
+	}
+
 	// Step 1: Verify the result signature
 	resultSig, err := bn254.NewSignatureFromBytes(taskResponse.ResultSignature)
 	if err != nil {
@@ -282,7 +321,19 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 	if !ok {
 		return nil, fmt.Errorf("failed to cast public key to bn254.PublicKey")
 	}
-	if verified, err := resultSig.VerifySolidityCompatible(bn254PubKey, outputDigest); err != nil {
+	signedOverDigest, err := tra.l1ContractCaller.CalculateBN254CertificateDigestBytes(
+		tra.ctx,
+		tra.ReferenceTimestamp,
+		outputDigest,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate signature: %w", err)
+	}
+
+	var digestData [32]byte
+	copy(digestData[:], signedOverDigest)
+	if verified, err := resultSig.VerifySolidityCompatible(bn254PubKey, digestData); err != nil {
 		return nil, fmt.Errorf("result signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("result signature verification failed: signature does not match operator public key")
@@ -294,29 +345,24 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
 	}
 
-	// Create the auth data that should have been signed
-	resultSigDigest := util.GetKeccak256Digest(taskResponse.ResultSignature)
+	// TODO: populate and use tra avs address and operator address to properly verify the expected result
 	authData := &types.AuthSignatureData{
-		TaskId:          taskResponse.TaskId,
+		TaskId:          tra.TaskId,
 		AvsAddress:      taskResponse.AvsAddress,
 		OperatorAddress: taskResponse.OperatorAddress,
-		OperatorSetId:   taskResponse.OperatorSetId,
-		ResultSigDigest: resultSigDigest,
+		OperatorSetId:   tra.OperatorSetId,
+		ResultSigDigest: util.GetKeccak256Digest(taskResponse.ResultSignature),
 	}
-	authBytes := authData.ToSigningBytes()
-	authDigest := util.GetKeccak256Digest(authBytes)
 
-	// Verify auth signature
-	if verified, err := authSig.VerifySolidityCompatible(operator.PublicKey.(*bn254.PublicKey), authDigest); err != nil {
+	authBytes := authData.ToSigningBytes()
+	authBytesDigest := util.GetKeccak256Digest(authBytes)
+	hashCopy := make([]byte, 32)
+	copy(hashCopy, authBytesDigest[:])
+
+	if verified, err := authSig.Verify(operator.PublicKey.(*bn254.PublicKey), hashCopy); err != nil {
 		return nil, fmt.Errorf("auth signature verification failed: %w", err)
 	} else if !verified {
 		return nil, fmt.Errorf("auth signature verification failed: signature does not match operator public key")
-	}
-
-	// Additional validation: ensure claimed operator matches expected
-	if !strings.EqualFold(taskResponse.OperatorAddress, operator.Address) {
-		return nil, fmt.Errorf("operator address mismatch: expected %s, got %s",
-			operator.Address, taskResponse.OperatorAddress)
 	}
 
 	return resultSig, nil
