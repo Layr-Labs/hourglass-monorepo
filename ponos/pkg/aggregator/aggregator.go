@@ -206,15 +206,11 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		MailboxContractAddresses: getMailboxAddressesForChains(a.contractStore.ListContracts()),
 		L1ChainId:                a.config.L1ChainId,
 		AggregatorAddress:        a.config.Address,
-<<<<<<< HEAD
 		TlsEnabled:               a.config.TLSEnabled,
-	},
-=======
 	}
 
 	aem, err := avsExecutionManager.NewAvsExecutionManager(
 		avsExeConfig,
->>>>>>> 0eccd65 (Refactored task handling to EVMChainPoller and making it aware of AvsAddress)
 		a.chainContractCallers,
 		a.signers,
 		a.contractStore,
