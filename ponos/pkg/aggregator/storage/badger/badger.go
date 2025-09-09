@@ -18,7 +18,7 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixChainBlock     = "chain:%d:lastBlock"
+	prefixChainBlock     = "avs:%s:chain:%d:lastBlock" // avsAddress:chainId:lastBlock
 	prefixTask           = "task:%s"
 	prefixTaskByStatus   = "taskstatus:%s:%s" // status:taskId
 	prefixOperatorConfig = "opset:%s:%d"      // avsAddress:operatorSetId
@@ -48,7 +48,7 @@ func NewBadgerAggregatorStore(cfg *aggregatorConfig.BadgerConfig) (*BadgerAggreg
 		opts.InMemory = true
 	}
 	if cfg.ValueLogFileSize > 0 {
-		opts.ValueLogFileSize = int64(cfg.ValueLogFileSize)
+		opts.ValueLogFileSize = cfg.ValueLogFileSize
 	}
 	if cfg.NumVersionsToKeep > 0 {
 		opts.NumVersionsToKeep = cfg.NumVersionsToKeep
@@ -97,8 +97,8 @@ func (s *BadgerAggregatorStore) runGC() {
 	}
 }
 
-// GetLastProcessedBlock retrieves the last processed block for a chain
-func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, chainId config.ChainId) (uint64, error) {
+// GetLastProcessedBlock retrieves the last processed block for a chain for a specific AVS
+func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -107,7 +107,7 @@ func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, chain
 	s.mu.RUnlock()
 
 	var blockNum uint64
-	key := fmt.Sprintf(prefixChainBlock, chainId)
+	key := fmt.Sprintf(prefixChainBlock, avsAddress, chainId)
 
 	err := s.db.View(func(txn *badgerv3.Txn) error {
 		item, err := txn.Get([]byte(key))
@@ -133,8 +133,8 @@ func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, chain
 	return blockNum, nil
 }
 
-// SetLastProcessedBlock updates the last processed block for a chain
-func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, chainId config.ChainId, blockNum uint64) error {
+// SetLastProcessedBlock updates the last processed block for a chain for a specific AVS
+func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -142,7 +142,7 @@ func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, chain
 	}
 	s.mu.RUnlock()
 
-	key := fmt.Sprintf(prefixChainBlock, chainId)
+	key := fmt.Sprintf(prefixChainBlock, avsAddress, chainId)
 	value, err := json.Marshal(blockNum)
 	if err != nil {
 		return fmt.Errorf("failed to marshal block number: %w", err)
@@ -159,7 +159,6 @@ func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, chain
 	return nil
 }
 
-// SaveTask stores a task
 func (s *BadgerAggregatorStore) SavePendingTask(ctx context.Context, task *types.Task) error {
 	s.mu.RLock()
 	if s.closed {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -43,11 +41,6 @@ type OperatorSet struct {
 
 type ConsensusType uint8
 
-const (
-	ConsensusTypeNone                     ConsensusType = 0
-	ConsensusTypeStakeProportionThreshold ConsensusType = 1
-)
-
 type OperatorSetTaskConsensus struct {
 	ConsensusType ConsensusType
 	Threshold     uint16
@@ -70,6 +63,8 @@ type AvsConfig struct {
 type AvsExecutionManager struct {
 	logger *zap.Logger
 
+	avsConfig *AvsConfig
+
 	config *AvsExecutionManagerConfig
 
 	chainContractCallers map[config.ChainId]contractCaller.IContractCaller
@@ -84,11 +79,9 @@ type AvsExecutionManager struct {
 
 	inflightTasks sync.Map
 
-	avsConfigMutex sync.Mutex
-
-	avsConfig *AvsConfig
-
 	store storage.AggregatorStore
+
+	avsConfigMutex sync.Mutex
 }
 
 func NewAvsExecutionManager(
@@ -97,6 +90,7 @@ func NewAvsExecutionManager(
 	signers signer.Signers,
 	cs contractStore.IContractStore,
 	om *operatorManager.OperatorManager,
+	taskQueue chan *types.Task,
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) (*AvsExecutionManager, error) {
@@ -129,24 +123,50 @@ func NewAvsExecutionManager(
 		operatorManager:      om,
 		store:                store,
 		inflightTasks:        sync.Map{},
-		taskQueue:            make(chan *types.Task, 10000),
+		taskQueue:            taskQueue,
 	}
 	return manager, nil
 }
 
-// Init initializes the AvsExecutionManager before starting
-func (em *AvsExecutionManager) Init(ctx context.Context) error {
-	em.logger.Sugar().Infow("Initializing AvsExecutionManager",
+func (em *AvsExecutionManager) Start(ctx context.Context) error {
+
+	em.logger.Sugar().Infow("Starting AvsExecutionManager",
+		zap.String("contractAddress", em.config.AvsAddress),
+		zap.Any("supportedChainIds", em.config.SupportedChainIds),
 		zap.String("avsAddress", em.config.AvsAddress),
 	)
 
-	// Recover pending tasks from storage
 	if err := em.recoverPendingTasks(ctx); err != nil {
 		em.logger.Sugar().Warnw("Failed to recover pending tasks",
 			"error", err,
 			"avsAddress", em.config.AvsAddress)
 		// Continue anyway - this is not a fatal error
 	}
+
+	go func() {
+		for {
+			select {
+			case task := <-em.taskQueue:
+
+				em.logger.Sugar().Infow("Received task from queue",
+					zap.String("taskId", task.TaskId),
+				)
+				if err := em.handleTask(ctx, task); err != nil {
+					em.logger.Sugar().Errorw("Failed to handle task",
+						"taskId", task.TaskId,
+						"error", err,
+					)
+				}
+			case <-ctx.Done():
+
+				em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
+				if ctx.Err() != nil {
+					em.logger.Sugar().Errorw("Error stopping AvsExecutionManager")
+				}
+				return
+			}
+		}
+	}()
 
 	return nil
 }
@@ -168,14 +188,13 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 
 	recovered := 0
 	for _, task := range pendingTasks {
-		// Check if task has already expired
+
 		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
 			em.logger.Sugar().Warnw("Skipping expired task during recovery",
 				"taskId", task.TaskId,
 				"deadline", task.DeadlineUnixSeconds.Unix(),
 				"currentTime", time.Now().Unix())
 
-			// Mark expired tasks as failed
 			if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); err != nil {
 				em.logger.Sugar().Warnw("Failed to mark expired task as failed",
 					"error", err,
@@ -184,14 +203,12 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 			continue
 		}
 
-		// Check if task is already in flight
 		if _, exists := em.inflightTasks.Load(task.TaskId); exists {
 			em.logger.Sugar().Warnw("Task already in flight, skipping recovery",
 				"taskId", task.TaskId)
 			continue
 		}
 
-		// Re-queue the task
 		select {
 		case em.taskQueue <- task:
 			recovered++
@@ -212,32 +229,6 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 		"avsAddress", em.config.AvsAddress)
 
 	return nil
-}
-
-// Start starts the AvsExecutionManager
-func (em *AvsExecutionManager) Start(ctx context.Context) error {
-	em.logger.Sugar().Infow("Starting AvsExecutionManager",
-		zap.String("contractAddress", em.config.AvsAddress),
-		zap.Any("supportedChainIds", em.config.SupportedChainIds),
-		zap.String("avsAddress", em.config.AvsAddress),
-	)
-	for {
-		select {
-		case task := <-em.taskQueue:
-			em.logger.Sugar().Infow("Received task from queue",
-				zap.String("taskId", task.TaskId),
-			)
-			if err := em.handleTask(ctx, task); err != nil {
-				em.logger.Sugar().Errorw("Failed to handle task",
-					"taskId", task.TaskId,
-					"error", err,
-				)
-			}
-		case <-ctx.Done():
-			em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
-			return ctx.Err()
-		}
-	}
 }
 
 func (em *AvsExecutionManager) getOperatorSetTaskConfig(
@@ -289,40 +280,6 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 	}
 
 	return taskConfig, nil
-}
-
-// HandleLog processes logs from the chain poller
-func (em *AvsExecutionManager) HandleLog(lwb *chainPoller.LogWithBlock) error {
-	em.logger.Sugar().Infow("Received log from chain poller",
-		zap.Any("log", lwb),
-	)
-	lg := lwb.Log
-
-	mailboxContract, _ := em.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
-
-	// Handle new task created
-	if lg.EventName == "TaskCreated" {
-		if mailboxContract == nil {
-			em.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
-				zap.String("eventName", lg.EventName),
-				zap.String("contractAddress", lg.Address),
-				zap.Uint("chainId", uint(lwb.Block.ChainId)),
-				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
-				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
-			)
-			return nil
-		}
-		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
-			return em.processTask(lwb)
-		}
-	}
-
-	em.logger.Sugar().Infow("Ignoring log",
-		zap.String("eventName", lg.EventName),
-		zap.String("contractAddress", lg.Address),
-		zap.Strings("addresses", em.getListOfContractAddresses()),
-	)
-	return nil
 }
 
 func (em *AvsExecutionManager) getAggregatorTaskConfig(_ context.Context, blockNumber uint64) (*AvsConfig, error) {
@@ -734,47 +691,6 @@ func (em *AvsExecutionManager) processECDSATask(
 	}
 }
 
-func (em *AvsExecutionManager) processTask(lwb *chainPoller.LogWithBlock) error {
-	lg := lwb.Log
-	em.logger.Sugar().Infow("Received TaskCreated event",
-		zap.String("eventName", lg.EventName),
-		zap.String("contractAddress", lg.Address),
-	)
-	task, err := types.NewTaskFromLog(lg, lwb.Block, lg.Address)
-	if err != nil {
-		return fmt.Errorf("failed to convert task: %w", err)
-	}
-	em.logger.Sugar().Infow("Converted task",
-		zap.Any("task", task),
-	)
-
-	if task.AVSAddress != strings.ToLower(em.config.AvsAddress) {
-		em.logger.Sugar().Infow("Ignoring task for different AVS address",
-			zap.String("taskAvsAddress", task.AVSAddress),
-			zap.String("currentAvsAddress", em.config.AvsAddress),
-		)
-		return nil
-	}
-
-	// Save task to storage
-	ctx := context.Background()
-	if err := em.store.SavePendingTask(ctx, task); err != nil {
-		em.logger.Sugar().Errorw("Failed to save task to storage",
-			"error", err,
-			"taskId", task.TaskId,
-		)
-		// Continue processing even if storage fails
-	} else {
-		em.logger.Sugar().Infow("Saved task to storage",
-			"taskId", task.TaskId,
-		)
-	}
-
-	em.taskQueue <- task
-	em.logger.Sugar().Infow("Added task to queue")
-	return nil
-}
-
 func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId) (contractCaller.IContractCaller, error) {
 	caller, ok := em.chainContractCallers[chainId]
 	if !ok {
@@ -849,12 +765,4 @@ func hasExpectedContractCallersForChains(supportedChains []config.ChainId, contr
 		}
 	}
 	return nil
-}
-
-func (em *AvsExecutionManager) getListOfContractAddresses() []string {
-	addrs := make([]string, 0, len(em.config.MailboxContractAddresses))
-	for _, addr := range em.config.MailboxContractAddresses {
-		addrs = append(addrs, strings.ToLower(addr))
-	}
-	return addrs
 }

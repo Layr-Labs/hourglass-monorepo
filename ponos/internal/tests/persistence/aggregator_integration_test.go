@@ -21,8 +21,9 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	store := memory.NewInMemoryAggregatorStore()
 
 	// Simulate some state before "crash"
+	avsAddress := "0xtest"
 	chainId := config.ChainId(1) // Ethereum mainnet
-	require.NoError(t, store.SetLastProcessedBlock(ctx, chainId, 1000))
+	require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
 
 	// Save some tasks
 	deadline1 := time.Now().Add(1 * time.Hour)
@@ -82,7 +83,7 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	// Here we're just verifying that storage preserved the state correctly
 
 	// Verify state was preserved
-	recoveredBlock, err := store.GetLastProcessedBlock(ctx, chainId)
+	recoveredBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(1000), recoveredBlock)
 
@@ -227,22 +228,23 @@ func TestChainPollerRecovery(t *testing.T) {
 	}
 
 	// Set different block heights
+	avsAddress := "0xtest"
 	for i, chain := range chains {
 		blockNum := uint64(1000 * (i + 1))
-		require.NoError(t, store.SetLastProcessedBlock(ctx, chain, blockNum))
+		require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chain, blockNum))
 	}
 
 	// Simulate recovery
 	for i, chain := range chains {
 		expectedBlock := uint64(1000 * (i + 1))
-		recoveredBlock, err := store.GetLastProcessedBlock(ctx, chain)
+		recoveredBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chain)
 		require.NoError(t, err)
 		assert.Equal(t, expectedBlock, recoveredBlock, "Chain %d block mismatch", chain)
 	}
 
 	// Test non-existent chain
 	nonExistentChain := config.ChainId(99999)
-	block, err := store.GetLastProcessedBlock(ctx, nonExistentChain)
+	block, err := store.GetLastProcessedBlock(ctx, avsAddress, nonExistentChain)
 	assert.ErrorIs(t, err, storage.ErrNotFound)
 	assert.Equal(t, uint64(0), block)
 }

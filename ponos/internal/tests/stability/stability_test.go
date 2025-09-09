@@ -213,7 +213,8 @@ func simulateAggregator(ctx context.Context, t *testing.T, store storage.Aggrega
 			return
 		case <-ticker.C:
 			// Simulate block processing
-			err := store.SetLastProcessedBlock(ctx, chainId, blockNum)
+			avsAddress := "0xtest"
+			err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
 			if err != nil {
 				t.Logf("Error setting block: %v", err)
 				atomic.AddInt64(&stats.errors, 1)
@@ -442,9 +443,10 @@ func TestConcurrentLoad(t *testing.T) {
 								errors <- err
 							}
 						case 1: // Update block
+							avsAddress := "0xtest"
 							chainId := config.ChainId(rand.Intn(3) + 1)
 							blockNum := uint64(rand.Intn(1000000))
-							if err := store.SetLastProcessedBlock(ctx, chainId, blockNum); err != nil {
+							if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum); err != nil {
 								errors <- err
 							}
 						case 2: // List tasks
