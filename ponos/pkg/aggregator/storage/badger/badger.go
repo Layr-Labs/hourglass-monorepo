@@ -23,6 +23,7 @@ const (
 	prefixTaskByStatus   = "taskstatus:%s:%s" // status:taskId
 	prefixOperatorConfig = "opset:%s:%d"      // avsAddress:operatorSetId
 	prefixAVSConfig      = "avs:%s"           // avsAddress
+	prefixBlock          = "block:avs:%s:chain:%d:num:%d" // avsAddress:chainId:blockNumber
 )
 
 // BadgerAggregatorStore implements the AggregatorStore interface using BadgerDB
@@ -577,6 +578,106 @@ func (s *BadgerAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress str
 	}
 
 	return &config, nil
+}
+
+// SaveBlock saves block information for reorg detection
+func (s *BadgerAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockInfo) error {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	if block == nil {
+		return errors.New("block is nil")
+	}
+
+	key := fmt.Sprintf(prefixBlock, avsAddress, block.ChainId, block.Number)
+	value, err := json.Marshal(block)
+	if err != nil {
+		return fmt.Errorf("failed to marshal block info: %w", err)
+	}
+
+	err = s.db.Update(func(txn *badgerv3.Txn) error {
+		return txn.Set([]byte(key), value)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to save block info: %w", err)
+	}
+
+	return nil
+}
+
+// GetBlock retrieves block information by block number
+func (s *BadgerAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockInfo, error) {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return nil, storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	var block storage.BlockInfo
+	key := fmt.Sprintf(prefixBlock, avsAddress, chainId, blockNumber)
+
+	err := s.db.View(func(txn *badgerv3.Txn) error {
+		item, err := txn.Get([]byte(key))
+		if err != nil {
+			if errors.Is(err, badgerv3.ErrKeyNotFound) {
+				return storage.ErrNotFound
+			}
+			return err
+		}
+
+		return item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &block)
+		})
+	})
+
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("failed to get block info: %w", err)
+	}
+
+	return &block, nil
+}
+
+// DeleteBlock removes block information from storage
+func (s *BadgerAggregatorStore) DeleteBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) error {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	key := fmt.Sprintf(prefixBlock, avsAddress, chainId, blockNumber)
+
+	err := s.db.Update(func(txn *badgerv3.Txn) error {
+		// Check if key exists first
+		_, err := txn.Get([]byte(key))
+		if err != nil {
+			if errors.Is(err, badgerv3.ErrKeyNotFound) {
+				return storage.ErrNotFound
+			}
+			return err
+		}
+
+		return txn.Delete([]byte(key))
+	})
+
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return err
+		}
+		return fmt.Errorf("failed to delete block info: %w", err)
+	}
+
+	return nil
 }
 
 // Close shuts down the store

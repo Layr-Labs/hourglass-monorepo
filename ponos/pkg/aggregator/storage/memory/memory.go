@@ -20,6 +20,7 @@ type InMemoryAggregatorStore struct {
 	tasks               map[string]*storage.TaskRecord
 	operatorSetConfigs  map[string]*storage.OperatorSetTaskConfig
 	avsConfigs          map[string]*storage.AvsConfig
+	blocks              map[string]*storage.BlockInfo // key: block:avs:<avsAddress>:chain:<chainId>:num:<blockNumber>
 }
 
 // NewInMemoryAggregatorStore creates a new in-memory aggregator store
@@ -29,12 +30,18 @@ func NewInMemoryAggregatorStore() *InMemoryAggregatorStore {
 		tasks:               make(map[string]*storage.TaskRecord),
 		operatorSetConfigs:  make(map[string]*storage.OperatorSetTaskConfig),
 		avsConfigs:          make(map[string]*storage.AvsConfig),
+		blocks:              make(map[string]*storage.BlockInfo),
 	}
 }
 
 // makeBlockKey creates a composite key for last processed block storage
 func makeBlockKey(avsAddress string, chainId config.ChainId) string {
 	return fmt.Sprintf("%s:%d", avsAddress, chainId)
+}
+
+// makeBlockInfoKey creates a composite key for block info storage
+func makeBlockInfoKey(avsAddress string, chainId config.ChainId, blockNumber uint64) string {
+	return fmt.Sprintf("block:avs:%s:chain:%d:num:%d", avsAddress, chainId, blockNumber)
 }
 
 // GetLastProcessedBlock returns the last processed block for a chain for a specific AVS
@@ -261,6 +268,60 @@ func (s *InMemoryAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress s
 	return config, nil
 }
 
+// SaveBlock saves block information for reorg detection
+func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockInfo) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return storage.ErrStoreClosed
+	}
+
+	if block == nil {
+		return fmt.Errorf("block cannot be nil")
+	}
+
+	key := makeBlockInfoKey(avsAddress, block.ChainId, block.Number)
+	s.blocks[key] = block
+	return nil
+}
+
+// GetBlock retrieves block information by block number
+func (s *InMemoryAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, storage.ErrStoreClosed
+	}
+
+	key := makeBlockInfoKey(avsAddress, chainId, blockNumber)
+	block, exists := s.blocks[key]
+	if !exists {
+		return nil, storage.ErrNotFound
+	}
+
+	return block, nil
+}
+
+// DeleteBlock removes block information from storage
+func (s *InMemoryAggregatorStore) DeleteBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return storage.ErrStoreClosed
+	}
+
+	key := makeBlockInfoKey(avsAddress, chainId, blockNumber)
+	if _, exists := s.blocks[key]; !exists {
+		return storage.ErrNotFound
+	}
+
+	delete(s.blocks, key)
+	return nil
+}
+
 // Close closes the store
 func (s *InMemoryAggregatorStore) Close() error {
 	s.mu.Lock()
@@ -277,6 +338,7 @@ func (s *InMemoryAggregatorStore) Close() error {
 	s.tasks = nil
 	s.operatorSetConfigs = nil
 	s.avsConfigs = nil
+	s.blocks = nil
 
 	return nil
 }
