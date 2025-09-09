@@ -12,7 +12,6 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -82,11 +81,7 @@ type AvsExecutionManager struct {
 
 	store storage.AggregatorStore
 
-	chainPollers map[config.ChainId]*EVMChainPoller.EVMChainPoller
-
 	avsConfigMutex sync.Mutex
-
-	pollersMutex sync.RWMutex
 }
 
 func NewAvsExecutionManager(
@@ -96,7 +91,6 @@ func NewAvsExecutionManager(
 	cs contractStore.IContractStore,
 	om *operatorManager.OperatorManager,
 	taskQueue chan *types.Task,
-	chainPollers map[config.ChainId]*EVMChainPoller.EVMChainPoller,
 	store storage.AggregatorStore,
 	logger *zap.Logger,
 ) (*AvsExecutionManager, error) {
@@ -130,7 +124,6 @@ func NewAvsExecutionManager(
 		store:                store,
 		inflightTasks:        sync.Map{},
 		taskQueue:            taskQueue,
-		chainPollers:         chainPollers,
 	}
 	return manager, nil
 }
@@ -148,10 +141,6 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 			"error", err,
 			"avsAddress", em.config.AvsAddress)
 		// Continue anyway - this is not a fatal error
-	}
-
-	if err := em.startPollers(ctx); err != nil {
-		return fmt.Errorf("failed to start pollers: %w", err)
 	}
 
 	go func() {
@@ -238,52 +227,6 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 		"totalPending", len(pendingTasks),
 		"recovered", recovered,
 		"avsAddress", em.config.AvsAddress)
-
-	return nil
-}
-
-// startPollers starts all chain pollers for this AVS
-func (em *AvsExecutionManager) startPollers(ctx context.Context) error {
-	em.pollersMutex.RLock()
-	defer em.pollersMutex.RUnlock()
-
-	if len(em.chainPollers) == 0 {
-		em.logger.Sugar().Infow("No chain pollers configured for AVS",
-			zap.String("avsAddress", em.config.AvsAddress))
-		return nil
-	}
-
-	wg := sync.WaitGroup{}
-	errChan := make(chan error, len(em.chainPollers))
-
-	for chainId, poller := range em.chainPollers {
-		wg.Add(1)
-		em.logger.Sugar().Infow("Starting poller for chain",
-			zap.Uint("chainId", uint(chainId)),
-			zap.String("avsAddress", em.config.AvsAddress))
-
-		go func(p *EVMChainPoller.EVMChainPoller, cId config.ChainId) {
-			if err := p.Start(ctx); err != nil {
-				em.logger.Sugar().Errorw("Poller stopped with error",
-					zap.Error(err),
-					zap.Uint("chainId", uint(cId)),
-					zap.String("avsAddress", em.config.AvsAddress))
-				errChan <- err
-			}
-			wg.Done()
-		}(poller, chainId)
-	}
-
-	wg.Wait()
-
-	select {
-	case err := <-errChan:
-		return fmt.Errorf("failed to start pollers: %w", err)
-	default:
-		em.logger.Sugar().Infow("Started all chain pollers",
-			zap.Int("count", len(em.chainPollers)),
-			zap.String("avsAddress", em.config.AvsAddress))
-	}
 
 	return nil
 }

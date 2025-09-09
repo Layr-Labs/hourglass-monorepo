@@ -177,7 +177,7 @@ func (a *Aggregator) Initialize() error {
 	return nil
 }
 
-func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
+func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) (err error) {
 
 	a.avsMutex.RLock()
 	if _, ok := a.avsManagers[avs.Address]; ok {
@@ -200,6 +200,18 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 	taskQueue := make(chan *types.Task)
 	chainPollers := a.getChainPollers(supportedChains, avs.Address, taskQueue)
 
+	avsCtx, avsCancel := context.WithCancel(a.rootCtx)
+	defer func() {
+		if err != nil {
+			avsCancel()
+		}
+	}()
+
+	err = a.startPollers(avsCtx, avs.Address, chainPollers)
+	if err != nil {
+		return err
+	}
+
 	avsExeConfig := &avsExecutionManager.AvsExecutionManagerConfig{
 		AvsAddress:               avs.Address,
 		SupportedChainIds:        supportedChains,
@@ -216,7 +228,6 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		a.contractStore,
 		om,
 		taskQueue,
-		chainPollers,
 		a.store,
 		a.logger,
 	)
@@ -230,18 +241,14 @@ func (a *Aggregator) registerAvs(avs *aggregatorConfig.AggregatorAvs) error {
 		return fmt.Errorf("aggregator not started, cannot register AVS %s", avs.Address)
 	}
 
-	avsCtx, avsCancel := context.WithCancel(a.rootCtx)
-
 	err = a.storeAvsManager(avs.Address, aem, avsCancel)
 	if err != nil {
-		avsCancel()
 		return err
 	}
 
 	err = aem.Start(avsCtx)
 	if err != nil {
 		a.removeAvsManager(avs.Address)
-		avsCancel()
 		return fmt.Errorf("failed to start AVS Execution Manager for %s: %w", avs.Address, err)
 	}
 
@@ -542,6 +549,47 @@ func (a *Aggregator) getChainConfig(chainId config.ChainId) *aggregatorConfig.Ch
 			return chain
 		}
 	}
+	return nil
+}
+
+// startPollers starts all chain pollers for this AVS
+func (a *Aggregator) startPollers(
+	ctx context.Context,
+	avsAddress string,
+	chainPollers map[config.ChainId]*EVMChainPoller.EVMChainPoller,
+) error {
+	wg := sync.WaitGroup{}
+	errChan := make(chan error, len(chainPollers))
+
+	for chainId, poller := range chainPollers {
+		wg.Add(1)
+		a.logger.Sugar().Infow("Starting poller for chain",
+			zap.Uint("chainId", uint(chainId)),
+			zap.String("avsAddress", avsAddress))
+
+		go func(p *EVMChainPoller.EVMChainPoller, cId config.ChainId) {
+			if err := p.Start(ctx); err != nil {
+				a.logger.Sugar().Errorw("Poller stopped with error",
+					zap.Error(err),
+					zap.Uint("chainId", uint(cId)),
+					zap.String("avsAddress", avsAddress))
+				errChan <- err
+			}
+			wg.Done()
+		}(poller, chainId)
+	}
+
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("failed to start pollers: %w", err)
+	default:
+		a.logger.Sugar().Infow("Started all chain pollers",
+			zap.Int("count", len(chainPollers)),
+			zap.String("avsAddress", avsAddress))
+	}
+
 	return nil
 }
 
