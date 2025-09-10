@@ -246,19 +246,3 @@ func (s *BadgerExecutorStore) Close() error {
 
 	return s.db.Close()
 }
-
-// isValidDeploymentStatusTransition checks if a deployment status transition is valid
-func isValidDeploymentStatusTransition(from, to storage.DeploymentStatus) bool {
-	switch from {
-	case storage.DeploymentStatusPending:
-		return to == storage.DeploymentStatusDeploying || to == storage.DeploymentStatusFailed
-	case storage.DeploymentStatusDeploying:
-		return to == storage.DeploymentStatusRunning || to == storage.DeploymentStatusFailed
-	case storage.DeploymentStatusRunning:
-		return to == storage.DeploymentStatusFailed // Can fail from running
-	case storage.DeploymentStatusFailed:
-		return false // Terminal state
-	default:
-		return false
-	}
-}
