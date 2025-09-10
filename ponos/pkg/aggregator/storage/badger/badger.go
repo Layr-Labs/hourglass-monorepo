@@ -20,9 +20,9 @@ import (
 const (
 	prefixChainBlock     = "avs:%s:chain:%d:lastBlock" // avsAddress:chainId:lastBlock
 	prefixTask           = "task:%s"
-	prefixTaskByStatus   = "taskstatus:%s:%s" // status:taskId
-	prefixOperatorConfig = "opset:%s:%d"      // avsAddress:operatorSetId
-	prefixAVSConfig      = "avs:%s"           // avsAddress
+	prefixTaskByStatus   = "taskstatus:%s:%s"             // status:taskId
+	prefixOperatorConfig = "opset:%s:%d"                  // avsAddress:operatorSetId
+	prefixAVSConfig      = "avs:%s"                       // avsAddress
 	prefixBlock          = "block:avs:%s:chain:%d:num:%d" // avsAddress:chainId:blockNumber
 )
 

@@ -24,11 +24,11 @@ type EVMChainPollerConfig struct {
 	PollingInterval      time.Duration
 	InterestingContracts []string
 	AvsAddress           string
-	
+
 	// Reorg handling configuration
-	MaxReorgDepth      int  // Maximum blocks to check for reorg (default: 10)
-	BlockHistorySize   int  // Number of blocks to keep in history (default: 100)
-	ReorgCheckEnabled  bool // Enable reorg detection (default: true)
+	MaxReorgDepth     int  // Maximum blocks to check for reorg (default: 10)
+	BlockHistorySize  int  // Number of blocks to keep in history (default: 100)
+	ReorgCheckEnabled bool // Enable reorg detection (default: true)
 }
 
 type EVMChainPoller struct {
@@ -55,7 +55,7 @@ func NewEVMChainPoller(
 	if store == nil {
 		panic("store is required")
 	}
-	
+
 	// Set default values for reorg configuration if not provided
 	if config.MaxReorgDepth == 0 {
 		config.MaxReorgDepth = 10
@@ -68,7 +68,7 @@ func NewEVMChainPoller(
 	if !config.ReorgCheckEnabled && config.MaxReorgDepth > 0 {
 		config.ReorgCheckEnabled = true
 	}
-	
+
 	for i, contract := range config.InterestingContracts {
 		logger.Sugar().Infof("InterestingContracts %d: %s\n", i, contract)
 	}
@@ -231,11 +231,11 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 				)
 				return err
 			}
-			
+
 			// Check if we have the previous block in storage
-			prevBlockInfo, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress, 
-				ecp.config.ChainId, blockNum - 1)
-			
+			prevBlockInfo, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress,
+				ecp.config.ChainId, blockNum-1)
+
 			// If we have the previous block, verify parent hash
 			if err == nil && prevBlockInfo != nil {
 				if newBlock.ParentHash.Value() != prevBlockInfo.Hash {
@@ -245,22 +245,22 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 						"expectedParent", prevBlockInfo.Hash,
 						"actualParent", newBlock.ParentHash.Value(),
 						"chainId", ecp.config.ChainId)
-					
-					commonAncestor, err := ecp.findCommonAncestor(ctx, blockNum - 1)
+
+					commonAncestor, err := ecp.findCommonAncestor(ctx, blockNum-1)
 					if err != nil {
 						return fmt.Errorf("failed to find common ancestor: %w", err)
 					}
-					
+
 					if err := ecp.handleReorg(ctx, commonAncestor); err != nil {
 						return fmt.Errorf("failed to handle reorg: %w", err)
 					}
-					
+
 					// After reorg, restart processing from the common ancestor
 					return nil
 				}
 			}
 		}
-		
+
 		_, _, err = ecp.getBlockWithLogs(ctx, blockNum)
 		if err != nil {
 			ecp.logger.Sugar().Errorw("Error fetching block with logs",
@@ -355,14 +355,14 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 		Timestamp:  block.Timestamp.Value(),
 		ChainId:    ecp.config.ChainId,
 	}
-	
+
 	if err := ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo); err != nil {
 		ecp.logger.Sugar().Warnw("Failed to save block info",
 			"error", err,
 			"blockNumber", blockInfo.Number)
 		// Non-fatal, continue processing
 	}
-	
+
 	// Prune old blocks if we're over retention limit
 	if ecp.config.BlockHistorySize > 0 && blockInfo.Number > uint64(ecp.config.BlockHistorySize) {
 		oldBlockNum := blockInfo.Number - uint64(ecp.config.BlockHistorySize)
@@ -665,11 +665,11 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 func (ecp *EVMChainPoller) findCommonAncestor(ctx context.Context, startBlockNum uint64) (*storage.BlockInfo, error) {
 	sugar := ecp.logger.Sugar()
 	maxDepth := ecp.config.MaxReorgDepth
-	
+
 	// Walk backwards from startBlockNum
-	for blockNum := startBlockNum; blockNum > 0 && startBlockNum - blockNum < uint64(maxDepth); blockNum-- {
+	for blockNum := startBlockNum; blockNum > 0 && startBlockNum-blockNum < uint64(maxDepth); blockNum-- {
 		// Get our stored block
-		ourBlock, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress, 
+		ourBlock, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress,
 			ecp.config.ChainId, blockNum)
 		if err != nil {
 			// We don't have this block, continue backwards
@@ -678,29 +678,29 @@ func (ecp *EVMChainPoller) findCommonAncestor(ctx context.Context, startBlockNum
 				"error", err)
 			continue
 		}
-		
+
 		// Get the chain's version of this block
 		chainBlock, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch block %d from chain: %w", blockNum, err)
 		}
-		
+
 		// Check if hashes match
 		if chainBlock.Hash.Value() == ourBlock.Hash {
 			// Found common ancestor!
 			sugar.Infow("Found common ancestor block",
 				"blockNumber", blockNum,
 				"blockHash", ourBlock.Hash,
-				"searchDepth", startBlockNum - blockNum)
+				"searchDepth", startBlockNum-blockNum)
 			return ourBlock, nil
 		}
-		
+
 		sugar.Debugw("Block hash mismatch, continuing search",
 			"blockNumber", blockNum,
 			"ourHash", ourBlock.Hash,
 			"chainHash", chainBlock.Hash.Value())
 	}
-	
+
 	return nil, fmt.Errorf("no common ancestor found within %d blocks", maxDepth)
 }
 
@@ -708,16 +708,16 @@ func (ecp *EVMChainPoller) findCommonAncestor(ctx context.Context, startBlockNum
 func (ecp *EVMChainPoller) handleReorg(ctx context.Context, commonAncestor *storage.BlockInfo) error {
 	sugar := ecp.logger.Sugar()
 	originalHeight := ecp.lastObservedBlock.Number.Value()
-	
+
 	sugar.Warnw("Handling blockchain reorganization",
 		"commonAncestor", commonAncestor.Number,
 		"lastObserved", originalHeight,
-		"blocksToRollback", originalHeight - commonAncestor.Number,
+		"blocksToRollback", originalHeight-commonAncestor.Number,
 		"chainId", ecp.config.ChainId)
-	
+
 	// Iteratively delete blocks from lastObserved down to common ancestor
 	for blockNum := originalHeight; blockNum > commonAncestor.Number; blockNum-- {
-		err := ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, 
+		err := ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress,
 			ecp.config.ChainId, blockNum)
 		if err != nil {
 			// Log but continue - block might not exist in storage
@@ -726,22 +726,22 @@ func (ecp *EVMChainPoller) handleReorg(ctx context.Context, commonAncestor *stor
 				"error", err)
 		}
 	}
-	
+
 	// Reset last processed block to common ancestor
-	err := ecp.store.SetLastProcessedBlock(ctx, ecp.config.AvsAddress, 
+	err := ecp.store.SetLastProcessedBlock(ctx, ecp.config.AvsAddress,
 		ecp.config.ChainId, commonAncestor.Number)
 	if err != nil {
 		return fmt.Errorf("failed to reset last processed block: %w", err)
 	}
-	
+
 	// Update in-memory state
 	ecp.lastObservedBlock = &ethereum.EthereumBlock{
 		Number: ethereum.EthereumQuantity(commonAncestor.Number),
 	}
-	
+
 	sugar.Infow("Reorganization handled successfully",
 		"newLastBlock", commonAncestor.Number,
-		"blocksRolledBack", originalHeight - commonAncestor.Number)
-	
+		"blocksRolledBack", originalHeight-commonAncestor.Number)
+
 	return nil
 }

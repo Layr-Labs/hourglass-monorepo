@@ -18,7 +18,7 @@ import (
 // TestBlockInfoBasicOperations tests basic save, get, delete operations
 func TestBlockInfoBasicOperations(t *testing.T) {
 	testCases := []struct {
-		name        string
+		name         string
 		storeFactory func(t *testing.T) storage.AggregatorStore
 	}{
 		{
@@ -85,7 +85,7 @@ func TestBlockInfoBasicOperations(t *testing.T) {
 func TestBlockchainSequence(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	
+
 	cfg := &aggregatorConfig.BadgerConfig{
 		Dir:      filepath.Join(tmpDir, "badger"),
 		InMemory: false,
@@ -124,10 +124,10 @@ func TestBlockchainSequence(t *testing.T) {
 	for i := 1; i < len(blocks); i++ {
 		currentBlock, err := store.GetBlock(ctx, avsAddress, chainId, blocks[i].Number)
 		require.NoError(t, err)
-		
+
 		previousBlock, err := store.GetBlock(ctx, avsAddress, chainId, blocks[i-1].Number)
 		require.NoError(t, err)
-		
+
 		// Current block's parent hash should match previous block's hash
 		assert.Equal(t, previousBlock.Hash, currentBlock.ParentHash)
 	}
@@ -137,7 +137,7 @@ func TestBlockchainSequence(t *testing.T) {
 func TestReorganizationScenario(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	
+
 	cfg := &aggregatorConfig.BadgerConfig{
 		Dir:      filepath.Join(tmpDir, "badger"),
 		InMemory: false,
@@ -218,7 +218,7 @@ func TestReorganizationScenario(t *testing.T) {
 func TestBlockPruning(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	
+
 	cfg := &aggregatorConfig.BadgerConfig{
 		Dir:      filepath.Join(tmpDir, "badger"),
 		InMemory: false,
@@ -271,7 +271,7 @@ func TestBlockPersistenceAcrossRestarts(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "badger")
-	
+
 	avsAddress := "0xavsDEF"
 	chainId := config.ChainId(1)
 
@@ -355,7 +355,7 @@ func TestBlockPersistenceAcrossRestarts(t *testing.T) {
 func TestMultipleAVSIsolation(t *testing.T) {
 	ctx := context.Background()
 	tmpDir := t.TempDir()
-	
+
 	cfg := &aggregatorConfig.BadgerConfig{
 		Dir:      filepath.Join(tmpDir, "badger"),
 		InMemory: false,
@@ -411,15 +411,4 @@ func TestMultipleAVSIsolation(t *testing.T) {
 	retrievedAVS2Again, err := store.GetBlock(ctx, avs2, chainId, 100)
 	require.NoError(t, err)
 	assert.Equal(t, "0xavs2_hash100", retrievedAVS2Again.Hash)
-}
-
-// Helper function for creating test blocks
-func createTestBlock(number uint64, chainId config.ChainId) *storage.BlockInfo {
-	return &storage.BlockInfo{
-		Number:     number,
-		Hash:       fmt.Sprintf("0xhash%d", number),
-		ParentHash: fmt.Sprintf("0xhash%d", number-1),
-		Timestamp:  1000000 + number,
-		ChainId:    chainId,
-	}
 }
