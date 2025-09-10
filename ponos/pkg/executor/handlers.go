@@ -802,7 +802,7 @@ func (e *Executor) validateOperatorInSet(task *executorV1.TaskSubmission) error 
 func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmission) []byte {
 	// IMPORTANT: We always use the executor configured address, not what's in the task
 	// This binds the signature to this specific executor
-	return util.EncodeTaskSubmissionMessage(
+	msg, err := util.EncodeTaskSubmissionMessageVersioned(
 		task.TaskId,
 		task.AvsAddress,
 		e.config.Operator.Address,
@@ -810,7 +810,16 @@ func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmissio
 		task.TaskBlockNumber,
 		task.OperatorSetId,
 		task.Payload,
+		1,
 	)
+	if err != nil {
+		e.logger.Sugar().Errorw("Failed to encode task submission message",
+			zap.Error(err),
+		)
+		return nil
+	}
+
+	return msg
 }
 
 // validateTaskSignature validates the signature of a task submission

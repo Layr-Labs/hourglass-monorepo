@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"sync"
 	"sync/atomic"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
@@ -55,7 +56,6 @@ func NewBN254TaskSession(
 	tlsEnabled bool,
 	logger *zap.Logger,
 ) (*TaskSession[bn254.Signature, aggregation.AggregatedBN254Certificate, signing.PublicKey], error) {
-
 	operators := make([]*aggregation.Operator[signing.PublicKey], 0)
 
 	for _, peer := range operatorPeersWeight.Operators {
@@ -117,7 +117,6 @@ func NewECDSATaskSession(
 	tlsEnabled bool,
 	logger *zap.Logger,
 ) (*TaskSession[ecdsa.Signature, aggregation.AggregatedECDSACertificate, common.Address], error) {
-
 	operators := make([]*aggregation.Operator[common.Address], 0)
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(task.OperatorSetId)
@@ -252,13 +251,13 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 
 			taskSubmission := &executorV1.TaskSubmission{
 				TaskId:             ts.Task.TaskId,
-				AvsAddress:         ts.Task.AVSAddress,
 				AggregatorAddress:  ts.aggregatorAddress,
-				ExecutorAddress:    peer.OperatorAddress,
+				AvsAddress:         ts.Task.AVSAddress,
 				Payload:            ts.Task.Payload,
 				Signature:          signature,
 				OperatorSetId:      ts.Task.OperatorSetId,
 				ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
+				ExecutorAddress:    peer.OperatorAddress,
 				TaskBlockNumber:    ts.Task.L1ReferenceBlockNumber,
 			}
 			ts.logger.Sugar().Infow("broadcasting task session to operators",
@@ -369,7 +368,8 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 
 // generateSignatureForExecutor creates a signature for a specific executor
 func (ts *TaskSession[SigT, CertT, PubKeyT]) generateSignatureForExecutor(executorAddress string) ([]byte, error) {
-	encodedMessage := util.EncodeTaskSubmissionMessage(
+	// Use the preferred version from configuration
+	encodedMessage, err := util.EncodeTaskSubmissionMessageVersioned(
 		ts.Task.TaskId,
 		ts.Task.AVSAddress,
 		executorAddress,
@@ -377,7 +377,11 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) generateSignatureForExecutor(execut
 		ts.Task.L1ReferenceBlockNumber,
 		ts.Task.OperatorSetId,
 		ts.Task.Payload,
+		1,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode task submission message: %w", err)
+	}
 
 	return ts.signer.SignMessage(encodedMessage)
 }

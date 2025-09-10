@@ -2,8 +2,8 @@ package util
 
 import (
 	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // TaskSubmissionSignatureData represents data signed by aggregator for a specific executor
@@ -94,54 +94,6 @@ func (trd *TaskResultSignatureData) ToSigningBytes() []byte {
 	result = append(result, trd.OutputDigest[:]...)
 
 	return result
-}
-
-// EncodeTaskSubmissionMessage creates the message to be signed by aggregator for a specific executor
-func EncodeTaskSubmissionMessage(
-	taskId string,
-	avsAddress string,
-	executorAddress string,
-	referenceTimestamp uint32,
-	blockNumber uint64,
-	operatorSetId uint32,
-	payload []byte,
-) []byte {
-
-	payloadDigest := crypto.Keccak256Hash(payload)
-
-	sigData := &TaskSubmissionSignatureData{
-		TaskId:          taskId,
-		AvsAddress:      avsAddress,
-		ExecutorAddress: executorAddress,
-		OperatorSetId:   operatorSetId,
-		BlockNumber:     blockNumber,
-		Timestamp:       referenceTimestamp,
-		PayloadDigest:   [32]byte(payloadDigest),
-	}
-
-	return sigData.ToSigningBytes()
-}
-
-// EncodeTaskResultMessage creates the message to be signed by executor when returning results
-func EncodeTaskResultMessage(
-	taskId string,
-	avsAddress string,
-	operatorAddress string,
-	operatorSetId uint32,
-	output []byte,
-) []byte {
-
-	outputDigest := crypto.Keccak256Hash(output)
-
-	sigData := &TaskResultSignatureData{
-		TaskId:          taskId,
-		AvsAddress:      avsAddress,
-		OperatorAddress: operatorAddress,
-		OperatorSetId:   operatorSetId,
-		OutputDigest:    [32]byte(outputDigest),
-	}
-
-	return sigData.ToSigningBytes()
 }
 
 // AbiEncodeUint32 encodes a uint32 as 32 bytes (ABI standard)
