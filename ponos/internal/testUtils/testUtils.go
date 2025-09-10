@@ -108,7 +108,7 @@ func WaitForAnvil(
 	anvilWg *sync.WaitGroup,
 	ctx context.Context,
 	t *testing.T,
-	ethereumClient *ethereum.Client,
+	ethereumClient *ethereum.EthereumClient,
 	errorsChan chan error,
 ) {
 	defer anvilWg.Done()

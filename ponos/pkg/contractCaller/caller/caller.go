@@ -56,7 +56,7 @@ type ContractCaller struct {
 }
 
 func NewContractCallerFromEthereumClient(
-	ethClient *ethereum.Client,
+	ethClient *ethereum.EthereumClient,
 	signer transactionSigner.ITransactionSigner,
 	logger *zap.Logger,
 ) (*ContractCaller, error) {

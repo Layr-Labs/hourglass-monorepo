@@ -95,7 +95,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	taskQueue := make(chan *types.Task)
 
 	var pollerConfig *EVMChainPoller.EVMChainPollerConfig
-	var pollerEthClient *ethereum.Client
+	var pollerEthClient *ethereum.EthereumClient
 	if networkTarget == NetworkTarget_L1 {
 		pollerConfig = &EVMChainPoller.EVMChainPollerConfig{
 			ChainId:              config.ChainId_EthereumAnvil,

@@ -60,7 +60,13 @@ type ClientParams struct {
 
 var jsonRPCVersion = "2.0"
 
-type Client struct {
+type Client interface {
+	GetLatestBlock(ctx context.Context) (uint64, error)
+	GetBlockByNumber(ctx context.Context, blockNumber uint64) (*EthereumBlock, error)
+	GetLogs(ctx context.Context, address string, fromBlock uint64, toBlock uint64) ([]*EthereumEventLog, error)
+}
+
+type EthereumClient struct {
 	Logger       *zap.Logger
 	httpClient   *http.Client
 	clientConfig *EthereumClientConfig
@@ -85,21 +91,21 @@ func DefaultChunkedCallEthereumClientConfig() *EthereumClientConfig {
 	}
 }
 
-func NewEthereumClient(cfg *EthereumClientConfig, l *zap.Logger) *Client {
+func NewEthereumClient(cfg *EthereumClientConfig, l *zap.Logger) *EthereumClient {
 	client := &http.Client{
 		Timeout: time.Second * 10,
 	}
 
 	l.Sugar().Debugw("Creating new Ethereum client", zap.Any("config", cfg))
 
-	return &Client{
+	return &EthereumClient{
 		httpClient:   client,
 		Logger:       l,
 		clientConfig: cfg,
 	}
 }
 
-func (c *Client) GetWebsocketConnection(wsUrl string) (*ethclient.Client, error) {
+func (c *EthereumClient) GetWebsocketConnection(wsUrl string) (*ethclient.Client, error) {
 	d, err := ethclient.Dial(wsUrl)
 	if err != nil {
 		return nil, err
@@ -108,11 +114,11 @@ func (c *Client) GetWebsocketConnection(wsUrl string) (*ethclient.Client, error)
 	return d, nil
 }
 
-func (c *Client) SetHttpClient(client *http.Client) {
+func (c *EthereumClient) SetHttpClient(client *http.Client) {
 	c.httpClient = client
 }
 
-func (c *Client) GetEthereumContractCaller() (*ethclient.Client, error) {
+func (c *EthereumClient) GetEthereumContractCaller() (*ethclient.Client, error) {
 	d, err := ethclient.Dial(c.clientConfig.BaseUrl)
 	if err != nil {
 		c.Logger.Sugar().Error("Failed to create new eth client", zap.Error(err))
@@ -121,7 +127,7 @@ func (c *Client) GetEthereumContractCaller() (*ethclient.Client, error) {
 	return d, nil
 }
 
-func (c *Client) ListenForNewBlocks(
+func (c *EthereumClient) ListenForNewBlocks(
 	ctx context.Context,
 	wsc *ethclient.Client,
 	quitChan chan struct{},
@@ -150,7 +156,7 @@ func (c *Client) ListenForNewBlocks(
 	}
 }
 
-func (c *Client) GetBlockNumber(ctx context.Context) (string, error) {
+func (c *EthereumClient) GetBlockNumber(ctx context.Context) (string, error) {
 	res, err := c.Call(ctx, GetBlockRequest(1))
 
 	if err != nil {
@@ -160,7 +166,7 @@ func (c *Client) GetBlockNumber(ctx context.Context) (string, error) {
 	return strings.ReplaceAll(string(res.Result), "\"", ""), nil
 }
 
-func (c *Client) GetBlockNumberUint64(ctx context.Context) (uint64, error) {
+func (c *EthereumClient) GetBlockNumberUint64(ctx context.Context) (uint64, error) {
 	blockNumber, err := c.GetBlockNumber(ctx)
 	if err != nil {
 		return 0, err
@@ -174,7 +180,7 @@ func (c *Client) GetBlockNumberUint64(ctx context.Context) (uint64, error) {
 	return blockNumberUint64, nil
 }
 
-func (c *Client) GetLatestBlock(ctx context.Context) (uint64, error) {
+func (c *EthereumClient) GetLatestBlock(ctx context.Context) (uint64, error) {
 	var rpcRequest *RPCRequest
 	if c.clientConfig.BlockType == BlockType_Latest {
 		rpcRequest = GetLatestBlockRequest(1)
@@ -197,7 +203,7 @@ func (c *Client) GetLatestBlock(ctx context.Context) (uint64, error) {
 	return ethBlock.Number.Value(), nil
 }
 
-func (c *Client) GetBlockByNumber(ctx context.Context, blockNumber uint64) (*EthereumBlock, error) {
+func (c *EthereumClient) GetBlockByNumber(ctx context.Context, blockNumber uint64) (*EthereumBlock, error) {
 	rpcRequest := GetBlockByNumberRequest(blockNumber, 1)
 
 	res, err := c.Call(ctx, rpcRequest)
@@ -215,7 +221,7 @@ func (c *Client) GetBlockByNumber(ctx context.Context, blockNumber uint64) (*Eth
 	return ethBlock, nil
 }
 
-func (c *Client) GetTransactionByHash(ctx context.Context, txHash string) (*EthereumTransaction, error) {
+func (c *EthereumClient) GetTransactionByHash(ctx context.Context, txHash string) (*EthereumTransaction, error) {
 	rpcRequest := GetTransactionByHashRequest(txHash, 1)
 
 	res, err := c.Call(ctx, rpcRequest)
@@ -234,7 +240,7 @@ func (c *Client) GetTransactionByHash(ctx context.Context, txHash string) (*Ethe
 }
 
 // GetTransactionReceipt retrieves the transaction receipt for a given transaction hash.
-func (c *Client) GetTransactionReceipt(ctx context.Context, txHash string) (*EthereumTransactionReceipt, error) {
+func (c *EthereumClient) GetTransactionReceipt(ctx context.Context, txHash string) (*EthereumTransactionReceipt, error) {
 	rpcRequest := GetTransactionReceiptRequest(txHash, 1)
 
 	res, err := c.Call(ctx, rpcRequest)
@@ -253,7 +259,7 @@ func (c *Client) GetTransactionReceipt(ctx context.Context, txHash string) (*Eth
 }
 
 // GetBlockTransactionReceipts retrieves the transaction receipts for a given block number.
-func (c *Client) GetBlockTransactionReceipts(ctx context.Context, blockNumber uint64) ([]*EthereumTransactionReceipt, error) {
+func (c *EthereumClient) GetBlockTransactionReceipts(ctx context.Context, blockNumber uint64) ([]*EthereumTransactionReceipt, error) {
 	rpcRequest := GetBlockReceiptsRequest(blockNumber, 1)
 
 	res, err := c.Call(ctx, rpcRequest)
@@ -270,7 +276,7 @@ func (c *Client) GetBlockTransactionReceipts(ctx context.Context, blockNumber ui
 	return txReceipts, nil
 }
 
-func (c *Client) GetLogs(ctx context.Context, address string, fromBlock uint64, toBlock uint64) ([]*EthereumEventLog, error) {
+func (c *EthereumClient) GetLogs(ctx context.Context, address string, fromBlock uint64, toBlock uint64) ([]*EthereumEventLog, error) {
 	rpcRequest := GetLogsRequest(address, fromBlock, toBlock, 1)
 
 	res, err := c.Call(ctx, rpcRequest)
@@ -294,7 +300,7 @@ type BatchRPCRequest[T any] struct {
 }
 
 //nolint:unused
-func (c *Client) batchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
+func (c *EthereumClient) batchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		return make([]*RPCResponse, 0), nil
 	}
@@ -360,7 +366,7 @@ const (
 )
 
 //nolint:unused
-func (c *Client) chunkedNativeBatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
+func (c *EthereumClient) chunkedNativeBatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		c.Logger.Sugar().Warnw("No requests to batch call")
 		return make([]*RPCResponse, 0), nil
@@ -435,7 +441,7 @@ const (
 // by calling the regular client.call method rather than relying on the batch call method.
 //
 // This function allows for better retry and error handling over the batch call method.
-func (c *Client) chunkedBatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
+func (c *EthereumClient) chunkedBatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		c.Logger.Sugar().Warnw("No requests to batch call")
 		return make([]*RPCResponse, 0), nil
@@ -522,7 +528,7 @@ func (c *Client) chunkedBatchCall(ctx context.Context, requests []*RPCRequest) (
 	return allResults, nil
 }
 
-func (c *Client) BatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
+func (c *EthereumClient) BatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCResponse, error) {
 	if len(requests) == 0 {
 		c.Logger.Sugar().Warnw("No requests to batch call")
 		return make([]*RPCResponse, 0), nil
@@ -531,7 +537,7 @@ func (c *Client) BatchCall(ctx context.Context, requests []*RPCRequest) ([]*RPCR
 	return c.chunkedBatchCall(ctx, requests)
 }
 
-func (c *Client) call(ctx context.Context, rpcRequest *RPCRequest) (*RPCResponse, error) {
+func (c *EthereumClient) call(ctx context.Context, rpcRequest *RPCRequest) (*RPCResponse, error) {
 	requestBody, err := json.Marshal(rpcRequest)
 
 	c.Logger.Sugar().Debug("Request body", zap.String("requestBody", string(requestBody)))
@@ -577,7 +583,7 @@ func (c *Client) call(ctx context.Context, rpcRequest *RPCRequest) (*RPCResponse
 	return destination, nil
 }
 
-func (c *Client) Call(ctx context.Context, rpcRequest *RPCRequest) (*RPCResponse, error) {
+func (c *EthereumClient) Call(ctx context.Context, rpcRequest *RPCRequest) (*RPCResponse, error) {
 	backoffs := []int{1, 3, 5, 10, 20, 30, 60}
 
 	for i, backoff := range backoffs {
