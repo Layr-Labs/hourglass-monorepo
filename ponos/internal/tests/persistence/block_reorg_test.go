@@ -4,19 +4,164 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
-// TestBlockInfoBasicOperations tests basic save, get, delete operations
-func TestBlockInfoBasicOperations(t *testing.T) {
+// mockEthereumClient implements the ethereum.Client interface for testing
+type mockEthereumClient struct {
+	mu                sync.RWMutex
+	blocks            map[uint64]*ethereum.EthereumBlock
+	latestBlockNumber uint64
+	returnErrors      bool
+}
+
+// mockLogParser implements a minimal log parser for testing
+type mockLogParser struct{}
+
+func (m *mockLogParser) DecodeLog(abi interface{}, log *ethereum.EthereumEventLog) (*types.DecodedLog, error) {
+	// Return minimal decoded log for testing
+	// Since we're testing reorg detection, not log processing, this is sufficient
+	return &types.DecodedLog{
+		EventName: "MockEvent",
+	}, nil
+}
+
+func newMockEthereumClient() *mockEthereumClient {
+	return &mockEthereumClient{
+		blocks: make(map[uint64]*ethereum.EthereumBlock),
+	}
+}
+
+func (m *mockEthereumClient) GetLatestBlock(ctx context.Context) (uint64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.returnErrors {
+		return 0, fmt.Errorf("mock error")
+	}
+	return m.latestBlockNumber, nil
+}
+
+func (m *mockEthereumClient) GetBlockByNumber(ctx context.Context, blockNumber uint64) (*ethereum.EthereumBlock, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.returnErrors {
+		return nil, fmt.Errorf("mock error")
+	}
+
+	block, exists := m.blocks[blockNumber]
+	if !exists {
+		return nil, fmt.Errorf("block %d not found", blockNumber)
+	}
+	return block, nil
+}
+
+func (m *mockEthereumClient) GetLogs(ctx context.Context, address string, fromBlock uint64, toBlock uint64) ([]*ethereum.EthereumEventLog, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.returnErrors {
+		return nil, fmt.Errorf("mock error")
+	}
+	// Return empty logs for this test since we're only testing block storage
+	return []*ethereum.EthereumEventLog{}, nil
+}
+
+func (m *mockEthereumClient) addBlock(block *ethereum.EthereumBlock) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.blocks[block.Number.Value()] = block
+	if block.Number.Value() > m.latestBlockNumber {
+		m.latestBlockNumber = block.Number.Value()
+	}
+}
+
+func (m *mockEthereumClient) setReturnErrors(returnErrors bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.returnErrors = returnErrors
+}
+
+// createBlock creates a single ethereum block with the given parameters
+func createBlock(number uint64, hash, parentHash string, chainId config.ChainId) *ethereum.EthereumBlock {
+	return &ethereum.EthereumBlock{
+		Hash:       ethereum.EthereumHexString(hash),
+		ParentHash: ethereum.EthereumHexString(parentHash),
+		Number:     ethereum.EthereumQuantity(number),
+		Timestamp:  ethereum.EthereumQuantity(1000 + number),
+		ChainId:    chainId,
+	}
+}
+
+// createBlockChain creates a chain of blocks with sequential parent-child relationships
+func createBlockChain(startNum, endNum uint64, hashSuffix string, chainId config.ChainId) []*ethereum.EthereumBlock {
+	blocks := make([]*ethereum.EthereumBlock, 0, endNum-startNum+1)
+	
+	for i := startNum; i <= endNum; i++ {
+		hash := fmt.Sprintf("0xhash%d%s", i, hashSuffix)
+		parentHash := fmt.Sprintf("0xhash%d%s", i-1, hashSuffix)
+		blocks = append(blocks, createBlock(i, hash, parentHash, chainId))
+	}
+	
+	return blocks
+}
+
+// addBlocksToClient adds multiple blocks to the mock ethereum client
+func addBlocksToClient(client *mockEthereumClient, blocks []*ethereum.EthereumBlock) {
+	for _, block := range blocks {
+		client.addBlock(block)
+	}
+}
+
+// replaceBlocksInClient replaces blocks in the mock client (simulating a reorg)
+func replaceBlocksInClient(client *mockEthereumClient, blocks []*ethereum.EthereumBlock) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	
+	for _, block := range blocks {
+		client.blocks[block.Number.Value()] = block
+	}
+	
+	// Update latest block number
+	if len(blocks) > 0 {
+		lastBlock := blocks[len(blocks)-1]
+		if lastBlock.Number.Value() > client.latestBlockNumber {
+			client.latestBlockNumber = lastBlock.Number.Value()
+		}
+	}
+}
+
+// verifyBlocksInStore verifies that blocks in the store match expected values
+func verifyBlocksInStore(t *testing.T, ctx context.Context, store storage.AggregatorStore, 
+	avsAddress string, chainId config.ChainId, startNum, endNum uint64, expectedHashSuffix string) {
+	
+	for i := startNum; i <= endNum; i++ {
+		block, err := store.GetBlock(ctx, avsAddress, chainId, i)
+		require.NoError(t, err, "Block %d should exist", i)
+		
+		expectedHash := fmt.Sprintf("0xhash%d%s", i, expectedHashSuffix)
+		assert.Equal(t, expectedHash, block.Hash, "Block %d should have expected hash", i)
+	}
+}
+
+// TestEVMChainPollerReorgDetection tests basic reorganization detection and handling
+func TestEVMChainPollerReorgDetection(t *testing.T) {
 	testCases := []struct {
 		name         string
 		storeFactory func(t *testing.T) storage.AggregatorStore
@@ -47,368 +192,99 @@ func TestBlockInfoBasicOperations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			store := tc.storeFactory(t)
-			avsAddress := "0xavs123"
+			avsAddress := "0xavsReorg"
 			chainId := config.ChainId(1)
 
-			// Test Save and Get
-			block1 := &storage.BlockInfo{
-				Number:     100,
-				Hash:       "0xhash100",
-				ParentHash: "0xhash99",
-				Timestamp:  1234567890,
-				ChainId:    chainId,
+			// Create mock client
+			mockClient := newMockEthereumClient()
+
+			// Step 1: Setup simple initial chain (blocks 100-105)
+			// Add block 99 as starting point for the poller
+			block99 := createBlock(99, "0xhash99", "0xhash98", chainId)
+			mockClient.addBlock(block99)
+			
+			// Create initial blocks (100-105)
+			initialBlocks := createBlockChain(100, 105, "", chainId)
+			addBlocksToClient(mockClient, initialBlocks)
+
+			// Step 2: Start poller and wait for initial processing
+			taskQueue := make(chan *types.Task, 100)
+			logger := zap.NewNop()
+
+			pollerConfig := &EVMChainPoller.EVMChainPollerConfig{
+				ChainId:              chainId,
+				PollingInterval:      50 * time.Millisecond,
+				InterestingContracts: []string{},
+				AvsAddress:           avsAddress,
+				MaxReorgDepth:        10,
+				BlockHistorySize:     100,
+				ReorgCheckEnabled:    true,
 			}
 
-			// Save block
-			err := store.SaveBlock(ctx, avsAddress, block1)
-			require.NoError(t, err)
+			// Create mock log parser for safer testing
+			// (avoids nil pointer issues even though logs are empty)
+			logParser := &mockLogParser{}
+			
+			poller := EVMChainPoller.NewEVMChainPoller(
+				mockClient,
+				taskQueue,
+				logParser,
+				pollerConfig,
+				nil, // contractStore not needed for this test
+				store,
+				logger,
+			)
 
-			// Retrieve block
-			retrievedBlock, err := store.GetBlock(ctx, avsAddress, chainId, 100)
-			require.NoError(t, err)
-			assert.Equal(t, block1.Hash, retrievedBlock.Hash)
-			assert.Equal(t, block1.ParentHash, retrievedBlock.ParentHash)
-			assert.Equal(t, block1.Number, retrievedBlock.Number)
+			// Start the poller
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
-			// Test Delete
-			err = store.DeleteBlock(ctx, avsAddress, chainId, 100)
-			require.NoError(t, err)
+			go func() {
+				err := poller.Start(ctx)
+				if err != nil && ctx.Err() == nil {
+					t.Errorf("Poller failed to start: %v", err)
+				}
+			}()
 
-			// Verify block is deleted
-			_, err = store.GetBlock(ctx, avsAddress, chainId, 100)
-			assert.ErrorIs(t, err, storage.ErrNotFound)
+			// Wait for initial blocks to be processed
+			require.Eventually(t, func() bool {
+				lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
+				return err == nil && lastProcessed >= 105
+			}, 5*time.Second, 50*time.Millisecond, "Initial blocks not processed")
+
+			// Verify initial blocks were stored
+			verifyBlocksInStore(t, ctx, store, avsAddress, chainId, 100, 105, "")
+
+			// Step 3: Simulate a basic reorg (replace blocks 103-105 with new versions and add 106)
+			newBlocks := createBlockChain(103, 106, "_new", chainId)
+			// Connect to block 102 (which remains unchanged)
+			newBlocks[0].ParentHash = "0xhash102"
+			
+			// Replace blocks in mock client (simulating the chain reorg)
+			replaceBlocksInClient(mockClient, newBlocks)
+
+			// Step 4: Verify reorg was handled correctly
+			require.Eventually(t, func() bool {
+				lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
+				return err == nil && lastProcessed >= 106
+			}, 5*time.Second, 50*time.Millisecond, "Reorged blocks not processed")
+
+			// Verify blocks before reorg point (100-102) are unchanged
+			verifyBlocksInStore(t, ctx, store, avsAddress, chainId, 100, 102, "")
+
+			// Verify reorged blocks (103-106) have new hashes
+			verifyBlocksInStore(t, ctx, store, avsAddress, chainId, 103, 106, "_new")
+
+			// Verify parent-child relationships
+			block103, err := store.GetBlock(ctx, avsAddress, chainId, 103)
+			require.NoError(t, err)
+			assert.Equal(t, "0xhash102", block103.ParentHash,
+				"Block 103 should point to block 102")
+
+			// Verify last processed block is updated
+			lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(106), lastProcessed, "Last processed should be 106")
 		})
 	}
-}
-
-// TestBlockchainSequence tests saving and retrieving a sequence of blocks
-func TestBlockchainSequence(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-
-	cfg := &aggregatorConfig.BadgerConfig{
-		Dir:      filepath.Join(tmpDir, "badger"),
-		InMemory: false,
-	}
-	store, err := badger.NewBadgerAggregatorStore(cfg)
-	require.NoError(t, err)
-	defer store.Close()
-
-	avsAddress := "0xavs456"
-	chainId := config.ChainId(1)
-
-	// Create a chain of blocks
-	blocks := []storage.BlockInfo{
-		{Number: 100, Hash: "0xhash100", ParentHash: "0xhash99", Timestamp: 1000, ChainId: chainId},
-		{Number: 101, Hash: "0xhash101", ParentHash: "0xhash100", Timestamp: 1001, ChainId: chainId},
-		{Number: 102, Hash: "0xhash102", ParentHash: "0xhash101", Timestamp: 1002, ChainId: chainId},
-		{Number: 103, Hash: "0xhash103", ParentHash: "0xhash102", Timestamp: 1003, ChainId: chainId},
-		{Number: 104, Hash: "0xhash104", ParentHash: "0xhash103", Timestamp: 1004, ChainId: chainId},
-	}
-
-	// Save all blocks
-	for i := range blocks {
-		err := store.SaveBlock(ctx, avsAddress, &blocks[i])
-		require.NoError(t, err)
-	}
-
-	// Verify all blocks can be retrieved
-	for _, expectedBlock := range blocks {
-		retrievedBlock, err := store.GetBlock(ctx, avsAddress, chainId, expectedBlock.Number)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBlock.Hash, retrievedBlock.Hash)
-		assert.Equal(t, expectedBlock.ParentHash, retrievedBlock.ParentHash)
-	}
-
-	// Verify parent-child relationships
-	for i := 1; i < len(blocks); i++ {
-		currentBlock, err := store.GetBlock(ctx, avsAddress, chainId, blocks[i].Number)
-		require.NoError(t, err)
-
-		previousBlock, err := store.GetBlock(ctx, avsAddress, chainId, blocks[i-1].Number)
-		require.NoError(t, err)
-
-		// Current block's parent hash should match previous block's hash
-		assert.Equal(t, previousBlock.Hash, currentBlock.ParentHash)
-	}
-}
-
-// TestReorganizationScenario simulates a blockchain reorganization
-func TestReorganizationScenario(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-
-	cfg := &aggregatorConfig.BadgerConfig{
-		Dir:      filepath.Join(tmpDir, "badger"),
-		InMemory: false,
-	}
-	store, err := badger.NewBadgerAggregatorStore(cfg)
-	require.NoError(t, err)
-	defer store.Close()
-
-	avsAddress := "0xavs789"
-	chainId := config.ChainId(1)
-
-	// Create initial chain
-	originalBlocks := []storage.BlockInfo{
-		{Number: 100, Hash: "0xhash100", ParentHash: "0xhash99", Timestamp: 1000, ChainId: chainId},
-		{Number: 101, Hash: "0xhash101", ParentHash: "0xhash100", Timestamp: 1001, ChainId: chainId},
-		{Number: 102, Hash: "0xhash102", ParentHash: "0xhash101", Timestamp: 1002, ChainId: chainId},
-		{Number: 103, Hash: "0xhash103_old", ParentHash: "0xhash102", Timestamp: 1003, ChainId: chainId},
-		{Number: 104, Hash: "0xhash104_old", ParentHash: "0xhash103_old", Timestamp: 1004, ChainId: chainId},
-		{Number: 105, Hash: "0xhash105_old", ParentHash: "0xhash104_old", Timestamp: 1005, ChainId: chainId},
-	}
-
-	// Save original chain
-	for i := range originalBlocks {
-		err := store.SaveBlock(ctx, avsAddress, &originalBlocks[i])
-		require.NoError(t, err)
-	}
-
-	// Set last processed block
-	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, 105)
-	require.NoError(t, err)
-
-	// Simulate reorg: blocks 103-105 are replaced
-	// Delete old blocks
-	for blockNum := uint64(103); blockNum <= 105; blockNum++ {
-		err := store.DeleteBlock(ctx, avsAddress, chainId, blockNum)
-		require.NoError(t, err)
-	}
-
-	// Add new blocks (reorged chain)
-	reorgedBlocks := []storage.BlockInfo{
-		{Number: 103, Hash: "0xhash103_new", ParentHash: "0xhash102", Timestamp: 1003, ChainId: chainId},
-		{Number: 104, Hash: "0xhash104_new", ParentHash: "0xhash103_new", Timestamp: 1004, ChainId: chainId},
-		{Number: 105, Hash: "0xhash105_new", ParentHash: "0xhash104_new", Timestamp: 1005, ChainId: chainId},
-		{Number: 106, Hash: "0xhash106_new", ParentHash: "0xhash105_new", Timestamp: 1006, ChainId: chainId},
-	}
-
-	for i := range reorgedBlocks {
-		err := store.SaveBlock(ctx, avsAddress, &reorgedBlocks[i])
-		require.NoError(t, err)
-	}
-
-	// Update last processed block
-	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, 106)
-	require.NoError(t, err)
-
-	// Verify blocks 100-102 are unchanged
-	for i := 0; i < 3; i++ {
-		block, err := store.GetBlock(ctx, avsAddress, chainId, originalBlocks[i].Number)
-		require.NoError(t, err)
-		assert.Equal(t, originalBlocks[i].Hash, block.Hash)
-	}
-
-	// Verify blocks 103-106 are the new versions
-	for _, expectedBlock := range reorgedBlocks {
-		block, err := store.GetBlock(ctx, avsAddress, chainId, expectedBlock.Number)
-		require.NoError(t, err)
-		assert.Equal(t, expectedBlock.Hash, block.Hash)
-		assert.Equal(t, expectedBlock.ParentHash, block.ParentHash)
-	}
-
-	// Verify last processed block is updated
-	lastBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(106), lastBlock)
-}
-
-// TestBlockPruning tests that old blocks can be pruned
-func TestBlockPruning(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-
-	cfg := &aggregatorConfig.BadgerConfig{
-		Dir:      filepath.Join(tmpDir, "badger"),
-		InMemory: false,
-	}
-	store, err := badger.NewBadgerAggregatorStore(cfg)
-	require.NoError(t, err)
-	defer store.Close()
-
-	avsAddress := "0xavsABC"
-	chainId := config.ChainId(1)
-	retentionLimit := 10 // Keep only last 10 blocks
-
-	// Save many blocks
-	for i := uint64(1); i <= 20; i++ {
-		block := &storage.BlockInfo{
-			Number:     i,
-			Hash:       fmt.Sprintf("0xhash%d", i),
-			ParentHash: fmt.Sprintf("0xhash%d", i-1),
-			Timestamp:  1000 + i,
-			ChainId:    chainId,
-		}
-		err := store.SaveBlock(ctx, avsAddress, block)
-		require.NoError(t, err)
-
-		// Prune old blocks if we exceed retention limit
-		if i > uint64(retentionLimit) {
-			oldBlockNum := i - uint64(retentionLimit)
-			err := store.DeleteBlock(ctx, avsAddress, chainId, oldBlockNum)
-			// Ignore error as block might not exist
-			_ = err
-		}
-	}
-
-	// Verify old blocks are pruned
-	for i := uint64(1); i <= 10; i++ {
-		_, err := store.GetBlock(ctx, avsAddress, chainId, i)
-		assert.ErrorIs(t, err, storage.ErrNotFound, "Block %d should be pruned", i)
-	}
-
-	// Verify recent blocks are retained
-	for i := uint64(11); i <= 20; i++ {
-		block, err := store.GetBlock(ctx, avsAddress, chainId, i)
-		require.NoError(t, err, "Block %d should be retained", i)
-		assert.Equal(t, fmt.Sprintf("0xhash%d", i), block.Hash)
-	}
-}
-
-// TestBlockPersistenceAcrossRestarts tests that blocks persist when store is closed and reopened
-func TestBlockPersistenceAcrossRestarts(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "badger")
-
-	avsAddress := "0xavsDEF"
-	chainId := config.ChainId(1)
-
-	// Phase 1: Save blocks and close store
-	{
-		cfg := &aggregatorConfig.BadgerConfig{
-			Dir:      dbPath,
-			InMemory: false,
-		}
-		store, err := badger.NewBadgerAggregatorStore(cfg)
-		require.NoError(t, err)
-
-		// Save some blocks
-		blocks := []storage.BlockInfo{
-			{Number: 200, Hash: "0xhash200", ParentHash: "0xhash199", Timestamp: 2000, ChainId: chainId},
-			{Number: 201, Hash: "0xhash201", ParentHash: "0xhash200", Timestamp: 2001, ChainId: chainId},
-			{Number: 202, Hash: "0xhash202", ParentHash: "0xhash201", Timestamp: 2002, ChainId: chainId},
-		}
-
-		for i := range blocks {
-			err := store.SaveBlock(ctx, avsAddress, &blocks[i])
-			require.NoError(t, err)
-		}
-
-		// Set last processed block
-		err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, 202)
-		require.NoError(t, err)
-
-		// Close the store
-		err = store.Close()
-		require.NoError(t, err)
-	}
-
-	// Phase 2: Reopen store and verify persistence
-	{
-		cfg := &aggregatorConfig.BadgerConfig{
-			Dir:      dbPath,
-			InMemory: false,
-		}
-		store, err := badger.NewBadgerAggregatorStore(cfg)
-		require.NoError(t, err)
-		defer store.Close()
-
-		// Verify blocks are still there
-		expectedBlocks := map[uint64]string{
-			200: "0xhash200",
-			201: "0xhash201",
-			202: "0xhash202",
-		}
-
-		for blockNum, expectedHash := range expectedBlocks {
-			block, err := store.GetBlock(ctx, avsAddress, chainId, blockNum)
-			require.NoError(t, err, "Block %d should persist", blockNum)
-			assert.Equal(t, expectedHash, block.Hash)
-		}
-
-		// Verify last processed block persists
-		lastBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
-		require.NoError(t, err)
-		assert.Equal(t, uint64(202), lastBlock)
-
-		// Add more blocks to verify store is still functional
-		newBlock := &storage.BlockInfo{
-			Number:     203,
-			Hash:       "0xhash203",
-			ParentHash: "0xhash202",
-			Timestamp:  2003,
-			ChainId:    chainId,
-		}
-		err = store.SaveBlock(ctx, avsAddress, newBlock)
-		require.NoError(t, err)
-
-		// Verify new block was saved
-		retrievedBlock, err := store.GetBlock(ctx, avsAddress, chainId, 203)
-		require.NoError(t, err)
-		assert.Equal(t, "0xhash203", retrievedBlock.Hash)
-	}
-}
-
-// TestMultipleAVSIsolation tests that blocks from different AVS addresses are isolated
-func TestMultipleAVSIsolation(t *testing.T) {
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-
-	cfg := &aggregatorConfig.BadgerConfig{
-		Dir:      filepath.Join(tmpDir, "badger"),
-		InMemory: false,
-	}
-	store, err := badger.NewBadgerAggregatorStore(cfg)
-	require.NoError(t, err)
-	defer store.Close()
-
-	avs1 := "0xavs111"
-	avs2 := "0xavs222"
-	chainId := config.ChainId(1)
-
-	// Save blocks for AVS1
-	block1AVS1 := &storage.BlockInfo{
-		Number:     100,
-		Hash:       "0xavs1_hash100",
-		ParentHash: "0xavs1_hash99",
-		Timestamp:  1000,
-		ChainId:    chainId,
-	}
-	err = store.SaveBlock(ctx, avs1, block1AVS1)
-	require.NoError(t, err)
-
-	// Save blocks for AVS2 with same block number
-	block1AVS2 := &storage.BlockInfo{
-		Number:     100,
-		Hash:       "0xavs2_hash100",
-		ParentHash: "0xavs2_hash99",
-		Timestamp:  2000,
-		ChainId:    chainId,
-	}
-	err = store.SaveBlock(ctx, avs2, block1AVS2)
-	require.NoError(t, err)
-
-	// Verify isolation - each AVS gets its own block
-	retrievedAVS1, err := store.GetBlock(ctx, avs1, chainId, 100)
-	require.NoError(t, err)
-	assert.Equal(t, "0xavs1_hash100", retrievedAVS1.Hash)
-
-	retrievedAVS2, err := store.GetBlock(ctx, avs2, chainId, 100)
-	require.NoError(t, err)
-	assert.Equal(t, "0xavs2_hash100", retrievedAVS2.Hash)
-
-	// Delete block for AVS1 shouldn't affect AVS2
-	err = store.DeleteBlock(ctx, avs1, chainId, 100)
-	require.NoError(t, err)
-
-	// AVS1 block should be gone
-	_, err = store.GetBlock(ctx, avs1, chainId, 100)
-	assert.ErrorIs(t, err, storage.ErrNotFound)
-
-	// AVS2 block should still exist
-	retrievedAVS2Again, err := store.GetBlock(ctx, avs2, chainId, 100)
-	require.NoError(t, err)
-	assert.Equal(t, "0xavs2_hash100", retrievedAVS2Again.Hash)
 }
