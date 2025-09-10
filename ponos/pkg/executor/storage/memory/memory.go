@@ -124,27 +124,3 @@ func (s *InMemoryExecutorStore) Close() error {
 
 	return nil
 }
-
-// validateDeploymentStatusTransition validates deployment status transitions
-func validateDeploymentStatusTransition(from, to storage.DeploymentStatus) error {
-	// Define valid transitions
-	validTransitions := map[storage.DeploymentStatus][]storage.DeploymentStatus{
-		storage.DeploymentStatusPending:   {storage.DeploymentStatusDeploying, storage.DeploymentStatusFailed},
-		storage.DeploymentStatusDeploying: {storage.DeploymentStatusRunning, storage.DeploymentStatusFailed},
-		storage.DeploymentStatusRunning:   {storage.DeploymentStatusFailed}, // Can fail after running
-		storage.DeploymentStatusFailed:    {},                               // Terminal state
-	}
-
-	allowedTransitions, exists := validTransitions[from]
-	if !exists {
-		return fmt.Errorf("%w: unknown status %s", storage.ErrInvalidDeploymentStatus, from)
-	}
-
-	for _, allowed := range allowedTransitions {
-		if allowed == to {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("%w: cannot transition from %s to %s", storage.ErrInvalidDeploymentStatus, from, to)
-}
