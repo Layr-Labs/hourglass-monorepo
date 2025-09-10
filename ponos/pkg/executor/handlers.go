@@ -307,6 +307,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
 	e.inflightTasks.Store(task.TaskId, task)
+	defer e.inflightTasks.Delete(task.TaskId)
 
 	response, err := avsPerf.RunTask(ctx, pt)
 
