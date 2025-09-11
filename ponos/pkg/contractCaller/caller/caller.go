@@ -245,7 +245,11 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
 	}
-
+	cc.logger.Sugar().Infow("Creating BN254 Submit Result Transaction",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("Cert", hexutil.Encode(certBytes)),
+		zap.String("TaskResponse", hexutil.Encode(params.TaskResponse)),
+	)
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, params.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
@@ -322,7 +326,11 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	if err != nil {
 		return nil, fmt.Errorf("failed to call GetECDSACertificateBytes: %w", err)
 	}
-
+	cc.logger.Sugar().Infow("Creating ECDSA Submit Result Transaction",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("Cert", hexutil.Encode(certBytes)),
+		zap.String("TaskResponse", hexutil.Encode(params.TaskResponse)),
+	)
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, params.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
