@@ -8,8 +8,8 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 )
 
-// BlockInfo stores essential block information for reorg detection
-type BlockInfo struct {
+// BlockEntity stores essential block information for reorg detection
+type BlockEntity struct {
 	Number     uint64
 	Hash       string
 	ParentHash string
@@ -24,8 +24,8 @@ type AggregatorStore interface {
 	SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error
 
 	// Block history management for reorg detection
-	SaveBlock(ctx context.Context, avsAddress string, block *BlockInfo) error
-	GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*BlockInfo, error)
+	SaveBlock(ctx context.Context, avsAddress string, block *BlockEntity) error
+	GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*BlockEntity, error)
 	DeleteBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) error
 
 	// Task management

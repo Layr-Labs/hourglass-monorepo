@@ -25,10 +25,9 @@ type EVMChainPollerConfig struct {
 	InterestingContracts []string
 	AvsAddress           string
 
-	// Reorg handling configuration
-	MaxReorgDepth     int  // Maximum blocks to check for reorg (default: 10)
-	BlockHistorySize  int  // Number of blocks to keep in history (default: 100)
-	ReorgCheckEnabled bool // Enable reorg detection (default: true)
+	MaxReorgDepth     int
+	BlockHistorySize  int
+	ReorgCheckEnabled bool
 }
 
 type EVMChainPoller struct {
@@ -199,7 +198,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	}
 
 	var blocksToFetch []uint64
-	if latestBlockNum >= ecp.lastObservedBlock.Number.Value()+1 {
+	if latestBlockNum > ecp.lastObservedBlock.Number.Value() {
 		for i := ecp.lastObservedBlock.Number.Value() + 1; i <= latestBlockNum; i++ {
 			blocksToFetch = append(blocksToFetch, i)
 		}
@@ -299,7 +298,7 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 	)
 	ecp.lastObservedBlock = block
 
-	blockInfo := &storage.BlockInfo{
+	blockInfo := &storage.BlockEntity{
 		Number:     block.Number.Value(),
 		Hash:       block.Hash.Value(),
 		ParentHash: block.ParentHash.Value(),
@@ -493,7 +492,7 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 		zap.Any("task", task),
 	)
 
-	if !strings.EqualFold(task.AVSAddress, strings.ToLower(ecp.config.AvsAddress)) {
+	if !strings.EqualFold(task.AVSAddress, ecp.config.AvsAddress) {
 		ecp.logger.Sugar().Infow("Ignoring task for different AVS address",
 			zap.String("taskAvsAddress", task.AVSAddress),
 			zap.String("currentAvsAddress", ecp.config.AvsAddress),
@@ -660,7 +659,7 @@ func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *e
 				ecp.logger.Sugar().Debugw("Block not found in storage",
 					"blockNumber", currentBlockNum,
 					"error", err)
-				blockInfo = &storage.BlockInfo{
+				blockInfo = &storage.BlockEntity{
 					Number:     chainBlock.Number.Value(),
 					Hash:       chainBlock.Hash.Value(),
 					ParentHash: chainBlock.ParentHash.Value(),
@@ -672,7 +671,7 @@ func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *e
 
 				return orphanedBlocks, ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo)
 			}
-			return nil, fmt.Errorf("failed to fetch block %d from chain: %w", currentBlockNum, err)
+			return nil, fmt.Errorf("failed to fetch block %d for : %w", currentBlockNum, err)
 		}
 
 		if blockInfo == nil {
