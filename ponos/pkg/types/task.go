@@ -46,6 +46,7 @@ type Task struct {
 	SourceBlockNumber      uint64         `json:"sourceBlockNumber"`
 	L1ReferenceBlockNumber uint64         `json:"l1ReferenceBlockNumber"`
 	BlockHash              string         `json:"blockHash"`
+	Version                uint32         `json:"version"`
 }
 
 type TaskResult struct {
@@ -158,5 +159,6 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		ChainId:             block.ChainId,
 		SourceBlockNumber:   block.Number.Value(),
 		BlockHash:           block.Hash.Value(),
+		Version:             1,
 	}, nil
 }

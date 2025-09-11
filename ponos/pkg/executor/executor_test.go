@@ -3,6 +3,13 @@ package executor
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
@@ -14,12 +21,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering/peeringDataFetcher"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-	"strconv"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
@@ -314,7 +315,7 @@ func testWithKeyType(
 	}
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 
-	encodedMessage := util.EncodeTaskSubmissionMessage(
+	encodedMessage, err := util.EncodeTaskSubmissionMessageVersioned(
 		taskId,
 		simAggConfig.Avss[0].Address,
 		chainConfig.ExecOperatorAccountAddress,
@@ -322,7 +323,11 @@ func testWithKeyType(
 		blockNumber,
 		1,
 		payloadJsonBytes,
+		1,
 	)
+	if err != nil {
+		t.Fatalf("Failed to encode task submission message: %v", err)
+	}
 
 	// For BN254, we need to hash the message before signing to match the production behavior
 	var payloadSig []byte
@@ -350,6 +355,7 @@ func testWithKeyType(
 		TaskBlockNumber:    blockNumber,
 		ReferenceTimestamp: 42,
 		OperatorSetId:      1,
+		Version:            1,
 	})
 	if err != nil {
 		cancel()

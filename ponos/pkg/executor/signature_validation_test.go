@@ -4,6 +4,10 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
+	"sync"
+	"testing"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	ecdsacrypto "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
@@ -22,9 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"sync"
-	"testing"
 )
 
 // TestValidateTaskSignature_ValidECDSA tests validation of a valid ECDSA signature
@@ -906,8 +907,9 @@ func (p *ConfigurableMockPerformer) ExecuteWorkflow(task *executorV1.TaskSubmiss
 	}
 
 	return &executorV1.TaskResult{
-		TaskId: task.TaskId,
-		Output: p.customResponse,
+		TaskId:  task.TaskId,
+		Output:  p.customResponse,
+		Version: 1,
 	}, nil
 }
 
@@ -986,13 +988,14 @@ func CreateValidTaskSubmission(t *testing.T, aggregatorKey interface{}, executor
 		TaskBlockNumber:    12345678,
 		Payload:            payload,
 		ReferenceTimestamp: 42,
+		Version:            1,
 	}
 }
 
 // SignTaskSubmission signs a task submission with the given key
 func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey interface{}, executorAddress string) *executorV1.TaskSubmission {
 	// Create the message to sign
-	message := util.EncodeTaskSubmissionMessage(
+	message, _ := util.EncodeTaskSubmissionMessageVersioned(
 		task.TaskId,
 		task.AvsAddress,
 		executorAddress,
@@ -1000,6 +1003,7 @@ func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey
 		task.TaskBlockNumber,
 		task.OperatorSetId,
 		task.Payload,
+		task.Version,
 	)
 
 	// Sign based on key type

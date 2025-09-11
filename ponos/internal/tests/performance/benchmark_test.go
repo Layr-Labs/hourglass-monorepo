@@ -99,6 +99,7 @@ func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 			L1ReferenceBlockNumber: uint64(i / 100),
 			ChainId:                config.ChainId(1),
 			Payload:                make([]byte, 256), // 256 bytes payload
+			Version:                1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -117,6 +118,7 @@ func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
+			Version:       1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -143,6 +145,7 @@ func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
+			Version:       1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -176,6 +179,7 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
+			Version:       1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -263,6 +267,7 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
 			ChainId:       config.ChainId(1),
+			Version:       1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -288,6 +293,7 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 						AVSAddress:    "0x123",
 						OperatorSetId: uint32(i),
 						ChainId:       config.ChainId(1),
+						Version:       1,
 					}
 					if err := store.SavePendingTask(ctx, task); err != nil {
 						b.Error(err)
