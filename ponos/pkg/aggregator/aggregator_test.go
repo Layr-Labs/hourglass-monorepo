@@ -674,7 +674,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to get L2 current block number: %v", err)
 	}
 	// Set last processed block to current - 1 to ensure we don't miss any events
-	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l2ChainId.Uint64()), l2CurrentBlock-1); err != nil {
+	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l2ChainId.Uint64()), l2CurrentBlock-10); err != nil {
 		t.Fatalf("Failed to set last processed block: %v", err)
 	}
 
