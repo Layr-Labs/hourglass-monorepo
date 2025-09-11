@@ -24,7 +24,7 @@ func EncodeTaskSubmissionMessageVersioned(
 ) ([]byte, error) {
 	switch version {
 	case TaskMessageVersionV1:
-		return EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, referenceTimestamp, blockNumber, operatorSetId, payload), nil
+		return encodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, referenceTimestamp, blockNumber, operatorSetId, payload), nil
 	default:
 		return nil, fmt.Errorf("unsupported task submission message version: %d", version)
 	}
@@ -41,14 +41,14 @@ func EncodeTaskResultMessageVersioned(
 ) ([]byte, error) {
 	switch version {
 	case TaskMessageVersionV1:
-		return EncodeTaskResultMessage(taskId, avsAddress, operatorAddress, operatorSetId, output), nil
+		return encodeTaskResultMessage(taskId, avsAddress, operatorAddress, operatorSetId, output), nil
 	default:
 		return nil, fmt.Errorf("unsupported task result message version: %d", version)
 	}
 }
 
-// EncodeTaskSubmissionMessage creates the message to be signed by aggregator for a specific executor
-func EncodeTaskSubmissionMessage(
+// encodeTaskSubmissionMessage creates the message to be signed by aggregator for a specific executor
+func encodeTaskSubmissionMessage(
 	taskId string,
 	avsAddress string,
 	executorAddress string,
@@ -74,7 +74,7 @@ func EncodeTaskSubmissionMessage(
 }
 
 // EncodeTaskResultMessage creates the message to be signed by executor when returning results
-func EncodeTaskResultMessage(
+func encodeTaskResultMessage(
 	taskId string,
 	avsAddress string,
 	operatorAddress string,

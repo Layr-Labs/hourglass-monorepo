@@ -89,7 +89,7 @@ type Task struct {
 	Payload         []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`                                        // generic bytes to pass off to the AVS software to execute
 	Deadline        uint64                 `protobuf:"varint,5,opt,name=deadline,proto3" json:"deadline,omitempty"`                                     // unix timestamp of when the task needs to be processed by
 	TaskSignature   string                 `protobuf:"bytes,6,opt,name=task_signature,json=taskSignature,proto3" json:"task_signature,omitempty"`       // signature of the payload, signed by aggregator
-	Version         uint32                 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`                                       // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+	Version         uint32                 `protobuf:"varint,7,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -180,7 +180,7 @@ type TaskResult struct {
 	Response          []byte                 `protobuf:"bytes,3,opt,name=response,proto3" json:"response,omitempty"`                                            // the provided response
 	ResponseSignature []byte                 `protobuf:"bytes,4,opt,name=response_signature,json=responseSignature,proto3" json:"response_signature,omitempty"` // signature of the response using the operator's key
 	ChainId           uint64                 `protobuf:"varint,5,opt,name=chain_id,json=chainId,proto3" json:"chain_id,omitempty"`                              // ID of the chain the message originated on
-	Version           uint32                 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`                                             // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+	Version           uint32                 `protobuf:"varint,6,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }

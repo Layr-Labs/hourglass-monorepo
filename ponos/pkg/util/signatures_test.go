@@ -23,6 +23,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 		payload          []byte
 		expectedLength   int
 		checkDeterminism bool
+		version          uint32
 	}{
 		{
 			name:             "basic encoding",
@@ -35,6 +36,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 			payload:          []byte("test payload"),
 			expectedLength:   224,
 			checkDeterminism: true,
+			version:          1,
 		},
 		{
 			name:             "empty payload",
@@ -47,6 +49,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 			payload:          []byte{},
 			expectedLength:   224,
 			checkDeterminism: true,
+			version:          1,
 		},
 		{
 			name:             "max operator set id and timestamp",
@@ -59,6 +62,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 			payload:          []byte("another test"),
 			expectedLength:   224,
 			checkDeterminism: true,
+			version:          1,
 		},
 		{
 			name:             "addresses with mixed case",
@@ -71,13 +75,14 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 			payload:          []byte("mixed case test"),
 			expectedLength:   224,
 			checkDeterminism: true,
+			version:          1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Encode the message
-			encoded := EncodeTaskSubmissionMessage(
+			encoded, _ := EncodeTaskSubmissionMessageVersioned(
 				tt.taskId,
 				tt.avsAddress,
 				tt.executorAddress,
@@ -85,6 +90,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 				tt.blockNumber,
 				tt.operatorSetId,
 				tt.payload,
+				tt.version,
 			)
 
 			// Check length
@@ -92,7 +98,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 
 			// Check determinism - encoding same data should produce same result
 			if tt.checkDeterminism {
-				encoded2 := EncodeTaskSubmissionMessage(
+				encoded2, _ := EncodeTaskSubmissionMessageVersioned(
 					tt.taskId,
 					tt.avsAddress,
 					tt.executorAddress,
@@ -100,6 +106,7 @@ func TestEncodeTaskSubmissionMessage(t *testing.T) {
 					tt.blockNumber,
 					tt.operatorSetId,
 					tt.payload,
+					tt.version,
 				)
 				assert.True(t, bytes.Equal(encoded, encoded2), "encoding should be deterministic")
 			}
@@ -184,24 +191,26 @@ func TestEncodeTaskResultMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Encode the message
-			encoded := EncodeTaskResultMessage(
+			encoded, _ := EncodeTaskResultMessageVersioned(
 				tt.taskId,
 				tt.avsAddress,
 				tt.operatorAddress,
 				tt.operatorSetId,
 				tt.output,
+				1,
 			)
 
 			// Check length
 			assert.Equal(t, tt.expectedLength, len(encoded), "encoded message should be exactly 160 bytes")
 
 			// Check determinism
-			encoded2 := EncodeTaskResultMessage(
+			encoded2, _ := EncodeTaskResultMessageVersioned(
 				tt.taskId,
 				tt.avsAddress,
 				tt.operatorAddress,
 				tt.operatorSetId,
 				tt.output,
+				1,
 			)
 			assert.True(t, bytes.Equal(encoded, encoded2), "encoding should be deterministic")
 
@@ -232,7 +241,7 @@ func TestSignatureDataStructures(t *testing.T) {
 		assert.Equal(t, 224, len(bytes), "signing bytes should be 224 bytes")
 
 		// Verify the same result as EncodeTaskSubmissionMessage
-		encodedDirect := EncodeTaskSubmissionMessage(
+		encodedDirect, _ := EncodeTaskSubmissionMessageVersioned(
 			sigData.TaskId,
 			sigData.AvsAddress,
 			sigData.ExecutorAddress,
@@ -240,6 +249,7 @@ func TestSignatureDataStructures(t *testing.T) {
 			sigData.BlockNumber,
 			sigData.OperatorSetId,
 			payload,
+			1,
 		)
 		assert.Equal(t, encodedDirect, bytes, "ToSigningBytes should match EncodeTaskSubmissionMessage")
 	})
@@ -260,12 +270,13 @@ func TestSignatureDataStructures(t *testing.T) {
 		assert.Equal(t, 160, len(bytes), "signing bytes should be 160 bytes")
 
 		// Verify the same result as EncodeTaskResultMessage
-		encodedDirect := EncodeTaskResultMessage(
+		encodedDirect, _ := EncodeTaskResultMessageVersioned(
 			sigData.TaskId,
 			sigData.AvsAddress,
 			sigData.OperatorAddress,
 			sigData.OperatorSetId,
 			output,
+			1,
 		)
 		assert.Equal(t, encodedDirect, bytes, "ToSigningBytes should match EncodeTaskResultMessage")
 	})
@@ -357,8 +368,8 @@ func TestTimestampFieldInEncoding(t *testing.T) {
 	timestamp1 := uint32(1000000000)
 	timestamp2 := uint32(2000000000)
 
-	message1 := EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestamp1, blockNumber, operatorSetId, payload)
-	message2 := EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestamp2, blockNumber, operatorSetId, payload)
+	message1, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestamp1, blockNumber, operatorSetId, payload, 1)
+	message2, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestamp2, blockNumber, operatorSetId, payload, 1)
 
 	// Messages should be different due to different timestamps
 	assert.False(t, bytes.Equal(message1, message2),
@@ -374,14 +385,14 @@ func TestTimestampFieldInEncoding(t *testing.T) {
 
 	// Test specific timestamp values encoding
 	timestampZero := uint32(0)
-	messageZero := EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestampZero, blockNumber, operatorSetId, payload)
+	messageZero, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestampZero, blockNumber, operatorSetId, payload, 1)
 	// Check that timestamp 0 is properly encoded (all zeros in timestamp position)
 	for i := 128; i < 156; i++ {
 		assert.Equal(t, byte(0), messageZero[i], "timestamp 0 should be all zeros")
 	}
 
 	timestampMax := ^uint32(0) // max uint32
-	messageMax := EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestampMax, blockNumber, operatorSetId, payload)
+	messageMax, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestampMax, blockNumber, operatorSetId, payload, 1)
 	// Check that max timestamp is properly encoded
 	assert.Equal(t, byte(0xff), messageMax[156])
 	assert.Equal(t, byte(0xff), messageMax[157])
@@ -403,8 +414,8 @@ func TestSignatureBindingPreventsReplay(t *testing.T) {
 	// Create messages for two different executors
 	blockNumber := uint64(12345)
 	timestamp := uint32(1234567890)
-	message1 := EncodeTaskSubmissionMessage(taskId, avsAddress, executor1, timestamp, blockNumber, operatorSetId, payload)
-	message2 := EncodeTaskSubmissionMessage(taskId, avsAddress, executor2, timestamp, blockNumber, operatorSetId, payload)
+	message1, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executor1, timestamp, blockNumber, operatorSetId, payload, 1)
+	message2, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executor2, timestamp, blockNumber, operatorSetId, payload, 1)
 
 	// Messages should be different even though all other parameters are the same
 	assert.False(t, bytes.Equal(message1, message2),
@@ -432,7 +443,7 @@ func TestCompatibilityWithSolidityAbiEncoding(t *testing.T) {
 
 	blockNumber := uint64(999)
 	timestamp := uint32(42)
-	encoded := EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestamp, blockNumber, operatorSetId, payload)
+	encoded, _ := EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestamp, blockNumber, operatorSetId, payload, 1)
 
 	// Expected encoding:
 	// taskId:          0000000000000000000000000000000000000000000000000000000000000001
@@ -471,7 +482,7 @@ func BenchmarkEncodeTaskSubmissionMessage(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = EncodeTaskSubmissionMessage(taskId, avsAddress, executorAddress, timestamp, blockNumber, operatorSetId, payload)
+		_, _ = EncodeTaskSubmissionMessageVersioned(taskId, avsAddress, executorAddress, timestamp, blockNumber, operatorSetId, payload, 1)
 	}
 }
 
@@ -484,6 +495,6 @@ func BenchmarkEncodeTaskResultMessage(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = EncodeTaskResultMessage(taskId, avsAddress, operatorAddress, operatorSetId, output)
+		_, _ = EncodeTaskResultMessageVersioned(taskId, avsAddress, operatorAddress, operatorSetId, output, 1)
 	}
 }

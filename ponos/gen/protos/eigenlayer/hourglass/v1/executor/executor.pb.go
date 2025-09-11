@@ -33,8 +33,8 @@ type TaskSubmission struct {
 	OperatorSetId      uint32                 `protobuf:"varint,6,opt,name=operator_set_id,json=operatorSetId,proto3" json:"operator_set_id,omitempty"`
 	ReferenceTimestamp uint32                 `protobuf:"varint,7,opt,name=reference_timestamp,json=referenceTimestamp,proto3" json:"reference_timestamp,omitempty"`
 	ExecutorAddress    string                 `protobuf:"bytes,8,opt,name=executor_address,json=executorAddress,proto3" json:"executor_address,omitempty"`
-	TaskBlockNumber    uint64                 `protobuf:"varint,9,opt,name=task_block_number,json=taskBlockNumber,proto3" json:"task_block_number,omitempty"` // Block number for consistent state queries
-	Version            uint32                 `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`                                         // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+	TaskBlockNumber    uint64                 `protobuf:"varint,9,opt,name=task_block_number,json=taskBlockNumber,proto3" json:"task_block_number,omitempty"`
+	Version            uint32                 `protobuf:"varint,10,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -144,11 +144,11 @@ type TaskResult struct {
 	TaskId          string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	OperatorAddress string                 `protobuf:"bytes,2,opt,name=operator_address,json=operatorAddress,proto3" json:"operator_address,omitempty"`
 	Output          []byte                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
-	ResultSignature []byte                 `protobuf:"bytes,4,opt,name=result_signature,json=resultSignature,proto3" json:"result_signature,omitempty"` // Signs hash(output) - for aggregation
+	ResultSignature []byte                 `protobuf:"bytes,4,opt,name=result_signature,json=resultSignature,proto3" json:"result_signature,omitempty"`
 	AvsAddress      string                 `protobuf:"bytes,5,opt,name=avs_address,json=avsAddress,proto3" json:"avs_address,omitempty"`
 	OperatorSetId   uint32                 `protobuf:"varint,6,opt,name=operator_set_id,json=operatorSetId,proto3" json:"operator_set_id,omitempty"`
-	AuthSignature   []byte                 `protobuf:"bytes,7,opt,name=auth_signature,json=authSignature,proto3" json:"auth_signature,omitempty"` // Signs identity data - for authentication
-	Version         uint32                 `protobuf:"varint,8,opt,name=version,proto3" json:"version,omitempty"`                                 // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+	AuthSignature   []byte                 `protobuf:"bytes,7,opt,name=auth_signature,json=authSignature,proto3" json:"auth_signature,omitempty"`
+	Version         uint32                 `protobuf:"varint,8,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

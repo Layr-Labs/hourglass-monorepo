@@ -37,19 +37,19 @@ message TaskSubmission {
   uint32 operator_set_id = 6;
   uint32 reference_timestamp = 7;
   string executor_address = 8;
-  uint64 task_block_number = 9;   // Block number for consistent state queries
-  uint32 version = 10;             // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+  uint64 task_block_number = 9;
+  uint32 version = 10;
 }
 
 message TaskResult {
   string task_id = 1;
   string operator_address = 2;
   bytes output = 3;
-  bytes result_signature = 4;  // Signs hash(output) - for aggregation
+  bytes result_signature = 4;
   string avs_address = 5;
   uint32 operator_set_id = 6;
-  bytes auth_signature = 7;     // Signs identity data - for authentication
-  uint32 version = 8;           // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+  bytes auth_signature = 7;
+  uint32 version = 8;
 }
 
 // KubernetesConfig contains Kubernetes-specific configuration for a performer

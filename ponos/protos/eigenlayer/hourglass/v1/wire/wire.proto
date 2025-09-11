@@ -17,7 +17,7 @@ message Task {
   bytes payload = 4;                        // generic bytes to pass off to the AVS software to execute
   uint64 deadline = 5;                      // unix timestamp of when the task needs to be processed by
   string task_signature = 6;                // signature of the payload, signed by aggregator
-  uint32 version = 7;                       // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+  uint32 version = 7;
 }
 
 message TaskResult {
@@ -26,7 +26,7 @@ message TaskResult {
   bytes response = 3;                       // the provided response
   bytes response_signature = 4;             // signature of the response using the operator's key
   uint64 chain_id = 5;                      // ID of the chain the message originated on
-  uint32 version = 6;                       // Protocol version (0 = legacy/V1, 2 = V2, etc.)
+  uint32 version = 6;
 }
 
 message HeartbeatPing {}
