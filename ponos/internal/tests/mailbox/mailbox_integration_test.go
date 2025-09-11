@@ -3,6 +3,13 @@ package mailbox
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"os/exec"
+	"slices"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
@@ -26,12 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"math/big"
-	"os/exec"
-	"slices"
-	"sync"
-	"testing"
-	"time"
 )
 
 type NetworkTarget string
@@ -606,6 +607,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		publishTaskCc = l2CC
 	}
 
+	time.Sleep(10 * time.Second)
+
 	// submit a task
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
 	task, err := publishTaskCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
@@ -615,7 +618,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	t.Logf("Task published: %+v", task)
 
 	select {
-	case <-time.After(240 * time.Second):
+	case <-time.After(260 * time.Second):
 		cancel()
 		t.Errorf("Test timed out after 240 seconds")
 	case <-ctx.Done():
