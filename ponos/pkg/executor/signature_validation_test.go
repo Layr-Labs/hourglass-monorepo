@@ -907,8 +907,9 @@ func (p *ConfigurableMockPerformer) ExecuteWorkflow(task *executorV1.TaskSubmiss
 	}
 
 	return &executorV1.TaskResult{
-		TaskId: task.TaskId,
-		Output: p.customResponse,
+		TaskId:  task.TaskId,
+		Output:  p.customResponse,
+		Version: 1,
 	}, nil
 }
 
@@ -987,6 +988,7 @@ func CreateValidTaskSubmission(t *testing.T, aggregatorKey interface{}, executor
 		TaskBlockNumber:    12345678,
 		Payload:            payload,
 		ReferenceTimestamp: 42,
+		Version:            1,
 	}
 }
 
@@ -1001,7 +1003,7 @@ func SignTaskSubmission(t *testing.T, task *executorV1.TaskSubmission, signerKey
 		task.TaskBlockNumber,
 		task.OperatorSetId,
 		task.Payload,
-		1,
+		task.Version,
 	)
 
 	// Sign based on key type

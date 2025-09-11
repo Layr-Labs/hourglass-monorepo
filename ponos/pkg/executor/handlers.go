@@ -431,6 +431,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		ResultSignature: resultSig,
 		AuthSignature:   authSig,
 		AvsAddress:      avsAddress,
+		Version:         1,
 	}
 
 	// Mark task as processed
@@ -810,7 +811,7 @@ func (e *Executor) constructTaskSubmissionMessage(task *executorV1.TaskSubmissio
 		task.TaskBlockNumber,
 		task.OperatorSetId,
 		task.Payload,
-		1,
+		task.Version,
 	)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to encode task submission message",

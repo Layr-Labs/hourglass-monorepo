@@ -8,7 +8,7 @@ import (
 
 // Version constants for message encoding
 const (
-	TaskMessageVersionV1 uint8 = 1
+	TaskMessageVersionV1 uint32 = 1
 )
 
 // EncodeTaskSubmissionMessageVersioned creates a versioned task submission message
@@ -20,7 +20,7 @@ func EncodeTaskSubmissionMessageVersioned(
 	blockNumber uint64,
 	operatorSetId uint32,
 	payload []byte,
-	version uint8,
+	version uint32,
 ) ([]byte, error) {
 	switch version {
 	case TaskMessageVersionV1:
@@ -37,7 +37,7 @@ func EncodeTaskResultMessageVersioned(
 	operatorAddress string,
 	operatorSetId uint32,
 	output []byte,
-	version uint8,
+	version uint32,
 ) ([]byte, error) {
 	switch version {
 	case TaskMessageVersionV1:

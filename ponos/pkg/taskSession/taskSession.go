@@ -259,6 +259,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				ReferenceTimestamp: ts.operatorPeersWeight.RootReferenceTimestamp,
 				ExecutorAddress:    peer.OperatorAddress,
 				TaskBlockNumber:    ts.Task.L1ReferenceBlockNumber,
+				Version:            ts.Task.Version,
 			}
 			ts.logger.Sugar().Infow("broadcasting task session to operators",
 				zap.Any("taskSubmission", taskSubmission),
@@ -377,7 +378,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) generateSignatureForExecutor(execut
 		ts.Task.L1ReferenceBlockNumber,
 		ts.Task.OperatorSetId,
 		ts.Task.Payload,
-		1,
+		ts.Task.Version,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode task submission message: %w", err)

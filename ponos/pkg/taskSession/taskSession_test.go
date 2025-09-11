@@ -193,6 +193,7 @@ func createTestTask() *types.Task {
 		Payload:                []byte("test-payload"),
 		DeadlineUnixSeconds:    &deadline,
 		L1ReferenceBlockNumber: 12345678, // Include block number for testing
+		Version:                1,
 	}
 }
 
@@ -331,7 +332,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 
 		mockClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("response")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("response"), Version: 1},
 			responseDelay: 200 * time.Millisecond, // Longer than context timeout
 		}
 
@@ -344,6 +345,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 			TaskId:          "test",
 			Payload:         []byte("test-payload"),
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 
 		require.Error(t, err)
@@ -359,7 +361,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 	t.Run("mock client successful response", func(t *testing.T) {
 		mockClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("quick response")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("quick response"), Version: 1},
 			responseDelay: 50 * time.Millisecond, // Shorter than timeout
 		}
 
@@ -371,6 +373,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 			TaskId:          "test",
 			Payload:         []byte("test-payload"),
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 
 		require.NoError(t, err)
@@ -386,13 +389,13 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		// Test simulating mixed responses - some fast, some timeout
 		fastClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast"), Version: 1},
 			responseDelay: 20 * time.Millisecond,
 		}
 
 		slowClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow"), Version: 1},
 			responseDelay: 150 * time.Millisecond, // Will timeout
 		}
 
@@ -403,6 +406,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		fastResult, fastErr := fastClient.SubmitTask(ctx, &executorV1.TaskSubmission{
 			TaskId:          "test",
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 		require.NoError(t, fastErr)
 		assert.Equal(t, []byte("fast"), fastResult.Output)
@@ -411,6 +415,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		slowResult, slowErr := slowClient.SubmitTask(ctx, &executorV1.TaskSubmission{
 			TaskId:          "test",
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 		require.Error(t, slowErr)
 		assert.Nil(t, slowResult)
@@ -783,13 +788,13 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		// Create mock clients with different behaviors
 		fastClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast-response")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("fast-response"), Version: 1},
 			responseDelay: 10 * time.Millisecond,
 		}
 
 		slowClient := &MockExecutorServiceClient{
 			shouldFail:    false,
-			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow-response")},
+			response:      &executorV1.TaskResult{TaskId: "test", Output: []byte("slow-response"), Version: 1},
 			responseDelay: 200 * time.Millisecond,
 		}
 
@@ -813,6 +818,7 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		result1, err1 := fastClient.SubmitTask(ctx1, &executorV1.TaskSubmission{
 			TaskId:          "test",
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 		require.NoError(t, err1)
 		assert.Equal(t, []byte("fast-response"), result1.Output)
@@ -821,6 +827,7 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 		result2, err2 := slowClient.SubmitTask(ctx2, &executorV1.TaskSubmission{
 			TaskId:          "test",
 			TaskBlockNumber: 0,
+			Version:         1,
 		})
 		require.Error(t, err2)
 		assert.Nil(t, result2)

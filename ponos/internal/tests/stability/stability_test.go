@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"runtime"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	aggregatorBadger "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/badger"
@@ -22,7 +24,6 @@ import (
 	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/require"
-	"runtime"
 )
 
 func shouldRunExtendedTests(t *testing.T) {
@@ -230,6 +231,7 @@ func simulateAggregator(ctx context.Context, t *testing.T, store storage.Aggrega
 					OperatorSetId:     uint32(taskCounter),
 					SourceBlockNumber: blockNum,
 					ChainId:           chainId,
+					Version:           1,
 				}
 				taskCounter++
 
@@ -438,6 +440,7 @@ func TestConcurrentLoad(t *testing.T) {
 								TaskId:        fmt.Sprintf("task-%d-%d", id, j),
 								AVSAddress:    "0x123",
 								OperatorSetId: uint32(j),
+								Version:       1,
 							}
 							if err := store.SavePendingTask(ctx, task); err != nil {
 								errors <- err
@@ -525,6 +528,7 @@ func TestMemoryLeaks(t *testing.T) {
 			TaskId:        fmt.Sprintf("task-%d", i),
 			AVSAddress:    "0x123",
 			OperatorSetId: uint32(i),
+			Version:       1,
 		}
 
 		// Create and delete tasks

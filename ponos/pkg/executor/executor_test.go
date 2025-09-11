@@ -355,6 +355,7 @@ func testWithKeyType(
 		TaskBlockNumber:    blockNumber,
 		ReferenceTimestamp: 42,
 		OperatorSetId:      1,
+		Version:            1,
 	})
 	if err != nil {
 		cancel()
