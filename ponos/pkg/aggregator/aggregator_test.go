@@ -667,6 +667,17 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	// Create in-memory storage for testing
 	aggStore := memory.NewInMemoryAggregatorStore()
 
+	// Initialize the last processed block for L2 chain to prevent missing events
+	// Get current L2 block number to use as starting point
+	l2CurrentBlock, err := l2EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get L2 current block number: %v", err)
+	}
+	// Set last processed block to current - 1 to ensure we don't miss any events
+	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l2ChainId.Uint64()), l2CurrentBlock-1); err != nil {
+		t.Fatalf("Failed to set last processed block: %v", err)
+	}
+
 	// Set up aggregator signers based on curve type
 	var aggSigners signer.Signers
 	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {

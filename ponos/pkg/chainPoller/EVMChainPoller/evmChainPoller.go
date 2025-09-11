@@ -314,7 +314,7 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 	if ecp.config.BlockHistorySize > 0 && blockInfo.Number > uint64(ecp.config.BlockHistorySize) {
 		oldBlockNum := blockInfo.Number - uint64(ecp.config.BlockHistorySize)
 		if err := ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId, oldBlockNum); err != nil {
-			ecp.logger.Sugar().Warn("Failed to prune old block",
+			ecp.logger.Sugar().Debugw("Failed to prune old block",
 				"blockNumber", oldBlockNum,
 				"error", err)
 			// TODO: non-fatal for now. Does run the (low) risk of orphaned storage usage
