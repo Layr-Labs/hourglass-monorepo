@@ -659,18 +659,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	// Create in-memory storage for testing
 	aggStore := memory.NewInMemoryAggregatorStore()
 
-	// Initialize the last processed block for L2 chain to prevent missing events
-	// Get current L2 block number to use as starting point
-	l2CurrentBlock, err := l2EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get L2 current block number: %v", err)
-	}
-
-	// Set last processed block to current - 1 to ensure we don't miss any events
-	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l2ChainId.Uint64()), l2CurrentBlock-10); err != nil {
-		t.Fatalf("Failed to set last processed block: %v", err)
-	}
-
 	// Set up aggregator signers based on curve type
 	var aggSigners signer.Signers
 	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {
@@ -796,6 +784,9 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	}
 	t.Logf("Pushing message to mailbox...")
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))
+
+	time.Sleep(10 * time.Second)
+
 	task, err := l2AppCc.PublishMessageToInbox(ctx, chainConfig.AVSAccountAddress, 1, payloadJsonBytes)
 	if err != nil {
 		t.Fatalf("Failed to publish message to inbox: %v", err)
@@ -931,7 +922,7 @@ operator:
     privateKey: "0x97c00ea4a86647f8b5c885ec3a685999c4b59e8693dbe26172748084ba0deec7"
 %s
 avss:
-  - address: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
+  - address: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
     responseTimeout: 3000
     chainIds: [31338]
     avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
@@ -1012,7 +1003,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
+  avsAddress: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "kubernetes"
   kubernetes:
@@ -1036,7 +1027,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xAa009D662185ec2A7CA4e34E99A8100790E7AfCa"
+  avsAddress: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "docker"
 `, signingKeysSection)

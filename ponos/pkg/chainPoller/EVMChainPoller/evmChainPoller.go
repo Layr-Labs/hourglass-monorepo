@@ -173,6 +173,8 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 
 		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1",
 			zap.Uint64("latestBlockNumber", latestBlockNum),
+			zap.Int("chainId", int(ecp.config.ChainId)),
+			zap.String("avsAddress", ecp.config.AvsAddress),
 		)
 		targetBlockNum := latestBlockNum - 1
 		lastestBlock, err := ecp.ethClient.GetBlockByNumber(ctx, targetBlockNum)
