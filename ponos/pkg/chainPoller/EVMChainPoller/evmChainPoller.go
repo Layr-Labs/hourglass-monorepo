@@ -140,7 +140,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
-	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener poll loop")
+	ecp.logger.Sugar().Infow("Starting Ethereum Chain Listener poll loop")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -524,15 +524,8 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 
 	select {
 	case ecp.taskQueue <- task:
-
-		if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
-			ecp.logger.Sugar().Errorw("Failed to mark task as processing",
-				"error", err,
-				"taskId", task.TaskId)
-		} else {
-			ecp.logger.Sugar().Infow("Marked task as processing",
-				"taskId", task.TaskId)
-		}
+		ecp.logger.Sugar().Infow("Task in queue for processing",
+			"taskId", task.TaskId)
 
 	case <-time.After(100 * time.Millisecond):
 		ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",

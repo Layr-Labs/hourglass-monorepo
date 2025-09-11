@@ -318,7 +318,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("task %s is already being processed", task.TaskId)
 	}
 
-	// Update task status to processing
 	if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
 		em.logger.Sugar().Warnw("Failed to update task status to processing",
 			"error", err,

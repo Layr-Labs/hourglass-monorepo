@@ -244,14 +244,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		aggConfig.Operator.SigningKeys.ECDSA = nil
 	}
 
-	aggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
-	aggConfig.Avss[0].ChainIds = []uint{
-		uint(config.ChainId_BaseSepoliaAnvil),
-	}
-	for _, chain := range aggConfig.Chains {
-		fmt.Printf("Agg chain: %+v\n", chain)
-	}
-
 	aggBn254PrivateSigningKey, aggEcdsaPrivateSigningKey, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(aggConfig.Operator, sigConfig.AggregatorCurve)
 	if err != nil {
 		t.Fatalf("Failed to parse keys from config: %v", err)
@@ -676,18 +668,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	// Set last processed block to current - 1 to ensure we don't miss any events
 	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l2ChainId.Uint64()), l2CurrentBlock-10); err != nil {
-		t.Fatalf("Failed to set last processed block: %v", err)
-	}
-
-	// Initialize the last processed block for L1 chain to prevent missing events
-	// Get current L1 block number to use as starting point
-	l1CurrentBlock, err := l2EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get L2 current block number: %v", err)
-	}
-
-	// Set last processed block to current - 1 to ensure we don't miss any events
-	if err := aggStore.SetLastProcessedBlock(ctx, chainConfig.AVSAccountAddress, config.ChainId(l1ChainId.Uint64()), l1CurrentBlock-10); err != nil {
 		t.Fatalf("Failed to set last processed block: %v", err)
 	}
 
