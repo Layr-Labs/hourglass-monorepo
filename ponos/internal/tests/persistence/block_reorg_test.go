@@ -164,26 +164,6 @@ func (m *mockEthereumClient) addBlock(block *ethereum.EthereumBlock) {
 	}
 }
 
-func (m *mockEthereumClient) setReturnErrors(returnErrors bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.returnErrors = returnErrors
-}
-
-// addLogs adds event logs for a specific address and block range
-func (m *mockEthereumClient) addLogs(address string, fromBlock, toBlock uint64, logs []*ethereum.EthereumEventLog) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	addr := strings.ToLower(address)
-	if m.logs[addr] == nil {
-		m.logs[addr] = make(map[blockRange][]*ethereum.EthereumEventLog)
-	}
-
-	br := blockRange{from: fromBlock, to: toBlock}
-	m.logs[addr][br] = logs
-}
-
 // createBlock creates a single ethereum block with the given parameters
 func createBlock(number uint64, hash, parentHash string, chainId config.ChainId) *ethereum.EthereumBlock {
 	return &ethereum.EthereumBlock{
