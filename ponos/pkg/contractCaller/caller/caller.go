@@ -3,6 +3,9 @@ package caller
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -28,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"math/big"
-	"time"
 )
 
 type ContractCallerConfig struct {
@@ -227,7 +228,11 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
 	}
-
+	cc.logger.Sugar().Infow("Creating BN254 Submit Result Transaction",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("Cert", hexutil.Encode(certBytes)),
+		zap.String("TaskResponse", hexutil.Encode(aggCert.TaskResponse)),
+	)
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
@@ -304,6 +309,11 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 		return nil, fmt.Errorf("failed to call GetECDSACertificateBytes: %w", err)
 	}
 
+	cc.logger.Sugar().Infow("Creating ECDSA Submit Result Transaction",
+		zap.String("taskId", hexutil.Encode(taskId[:])),
+		zap.String("Cert", hexutil.Encode(certBytes)),
+		zap.String("TaskResponse", hexutil.Encode(aggCert.TaskResponse)),
+	)
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, aggCert.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
