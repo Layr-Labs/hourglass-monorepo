@@ -3,16 +3,20 @@ package transactionLogParser
 import (
 	"encoding/hex"
 	"fmt"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
+
+type LogParser interface {
+	DecodeLog(a *abi.ABI, lg *ethereum.EthereumEventLog) (*log.DecodedLog, error)
+}
 
 // TransactionLogParser handles the parsing and decoding of Ethereum transaction logs.
 // It uses contract ABIs to decode event data into structured format.
@@ -37,59 +41,6 @@ func NewTransactionLogParser(
 	return &TransactionLogParser{
 		logger:        logger,
 		contractStore: contractStore,
-	}
-}
-
-// DecodeLogWithAbi decodes a log using the appropriate ABI.
-// If the log address doesn't match the transaction's target address, it attempts to find
-// the correct contract ABI using the contract manager.
-//
-// Parameters:
-//   - a: Optional ABI to use for decoding (can be nil)
-//   - txReceipt: The transaction receipt containing context information
-//   - lg: The specific log to decode
-//
-// Returns:
-//   - *parser.DecodedLog: The decoded log with structured data
-//   - error: Any error encountered during decoding
-func (tlp *TransactionLogParser) DecodeLogWithAbi(
-	a *abi.ABI,
-	txReceipt *ethereum.EthereumTransactionReceipt,
-	lg *ethereum.EthereumEventLog,
-) (*log.DecodedLog, error) {
-	logAddress := common.HexToAddress(lg.Address.Value())
-
-	// If the address of the log is not the same as the contract address, we need to load the ABI for the log
-	//
-	// The typical case is when a contract interacts with another contract that emits an event
-	if util.AreAddressesEqual(logAddress.String(), txReceipt.GetTargetAddress().Value()) && a != nil {
-		return tlp.DecodeLog(a, lg)
-	} else {
-		tlp.logger.Sugar().Debugw("Log address does not match contract address",
-			zap.String("logAddress", logAddress.String()),
-			zap.String("contractAddress", txReceipt.GetTargetAddress().Value()),
-		)
-
-		foundContract, err := tlp.contractStore.GetContractByAddress(logAddress.String())
-		if err != nil {
-			tlp.logger.Sugar().Errorw("Failed to get contract for address",
-				zap.Error(err),
-				zap.String("address", logAddress.String()),
-			)
-			return nil, fmt.Errorf("failed to get contract for address %s: %w", logAddress.String(), err)
-		}
-
-		// newAbi, err := abi.JSON(strings.NewReader(combinedAbis))
-		newAbi, err := foundContract.GetAbi()
-		if err != nil {
-			tlp.logger.Sugar().Errorw("Failed to parse ABI",
-				zap.Error(err),
-				zap.String("contractAddress", logAddress.String()),
-			)
-			return tlp.DecodeLog(nil, lg)
-		}
-
-		return tlp.DecodeLog(newAbi, lg)
 	}
 }
 

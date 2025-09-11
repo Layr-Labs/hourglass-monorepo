@@ -20,7 +20,7 @@ type InMemoryAggregatorStore struct {
 	tasks               map[string]*storage.TaskRecord
 	operatorSetConfigs  map[string]*storage.OperatorSetTaskConfig
 	avsConfigs          map[string]*storage.AvsConfig
-	blocks              map[string]*storage.BlockInfo // key: block:avs:<avsAddress>:chain:<chainId>:num:<blockNumber>
+	blocks              map[string]*storage.BlockInfo
 }
 
 // NewInMemoryAggregatorStore creates a new in-memory aggregator store
@@ -76,7 +76,7 @@ func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, avs
 	return nil
 }
 
-// SaveTask saves a task to storage
+// SavePendingTask SaveTask saves a task to storage
 func (s *InMemoryAggregatorStore) SavePendingTask(ctx context.Context, task *types.Task) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

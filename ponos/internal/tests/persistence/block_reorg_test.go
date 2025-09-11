@@ -384,6 +384,14 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 			require.NoError(t, err)
 			assert.Equal(t, uint64(106), lastProcessed, "Last processed should be 106")
+
+			// Step 5: Verify tasks in queue is empty since there is no log provided in events
+			select {
+			case task := <-taskQueue:
+				t.Errorf("Unexpected task in queue: %v", task)
+			case <-time.After(100 * time.Millisecond):
+				t.Log("No tasks in queue as expected (no logs added)")
+			}
 		})
 	}
 }

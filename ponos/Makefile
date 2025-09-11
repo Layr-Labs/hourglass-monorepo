@@ -137,6 +137,13 @@ build/test-container:
 test:
 	GOFLAGS="-count=1" ./scripts/goTest.sh -v -p 1 -parallel 1 ./...
 
+.PHONY: gen-mocks
+gen-mocks:
+	@echo "Generating mock for ethereum.Client interface..."
+	mockgen -source=pkg/clients/ethereum/client.go -destination=mocks/mock_ethereum_client.go -package=mocks Client
+	@echo "Generating mock for transactionLogParser.LogParser interface..."
+	mockgen -source=pkg/transactionLogParser/transactionLogParser.go -destination=mocks/mock_log_parser.go -package=mocks LogParser
+
 .PHONY: ci-test
 ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container build/operator-container test
 

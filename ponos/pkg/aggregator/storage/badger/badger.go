@@ -18,12 +18,12 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixChainBlock     = "avs:%s:chain:%d:lastBlock" // avsAddress:chainId:lastBlock
+	prefixChainBlock     = "lastblock:%s:%d" // avsAddress:chainId
 	prefixTask           = "task:%s"
-	prefixTaskByStatus   = "taskstatus:%s:%s"             // status:taskId
-	prefixOperatorConfig = "opset:%s:%d"                  // avsAddress:operatorSetId
-	prefixAVSConfig      = "avs:%s"                       // avsAddress
-	prefixBlock          = "block:avs:%s:chain:%d:num:%d" // avsAddress:chainId:blockNumber
+	prefixTaskByStatus   = "taskstatus:%s:%s" // status:taskId
+	prefixOperatorConfig = "opset:%s:%d"      // avsAddress:operatorSetId
+	prefixAVSConfig      = "avs:%s"           // avsAddress
+	prefixBlock          = "block:%s:%d:%d"   // avsAddress:chainId:blockNumber
 )
 
 // BadgerAggregatorStore implements the AggregatorStore interface using BadgerDB
