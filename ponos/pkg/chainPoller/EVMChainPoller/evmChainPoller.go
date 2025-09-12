@@ -24,13 +24,17 @@ type EVMChainPollerConfig struct {
 	PollingInterval      time.Duration
 	InterestingContracts []string
 	AvsAddress           string
+
+	MaxReorgDepth     int
+	BlockHistorySize  int
+	ReorgCheckEnabled bool
 }
 
 type EVMChainPoller struct {
-	ethClient         *ethereum.Client
+	ethClient         ethereum.Client
 	lastObservedBlock *ethereum.EthereumBlock
 	taskQueue         chan *types.Task
-	logParser         *transactionLogParser.TransactionLogParser
+	logParser         transactionLogParser.LogParser
 	config            *EVMChainPollerConfig
 	contractStore     contractStore.IContractStore
 	logger            *zap.Logger
@@ -38,9 +42,9 @@ type EVMChainPoller struct {
 }
 
 func NewEVMChainPoller(
-	ethClient *ethereum.Client,
+	ethClient ethereum.Client,
 	taskQueue chan *types.Task,
-	logParser *transactionLogParser.TransactionLogParser,
+	logParser transactionLogParser.LogParser,
 	config *EVMChainPollerConfig,
 	contractStore contractStore.IContractStore,
 	store storage.AggregatorStore,
@@ -50,6 +54,19 @@ func NewEVMChainPoller(
 	if store == nil {
 		panic("store is required")
 	}
+
+	// Set default values for reorg configuration if not provided
+	if config.MaxReorgDepth == 0 {
+		config.MaxReorgDepth = 10
+	}
+	if config.BlockHistorySize == 0 {
+		config.BlockHistorySize = 100
+	}
+	// ReorgCheckEnabled defaults to true unless explicitly set to false
+	if !config.ReorgCheckEnabled && config.MaxReorgDepth > 0 {
+		config.ReorgCheckEnabled = true
+	}
+
 	for i, contract := range config.InterestingContracts {
 		logger.Sugar().Infof("InterestingContracts %d: %s\n", i, contract)
 	}
@@ -69,8 +86,7 @@ func NewEVMChainPoller(
 
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 
-	sugar := ecp.logger.Sugar()
-	sugar.Infow("Starting Ethereum L1Chain Listener",
+	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener",
 		zap.Any("chainId", ecp.config.ChainId),
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
@@ -78,23 +94,40 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 	// Load last processed block from storage
 	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
 	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		sugar.Warnw("Failed to get last processed block from storage",
+		ecp.logger.Sugar().Warnw("Failed to get last processed block from storage",
 			"error", err,
 			"chainId", ecp.config.ChainId,
 		)
+
 	} else if err == nil && lastBlock > 0 {
-		sugar.Infow("Recovered last processed block from storage",
+		ecp.logger.Sugar().Infow("Recovered last processed block from storage",
 			"blockNumber", lastBlock,
 			"chainId", ecp.config.ChainId,
 		)
-		// Set lastObservedBlock to recover from this point
-		ecp.lastObservedBlock = &ethereum.EthereumBlock{
-			Number: ethereum.EthereumQuantity(lastBlock),
+
+		lastStoredBlock, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId, lastBlock)
+		if err != nil {
+			ecp.logger.Sugar().Warnw("Failed to get last processed block from storage")
+			block, err := ecp.ethClient.GetBlockByNumber(ctx, lastBlock)
+			if err != nil {
+				return err
+			}
+			ecp.lastObservedBlock = block
+		}
+
+		if lastStoredBlock != nil {
+			ecp.lastObservedBlock = &ethereum.EthereumBlock{
+				Number:     ethereum.EthereumQuantity(lastBlock),
+				Hash:       ethereum.EthereumHexString(lastStoredBlock.Hash),
+				ParentHash: ethereum.EthereumHexString(lastStoredBlock.ParentHash),
+				Timestamp:  ethereum.EthereumQuantity(lastStoredBlock.Timestamp),
+				ChainId:    lastStoredBlock.ChainId,
+			}
 		}
 	}
 
 	if err := ecp.recoverInProgressTasks(ctx); err != nil {
-		sugar.Warnw("Failed to recover in-progress tasks",
+		ecp.logger.Sugar().Warnw("Failed to recover in-progress tasks",
 			"error", err,
 			"avsAddress", ecp.config.AvsAddress)
 	}
@@ -106,50 +139,26 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
-	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener poll loop")
+	ecp.logger.Sugar().Infow("Starting Ethereum Chain Listener poll loop")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go func() {
-		ticker := time.NewTicker(ecp.config.PollingInterval)
-		defer ticker.Stop()
+	ticker := time.NewTicker(ecp.config.PollingInterval)
+	defer ticker.Stop()
 
-		// Process first block immediately
-		if err := ecp.processNextBlock(ctx); err != nil {
-			ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
-			cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			ecp.logger.Sugar().Infow("Polling loop context cancelled, stopping")
 			return
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				ecp.logger.Sugar().Infow("Polling loop context cancelled, stopping")
+		case <-ticker.C:
+			if err := ecp.processNextBlock(ctx); err != nil {
+				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
+				cancel()
 				return
-			case <-ticker.C:
-				if err := ecp.processNextBlock(ctx); err != nil {
-					ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
-					cancel()
-					return
-				}
 			}
 		}
-	}()
-
-	<-ctx.Done()
-	ecp.logger.Sugar().Infow("Ethereum L1Chain Listener context cancelled, exiting poll loop")
-}
-
-func (ecp *EVMChainPoller) isInterestingLog(log *ethereum.EthereumEventLog) bool {
-
-	logAddr := strings.ToLower(log.Address.Value())
-	for _, ic := range ecp.config.InterestingContracts {
-		if strings.EqualFold(ic, logAddr) {
-			return true
-		}
 	}
-
-	return false
 }
 
 func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
@@ -160,12 +169,19 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	}
 
 	if ecp.lastObservedBlock == nil {
+
 		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1",
 			zap.Uint64("latestBlockNumber", latestBlockNum),
+			zap.Int("chainId", int(ecp.config.ChainId)),
+			zap.String("avsAddress", ecp.config.AvsAddress),
 		)
-		ecp.lastObservedBlock = &ethereum.EthereumBlock{
-			Number: ethereum.EthereumQuantity(latestBlockNum - 1),
+		targetBlockNum := latestBlockNum - 1
+		lastestBlock, err := ecp.ethClient.GetBlockByNumber(ctx, targetBlockNum)
+		if err != nil {
+			return fmt.Errorf("could not get last observed block from ethClient: %w", err)
 		}
+		ecp.lastObservedBlock = lastestBlock
+
 	} else {
 		ecp.logger.Sugar().Debugw("latest on chain block",
 			zap.Uint64("blockNumber", latestBlockNum),
@@ -173,8 +189,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 		)
 	}
 
-	// if the latest observed block is the same as the latest block, skip processing
-	if ecp.lastObservedBlock != nil && ecp.lastObservedBlock.Number.Value() == latestBlockNum {
+	if ecp.lastObservedBlock.Number.Value() == latestBlockNum {
 		ecp.logger.Sugar().Debugw("Skipping block processing as the last observed block is the same as the latest block",
 			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
 			zap.Uint64("latestBlock", latestBlockNum),
@@ -182,17 +197,8 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 		return nil
 	}
 
-	// if the latest observed block is greater than the latest block, skip processing since the chain is lagging behind
-	if ecp.lastObservedBlock != nil && ecp.lastObservedBlock.Number.Value() > latestBlockNum {
-		ecp.logger.Sugar().Infow("Skipping block processing as the last observed block is greater than the latest block",
-			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
-			zap.Uint64("latestBlock", latestBlockNum),
-		)
-		return nil
-	}
-
 	var blocksToFetch []uint64
-	if latestBlockNum >= ecp.lastObservedBlock.Number.Value()+1 {
+	if latestBlockNum > ecp.lastObservedBlock.Number.Value() {
 		for i := ecp.lastObservedBlock.Number.Value() + 1; i <= latestBlockNum; i++ {
 			blocksToFetch = append(blocksToFetch, i)
 		}
@@ -202,7 +208,27 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	)
 
 	for _, blockNum := range blocksToFetch {
-		_, _, err = ecp.getBlockWithLogs(ctx, blockNum)
+
+		newBlock, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
+		if err != nil {
+			ecp.logger.Sugar().Errorw("Failed to fetch block for reorg check",
+				zap.Uint64("blockNumber", blockNum),
+				zap.Error(err),
+			)
+			return err
+		}
+
+		if newBlock.ParentHash.Value() != ecp.lastObservedBlock.Hash.Value() {
+			ecp.logger.Sugar().Warnw("Blockchain reorganization detected",
+				"blockNumber", blockNum,
+				"expectedParent", ecp.lastObservedBlock.Hash.Value(),
+				"actualParent", newBlock.ParentHash.Value(),
+				"chainId", ecp.config.ChainId)
+
+			return ecp.reconcileReorg(ctx, newBlock)
+		}
+
+		_, _, err = ecp.processBlockLogs(ctx, newBlock)
 		if err != nil {
 			ecp.logger.Sugar().Errorw("Error fetching block with logs",
 				zap.Uint64("blockNumber", blockNum),
@@ -211,9 +237,11 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			return err
 		}
 	}
+
 	ecp.logger.Sugar().Debugw("All blocks processed",
 		zap.Any("blocksToFetch", blocksToFetch),
 	)
+
 	if len(blocksToFetch) > 0 && blocksToFetch[len(blocksToFetch)-1]%100 == 0 {
 		ecp.logger.Sugar().Infow("Processed block",
 			zap.Uint64("blockNumber", blocksToFetch[len(blocksToFetch)-1]),
@@ -223,19 +251,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	return nil
 }
 
-func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
-
-	ecp.logger.Sugar().Infow("Fetching Ethereum block with logs",
-		zap.Uint64("blockNumber", blockNum),
-	)
-	block, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if block == nil {
-		return nil, nil, fmt.Errorf("block number %d is nil", blockNum)
-	}
+func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum.EthereumBlock) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
 
 	logs, err := ecp.fetchLogsForInterestingContractsForBlock(block.Number.Value())
 	if err != nil {
@@ -255,12 +271,6 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 	)
 
 	for _, log := range logs {
-		if !ecp.isInterestingLog(log) {
-			ecp.logger.Sugar().Debugw("Skipping log as it is not interesting",
-				zap.String("transactionHash", log.TransactionHash.Value()),
-			)
-			continue
-		}
 
 		decodedLog, err := ecp.logParser.DecodeLog(nil, log)
 		if err != nil {
@@ -288,7 +298,30 @@ func (ecp *EVMChainPoller) getBlockWithLogs(ctx context.Context, blockNum uint64
 	)
 	ecp.lastObservedBlock = block
 
-	// Save last processed block to storage
+	blockInfo := &storage.BlockRecord{
+		Number:     block.Number.Value(),
+		Hash:       block.Hash.Value(),
+		ParentHash: block.ParentHash.Value(),
+		Timestamp:  block.Timestamp.Value(),
+		ChainId:    ecp.config.ChainId,
+	}
+
+	if err := ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo); err != nil {
+		ecp.logger.Sugar().Warnw("Failed to save block info",
+			"error", err,
+			"blockNumber", blockInfo.Number)
+	}
+
+	if ecp.config.BlockHistorySize > 0 && blockInfo.Number > uint64(ecp.config.BlockHistorySize) {
+		oldBlockNum := blockInfo.Number - uint64(ecp.config.BlockHistorySize)
+		if err := ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId, oldBlockNum); err != nil {
+			ecp.logger.Sugar().Debugw("Failed to prune old block",
+				"blockNumber", oldBlockNum,
+				"error", err)
+			// TODO: non-fatal for now. Does run the (low) risk of orphaned storage usage
+		}
+	}
+
 	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.AvsAddress, ecp.config.ChainId, block.Number.Value()); err != nil {
 		ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
 			"error", err,
@@ -340,6 +373,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				zap.String("contract", contract),
 				zap.Uint64("blockNumber", blockNumber),
 			)
+
 			logs, err := ecp.ethClient.GetLogs(ctxWithTimeout, contract, blockNumber, blockNumber)
 			if err != nil {
 				ecp.logger.Sugar().Errorw("Failed to fetch logs for contract",
@@ -350,6 +384,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				errorsChan <- fmt.Errorf("failed to fetch logs for contract %s: %w", contract, err)
 				return
 			}
+
 			if len(logs) == 0 {
 				ecp.logger.Sugar().Debugw("No logs found for contract",
 					zap.String("contract", contract),
@@ -358,17 +393,22 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 				logResultsChan <- []*ethereum.EthereumEventLog{}
 				return
 			}
+
 			ecp.logger.Sugar().Infow("Fetched logs for contract",
 				zap.String("contract", contract),
 				zap.Uint64("blockNumber", blockNumber),
 				zap.Int("logCount", len(logs)),
 			)
+
 			logResultsChan <- logs
+
 		}(contract, &wg)
 	}
+
 	wg.Wait()
 	close(logResultsChan)
 	close(errorsChan)
+
 	ecp.logger.Sugar().Debugw("All logs fetched for contracts",
 		zap.Uint64("blockNumber", blockNumber),
 	)
@@ -377,6 +417,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	for err := range errorsChan {
 		allErrors = append(allErrors, err)
 	}
+
 	if len(allErrors) > 0 {
 		return nil, fmt.Errorf("failed to fetch logs for contracts: %v", allErrors)
 	}
@@ -385,6 +426,7 @@ func (ecp *EVMChainPoller) fetchLogsForInterestingContractsForBlock(blockNumber 
 	for contractLogs := range logResultsChan {
 		allLogs = append(allLogs, contractLogs...)
 	}
+
 	ecp.logger.Sugar().Infow("All logs fetched for contracts",
 		zap.Uint64("blockNumber", blockNumber),
 		zap.Int("logCount", len(allLogs)),
@@ -401,31 +443,37 @@ func (ecp *EVMChainPoller) handleLog(ctx context.Context, lwb *chainPoller.LogWi
 	)
 	lg := lwb.Log
 
-	mailboxContract, _ := ecp.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
-
 	// Handle new task created
-	if lg.EventName == "TaskCreated" {
-		if mailboxContract == nil {
-			ecp.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
-				zap.String("eventName", lg.EventName),
-				zap.String("contractAddress", lg.Address),
-				zap.Uint("chainId", uint(lwb.Block.ChainId)),
-				zap.Uint64("blockNumber", lwb.Block.Number.Value()),
-				zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
-			)
-			return nil
-		}
-		if strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
-			return ecp.processTask(ctx, lwb)
-		}
+	if lg.EventName != "TaskCreated" {
+		ecp.logger.Sugar().Debugw("Ignoring log",
+			zap.String("eventName", lg.EventName),
+			zap.String("contractAddress", lg.Address),
+			zap.Strings("addresses", ecp.config.InterestingContracts),
+		)
+		return nil
 	}
 
-	ecp.logger.Sugar().Infow("Ignoring log",
-		zap.String("eventName", lg.EventName),
-		zap.String("contractAddress", lg.Address),
-		zap.Strings("addresses", ecp.config.InterestingContracts),
-	)
-	return nil
+	mailboxContract, err := ecp.contractStore.GetContractByNameForChainId(config.ContractName_TaskMailbox, lwb.Block.ChainId)
+	if err != nil {
+		return err
+	}
+
+	if mailboxContract == nil {
+		ecp.logger.Sugar().Errorw("Mailbox contract not found for TaskCreated event",
+			zap.String("eventName", lg.EventName),
+			zap.String("contractAddress", lg.Address),
+			zap.Uint("chainId", uint(lwb.Block.ChainId)),
+			zap.Uint64("blockNumber", lwb.Block.Number.Value()),
+			zap.String("transactionHash", lwb.RawLog.TransactionHash.Value()),
+		)
+		return nil
+	}
+
+	if !strings.EqualFold(lwb.Log.Address, mailboxContract.Address) {
+		return nil
+	}
+
+	return ecp.processTask(ctx, lwb)
 }
 
 func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.LogWithBlock) error {
@@ -444,7 +492,7 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 		zap.Any("task", task),
 	)
 
-	if task.AVSAddress != strings.ToLower(ecp.config.AvsAddress) {
+	if !strings.EqualFold(task.AVSAddress, ecp.config.AvsAddress) {
 		ecp.logger.Sugar().Infow("Ignoring task for different AVS address",
 			zap.String("taskAvsAddress", task.AVSAddress),
 			zap.String("currentAvsAddress", ecp.config.AvsAddress),
@@ -452,18 +500,17 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 		return nil
 	}
 
-	// Check if task already exists in storage
 	existingTask, err := ecp.store.GetTask(ctx, task.TaskId)
 	if err == nil && existingTask != nil {
-		// Task already exists, skip it to avoid duplicate processing
 		ecp.logger.Sugar().Infow("Task already exists in storage, skipping duplicate",
 			"taskId", task.TaskId)
+
 		return nil
+
 	} else if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		ecp.logger.Sugar().Errorw("Failed to check existing task",
 			"error", err,
 			"taskId", task.TaskId)
-		// Continue processing on storage errors
 	}
 
 	if err := ecp.store.SavePendingTask(ctx, task); err != nil {
@@ -478,15 +525,8 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 
 	select {
 	case ecp.taskQueue <- task:
-
-		if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
-			ecp.logger.Sugar().Errorw("Failed to mark task as processing",
-				"error", err,
-				"taskId", task.TaskId)
-		} else {
-			ecp.logger.Sugar().Infow("Marked task as processing",
-				"taskId", task.TaskId)
-		}
+		ecp.logger.Sugar().Infow("Task in queue for processing",
+			"taskId", task.TaskId)
 
 	case <-time.After(100 * time.Millisecond):
 		ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
@@ -573,4 +613,104 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 		"avsAddress", ecp.config.AvsAddress)
 
 	return nil
+}
+
+// reconcileReorg finds the common ancestor of the previously processed block head and the new blocks
+func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ethereum.EthereumBlock) error {
+	maxDepth := ecp.config.MaxReorgDepth
+	orphanedBlocks, err := ecp.findOrphanedBlocks(ctx, startBlock, maxDepth)
+
+	if err != nil {
+		return err
+	}
+
+	if len(orphanedBlocks) == 0 {
+		return fmt.Errorf("no orphaned blocks found")
+	}
+
+	for _, orphanedBlock := range orphanedBlocks {
+		err = ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, orphanedBlock.ChainId, orphanedBlock.Number.Value())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *ethereum.EthereumBlock, maxDepth int) ([]*ethereum.EthereumBlock, error) {
+	var orphanedBlocks []*ethereum.EthereumBlock
+	startBlockNumber := startBlock.Number.Value()
+
+	for currentBlockNum := startBlockNumber - 1; startBlockNumber-currentBlockNum <= uint64(maxDepth) && currentBlockNum > 0; currentBlockNum-- {
+
+		chainBlock, err := ecp.ethClient.GetBlockByNumber(ctx, currentBlockNum)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch block %d from chain: %w", currentBlockNum, err)
+		}
+
+		blockInfo, err := ecp.store.GetBlock(
+			ctx, ecp.config.AvsAddress,
+			ecp.config.ChainId,
+			currentBlockNum,
+		)
+
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				ecp.logger.Sugar().Debugw("Block not found in storage",
+					"blockNumber", currentBlockNum,
+					"error", err)
+				blockInfo = &storage.BlockRecord{
+					Number:     chainBlock.Number.Value(),
+					Hash:       chainBlock.Hash.Value(),
+					ParentHash: chainBlock.ParentHash.Value(),
+					Timestamp:  chainBlock.Timestamp.Value(),
+					ChainId:    chainBlock.ChainId,
+				}
+
+				ecp.lastObservedBlock = chainBlock
+
+				return orphanedBlocks, ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo)
+			}
+			return nil, fmt.Errorf("failed to fetch block %d for : %w", currentBlockNum, err)
+		}
+
+		if blockInfo == nil {
+			return orphanedBlocks, fmt.Errorf("block info not found for block %d", currentBlockNum)
+		}
+
+		if chainBlock.Hash.Value() != blockInfo.Hash {
+			ecp.logger.Sugar().Infow("Found orphaned block",
+				"blockNumber", currentBlockNum,
+				"storedBlockHash", blockInfo.Hash,
+				"chainBlockHash", chainBlock.Hash.Value(),
+				"searchDepth", startBlockNumber-currentBlockNum)
+
+			// Create ethereum block from stored block info (the orphaned block)
+			orphanedBlock := &ethereum.EthereumBlock{
+				Number:     ethereum.EthereumQuantity(blockInfo.Number),
+				Hash:       ethereum.EthereumHexString(blockInfo.Hash),
+				ParentHash: ethereum.EthereumHexString(blockInfo.ParentHash),
+				Timestamp:  ethereum.EthereumQuantity(blockInfo.Timestamp),
+				ChainId:    blockInfo.ChainId,
+			}
+			orphanedBlocks = append(orphanedBlocks, orphanedBlock)
+			continue
+		}
+
+		ecp.logger.Sugar().Debugw("Block hash match, stopping reorg ancestry search",
+			"blockNumber", currentBlockNum,
+			"blockHash", blockInfo.Hash,
+			"chainHash", chainBlock.Hash.Value())
+
+		ecp.lastObservedBlock = chainBlock
+
+		err = ecp.store.SetLastProcessedBlock(ctx, ecp.config.AvsAddress, chainBlock.ChainId, chainBlock.Number.Value())
+		if err != nil {
+			return nil, err
+		}
+
+		break
+	}
+
+	return orphanedBlocks, nil
 }

@@ -63,7 +63,7 @@ type Aggregator struct {
 	rootCtx context.Context
 
 	// transactionLogParser is used to decode logs from the chain
-	transactionLogParser *transactionLogParser.TransactionLogParser
+	transactionLogParser transactionLogParser.LogParser
 
 	// contractStore is used to fetch contract addresses and ABIs
 	contractStore contractStore.IContractStore
@@ -95,7 +95,7 @@ func NewAggregatorWithManagementRpcServer(
 	managementServerGrpcPort int,
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
-	tlp *transactionLogParser.TransactionLogParser,
+	lp transactionLogParser.LogParser,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signers signer.Signers,
 	store storage.AggregatorStore,
@@ -108,13 +108,13 @@ func NewAggregatorWithManagementRpcServer(
 		return nil, errors.Wrapf(err, "failed to create aggregator management rpc server with port %d", managementServerGrpcPort)
 	}
 
-	return NewAggregator(cfg, contractStore, tlp, peeringDataFetcher, signers, store, rpc, logger)
+	return NewAggregator(cfg, contractStore, lp, peeringDataFetcher, signers, store, rpc, logger)
 }
 
 func NewAggregator(
 	cfg *AggregatorConfig,
 	contractStore contractStore.IContractStore,
-	tlp *transactionLogParser.TransactionLogParser,
+	lp transactionLogParser.LogParser,
 	peeringDataFetcher peering.IPeeringDataFetcher,
 	signers signer.Signers,
 	store storage.AggregatorStore,
@@ -132,7 +132,7 @@ func NewAggregator(
 
 	return &Aggregator{
 		contractStore:        contractStore,
-		transactionLogParser: tlp,
+		transactionLogParser: lp,
 		config:               cfg,
 		logger:               logger,
 		signers:              signers,

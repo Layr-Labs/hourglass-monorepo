@@ -14,6 +14,11 @@ type AggregatorStore interface {
 	GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error)
 	SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error
 
+	// Block history management for reorg detection
+	SaveBlock(ctx context.Context, avsAddress string, block *BlockRecord) error
+	GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*BlockRecord, error)
+	DeleteBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) error
+
 	// Task management
 	SavePendingTask(ctx context.Context, task *types.Task) error
 	GetTask(ctx context.Context, taskId string) (*types.Task, error)
@@ -49,6 +54,15 @@ type TaskRecord struct {
 	Status    TaskStatus
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// BlockRecord stores essential block information for reorg detection
+type BlockRecord struct {
+	Number     uint64
+	Hash       string
+	ParentHash string
+	Timestamp  uint64
+	ChainId    config.ChainId
 }
 
 // ConsensusType represents the type of consensus mechanism
