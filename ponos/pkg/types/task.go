@@ -45,6 +45,7 @@ type Task struct {
 	ChainId                config.ChainId `json:"chainId"`
 	SourceBlockNumber      uint64         `json:"sourceBlockNumber"`
 	L1ReferenceBlockNumber uint64         `json:"l1ReferenceBlockNumber"`
+	ReferenceTimestamp     uint32         `json:"referenceTimestamp"`
 	BlockHash              string         `json:"blockHash"`
 	Version                uint32         `json:"version"`
 }
@@ -127,6 +128,11 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	}
 	avsAddress = avsAddr.String()
 
+	referenceTimestamp, ok := log.Arguments[4].Value.(uint32)
+	if !ok {
+		return nil, fmt.Errorf("failed to parse task reference timestamp")
+	}
+
 	// it aint stupid if it works...
 	// take the output data, turn it into a json string, then Unmarshal it into a typed struct
 	// rather than trying to coerce data types
@@ -158,6 +164,7 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		Payload:             od.Payload,
 		ChainId:             block.ChainId,
 		SourceBlockNumber:   block.Number.Value(),
+		ReferenceTimestamp:  referenceTimestamp,
 		BlockHash:           block.Hash.Value(),
 		Version:             1,
 	}, nil

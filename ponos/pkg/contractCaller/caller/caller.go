@@ -912,12 +912,12 @@ func (cc *ContractCaller) buildTransactionOpts(ctx context.Context) (*bind.Trans
 	return cc.signer.GetTransactOpts(ctx)
 }
 
-func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber int64) ([]*big.Int, []common.Address, error) {
+func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, referenceBlockNumber uint64) ([]*big.Int, []common.Address, error) {
 	opts := &bind.CallOpts{
 		Context: ctx,
 	}
 	if referenceBlockNumber > 0 {
-		opts.BlockNumber = new(big.Int).SetUint64(uint64(referenceBlockNumber))
+		opts.BlockNumber = new(big.Int).SetUint64(referenceBlockNumber)
 	}
 	return cc.crossChainRegistry.GetSupportedChains(opts)
 }
@@ -967,7 +967,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	}
 
 	cc.logger.Sugar().Infow("Fetching supported chains for multichain")
-	chainIds, tableUpdaterAddresses, err := cc.GetSupportedChainsForMultichain(ctx, int64(atBlockNumber))
+	chainIds, tableUpdaterAddresses, err := cc.GetSupportedChainsForMultichain(ctx, atBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get supported chains for multichain: %w", err)
 	}
@@ -1020,7 +1020,11 @@ func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference timestamp: %w", err)
 	}
-	latestReferenceBlockNumber, err := tableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{}, latestReferenceTimestamp)
+
+	latestReferenceBlockNumber, err := tableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+	}, latestReferenceTimestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference block number: %w", err)
 	}

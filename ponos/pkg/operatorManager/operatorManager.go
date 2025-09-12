@@ -3,14 +3,15 @@ package operatorManager
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"strings"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
-	"math/big"
-	"strings"
 )
 
 type OperatorManagerConfig struct {
@@ -73,15 +74,18 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	sourceBlockNumber uint64,
 	operatorSetId uint32,
 ) (*PeerWeight, error) {
+
+	convertedChainId := uint32(chainId)
 	om.logger.Sugar().Infow("Getting executor peers and weights for block",
-		zap.Uint32("chainId", uint32(chainId)),
+		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("sourceBlockNumber", sourceBlockNumber),
 		zap.Uint32("operatorSetId", operatorSetId),
 	)
+
 	l1Cc, err := om.getContractCallerForChainId(om.config.L1ChainId)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get contract caller for chain ID",
-			zap.Uint32("ChainId", uint32(chainId)),
+			zap.Uint32("ChainId", convertedChainId),
 			zap.Error(err),
 		)
 		return nil, err
@@ -94,16 +98,16 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		targetChainCc, err = om.getContractCallerForChainId(chainId)
 		if err != nil {
 			om.logger.Sugar().Errorw("Failed to get contract caller for target chain ID",
-				zap.Uint32("ChainId", uint32(chainId)),
+				zap.Uint32("ChainId", convertedChainId),
 				zap.Error(err),
 			)
 			return nil, err
 		}
 	}
 
-	var supportedChainsBlockRef int64
+	var supportedChainsBlockRef uint64
 	if chainId == om.config.L1ChainId {
-		supportedChainsBlockRef = int64(sourceBlockNumber)
+		supportedChainsBlockRef = sourceBlockNumber
 	} else {
 		// if this is not the L1, then we need to use the block number from the latest reference time
 		// NOTE: there are potential edge cases where due to the L1 and L2 blocks not aligning 1 to 1.
@@ -111,9 +115,9 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		supportedChainsBlockRef = -1 // use latest block
 	}
 	om.logger.Sugar().Debugw("Fetching supported chains for multichain",
-		zap.Uint32("chainId", uint32(chainId)),
+		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("sourceBlockNumber", sourceBlockNumber),
-		zap.Int64("supportedChainsBlockRef", supportedChainsBlockRef),
+		zap.Uint64("supportedChainsBlockRef", supportedChainsBlockRef),
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 	)
@@ -136,13 +140,13 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	// if there is no table updater, then this chain is likely misconfigured or not supported
 	if destTableUpdaterAddress == (common.Address{}) {
 		om.logger.Sugar().Errorw("No table updater address found for chain",
-			zap.Uint32("chainId", uint32(chainId)),
+			zap.Uint32("chainId", convertedChainId),
 			zap.Uint64("sourceBlockNumber", sourceBlockNumber),
 		)
 		return nil, fmt.Errorf("no table updater address found for chain ID %d", chainId)
 	}
 	om.logger.Sugar().Infow("Found table updater address for chain",
-		zap.Uint32("chainId", uint32(chainId)),
+		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("blockNumber", sourceBlockNumber),
 		zap.String("tableUpdaterAddress", destTableUpdaterAddress.Hex()),
 		zap.String("avsAddress", om.config.AvsAddress),
@@ -153,14 +157,14 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	latestReferenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(ctx, destTableUpdaterAddress, sourceBlockNumber)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get latest reference time and block for table updater",
-			zap.Uint32("chainId", uint32(chainId)),
+			zap.Uint32("chainId", convertedChainId),
 			zap.Uint64("sourceBlockNumber", sourceBlockNumber),
 			zap.Error(err),
 		)
 		return nil, err
 	}
 	om.logger.Sugar().Infow("Latest reference time and block for table updater",
-		zap.Uint32("chainId", uint32(chainId)),
+		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("sourceBlockNumber", sourceBlockNumber),
 		zap.Uint32("latestReferenceBlockNumber", latestReferenceTimeAndBlock.LatestReferenceBlockNumber),
 		zap.Uint32("latestReferenceTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
