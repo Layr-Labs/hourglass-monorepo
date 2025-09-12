@@ -581,7 +581,7 @@ func (s *BadgerAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress str
 }
 
 // SaveBlock saves block information for reorg detection
-func (s *BadgerAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockEntity) error {
+func (s *BadgerAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockRecord) error {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -611,7 +611,7 @@ func (s *BadgerAggregatorStore) SaveBlock(ctx context.Context, avsAddress string
 }
 
 // GetBlock retrieves block information by block number
-func (s *BadgerAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockEntity, error) {
+func (s *BadgerAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockRecord, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
@@ -619,7 +619,7 @@ func (s *BadgerAggregatorStore) GetBlock(ctx context.Context, avsAddress string,
 	}
 	s.mu.RUnlock()
 
-	var block storage.BlockEntity
+	var block storage.BlockRecord
 	key := fmt.Sprintf(prefixBlock, avsAddress, chainId, blockNumber)
 
 	err := s.db.View(func(txn *badgerv3.Txn) error {

@@ -275,7 +275,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			// Initialize the last processed block to 99 so poller starts from block 100
 			err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, 99)
 			require.NoError(t, err)
-			blockInfo := &storage.BlockEntity{
+			blockInfo := &storage.BlockRecord{
 				Number:     99,
 				Hash:       "0xhash99",
 				ParentHash: "0xhash98",

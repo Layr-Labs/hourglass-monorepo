@@ -298,7 +298,7 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 	)
 	ecp.lastObservedBlock = block
 
-	blockInfo := &storage.BlockEntity{
+	blockInfo := &storage.BlockRecord{
 		Number:     block.Number.Value(),
 		Hash:       block.Hash.Value(),
 		ParentHash: block.ParentHash.Value(),
@@ -659,7 +659,7 @@ func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *e
 				ecp.logger.Sugar().Debugw("Block not found in storage",
 					"blockNumber", currentBlockNum,
 					"error", err)
-				blockInfo = &storage.BlockEntity{
+				blockInfo = &storage.BlockRecord{
 					Number:     chainBlock.Number.Value(),
 					Hash:       chainBlock.Hash.Value(),
 					ParentHash: chainBlock.ParentHash.Value(),

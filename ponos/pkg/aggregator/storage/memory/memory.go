@@ -20,7 +20,7 @@ type InMemoryAggregatorStore struct {
 	tasks               map[string]*storage.TaskRecord
 	operatorSetConfigs  map[string]*storage.OperatorSetTaskConfig
 	avsConfigs          map[string]*storage.AvsConfig
-	blocks              map[string]*storage.BlockEntity
+	blocks              map[string]*storage.BlockRecord
 }
 
 // NewInMemoryAggregatorStore creates a new in-memory aggregator store
@@ -30,7 +30,7 @@ func NewInMemoryAggregatorStore() *InMemoryAggregatorStore {
 		tasks:               make(map[string]*storage.TaskRecord),
 		operatorSetConfigs:  make(map[string]*storage.OperatorSetTaskConfig),
 		avsConfigs:          make(map[string]*storage.AvsConfig),
-		blocks:              make(map[string]*storage.BlockEntity),
+		blocks:              make(map[string]*storage.BlockRecord),
 	}
 }
 
@@ -269,7 +269,7 @@ func (s *InMemoryAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress s
 }
 
 // SaveBlock saves block information for reorg detection
-func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockEntity) error {
+func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -287,7 +287,7 @@ func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress stri
 }
 
 // GetBlock retrieves block information by block number
-func (s *InMemoryAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockEntity, error) {
+func (s *InMemoryAggregatorStore) GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*storage.BlockRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

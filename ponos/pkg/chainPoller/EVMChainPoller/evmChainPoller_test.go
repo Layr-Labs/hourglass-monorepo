@@ -45,7 +45,7 @@ func TestFindOrphanedBlocks_NoReorg_AllBlocksMatch(t *testing.T) {
 	store := memory.NewInMemoryAggregatorStore()
 
 	// Setup: Save block 99 in store
-	err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+	err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 		Number:     99,
 		Hash:       "0x99",
 		ParentHash: "0x98",
@@ -98,7 +98,7 @@ func TestFindOrphanedBlocks_SimpleReorg_FindsOrphanedAndAncestor(t *testing.T) {
 
 	// Setup: Save blocks 97-99 in store (old chain)
 	for i := uint64(97); i <= 99; i++ {
-		err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+		err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 			Number:     i,
 			Hash:       fmt.Sprintf("0x%d_old", i),
 			ParentHash: fmt.Sprintf("0x%d_old", i-1),
@@ -108,7 +108,7 @@ func TestFindOrphanedBlocks_SimpleReorg_FindsOrphanedAndAncestor(t *testing.T) {
 	}
 
 	// Also save block 97 with the correct hash that will match
-	err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+	err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 		Number:     97,
 		Hash:       "0x97",
 		ParentHash: "0x96",
@@ -174,7 +174,7 @@ func TestFindOrphanedBlocks_DeepReorg_HitsMaxDepth(t *testing.T) {
 
 	// Setup: Save blocks 97-99 in store (all with old hashes)
 	for i := uint64(97); i <= 99; i++ {
-		err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+		err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 			Number:     i,
 			Hash:       fmt.Sprintf("0x%d_old", i),
 			ParentHash: fmt.Sprintf("0x%d_old", i-1),
@@ -295,7 +295,7 @@ func TestFindOrphanedBlocks_StateChanges(t *testing.T) {
 	store := memory.NewInMemoryAggregatorStore()
 
 	// Setup: Save block 99 in store
-	err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+	err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 		Number:     99,
 		Hash:       "0x99",
 		ParentHash: "0x98",
@@ -349,7 +349,7 @@ func TestReconcileReorg_Success_DeletesOrphanedBlocks(t *testing.T) {
 
 	// Setup: Save blocks 98-99 in store (will be orphaned)
 	for i := uint64(98); i <= 99; i++ {
-		err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+		err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 			Number:     i,
 			Hash:       fmt.Sprintf("0x%d_old", i),
 			ParentHash: fmt.Sprintf("0x%d_old", i-1),
@@ -359,7 +359,7 @@ func TestReconcileReorg_Success_DeletesOrphanedBlocks(t *testing.T) {
 	}
 
 	// Also save block 97 that will match (common ancestor)
-	err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+	err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 		Number:     97,
 		Hash:       "0x97",
 		ParentHash: "0x96",
@@ -440,7 +440,7 @@ func TestReconcileReorg_NoOrphanedBlocks_ReturnsError(t *testing.T) {
 	store := memory.NewInMemoryAggregatorStore()
 
 	// Setup: Save block 99 that matches chain (no reorg)
-	err := store.SaveBlock(ctx, "0xtest", &storage.BlockEntity{
+	err := store.SaveBlock(ctx, "0xtest", &storage.BlockRecord{
 		Number:     99,
 		Hash:       "0x99",
 		ParentHash: "0x98",
