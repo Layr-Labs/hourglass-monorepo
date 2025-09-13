@@ -128,14 +128,15 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	}
 	avsAddress = avsAddr.String()
 
-	referenceTimestamp, ok := log.Arguments[4].Value.(uint32)
+	referenceTimestampBig, ok := log.Arguments[4].Value.(*big.Int)
 	if !ok {
-		return nil, fmt.Errorf("failed to parse task reference timestamp")
+		return nil, fmt.Errorf("failed to parse task reference timestamp: expected *big.Int, got %T", log.Arguments[4].Value)
 	}
+	if !referenceTimestampBig.IsUint64() {
+		return nil, fmt.Errorf("reference timestamp overflow: %s", referenceTimestampBig.String())
+	}
+	referenceTimestamp := uint32(referenceTimestampBig.Uint64())
 
-	// it aint stupid if it works...
-	// take the output data, turn it into a json string, then Unmarshal it into a typed struct
-	// rather than trying to coerce data types
 	outputBytes, err := json.Marshal(log.OutputData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal output data: %w", err)
