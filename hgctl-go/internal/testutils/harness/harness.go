@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
@@ -453,8 +454,8 @@ func (h *TestHarness) GetBeaconETHStrategy() string {
 	return "0xbeaC0eeEeeeeEEeEeEEEEeeEEeEeeeEeeEEBEaC0"
 }
 
-// GetAggregatorKeystore returns the aggregator BN254 keystore
-func (h *TestHarness) GetAggregatorKeystore() *PreGeneratedKeystore {
+// GetAggregatorBN254Keystore returns the aggregator BN254 keystore
+func (h *TestHarness) GetAggregatorBN254Keystore() *PreGeneratedKeystore {
 	return h.keystores["aggregator-bn254"]
 }
 
@@ -463,8 +464,8 @@ func (h *TestHarness) GetAggregatorECDSAKeystore() *PreGeneratedKeystore {
 	return h.keystores["aggregator-ecdsa"]
 }
 
-// GetExecutorKeystore returns the executor BN254 keystore
-func (h *TestHarness) GetExecutorKeystore() *PreGeneratedKeystore {
+// GetExecutorBN254Keystore returns the executor BN254 keystore
+func (h *TestHarness) GetExecutorBN254Keystore() *PreGeneratedKeystore {
 	return h.keystores["executor-bn254"]
 }
 
