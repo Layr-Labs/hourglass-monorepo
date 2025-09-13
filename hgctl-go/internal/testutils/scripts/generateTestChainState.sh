@@ -63,7 +63,7 @@ mkdir -p "$KEYS_DIR"
 L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
 
 anvilL1ChainId=31337
-anvilL1StartBlock=8892630
+anvilL1StartBlock=9085290
 anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
 anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -73,7 +73,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=28820370
+anvilL2StartBlock=30327360
 anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
 anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -188,6 +188,11 @@ create_keystore() {
 AGGREGATOR_ADDRESS=$(cast wallet address --private-key 0x$AGGREGATOR_ECDSA_PK)
 EXECUTOR_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_ECDSA_PK)
 
+# Delete existing test context if it exists (ignore errors)
+echo "Removing any existing test context..."
+rm -rf "$HOME/.hgctl/test" 2>/dev/null || true
+rm -rf "$HOME/.config/hgctl/test" 2>/dev/null || true
+
 # Create context with non-interactive flags
 echo "Creating hgctl context 'test' with L1 RPC URL and operator address..."
 "$HGCTL" context create \
@@ -278,31 +283,31 @@ fundAccount "$EXECUTOR_ADDRESS"
 # deployer account
 deployAccountAddress=$(echo $seedAccounts | jq -r '.[0].address')
 deployAccountPk=$(echo $seedAccounts | jq -r '.[0].private_key')
-export PRIVATE_KEY_DEPLOYER=$deployAccountPk
+export PRIVATE_KEY_DEPLOYER="0x$deployAccountPk"
 echo "Deploy account: $deployAccountAddress"
 
 # avs account
 avsAccountAddress=$(echo $seedAccounts | jq -r '.[1].address')
 avsAccountPk=$(echo $seedAccounts | jq -r '.[1].private_key')
-export PRIVATE_KEY_AVS=$avsAccountPk
+export PRIVATE_KEY_AVS="0x$avsAccountPk"
 echo "AVS account: $avsAccountAddress"
 
 # app account
 appAccountAddress=$(echo $seedAccounts | jq -r '.[2].address')
 appAccountPk=$(echo $seedAccounts | jq -r '.[2].private_key')
-export PRIVATE_KEY_APP=$appAccountPk
+export PRIVATE_KEY_APP="0x$appAccountPk"
 echo "App account: $appAccountAddress"
 
 # operator account (use ECDSA keys for transactions)
 operatorAccountAddress=$AGGREGATOR_ADDRESS
 operatorAccountPk=$AGGREGATOR_ECDSA_PK
-export PRIVATE_KEY_OPERATOR=$operatorAccountPk
+export PRIVATE_KEY_OPERATOR="0x$operatorAccountPk"
 echo "Operator account: $operatorAccountAddress"
 
 # exec operator account (use ECDSA keys for transactions)
 execOperatorAccountAddress=$EXECUTOR_ADDRESS
 execOperatorAccountPk=$EXECUTOR_ECDSA_PK
-export PRIVATE_KEY_EXEC_OPERATOR=$execOperatorAccountPk
+export PRIVATE_KEY_EXEC_OPERATOR="0x$execOperatorAccountPk"
 echo "Exec Operator account: $execOperatorAccountAddress"
 
 # -----------------------------------------------------------------------------
@@ -387,11 +392,11 @@ function lowercaseAddress() {
     echo "$1" | tr '[:upper:]' '[:lower:]'
 }
 
-deployAccountPublicKey=$(cast wallet public-key --private-key $deployAccountPk)
-avsAccountPublicKey=$(cast wallet public-key --private-key $avsAccountPk)
-appAccountPublicKey=$(cast wallet public-key --private-key $appAccountPk)
-operatorAccountPublicKey=$(cast wallet public-key --private-key $operatorAccountPk)
-execOperatorAccountPublicKey=$(cast wallet public-key --private-key $execOperatorAccountPk)
+deployAccountPublicKey=$(cast wallet public-key --private-key "0x$deployAccountPk")
+avsAccountPublicKey=$(cast wallet public-key --private-key "0x$avsAccountPk")
+appAccountPublicKey=$(cast wallet public-key --private-key "0x$appAccountPk")
+operatorAccountPublicKey=$(cast wallet public-key --private-key "0x$operatorAccountPk")
+execOperatorAccountPublicKey=$(cast wallet public-key --private-key "0x$execOperatorAccountPk")
 deployAccountAddress=$(lowercaseAddress $deployAccountAddress)
 
 # Create chainData directory if it doesn't exist

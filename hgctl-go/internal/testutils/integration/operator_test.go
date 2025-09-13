@@ -2,10 +2,11 @@ package integration
 
 import (
 	"context"
+	"testing"
+
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/harness"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestOperatorRegistration(t *testing.T) {
@@ -133,7 +134,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 	t.Run("Register_Executor_BN254_Key", func(t *testing.T) {
 		// Register executor's BN254 key to a different operator set
-		executorBN254 := h.GetExecutorKeystore()
+		executorBN254 := h.GetExecutorBN254Keystore()
 
 		// Set context for operator set 1
 		contextResult, err := h.ExecuteCLI(
@@ -146,11 +147,14 @@ func TestOperatorRegistration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
+		_, err = h.ExecuteCLI("signer", "system", "remove")
+		require.NoError(t, err)
+
 		// Configure system signer with BN254 keystore
 		// This assumes the keystore name has been configured
 		_, err = h.ExecuteCLI(
 			"signer", "system", "keystore",
-			"--name", "executor-bn254",
+			"--name", "executor",
 			"--type", "bn254",
 		)
 		require.NoError(t, err)
@@ -159,7 +163,7 @@ func TestOperatorRegistration(t *testing.T) {
 
 		// Register BN254 key (no flags needed - uses context)
 		result, _ := h.ExecuteCLIWithKeystore("executor-bn254",
-			"eigenlayer", "register-key")
+			"el", "register-key")
 
 		// This might fail if executor is not registered as operator
 		// but we're testing the BN254 key registration flow
@@ -168,6 +172,7 @@ func TestOperatorRegistration(t *testing.T) {
 		} else {
 			// Executor might not be registered as operator yet
 			t.Logf("Executor BN254 registration result: %s", result.Stdout)
+			t.Fail()
 		}
 	})
 
