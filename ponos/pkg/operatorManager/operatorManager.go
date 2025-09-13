@@ -81,14 +81,14 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 		zap.Uint32("operatorSetId", task.OperatorSetId),
 	)
 
-	targetChainCc, err := om.getContractCallerForChainId(task.ChainId)
+	l1ChainCc, err := om.getContractCallerForChainId(om.config.L1ChainId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get contract callers: %w", err)
+		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
 	}
 
 	l1BlockForTableData := task.L1ReferenceBlockNumber
 
-	tableData, err := om.fetchOperatorTableData(ctx, targetChainCc, task.OperatorSetId, l1BlockForTableData)
+	tableData, err := om.fetchOperatorTableData(ctx, l1ChainCc, task.OperatorSetId, l1BlockForTableData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch operator table data: %w", err)
 	}
@@ -102,7 +102,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 
 	filteredOperators := om.filterOperatorsForSet(operators, operatorWeights, task.OperatorSetId)
 
-	curveType, err := targetChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
+	curveType, err := l1ChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}

@@ -231,7 +231,7 @@ func (em *AvsExecutionManager) recoverPendingTasks(ctx context.Context) error {
 	return nil
 }
 
-func (em *AvsExecutionManager) getOperatorSetTaskConfig(
+func (em *AvsExecutionManager) getExecutorTaskConfig(
 	ctx context.Context,
 	task *types.Task,
 ) (*OperatorSetTaskConfig, error) {
@@ -282,7 +282,7 @@ func (em *AvsExecutionManager) getOperatorSetTaskConfig(
 	return taskConfig, nil
 }
 
-func (em *AvsExecutionManager) getAggregatorTaskConfig(_ context.Context, blockNumber uint64) (*AvsConfig, error) {
+func (em *AvsExecutionManager) getAvsConfig(blockNumber uint64) (*AvsConfig, error) {
 	em.avsConfigMutex.Lock()
 	defer em.avsConfigMutex.Unlock()
 
@@ -327,7 +327,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
 	defer cancel()
 
-	executorTaskConfig, err := em.getOperatorSetTaskConfig(ctx, task)
+	executorTaskConfig, err := em.getExecutorTaskConfig(ctx, task)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set operator set task config",
 			zap.String("taskId", task.TaskId),
@@ -339,7 +339,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	task.ThresholdBips = executorTaskConfig.Consensus.Threshold
 	task.L1ReferenceBlockNumber = executorTaskConfig.L1ReferenceBlockNumber
 
-	avsConfig, err := em.getAggregatorTaskConfig(ctx, task.L1ReferenceBlockNumber)
+	avsConfig, err := em.getAvsConfig(task.L1ReferenceBlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get or set aggregator task config",
 			zap.String("taskId", task.TaskId),

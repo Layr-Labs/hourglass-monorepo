@@ -3,6 +3,7 @@ package peering
 import (
 	"context"
 	"fmt"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/ethereum/go-ethereum/common"
