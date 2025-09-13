@@ -502,16 +502,19 @@ func TestRecoverInProgressTasks_ExpiredTasks_MarkedAsFailed(t *testing.T) {
 		TaskId:              "expired-task-1",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &expiredDeadline,
+		ReferenceTimestamp:  100,
 	}
 	expiredTask2 := &types.Task{
 		TaskId:              "expired-task-2",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &expiredDeadline,
+		ReferenceTimestamp:  100,
 	}
 	validTask := &types.Task{
 		TaskId:              "valid-task",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &validDeadline,
+		ReferenceTimestamp:  100,
 	}
 
 	// Save all tasks as pending
@@ -564,18 +567,21 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-1"),
+		ReferenceTimestamp:  100,
 	}
 	task2 := &types.Task{
 		TaskId:              "task-2",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-2"),
+		ReferenceTimestamp:  100,
 	}
 	task3 := &types.Task{
 		TaskId:              "task-3",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-3"),
+		ReferenceTimestamp:  100,
 	}
 
 	// Save all tasks as pending
@@ -673,6 +679,7 @@ func TestRecoverInProgressTasks_QueueFull_TasksRemainPending(t *testing.T) {
 			TaskId:              fmt.Sprintf("task-%d", i),
 			AVSAddress:          "0xtest",
 			DeadlineUnixSeconds: &validDeadline,
+			ReferenceTimestamp:  100,
 		}
 		require.NoError(t, store.SavePendingTask(ctx, task))
 	}
@@ -722,11 +729,13 @@ func TestPollerProcessesTasksFromStorage(t *testing.T) {
 		TaskId:              "task-1",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
+		ReferenceTimestamp:  100,
 	}
 	task2 := &types.Task{
 		TaskId:              "task-2",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
+		ReferenceTimestamp:  100,
 	}
 
 	// Pre-populate storage with pending tasks
@@ -791,11 +800,13 @@ func TestPollerSkipsExpiredTasks(t *testing.T) {
 		TaskId:              "valid-task",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
+		ReferenceTimestamp:  100,
 	}
 	expiredTask := &types.Task{
 		TaskId:              "expired-task",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &expiredDeadline,
+		ReferenceTimestamp:  100,
 	}
 
 	// Save both tasks to storage
@@ -852,6 +863,7 @@ func TestPollerHandlesChannelFull(t *testing.T) {
 			TaskId:              fmt.Sprintf("task-%d", i),
 			AVSAddress:          avsAddress,
 			DeadlineUnixSeconds: &validDeadline,
+			ReferenceTimestamp:  100,
 		}
 		require.NoError(t, store.SavePendingTask(ctx, task))
 	}

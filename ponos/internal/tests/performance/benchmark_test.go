@@ -97,6 +97,7 @@ func benchmarkSaveTask(b *testing.B, store storage.AggregatorStore) {
 			OperatorSetId:          uint32(i),
 			SourceBlockNumber:      uint64(i / 100),
 			L1ReferenceBlockNumber: uint64(i / 100),
+			ReferenceTimestamp:     100,
 			ChainId:                config.ChainId(1),
 			Payload:                make([]byte, 256), // 256 bytes payload
 			Version:                1,
@@ -114,11 +115,12 @@ func benchmarkGetTask(b *testing.B, store storage.AggregatorStore) {
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("get-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
-			Version:       1,
+			TaskId:             fmt.Sprintf("get-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ChainId:            config.ChainId(1),
+			ReferenceTimestamp: 100,
+			Version:            1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -141,11 +143,12 @@ func benchmarkUpdateTaskStatus(b *testing.B, store storage.AggregatorStore) {
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("update-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
-			Version:       1,
+			TaskId:             fmt.Sprintf("update-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ReferenceTimestamp: 100,
+			ChainId:            config.ChainId(1),
+			Version:            1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -175,11 +178,12 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 	numTasks := 10000
 	for i := 0; i < numTasks; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("list-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
-			Version:       1,
+			TaskId:             fmt.Sprintf("list-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ReferenceTimestamp: 100,
+			ChainId:            config.ChainId(1),
+			Version:            1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -263,11 +267,12 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 	// Pre-populate some data
 	for i := 0; i < 1000; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("pre-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
-			Version:       1,
+			TaskId:             fmt.Sprintf("pre-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ReferenceTimestamp: 100,
+			ChainId:            config.ChainId(1),
+			Version:            1,
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)
@@ -289,11 +294,12 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 				switch i % 4 {
 				case 0: // Save new task
 					task := &types.Task{
-						TaskId:        fmt.Sprintf("concurrent-task-%d-%d", goroutineId, i),
-						AVSAddress:    "0x123",
-						OperatorSetId: uint32(i),
-						ChainId:       config.ChainId(1),
-						Version:       1,
+						TaskId:             fmt.Sprintf("concurrent-task-%d-%d", goroutineId, i),
+						AVSAddress:         "0x123",
+						OperatorSetId:      uint32(i),
+						ReferenceTimestamp: 100,
+						ChainId:            config.ChainId(1),
+						Version:            1,
 					}
 					if err := store.SavePendingTask(ctx, task); err != nil {
 						b.Error(err)
@@ -473,11 +479,12 @@ func benchmarkMemoryWithTasks(b *testing.B, store storage.AggregatorStore, taskC
 	// Populate store
 	for i := 0; i < taskCount; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("mem-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
-			Payload:       make([]byte, 1024), // 1KB payload
+			TaskId:             fmt.Sprintf("mem-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ReferenceTimestamp: 100,
+			ChainId:            config.ChainId(1),
+			Payload:            make([]byte, 1024), // 1KB payload
 		}
 		if err := store.SavePendingTask(ctx, task); err != nil {
 			b.Fatal(err)

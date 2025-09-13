@@ -4,10 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"go.uber.org/zap"
 	"math/big"
 	"net/http"
 	"os"
@@ -17,6 +13,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"go.uber.org/zap"
 )
 
 const (

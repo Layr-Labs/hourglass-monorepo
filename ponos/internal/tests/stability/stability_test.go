@@ -226,12 +226,13 @@ func simulateAggregator(ctx context.Context, t *testing.T, store storage.Aggrega
 			// Create random tasks
 			if rand.Intn(10) < 3 { // 30% chance
 				task := &types.Task{
-					TaskId:            fmt.Sprintf("task-%d", taskCounter),
-					AVSAddress:        "0x123",
-					OperatorSetId:     uint32(taskCounter),
-					SourceBlockNumber: blockNum,
-					ChainId:           chainId,
-					Version:           1,
+					TaskId:             fmt.Sprintf("task-%d", taskCounter),
+					AVSAddress:         "0x123",
+					OperatorSetId:      uint32(taskCounter),
+					SourceBlockNumber:  blockNum,
+					ReferenceTimestamp: 1000,
+					ChainId:            chainId,
+					Version:            1,
 				}
 				taskCounter++
 
@@ -437,10 +438,11 @@ func TestConcurrentLoad(t *testing.T) {
 						switch rand.Intn(4) {
 						case 0: // Save task
 							task := &types.Task{
-								TaskId:        fmt.Sprintf("task-%d-%d", id, j),
-								AVSAddress:    "0x123",
-								OperatorSetId: uint32(j),
-								Version:       1,
+								TaskId:             fmt.Sprintf("task-%d-%d", id, j),
+								AVSAddress:         "0x123",
+								OperatorSetId:      uint32(j),
+								ReferenceTimestamp: 100,
+								Version:            1,
 							}
 							if err := store.SavePendingTask(ctx, task); err != nil {
 								errors <- err
@@ -525,10 +527,11 @@ func TestMemoryLeaks(t *testing.T) {
 	// Perform many operations
 	for i := 0; i < iterations; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			Version:       1,
+			TaskId:             fmt.Sprintf("task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ReferenceTimestamp: 100,
+			Version:            1,
 		}
 
 		// Create and delete tasks

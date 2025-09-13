@@ -371,14 +371,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get contract caller for chain: %w", err)
 	}
 
-	// TODO (FromTheRain):  reuse the calculated L1ReferenceBlockNumber
-	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForBlock(
-		ctx,
-		task.ChainId,
-		// This must be source block number so this method can translate to reference block.
-		task.SourceBlockNumber,
-		task.OperatorSetId,
-	)
+	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForTask(ctx, task)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get operator peers and weights",
 			zap.Uint("chainId", uint(task.ChainId)),
@@ -389,7 +382,7 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	}
 	fmt.Printf("Operator peers and weights: %v\n", operatorPeersWeight)
 
-	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(ctx, task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
+	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get curve type for operator set",
 			zap.String("avsAddress", task.AVSAddress),
@@ -716,8 +709,8 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 		return 0, fmt.Errorf("no contract caller found for chain ID: %d", chainId)
 	}
 
-	// Get supported chains from L1 to find the table updater address using -1 (latest) for L2 chains
-	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, -1)
+	// Get supported chains from L1 to find the table updater address using 0 (latest) for L2 chains
+	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, 0)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get supported chains: %w", err)
 	}
