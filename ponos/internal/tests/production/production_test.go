@@ -187,6 +187,7 @@ func TestProductionRecovery(t *testing.T) {
 			OperatorSetId:          uint32(i),
 			SourceBlockNumber:      uint64(i / 10),
 			L1ReferenceBlockNumber: uint64(i / 10),
+			ReferenceTimestamp:     100,
 			ChainId:                1,
 			Payload:                make([]byte, 1024), // 1KB payload
 		}
@@ -236,6 +237,7 @@ func TestProductionRecovery(t *testing.T) {
 		OperatorSetId:          uint32(numTasks),
 		SourceBlockNumber:      lastBlock + 1000,
 		L1ReferenceBlockNumber: lastBlock + 1000,
+		ReferenceTimestamp:     1000,
 		ChainId:                chainId,
 	}
 	require.NoError(t, store2.SavePendingTask(ctx, newTask))
@@ -258,10 +260,11 @@ func TestProductionMetrics(t *testing.T) {
 	// Perform operations and measure
 	for i := 0; i < 1000; i++ {
 		task := &types.Task{
-			TaskId:        fmt.Sprintf("metric-task-%d", i),
-			AVSAddress:    "0x123",
-			OperatorSetId: uint32(i),
-			ChainId:       config.ChainId(1),
+			TaskId:             fmt.Sprintf("metric-task-%d", i),
+			AVSAddress:         "0x123",
+			OperatorSetId:      uint32(i),
+			ChainId:            config.ChainId(1),
+			ReferenceTimestamp: 1,
 		}
 
 		// SavePendingTask
@@ -365,6 +368,7 @@ func TestProductionScale(t *testing.T) {
 				OperatorSetId:          uint32(i),
 				SourceBlockNumber:      uint64(i / 100),
 				L1ReferenceBlockNumber: uint64(i / 100),
+				ReferenceTimestamp:     100,
 				ChainId:                config.ChainId(c),
 			}
 			require.NoError(t, store.SavePendingTask(ctx, task))

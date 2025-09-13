@@ -44,6 +44,7 @@ func createTask(id string) *types.Task {
 		ChainId:                config.ChainId(1),
 		SourceBlockNumber:      1000,
 		L1ReferenceBlockNumber: 1000,
+		ReferenceTimestamp:     1000,
 		BlockHash:              fmt.Sprintf("0xhash%s", id),
 	}
 }

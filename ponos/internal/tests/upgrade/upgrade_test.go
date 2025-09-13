@@ -88,6 +88,7 @@ func TestRollingUpgrade(t *testing.T) {
 				OperatorSetId:          1,
 				SourceBlockNumber:      1000,
 				L1ReferenceBlockNumber: 1000,
+				ReferenceTimestamp:     1000,
 				ChainId:                config.ChainId(1),
 			}
 			require.NoError(t, aggStore1.SavePendingTask(ctx, task))
@@ -166,6 +167,7 @@ func TestRollingUpgrade(t *testing.T) {
 				OperatorSetId:          2,
 				SourceBlockNumber:      2000,
 				L1ReferenceBlockNumber: 2000,
+				ReferenceTimestamp:     2000,
 				ChainId:                config.ChainId(1),
 			}
 			require.NoError(t, aggStore2.SavePendingTask(ctx, newTask))
@@ -276,6 +278,7 @@ func TestBackwardCompatibility(t *testing.T) {
 		OperatorSetId:          1,
 		SourceBlockNumber:      1000,
 		L1ReferenceBlockNumber: 1000,
+		ReferenceTimestamp:     1000,
 		ChainId:                chainId,
 		Payload:                []byte("test payload"),
 	}
@@ -362,6 +365,7 @@ func TestUpgradeUnderLoad(t *testing.T) {
 					OperatorSetId:          uint32(taskId),
 					SourceBlockNumber:      blockNum,
 					L1ReferenceBlockNumber: blockNum,
+					ReferenceTimestamp:     100,
 					ChainId:                chainId,
 				}
 				_ = store1.SavePendingTask(ctx, task)
@@ -408,6 +412,7 @@ func TestUpgradeUnderLoad(t *testing.T) {
 		OperatorSetId:          9999,
 		SourceBlockNumber:      lastBlock2 + 100,
 		L1ReferenceBlockNumber: lastBlock2 + 100,
+		ReferenceTimestamp:     100,
 		ChainId:                chainId,
 	}
 	require.NoError(t, store2.SavePendingTask(ctx, newTask))

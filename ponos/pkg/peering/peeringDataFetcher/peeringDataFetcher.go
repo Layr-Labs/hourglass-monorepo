@@ -3,6 +3,7 @@ package peeringDataFetcher
 import (
 	"context"
 	"fmt"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"go.uber.org/zap"

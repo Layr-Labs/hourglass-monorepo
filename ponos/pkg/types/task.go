@@ -45,6 +45,7 @@ type Task struct {
 	ChainId                config.ChainId `json:"chainId"`
 	SourceBlockNumber      uint64         `json:"sourceBlockNumber"`
 	L1ReferenceBlockNumber uint64         `json:"l1ReferenceBlockNumber"`
+	ReferenceTimestamp     uint32         `json:"referenceTimestamp"`
 	BlockHash              string         `json:"blockHash"`
 	Version                uint32         `json:"version"`
 }
@@ -111,9 +112,9 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	var avsAddress string
 	var taskId string
 
-	// validate log.Arguments length matches the onchain event
-	if len(log.Arguments) < 9 {
-		return nil, fmt.Errorf("invalid log arguments length: %d", len(log.Arguments))
+	// validate log.Arguments length matches the indexed parameters (3 indexed params)
+	if len(log.Arguments) < 3 {
+		return nil, fmt.Errorf("invalid log arguments length: expected at least 3, got %d", len(log.Arguments))
 	}
 
 	taskId, ok := log.Arguments[1].Value.(string)
@@ -127,18 +128,16 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	}
 	avsAddress = avsAddr.String()
 
-	// it aint stupid if it works...
-	// take the output data, turn it into a json string, then Unmarshal it into a typed struct
-	// rather than trying to coerce data types
 	outputBytes, err := json.Marshal(log.OutputData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal output data: %w", err)
 	}
 
 	type outputDataType struct {
-		ExecutorOperatorSetId uint32
-		TaskDeadline          *big.Int `json:"TaskDeadline"`
-		Payload               []byte
+		ExecutorOperatorSetId           uint32   `json:"ExecutorOperatorSetId"`
+		OperatorTableReferenceTimestamp uint32   `json:"OperatorTableReferenceTimestamp"`
+		TaskDeadline                    *big.Int `json:"TaskDeadline"`
+		Payload                         []byte   `json:"Payload"`
 	}
 	var od *outputDataType
 	if err := json.Unmarshal(outputBytes, &od); err != nil {
@@ -158,6 +157,7 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 		Payload:             od.Payload,
 		ChainId:             block.ChainId,
 		SourceBlockNumber:   block.Number.Value(),
+		ReferenceTimestamp:  od.OperatorTableReferenceTimestamp,
 		BlockHash:           block.Hash.Value(),
 		Version:             1,
 	}, nil

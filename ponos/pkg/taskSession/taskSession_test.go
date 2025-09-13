@@ -192,7 +192,8 @@ func createTestTask() *types.Task {
 		ThresholdBips:          7500, // 75%
 		Payload:                []byte("test-payload"),
 		DeadlineUnixSeconds:    &deadline,
-		L1ReferenceBlockNumber: 12345678, // Include block number for testing
+		L1ReferenceBlockNumber: 12345678,
+		ReferenceTimestamp:     100,
 		Version:                1,
 	}
 }

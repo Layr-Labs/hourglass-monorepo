@@ -3,6 +3,8 @@ package testUtils
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
@@ -10,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
-	"testing"
 )
 
 func SetupOperatorPeering(

@@ -83,7 +83,6 @@ type BN254TaskResultAggregator struct {
 	AggregatePublicKey signing.PublicKey
 
 	aggregatedOperators *aggregatedBN254Operators
-	// Add more fields as needed for aggregation
 }
 
 // NewBN254TaskResultAggregator initializes a new aggregation certificate for a task window.

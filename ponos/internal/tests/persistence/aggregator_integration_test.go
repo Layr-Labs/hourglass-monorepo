@@ -38,6 +38,7 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 		ChainId:                chainId,
 		SourceBlockNumber:      990,
 		L1ReferenceBlockNumber: 990,
+		ReferenceTimestamp:     990,
 		BlockHash:              "0xhash1",
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task1))
@@ -55,6 +56,7 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 		ChainId:                chainId,
 		SourceBlockNumber:      995,
 		L1ReferenceBlockNumber: 995,
+		ReferenceTimestamp:     995,
 		BlockHash:              "0xhash2",
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task2))
@@ -124,6 +126,7 @@ func TestAggregatorTaskFlowWithPersistence(t *testing.T) {
 		ChainId:                config.ChainId(1),
 		SourceBlockNumber:      1000,
 		L1ReferenceBlockNumber: 1000,
+		ReferenceTimestamp:     1000,
 		BlockHash:              "0xhash",
 	}
 
@@ -177,6 +180,7 @@ func TestAggregatorConcurrentOperations(t *testing.T) {
 					ChainId:                config.ChainId(1),
 					SourceBlockNumber:      uint64(1000 + j),
 					L1ReferenceBlockNumber: uint64(1000 + j),
+					ReferenceTimestamp:     1000,
 					BlockHash:              fmt.Sprintf("0xhash%d%d", id, j),
 				}
 				if err := store.SavePendingTask(ctx, task); err != nil {

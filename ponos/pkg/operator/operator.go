@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"fmt"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
