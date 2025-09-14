@@ -249,64 +249,11 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			task.OperatorSetId = uint32(i % 10)
 			task.Payload = []byte(fmt.Sprintf("payload-data-%d", i))
 			_ = store.SavePendingTask(ctx, task)
-
-			if i%100 == 0 {
-				config := &storage.OperatorSetTaskConfig{
-					TaskSLA:      3600,
-					CurveType:    config.CurveTypeBN254,
-					TaskMetadata: []byte(fmt.Sprintf("metadata-%d", i)),
-					Consensus: storage.OperatorSetTaskConsensus{
-						ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-						Threshold:     6700,
-					},
-				}
-				_ = store.SaveOperatorSetConfig(ctx, fmt.Sprintf("0xavs%d", i%100), uint32(i%10), config)
-			}
 		}
 
 		// Perform operations on large dataset
 		for i := 0; i < b.N; i++ {
 			_, _ = store.ListPendingTasks(ctx)
-		}
-	})
-}
-
-// Benchmark config operations
-func BenchmarkConfigOperations(b *testing.B) {
-	ctx := context.Background()
-
-	b.Run("InMemoryStore/SaveOperatorSetConfig", func(b *testing.B) {
-		store := memory.NewInMemoryAggregatorStore()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			opConfig := &storage.OperatorSetTaskConfig{
-				TaskSLA:      int64(3600 + i),
-				CurveType:    config.CurveTypeBN254,
-				TaskMetadata: []byte(fmt.Sprintf("metadata-%d", i)),
-				Consensus: storage.OperatorSetTaskConsensus{
-					ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-					Threshold:     uint16(6700 + i%100),
-				},
-			}
-			_ = store.SaveOperatorSetConfig(ctx, fmt.Sprintf("0xavs%d", i%10), uint32(i%5), opConfig)
-		}
-	})
-
-	b.Run("SyncMap/SaveOperatorSetConfig", func(b *testing.B) {
-		baseline := newSyncMapBaseline()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			opConfig := &storage.OperatorSetTaskConfig{
-				TaskSLA:      int64(3600 + i),
-				CurveType:    config.CurveTypeBN254,
-				TaskMetadata: []byte(fmt.Sprintf("metadata-%d", i)),
-				Consensus: storage.OperatorSetTaskConsensus{
-					ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-					Threshold:     uint16(6700 + i%100),
-				},
-			}
-			key := fmt.Sprintf("opset-%s-%d", fmt.Sprintf("0xavs%d", i%10), i%5)
-			baseline.configs.Store(key, opConfig)
 		}
 	})
 }

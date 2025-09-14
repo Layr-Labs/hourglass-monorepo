@@ -61,25 +61,6 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task2))
 
-	// Save some configs
-	operatorConfig := &storage.OperatorSetTaskConfig{
-		TaskSLA:      3600,
-		CurveType:    config.CurveTypeBN254,
-		TaskMetadata: []byte("test metadata"),
-		Consensus: storage.OperatorSetTaskConsensus{
-			ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-			Threshold:     6700,
-		},
-	}
-	require.NoError(t, store.SaveOperatorSetConfig(ctx, "0xavs1", 1, operatorConfig))
-
-	avsConfig := &storage.AvsConfig{
-		AggregatorOperatorSetId: 1,
-		ExecutorOperatorSetIds:  []uint32{1, 2, 3},
-		CurveType:               config.CurveTypeBN254,
-	}
-	require.NoError(t, store.SaveAVSConfig(ctx, "0xavs1", avsConfig))
-
 	// Simulate "crash" by creating new aggregator with same store
 	// Note: In real usage, aggregator would be created with all dependencies
 	// Here we're just verifying that storage preserved the state correctly
@@ -97,16 +78,6 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	recoveredTask1, err := store.GetTask(ctx, "task-1")
 	require.NoError(t, err)
 	assert.Equal(t, "task-1", recoveredTask1.TaskId)
-
-	recoveredOpConfig, err := store.GetOperatorSetConfig(ctx, "0xavs1", 1)
-	require.NoError(t, err)
-	assert.Equal(t, int64(3600), recoveredOpConfig.TaskSLA)
-	assert.Equal(t, config.CurveTypeBN254, recoveredOpConfig.CurveType)
-
-	recoveredAvsConfig, err := store.GetAVSConfig(ctx, "0xavs1")
-	require.NoError(t, err)
-	assert.Equal(t, uint32(1), recoveredAvsConfig.AggregatorOperatorSetId)
-	assert.Len(t, recoveredAvsConfig.ExecutorOperatorSetIds, 3)
 }
 
 func TestAggregatorTaskFlowWithPersistence(t *testing.T) {
@@ -251,51 +222,4 @@ func TestChainPollerRecovery(t *testing.T) {
 	block, err := store.GetLastProcessedBlock(ctx, avsAddress, nonExistentChain)
 	assert.ErrorIs(t, err, storage.ErrNotFound)
 	assert.Equal(t, uint64(0), block)
-}
-
-func TestOperatorSetConfigPersistence(t *testing.T) {
-	ctx := context.Background()
-	store := memory.NewInMemoryAggregatorStore()
-
-	// Test multiple operator sets for same AVS
-	avsAddress := "0xavs-multi"
-	for i := uint32(0); i < 5; i++ {
-		config := &storage.OperatorSetTaskConfig{
-			TaskSLA:      int64(3600 + i*100),
-			CurveType:    config.CurveTypeBN254,
-			TaskMetadata: []byte(fmt.Sprintf("metadata-%d", i)),
-			Consensus: storage.OperatorSetTaskConsensus{
-				ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-				Threshold:     uint16(6700 + i*100),
-			},
-		}
-		require.NoError(t, store.SaveOperatorSetConfig(ctx, avsAddress, i, config))
-	}
-
-	// Verify all configs
-	for i := uint32(0); i < 5; i++ {
-		config, err := store.GetOperatorSetConfig(ctx, avsAddress, i)
-		require.NoError(t, err)
-		assert.Equal(t, int64(3600+i*100), config.TaskSLA)
-		assert.Equal(t, uint16(6700+i*100), config.Consensus.Threshold)
-	}
-
-	// Test update existing config
-	updatedConfig := &storage.OperatorSetTaskConfig{
-		TaskSLA:      7200,
-		CurveType:    config.CurveTypeECDSA,
-		TaskMetadata: []byte("updated metadata"),
-		Consensus: storage.OperatorSetTaskConsensus{
-			ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-			Threshold:     7500,
-		},
-	}
-	require.NoError(t, store.SaveOperatorSetConfig(ctx, avsAddress, 0, updatedConfig))
-
-	// Verify update
-	config, err := store.GetOperatorSetConfig(ctx, avsAddress, 0)
-	require.NoError(t, err)
-	assert.Equal(t, int64(7200), config.TaskSLA)
-	assert.Equal(t, storage.ConsensusTypeStakeProportionThreshold, config.Consensus.ConsensusType)
-	assert.Equal(t, uint16(7500), config.Consensus.Threshold)
 }

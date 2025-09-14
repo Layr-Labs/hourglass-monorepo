@@ -20,7 +20,6 @@ type TestSuite struct {
 func (s *TestSuite) Run(t *testing.T) {
 	t.Run("ChainPollingState", s.testChainPollingState)
 	t.Run("TaskManagement", s.testTaskManagement)
-	t.Run("ConfigCaching", s.testConfigCaching)
 	t.Run("Lifecycle", s.testLifecycle)
 	t.Run("ConcurrentAccess", s.testConcurrentAccess)
 }
@@ -210,64 +209,6 @@ func (s *TestSuite) testTaskManagement(t *testing.T) {
 	// Test deleting non-existent task
 	err = store.DeleteTask(ctx, "non-existent")
 	assert.ErrorIs(t, err, ErrNotFound)
-}
-
-func (s *TestSuite) testConfigCaching(t *testing.T) {
-	store, err := s.NewStore()
-	require.NoError(t, err)
-	defer store.Close()
-
-	ctx := context.Background()
-
-	// Test OperatorSetConfig
-	avsAddress := "0xavs123"
-	operatorSetId := uint32(1)
-	opsetConfig := &OperatorSetTaskConfig{
-		TaskSLA:      3600,
-		CurveType:    config.CurveTypeBN254,
-		TaskMetadata: []byte("metadata"),
-		Consensus: OperatorSetTaskConsensus{
-			ConsensusType: ConsensusTypeStakeProportionThreshold,
-			Threshold:     6666,
-		},
-	}
-
-	// Test getting non-existent config
-	_, err = store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
-	assert.ErrorIs(t, err, ErrNotFound)
-
-	// Test saving and getting config
-	err = store.SaveOperatorSetConfig(ctx, avsAddress, operatorSetId, opsetConfig)
-	require.NoError(t, err)
-
-	retrieved, err := store.GetOperatorSetConfig(ctx, avsAddress, operatorSetId)
-	require.NoError(t, err)
-	assert.Equal(t, opsetConfig.TaskSLA, retrieved.TaskSLA)
-	assert.Equal(t, opsetConfig.CurveType, retrieved.CurveType)
-	assert.Equal(t, opsetConfig.TaskMetadata, retrieved.TaskMetadata)
-	assert.Equal(t, opsetConfig.Consensus.ConsensusType, retrieved.Consensus.ConsensusType)
-	assert.Equal(t, opsetConfig.Consensus.Threshold, retrieved.Consensus.Threshold)
-
-	// Test AVSConfig
-	avsConfig := &AvsConfig{
-		AggregatorOperatorSetId: 1,
-		ExecutorOperatorSetIds:  []uint32{2, 3, 4},
-		CurveType:               config.CurveTypeECDSA,
-	}
-
-	// Test getting non-existent AVS config
-	_, err = store.GetAVSConfig(ctx, avsAddress)
-	assert.ErrorIs(t, err, ErrNotFound)
-
-	// Test saving and getting AVS config
-	err = store.SaveAVSConfig(ctx, avsAddress, avsConfig)
-	require.NoError(t, err)
-
-	retrievedAVS, err := store.GetAVSConfig(ctx, avsAddress)
-	require.NoError(t, err)
-	assert.Equal(t, avsConfig.AggregatorOperatorSetId, retrievedAVS.AggregatorOperatorSetId)
-	assert.Equal(t, avsConfig.ExecutorOperatorSetIds, retrievedAVS.ExecutorOperatorSetIds)
-	assert.Equal(t, avsConfig.CurveType, retrievedAVS.CurveType)
 }
 
 func (s *TestSuite) testLifecycle(t *testing.T) {

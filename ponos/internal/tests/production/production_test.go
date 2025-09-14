@@ -342,7 +342,6 @@ func TestProductionScale(t *testing.T) {
 	// Production scale parameters
 	numChains := 3
 	numTasksPerChain := 100000
-	numOperatorSets := 10
 
 	t.Logf("Testing with %d chains, %d tasks per chain", numChains, numTasksPerChain)
 
@@ -373,19 +372,6 @@ func TestProductionScale(t *testing.T) {
 			}
 			require.NoError(t, store.SavePendingTask(ctx, task))
 		}
-	}
-
-	// Create operator configs
-	for i := 0; i < numOperatorSets; i++ {
-		opSetConfig := &storage.OperatorSetTaskConfig{
-			TaskSLA:   3600,
-			CurveType: config.CurveTypeBN254,
-			Consensus: storage.OperatorSetTaskConsensus{
-				ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-				Threshold:     6600,
-			},
-		}
-		require.NoError(t, store.SaveOperatorSetConfig(ctx, "0xavs1", uint32(i), opSetConfig))
 	}
 
 	// Test query performance at scale
