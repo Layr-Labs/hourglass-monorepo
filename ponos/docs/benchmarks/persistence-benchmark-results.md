@@ -26,12 +26,6 @@ This document summarizes the performance characteristics of the in-memory storag
 |-----------|-----------------|----------|-------------------|
 | SetLastProcessedBlock | 9.077 ns/op (0 B/op, 0 allocs) | 117.0 ns/op (48 B/op, 4 allocs) | **+92.2% faster** |
 
-### Config Operations
-
-| Operation | In-Memory Store | sync.Map | Performance Delta |
-|-----------|-----------------|----------|-------------------|
-| SaveOperatorSetConfig | 235.8 ns/op (136 B/op, 7 allocs) | 277.9 ns/op (176 B/op, 9 allocs) | **+15.1% faster** |
-
 ### Executor Operations
 
 | Operation | In-Memory Store |

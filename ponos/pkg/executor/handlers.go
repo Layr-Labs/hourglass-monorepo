@@ -89,25 +89,6 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		}, status.Error(codes.Internal, err.Error())
 	}
 
-	// Create deployment record in storage
-	deploymentId := fmt.Sprintf("deployment-%s-%d", avsAddress, time.Now().UnixNano())
-	deploymentInfo := &storage.DeploymentInfo{
-		DeploymentId:     deploymentId,
-		AvsAddress:       avsAddress,
-		ArtifactRegistry: req.GetRegistryUrl(),
-		ArtifactDigest:   req.GetDigest(),
-		Status:           storage.DeploymentStatusPending,
-		StartedAt:        time.Now(),
-		CompletedAt:      nil,
-		Error:            "",
-	}
-	if err := e.store.SaveDeployment(ctx, deploymentId, deploymentInfo); err != nil {
-		e.logger.Sugar().Warnw("Failed to save deployment to storage",
-			"error", err,
-			"deploymentId", deploymentId,
-		)
-	}
-
 	// Deploy using the performer's Deploy method
 	image := avsPerformer.PerformerImage{
 		Repository: req.GetRegistryUrl(),
@@ -150,24 +131,8 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		image.ServiceAccountName = req.GetKubernetes().GetServiceAccountName()
 	}
 
-	// Update deployment status to deploying
-	if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusDeploying); err != nil {
-		e.logger.Sugar().Warnw("Failed to update deployment status",
-			"error", err,
-			"deploymentId", deploymentId,
-		)
-	}
-
 	result, err := performer.Deploy(ctx, image)
 	if err != nil {
-		// Update deployment status to failed
-		if updateErr := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusFailed); updateErr != nil {
-			e.logger.Sugar().Warnw("Failed to update deployment status to failed",
-				"error", updateErr,
-				"deploymentId", deploymentId,
-			)
-		}
-
 		// Check for specific error types to return appropriate gRPC status codes
 		if strings.Contains(err.Error(), "deployment already in progress") {
 			return &executorV1.DeployArtifactResponse{
@@ -203,14 +168,6 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		zap.String("performerId", result.PerformerID),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
-
-	// Update deployment status to running and save performer state
-	if err := e.store.UpdateDeploymentStatus(ctx, deploymentId, storage.DeploymentStatusRunning); err != nil {
-		e.logger.Sugar().Warnw("Failed to update deployment status to running",
-			"error", err,
-			"deploymentId", deploymentId,
-		)
-	}
 
 	// Save performer state
 	performerState := &storage.PerformerState{
@@ -310,25 +267,23 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		"aggregatorAddress", task.AggregatorAddress,
 	)
 
-	// Check if task has already been processed
+	avsAddress := strings.ToLower(task.GetAvsAddress())
+	if avsAddress == "" {
+		return nil, fmt.Errorf("AVS address is empty")
+	}
+
 	processed, err := e.store.IsTaskProcessed(ctx, task.TaskId)
 	if err != nil {
 		e.logger.Sugar().Warnw("Failed to check if task is processed",
 			"taskId", task.TaskId,
 			"error", err,
 		)
-		// Continue processing even if check fails
 	} else if processed {
 		e.logger.Sugar().Warnw("Task already processed, skipping",
 			"taskId", task.TaskId,
-			"avsAddress", task.AvsAddress,
+			"avsAddress", avsAddress,
 		)
 		return nil, fmt.Errorf("task %s already processed", task.TaskId)
-	}
-
-	avsAddress := strings.ToLower(task.GetAvsAddress())
-	if avsAddress == "" {
-		return nil, fmt.Errorf("AVS address is empty")
 	}
 
 	if task.ExecutorAddress == "" {
@@ -344,12 +299,10 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 			e.config.Operator.Address, task.ExecutorAddress)
 	}
 
-	// Validate operator is in the operator set
 	if err := e.validateOperatorInSet(task); err != nil {
 		return nil, err
 	}
 
-	// Validate task signature
 	if err := e.validateTaskSignature(task); err != nil {
 		e.logger.Sugar().Errorw("Task signature validation failed",
 			"taskId", task.TaskId,
@@ -366,34 +319,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 
 	pt := performerTask.NewPerformerTaskFromTaskSubmissionProto(task)
 	e.inflightTasks.Store(task.TaskId, task)
-
-	// Save inflight task to storage
-	taskInfo := &storage.TaskInfo{
-		TaskId:            task.TaskId,
-		AvsAddress:        avsAddress,
-		OperatorAddress:   e.config.Operator.Address,
-		ReceivedAt:        time.Now(),
-		Status:            "processing",
-		AggregatorAddress: task.GetAggregatorAddress(),
-		OperatorSetId:     task.OperatorSetId,
-	}
-	if err := e.store.SaveInflightTask(ctx, task.TaskId, taskInfo); err != nil {
-		e.logger.Sugar().Warnw("Failed to save inflight task to storage",
-			"error", err,
-			"taskId", task.TaskId,
-		)
-	}
-
-	// Cleanup inflight task and delete from storage irrespective of the result of the task.
-	defer func() {
-		e.inflightTasks.Delete(task.TaskId)
-		if err := e.store.DeleteInflightTask(context.Background(), task.TaskId); err != nil {
-			e.logger.Sugar().Warnw("Failed to delete inflight task from storage",
-				"error", err,
-				"taskId", task.TaskId,
-			)
-		}
-	}()
+	defer e.inflightTasks.Delete(task.TaskId)
 
 	response, err := avsPerf.RunTask(ctx, pt)
 
@@ -434,13 +360,11 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		Version:         1,
 	}
 
-	// Mark task as processed
 	if err := e.store.MarkTaskProcessed(ctx, task.TaskId); err != nil {
 		e.logger.Sugar().Warnw("Failed to mark task as processed",
 			"taskId", task.TaskId,
 			"error", err,
 		)
-		// Don't fail the task, just log the error
 	}
 
 	return result, nil

@@ -364,14 +364,6 @@ func BenchmarkExecutorOperations(b *testing.B) {
 			b.Run("SavePerformerState", func(b *testing.B) {
 				benchmarkSavePerformerState(b, store)
 			})
-
-			b.Run("SaveInflightTask", func(b *testing.B) {
-				benchmarkSaveInflightTask(b, store)
-			})
-
-			b.Run("SaveDeployment", func(b *testing.B) {
-				benchmarkSaveDeployment(b, store)
-			})
 		})
 	}
 }
@@ -390,43 +382,6 @@ func benchmarkSavePerformerState(b *testing.B, store executorStorage.ExecutorSto
 			CreatedAt:   time.Now(),
 		}
 		if err := store.SavePerformerState(ctx, performerId, state); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func benchmarkSaveInflightTask(b *testing.B, store executorStorage.ExecutorStore) {
-	ctx := context.Background()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		taskId := fmt.Sprintf("inflight-task-%d", i)
-		task := &executorStorage.TaskInfo{
-			TaskId:          taskId,
-			AvsAddress:      "0xavs123",
-			OperatorAddress: fmt.Sprintf("operator-%d", i%10),
-			ReceivedAt:      time.Now(),
-		}
-		if err := store.SaveInflightTask(ctx, taskId, task); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func benchmarkSaveDeployment(b *testing.B, store executorStorage.ExecutorStore) {
-	ctx := context.Background()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		deploymentId := fmt.Sprintf("deployment-%d", i)
-		deployment := &executorStorage.DeploymentInfo{
-			DeploymentId:   deploymentId,
-			AvsAddress:     "0xavs123",
-			ArtifactDigest: fmt.Sprintf("sha256:abc%d", i),
-			Status:         executorStorage.DeploymentStatusRunning,
-			StartedAt:      time.Now(),
-		}
-		if err := store.SaveDeployment(ctx, deploymentId, deployment); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -27,13 +27,6 @@ type AggregatorStore interface {
 	UpdateTaskStatus(ctx context.Context, taskId string, status TaskStatus) error
 	DeleteTask(ctx context.Context, taskId string) error
 
-	// Config caching
-	SaveOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32, config *OperatorSetTaskConfig) error
-	GetOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32) (*OperatorSetTaskConfig, error)
-
-	SaveAVSConfig(ctx context.Context, avsAddress string, config *AvsConfig) error
-	GetAVSConfig(ctx context.Context, avsAddress string) (*AvsConfig, error)
-
 	// Lifecycle management
 	Close() error
 }

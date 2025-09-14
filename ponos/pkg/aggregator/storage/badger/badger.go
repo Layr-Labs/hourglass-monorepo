@@ -18,12 +18,10 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixChainBlock     = "lastblock:%s:%d" // avsAddress:chainId
-	prefixTask           = "task:%s"
-	prefixTaskByStatus   = "taskstatus:%s:%s" // status:taskId
-	prefixOperatorConfig = "opset:%s:%d"      // avsAddress:operatorSetId
-	prefixAVSConfig      = "avs:%s"           // avsAddress
-	prefixBlock          = "block:%s:%d:%d"   // avsAddress:chainId:blockNumber
+	prefixChainBlock   = "lastblock:%s:%d" // avsAddress:chainId
+	prefixTask         = "task:%s"
+	prefixTaskByStatus = "taskstatus:%s:%s" // status:taskId
+	prefixBlock        = "block:%s:%d:%d"   // avsAddress:chainId:blockNumber
 )
 
 // BadgerAggregatorStore implements the AggregatorStore interface using BadgerDB
@@ -446,138 +444,6 @@ func (s *BadgerAggregatorStore) DeleteTask(ctx context.Context, taskId string) e
 		statusKey := fmt.Sprintf(prefixTaskByStatus, record.Status, taskId)
 		return txn.Delete([]byte(statusKey))
 	})
-}
-
-// SaveOperatorSetConfig stores an operator set configuration
-func (s *BadgerAggregatorStore) SaveOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32, config *storage.OperatorSetTaskConfig) error {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return storage.ErrStoreClosed
-	}
-	s.mu.RUnlock()
-
-	if config == nil {
-		return errors.New("config is nil")
-	}
-
-	key := fmt.Sprintf(prefixOperatorConfig, avsAddress, operatorSetId)
-	value, err := json.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	err = s.db.Update(func(txn *badgerv3.Txn) error {
-		return txn.Set([]byte(key), value)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to save operator set config: %w", err)
-	}
-
-	return nil
-}
-
-// GetOperatorSetConfig retrieves an operator set configuration
-func (s *BadgerAggregatorStore) GetOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32) (*storage.OperatorSetTaskConfig, error) {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return nil, storage.ErrStoreClosed
-	}
-	s.mu.RUnlock()
-
-	var config storage.OperatorSetTaskConfig
-	key := fmt.Sprintf(prefixOperatorConfig, avsAddress, operatorSetId)
-
-	err := s.db.View(func(txn *badgerv3.Txn) error {
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if errors.Is(err, badgerv3.ErrKeyNotFound) {
-				return storage.ErrNotFound
-			}
-			return err
-		}
-
-		return item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &config)
-		})
-	})
-
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get operator set config: %w", err)
-	}
-
-	return &config, nil
-}
-
-// SaveAVSConfig stores an AVS configuration
-func (s *BadgerAggregatorStore) SaveAVSConfig(ctx context.Context, avsAddress string, config *storage.AvsConfig) error {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return storage.ErrStoreClosed
-	}
-	s.mu.RUnlock()
-
-	if config == nil {
-		return errors.New("config is nil")
-	}
-
-	key := fmt.Sprintf(prefixAVSConfig, avsAddress)
-	value, err := json.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	err = s.db.Update(func(txn *badgerv3.Txn) error {
-		return txn.Set([]byte(key), value)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to save avs config: %w", err)
-	}
-
-	return nil
-}
-
-// GetAVSConfig retrieves an AVS configuration
-func (s *BadgerAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress string) (*storage.AvsConfig, error) {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return nil, storage.ErrStoreClosed
-	}
-	s.mu.RUnlock()
-
-	var config storage.AvsConfig
-	key := fmt.Sprintf(prefixAVSConfig, avsAddress)
-
-	err := s.db.View(func(txn *badgerv3.Txn) error {
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if errors.Is(err, badgerv3.ErrKeyNotFound) {
-				return storage.ErrNotFound
-			}
-			return err
-		}
-
-		return item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &config)
-		})
-	})
-
-	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("failed to get avs config: %w", err)
-	}
-
-	return &config, nil
 }
 
 // SaveBlock saves block information for reorg detection

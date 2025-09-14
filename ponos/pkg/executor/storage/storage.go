@@ -13,17 +13,6 @@ type ExecutorStore interface {
 	ListPerformerStates(ctx context.Context) ([]*PerformerState, error)
 	DeletePerformerState(ctx context.Context, performerId string) error
 
-	// Task tracking
-	SaveInflightTask(ctx context.Context, taskId string, task *TaskInfo) error
-	GetInflightTask(ctx context.Context, taskId string) (*TaskInfo, error)
-	ListInflightTasks(ctx context.Context) ([]*TaskInfo, error)
-	DeleteInflightTask(ctx context.Context, taskId string) error
-
-	// Deployment tracking
-	SaveDeployment(ctx context.Context, deploymentId string, deployment *DeploymentInfo) error
-	GetDeployment(ctx context.Context, deploymentId string) (*DeploymentInfo, error)
-	UpdateDeploymentStatus(ctx context.Context, deploymentId string, status DeploymentStatus) error
-
 	// Processed task tracking - prevents duplicate task processing
 	MarkTaskProcessed(ctx context.Context, taskId string) error
 	IsTaskProcessed(ctx context.Context, taskId string) (bool, error)

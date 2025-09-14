@@ -20,20 +20,6 @@ func TestInMemoryExecutorStore(t *testing.T) {
 	suite.Run(t)
 }
 
-// TestInMemorySpecific tests in-memory specific behavior
-func TestInMemorySpecific(t *testing.T) {
-	t.Run("MultipleInstances", func(t *testing.T) {
-		// Test that multiple instances don't share state
-		store1 := memory.NewInMemoryExecutorStore()
-		store2 := memory.NewInMemoryExecutorStore()
-
-		// Both should have independent state
-		if store1 == store2 {
-			t.Fatal("NewInMemoryExecutorStore should create independent instances")
-		}
-	})
-}
-
 // TestMemoryPassThroughBehavior verifies that memory storage doesn't track processed tasks
 // to avoid unbounded memory growth
 func TestMemoryPassThroughBehavior(t *testing.T) {
@@ -111,4 +97,18 @@ func TestMemoryStoreAfterClose(t *testing.T) {
 	_, err = store.IsTaskProcessed(ctx, "task-1")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "storage is closed")
+}
+
+// TestInMemorySpecific tests in-memory specific behavior
+func TestInMemorySpecific(t *testing.T) {
+	t.Run("MultipleInstances", func(t *testing.T) {
+		// Test that multiple instances don't share state
+		store1 := memory.NewInMemoryExecutorStore()
+		store2 := memory.NewInMemoryExecutorStore()
+
+		// Both should have independent state
+		if store1 == store2 {
+			t.Fatal("NewInMemoryExecutorStore should create independent instances")
+		}
+	})
 }

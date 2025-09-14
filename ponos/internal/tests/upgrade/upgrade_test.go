@@ -284,23 +284,6 @@ func TestBackwardCompatibility(t *testing.T) {
 	}
 	require.NoError(t, store.SavePendingTask(ctx, task))
 
-	opConfig := &storage.OperatorSetTaskConfig{
-		TaskSLA:   3600,
-		CurveType: config.CurveTypeBN254,
-		Consensus: storage.OperatorSetTaskConsensus{
-			ConsensusType: storage.ConsensusTypeStakeProportionThreshold,
-			Threshold:     6600, // 66%
-		},
-	}
-	require.NoError(t, store.SaveOperatorSetConfig(ctx, "0x123", 1, opConfig))
-
-	avsConfig := &storage.AvsConfig{
-		AggregatorOperatorSetId: 1,
-		ExecutorOperatorSetIds:  []uint32{1, 2},
-		CurveType:               config.CurveTypeBN254,
-	}
-	require.NoError(t, store.SaveAVSConfig(ctx, "0x123", avsConfig))
-
 	store.Close()
 
 	// Reopen and verify data integrity
@@ -319,14 +302,6 @@ func TestBackwardCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, task.TaskId, loadedTask.TaskId)
 	require.Equal(t, task.Payload, loadedTask.Payload)
-
-	loadedOpConfig, err := store2.GetOperatorSetConfig(ctx, "0x123", 1)
-	require.NoError(t, err)
-	require.Equal(t, opConfig.TaskSLA, loadedOpConfig.TaskSLA)
-
-	loadedAvsConfig, err := store2.GetAVSConfig(ctx, "0x123")
-	require.NoError(t, err)
-	require.Equal(t, avsConfig.AggregatorOperatorSetId, loadedAvsConfig.AggregatorOperatorSetId)
 }
 
 // TestUpgradeUnderLoad simulates upgrading while system is under load

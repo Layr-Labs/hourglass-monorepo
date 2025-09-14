@@ -343,33 +343,6 @@ Aggregates operator responses based on consensus rules.
 
 ## Storage Layer
 
-### Storage Manager
-
-Provides unified interface to different storage backends.
-
-**Storage Abstraction:**
-```go
-type AggregatorStore interface {
-    // Chain state
-    GetLastProcessedBlock(chainId ChainId) (uint64, error)
-    SetLastProcessedBlock(chainId ChainId, block uint64) error
-    
-    // Task management
-    SaveTask(task *Task) error
-    GetTask(taskId string) (*Task, error)
-    ListPendingTasks() ([]*Task, error)
-    UpdateTaskStatus(taskId string, status TaskStatus) error
-    
-    // Response tracking
-    SaveResponse(taskId string, response *Response) error
-    GetResponses(taskId string) ([]*Response, error)
-    
-    // Configuration cache
-    SaveOperatorSetConfig(avsAddress string, config *OperatorSetConfig) error
-    GetOperatorSetConfig(avsAddress string) (*OperatorSetConfig, error)
-}
-```
-
 ### Storage Backends
 
 **Memory Store:**

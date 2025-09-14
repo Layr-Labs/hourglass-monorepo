@@ -198,76 +198,6 @@ func (s *InMemoryAggregatorStore) DeleteTask(ctx context.Context, taskId string)
 	return nil
 }
 
-// SaveOperatorSetConfig saves operator set configuration
-func (s *InMemoryAggregatorStore) SaveOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32, config *storage.OperatorSetTaskConfig) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return storage.ErrStoreClosed
-	}
-
-	if config == nil {
-		return fmt.Errorf("config cannot be nil")
-	}
-
-	key := makeOperatorSetKey(avsAddress, operatorSetId)
-	s.operatorSetConfigs[key] = config
-	return nil
-}
-
-// GetOperatorSetConfig retrieves operator set configuration
-func (s *InMemoryAggregatorStore) GetOperatorSetConfig(ctx context.Context, avsAddress string, operatorSetId uint32) (*storage.OperatorSetTaskConfig, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.closed {
-		return nil, storage.ErrStoreClosed
-	}
-
-	key := makeOperatorSetKey(avsAddress, operatorSetId)
-	config, exists := s.operatorSetConfigs[key]
-	if !exists {
-		return nil, storage.ErrNotFound
-	}
-
-	return config, nil
-}
-
-// SaveAVSConfig saves AVS configuration
-func (s *InMemoryAggregatorStore) SaveAVSConfig(ctx context.Context, avsAddress string, config *storage.AvsConfig) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return storage.ErrStoreClosed
-	}
-
-	if config == nil {
-		return fmt.Errorf("config cannot be nil")
-	}
-
-	s.avsConfigs[avsAddress] = config
-	return nil
-}
-
-// GetAVSConfig retrieves AVS configuration
-func (s *InMemoryAggregatorStore) GetAVSConfig(ctx context.Context, avsAddress string) (*storage.AvsConfig, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.closed {
-		return nil, storage.ErrStoreClosed
-	}
-
-	config, exists := s.avsConfigs[avsAddress]
-	if !exists {
-		return nil, storage.ErrNotFound
-	}
-
-	return config, nil
-}
-
 // SaveBlock saves block information for reorg detection
 func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress string, block *storage.BlockRecord) error {
 	s.mu.Lock()
@@ -341,12 +271,6 @@ func (s *InMemoryAggregatorStore) Close() error {
 	s.blocks = nil
 
 	return nil
-}
-
-// Helper functions
-
-func makeOperatorSetKey(avsAddress string, operatorSetId uint32) string {
-	return fmt.Sprintf("%s:%d", avsAddress, operatorSetId)
 }
 
 func validateTaskStatusTransition(from, to storage.TaskStatus) error {

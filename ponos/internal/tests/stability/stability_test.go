@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"runtime"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/aggregatorConfig"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
@@ -288,7 +287,6 @@ func simulateExecutor(ctx context.Context, t *testing.T, store executorStorage.E
 	blockProcessed int64
 }) {
 	performerCounter := 0
-	deploymentCounter := 0
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -315,49 +313,6 @@ func simulateExecutor(ctx context.Context, t *testing.T, store executorStorage.E
 				if err != nil {
 					t.Logf("Error saving performer: %v", err)
 					atomic.AddInt64(&stats.errors, 1)
-				}
-
-				// Create deployment
-				deploymentId := fmt.Sprintf("deploy-%d", deploymentCounter)
-				deployment := &executorStorage.DeploymentInfo{
-					DeploymentId:   deploymentId,
-					AvsAddress:     state.AvsAddress,
-					ArtifactDigest: "sha256:abc123",
-					Status:         executorStorage.DeploymentStatusRunning,
-					StartedAt:      time.Now(),
-				}
-				deploymentCounter++
-
-				err = store.SaveDeployment(ctx, deployment.DeploymentId, deployment)
-				if err != nil {
-					t.Logf("Error saving deployment: %v", err)
-					atomic.AddInt64(&stats.errors, 1)
-				}
-			}
-
-			// Simulate task execution
-			if rand.Intn(10) < 5 { // 50% chance
-				taskId := fmt.Sprintf("exec-task-%d", rand.Intn(1000))
-				task := &executorStorage.TaskInfo{
-					TaskId:          taskId,
-					AvsAddress:      "0xavs123",
-					OperatorAddress: fmt.Sprintf("operator-%d", rand.Intn(performerCounter+1)),
-					ReceivedAt:      time.Now(),
-				}
-
-				err := store.SaveInflightTask(ctx, taskId, task)
-				if err != nil {
-					t.Logf("Error saving inflight task: %v", err)
-					atomic.AddInt64(&stats.errors, 1)
-				}
-
-				// Complete task
-				if rand.Intn(10) < 9 { // 90% completion rate
-					err = store.DeleteInflightTask(ctx, taskId)
-					if err != nil {
-						t.Logf("Error deleting inflight task: %v", err)
-						atomic.AddInt64(&stats.errors, 1)
-					}
 				}
 			}
 		}

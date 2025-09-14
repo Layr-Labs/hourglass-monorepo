@@ -18,10 +18,8 @@ type TestSuite struct {
 // Run executes all storage interface compliance tests
 func (s *TestSuite) Run(t *testing.T) {
 	t.Run("PerformerState", s.testPerformerState)
-	t.Run("TaskTracking", s.testTaskTracking)
-	t.Run("ProcessedTasks", s.testProcessedTasks)
-	t.Run("DeploymentTracking", s.testDeploymentTracking)
 	t.Run("Lifecycle", s.testLifecycle)
+	t.Run("ProcessedTasks", s.testProcessedTasks)
 	t.Run("ConcurrentAccess", s.testConcurrentAccess)
 }
 
@@ -91,62 +89,32 @@ func (s *TestSuite) testPerformerState(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-func (s *TestSuite) testTaskTracking(t *testing.T) {
+func (s *TestSuite) testLifecycle(t *testing.T) {
 	store, err := s.NewStore()
 	require.NoError(t, err)
-	defer store.Close()
 
 	ctx := context.Background()
 
-	taskInfo := &TaskInfo{
-		TaskId:            "task-123",
-		AvsAddress:        "0xavs123",
-		OperatorAddress:   "0xoperator123",
-		ReceivedAt:        time.Now(),
-		Status:            "processing",
-		AggregatorAddress: "0xaggregator123",
-		OperatorSetId:     1,
+	// Add some data
+	performerState := &PerformerState{
+		PerformerId: "test-performer",
+		AvsAddress:  "0xavs123",
+		Status:      "running",
+		CreatedAt:   time.Now(),
 	}
-
-	// Test getting non-existent task
-	_, err = store.GetInflightTask(ctx, taskInfo.TaskId)
-	assert.ErrorIs(t, err, ErrNotFound)
-
-	// Test saving and getting inflight task
-	err = store.SaveInflightTask(ctx, taskInfo.TaskId, taskInfo)
+	err = store.SavePerformerState(ctx, performerState.PerformerId, performerState)
 	require.NoError(t, err)
 
-	retrieved, err := store.GetInflightTask(ctx, taskInfo.TaskId)
-	require.NoError(t, err)
-	assert.Equal(t, taskInfo.TaskId, retrieved.TaskId)
-	assert.Equal(t, taskInfo.AvsAddress, retrieved.AvsAddress)
-	assert.Equal(t, taskInfo.Status, retrieved.Status)
-
-	// Test listing inflight tasks
-	tasks, err := store.ListInflightTasks(ctx)
-	require.NoError(t, err)
-	assert.Len(t, tasks, 1)
-	assert.Equal(t, taskInfo.TaskId, tasks[0].TaskId)
-
-	// Test updating task
-	taskInfo.Status = "completed"
-	err = store.SaveInflightTask(ctx, taskInfo.TaskId, taskInfo)
+	// Close the store
+	err = store.Close()
 	require.NoError(t, err)
 
-	retrieved, err = store.GetInflightTask(ctx, taskInfo.TaskId)
-	require.NoError(t, err)
-	assert.Equal(t, "completed", retrieved.Status)
+	// Operations after close should fail
+	err = store.SavePerformerState(ctx, "new-performer", performerState)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 
-	// Test deleting task
-	err = store.DeleteInflightTask(ctx, taskInfo.TaskId)
-	require.NoError(t, err)
-
-	_, err = store.GetInflightTask(ctx, taskInfo.TaskId)
-	assert.ErrorIs(t, err, ErrNotFound)
-
-	// Test deleting non-existent task
-	err = store.DeleteInflightTask(ctx, "non-existent")
-	assert.ErrorIs(t, err, ErrNotFound)
+	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
+	assert.ErrorIs(t, err, ErrStoreClosed)
 }
 
 func (s *TestSuite) testProcessedTasks(t *testing.T) {
@@ -175,88 +143,6 @@ func (s *TestSuite) testProcessedTasks(t *testing.T) {
 	// Test empty task ID validation
 	err = store.MarkTaskProcessed(ctx, "")
 	assert.Error(t, err, "empty task ID should return error")
-}
-
-func (s *TestSuite) testDeploymentTracking(t *testing.T) {
-	store, err := s.NewStore()
-	require.NoError(t, err)
-	defer store.Close()
-
-	ctx := context.Background()
-
-	deploymentInfo := &DeploymentInfo{
-		DeploymentId:     "deploy-123",
-		AvsAddress:       "0xavs123",
-		ArtifactRegistry: "registry.io/avs",
-		ArtifactDigest:   "sha256:abcdef",
-		Status:           DeploymentStatusPending,
-		StartedAt:        time.Now(),
-		CompletedAt:      nil,
-		Error:            "",
-	}
-
-	// Test getting non-existent deployment
-	_, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
-	assert.ErrorIs(t, err, ErrNotFound)
-
-	// Test saving and getting deployment
-	err = store.SaveDeployment(ctx, deploymentInfo.DeploymentId, deploymentInfo)
-	require.NoError(t, err)
-
-	retrieved, err := store.GetDeployment(ctx, deploymentInfo.DeploymentId)
-	require.NoError(t, err)
-	assert.Equal(t, deploymentInfo.DeploymentId, retrieved.DeploymentId)
-	assert.Equal(t, deploymentInfo.AvsAddress, retrieved.AvsAddress)
-	assert.Equal(t, deploymentInfo.Status, retrieved.Status)
-
-	// Test updating deployment status
-	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, DeploymentStatusDeploying)
-	require.NoError(t, err)
-
-	retrieved, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
-	require.NoError(t, err)
-	assert.Equal(t, DeploymentStatusDeploying, retrieved.Status)
-
-	// Test updating to completed
-	err = store.UpdateDeploymentStatus(ctx, deploymentInfo.DeploymentId, DeploymentStatusRunning)
-	require.NoError(t, err)
-
-	retrieved, err = store.GetDeployment(ctx, deploymentInfo.DeploymentId)
-	require.NoError(t, err)
-	assert.Equal(t, DeploymentStatusRunning, retrieved.Status)
-	assert.NotNil(t, retrieved.CompletedAt)
-
-	// Test updating non-existent deployment
-	err = store.UpdateDeploymentStatus(ctx, "non-existent", DeploymentStatusFailed)
-	assert.ErrorIs(t, err, ErrNotFound)
-}
-
-func (s *TestSuite) testLifecycle(t *testing.T) {
-	store, err := s.NewStore()
-	require.NoError(t, err)
-
-	ctx := context.Background()
-
-	// Add some data
-	performerState := &PerformerState{
-		PerformerId: "test-performer",
-		AvsAddress:  "0xavs123",
-		Status:      "running",
-		CreatedAt:   time.Now(),
-	}
-	err = store.SavePerformerState(ctx, performerState.PerformerId, performerState)
-	require.NoError(t, err)
-
-	// Close the store
-	err = store.Close()
-	require.NoError(t, err)
-
-	// Operations after close should fail
-	err = store.SavePerformerState(ctx, "new-performer", performerState)
-	assert.ErrorIs(t, err, ErrStoreClosed)
-
-	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
-	assert.ErrorIs(t, err, ErrStoreClosed)
 }
 
 func (s *TestSuite) testConcurrentAccess(t *testing.T) {
