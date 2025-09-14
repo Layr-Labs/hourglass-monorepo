@@ -272,6 +272,20 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		return nil, fmt.Errorf("AVS address is empty")
 	}
 
+	processed, err := e.store.IsTaskProcessed(ctx, task.TaskId)
+	if err != nil {
+		e.logger.Sugar().Warnw("Failed to check if task is processed",
+			"taskId", task.TaskId,
+			"error", err,
+		)
+	} else if processed {
+		e.logger.Sugar().Warnw("Task already processed, skipping",
+			"taskId", task.TaskId,
+			"avsAddress", avsAddress,
+		)
+		return nil, fmt.Errorf("task %s already processed", task.TaskId)
+	}
+
 	if task.ExecutorAddress == "" {
 		return nil, fmt.Errorf("executor address is empty")
 	}
@@ -285,12 +299,10 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 			e.config.Operator.Address, task.ExecutorAddress)
 	}
 
-	// Validate operator is in the operator set
 	if err := e.validateOperatorInSet(task); err != nil {
 		return nil, err
 	}
 
-	// Validate task signature
 	if err := e.validateTaskSignature(task); err != nil {
 		e.logger.Sugar().Errorw("Task signature validation failed",
 			"taskId", task.TaskId,
@@ -346,6 +358,13 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		AuthSignature:   authSig,
 		AvsAddress:      avsAddress,
 		Version:         1,
+	}
+
+	if err := e.store.MarkTaskProcessed(ctx, task.TaskId); err != nil {
+		e.logger.Sugar().Warnw("Failed to mark task as processed",
+			"taskId", task.TaskId,
+			"error", err,
+		)
 	}
 
 	return result, nil

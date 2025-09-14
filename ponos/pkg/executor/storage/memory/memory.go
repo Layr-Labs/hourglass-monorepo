@@ -106,6 +106,34 @@ func (s *InMemoryExecutorStore) DeletePerformerState(ctx context.Context, perfor
 	return nil
 }
 
+// MarkTaskProcessed is a no-op for in-memory storage to avoid unbounded growth
+func (s *InMemoryExecutorStore) MarkTaskProcessed(ctx context.Context, taskId string) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return storage.ErrStoreClosed
+	}
+
+	if taskId == "" {
+		return fmt.Errorf("task ID cannot be empty")
+	}
+
+	return nil
+}
+
+// IsTaskProcessed always returns false for in-memory storage to avoid unbounded growth
+func (s *InMemoryExecutorStore) IsTaskProcessed(ctx context.Context, taskId string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return false, storage.ErrStoreClosed
+	}
+
+	return false, nil
+}
+
 // Close closes the store
 func (s *InMemoryExecutorStore) Close() error {
 	s.mu.Lock()

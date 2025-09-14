@@ -19,6 +19,7 @@ type TestSuite struct {
 func (s *TestSuite) Run(t *testing.T) {
 	t.Run("PerformerState", s.testPerformerState)
 	t.Run("Lifecycle", s.testLifecycle)
+	t.Run("ProcessedTasks", s.testProcessedTasks)
 	t.Run("ConcurrentAccess", s.testConcurrentAccess)
 }
 
@@ -114,6 +115,34 @@ func (s *TestSuite) testLifecycle(t *testing.T) {
 
 	_, err = store.GetPerformerState(ctx, performerState.PerformerId)
 	assert.ErrorIs(t, err, ErrStoreClosed)
+}
+
+func (s *TestSuite) testProcessedTasks(t *testing.T) {
+	store, err := s.NewStore()
+	require.NoError(t, err)
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Test checking non-processed task
+	_, err = store.IsTaskProcessed(ctx, "task-123")
+	require.NoError(t, err)
+
+	// Test marking task as processed
+	err = store.MarkTaskProcessed(ctx, "task-123")
+	require.NoError(t, err)
+
+	// Test checking after marking
+	_, err = store.IsTaskProcessed(ctx, "task-123")
+	require.NoError(t, err)
+
+	// Test marking same task again (should be idempotent)
+	err = store.MarkTaskProcessed(ctx, "task-123")
+	require.NoError(t, err)
+
+	// Test empty task ID validation
+	err = store.MarkTaskProcessed(ctx, "")
+	assert.Error(t, err, "empty task ID should return error")
 }
 
 func (s *TestSuite) testConcurrentAccess(t *testing.T) {

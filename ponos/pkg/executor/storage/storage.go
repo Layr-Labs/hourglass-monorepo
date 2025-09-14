@@ -13,6 +13,10 @@ type ExecutorStore interface {
 	ListPerformerStates(ctx context.Context) ([]*PerformerState, error)
 	DeletePerformerState(ctx context.Context, performerId string) error
 
+	// Processed task tracking - prevents duplicate task processing
+	MarkTaskProcessed(ctx context.Context, taskId string) error
+	IsTaskProcessed(ctx context.Context, taskId string) (bool, error)
+
 	// Lifecycle management
 	Close() error
 }

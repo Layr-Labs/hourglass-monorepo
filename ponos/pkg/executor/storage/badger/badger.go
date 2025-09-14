@@ -231,6 +231,67 @@ func (s *BadgerExecutorStore) DeletePerformerState(ctx context.Context, performe
 	return nil
 }
 
+// MarkTaskProcessed marks a task as processed
+func (s *BadgerExecutorStore) MarkTaskProcessed(ctx context.Context, taskId string) error {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	if taskId == "" {
+		return fmt.Errorf("task ID cannot be empty")
+	}
+
+	key := fmt.Sprintf(prefixProcessed, taskId)
+	processedTask := &storage.ProcessedTask{
+		TaskId:      taskId,
+		ProcessedAt: time.Now(),
+	}
+
+	value, err := json.Marshal(processedTask)
+	if err != nil {
+		return fmt.Errorf("failed to marshal processed task: %w", err)
+	}
+
+	err = s.db.Update(func(txn *badgerv3.Txn) error {
+		return txn.Set([]byte(key), value)
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to mark task as processed: %w", err)
+	}
+
+	return nil
+}
+
+// IsTaskProcessed checks if a task has been processed
+func (s *BadgerExecutorStore) IsTaskProcessed(ctx context.Context, taskId string) (bool, error) {
+	s.mu.RLock()
+	if s.closed {
+		s.mu.RUnlock()
+		return false, storage.ErrStoreClosed
+	}
+	s.mu.RUnlock()
+
+	key := fmt.Sprintf(prefixProcessed, taskId)
+
+	err := s.db.View(func(txn *badgerv3.Txn) error {
+		_, err := txn.Get([]byte(key))
+		return err
+	})
+
+	if err != nil {
+		if errors.Is(err, badgerv3.ErrKeyNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check if task is processed: %w", err)
+	}
+
+	return true, nil
+}
+
 // Close shuts down the store
 func (s *BadgerExecutorStore) Close() error {
 	s.mu.Lock()
