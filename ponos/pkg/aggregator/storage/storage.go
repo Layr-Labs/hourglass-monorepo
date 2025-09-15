@@ -10,16 +10,12 @@ import (
 
 // AggregatorStore defines the interface for aggregator state persistence
 type AggregatorStore interface {
-	// Chain polling state management - namespaced by AVS address
-	GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error)
-	SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error
+	GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (*BlockRecord, error)
 
-	// Block history management for reorg detection
 	SaveBlock(ctx context.Context, avsAddress string, block *BlockRecord) error
 	GetBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) (*BlockRecord, error)
 	DeleteBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNumber uint64) error
 
-	// Task management
 	SavePendingTask(ctx context.Context, task *types.Task) error
 	GetTask(ctx context.Context, taskId string) (*types.Task, error)
 	ListPendingTasks(ctx context.Context) ([]*types.Task, error)
@@ -27,7 +23,6 @@ type AggregatorStore interface {
 	UpdateTaskStatus(ctx context.Context, taskId string, status TaskStatus) error
 	DeleteTask(ctx context.Context, taskId string) error
 
-	// Lifecycle management
 	Close() error
 }
 

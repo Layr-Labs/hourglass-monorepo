@@ -39,41 +39,33 @@ func makeBlockKey(avsAddress string, chainId config.ChainId) string {
 	return fmt.Sprintf("%s:%d", avsAddress, chainId)
 }
 
-// makeBlockInfoKey creates a composite key for block info storage
-func makeBlockInfoKey(avsAddress string, chainId config.ChainId, blockNumber uint64) string {
+// makeBlockRecordKey creates a composite key for block info storage
+func makeBlockRecordKey(avsAddress string, chainId config.ChainId, blockNumber uint64) string {
 	return fmt.Sprintf("block:%s:%d:%d", avsAddress, chainId, blockNumber)
 }
 
 // GetLastProcessedBlock returns the last processed block for a chain for a specific AVS
-func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error) {
+func (s *InMemoryAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (*storage.BlockRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.closed {
-		return 0, storage.ErrStoreClosed
+		return nil, storage.ErrStoreClosed
 	}
 
 	key := makeBlockKey(avsAddress, chainId)
 	blockNum, exists := s.lastProcessedBlocks[key]
 	if !exists {
-		return 0, storage.ErrNotFound
+		return nil, storage.ErrNotFound
 	}
 
-	return blockNum, nil
-}
-
-// SetLastProcessedBlock sets the last processed block for a chain for a specific AVS
-func (s *InMemoryAggregatorStore) SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.closed {
-		return storage.ErrStoreClosed
+	blockKey := makeBlockRecordKey(avsAddress, chainId, blockNum)
+	block, exists := s.blocks[blockKey]
+	if !exists {
+		return nil, storage.ErrNotFound
 	}
 
-	key := makeBlockKey(avsAddress, chainId)
-	s.lastProcessedBlocks[key] = blockNum
-	return nil
+	return block, nil
 }
 
 // SavePendingTask SaveTask saves a task to storage
@@ -211,8 +203,11 @@ func (s *InMemoryAggregatorStore) SaveBlock(ctx context.Context, avsAddress stri
 		return fmt.Errorf("block cannot be nil")
 	}
 
-	key := makeBlockInfoKey(avsAddress, block.ChainId, block.Number)
+	key := makeBlockRecordKey(avsAddress, block.ChainId, block.Number)
 	s.blocks[key] = block
+	key = makeBlockKey(avsAddress, block.ChainId)
+	s.lastProcessedBlocks[key] = block.Number
+
 	return nil
 }
 
@@ -225,7 +220,7 @@ func (s *InMemoryAggregatorStore) GetBlock(ctx context.Context, avsAddress strin
 		return nil, storage.ErrStoreClosed
 	}
 
-	key := makeBlockInfoKey(avsAddress, chainId, blockNumber)
+	key := makeBlockRecordKey(avsAddress, chainId, blockNumber)
 	block, exists := s.blocks[key]
 	if !exists {
 		return nil, storage.ErrNotFound
@@ -243,7 +238,7 @@ func (s *InMemoryAggregatorStore) DeleteBlock(ctx context.Context, avsAddress st
 		return storage.ErrStoreClosed
 	}
 
-	key := makeBlockInfoKey(avsAddress, chainId, blockNumber)
+	key := makeBlockRecordKey(avsAddress, chainId, blockNumber)
 	if _, exists := s.blocks[key]; !exists {
 		return storage.ErrNotFound
 	}

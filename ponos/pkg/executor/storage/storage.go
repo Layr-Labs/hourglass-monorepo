@@ -7,17 +7,14 @@ import (
 
 // ExecutorStore defines the interface for executor state persistence
 type ExecutorStore interface {
-	// Performer state management
 	SavePerformerState(ctx context.Context, performerId string, state *PerformerState) error
 	GetPerformerState(ctx context.Context, performerId string) (*PerformerState, error)
 	ListPerformerStates(ctx context.Context) ([]*PerformerState, error)
 	DeletePerformerState(ctx context.Context, performerId string) error
 
-	// Processed task tracking - prevents duplicate task processing
 	MarkTaskProcessed(ctx context.Context, taskId string) error
 	IsTaskProcessed(ctx context.Context, taskId string) (bool, error)
 
-	// Lifecycle management
 	Close() error
 }
 

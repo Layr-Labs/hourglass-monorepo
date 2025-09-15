@@ -31,14 +31,13 @@ type EVMChainPollerConfig struct {
 }
 
 type EVMChainPoller struct {
-	ethClient         ethereum.Client
-	lastObservedBlock *ethereum.EthereumBlock
-	taskQueue         chan *types.Task
-	logParser         transactionLogParser.LogParser
-	config            *EVMChainPollerConfig
-	contractStore     contractStore.IContractStore
-	logger            *zap.Logger
-	store             storage.AggregatorStore
+	ethClient     ethereum.Client
+	taskQueue     chan *types.Task
+	logParser     transactionLogParser.LogParser
+	config        *EVMChainPollerConfig
+	contractStore contractStore.IContractStore
+	logger        *zap.Logger
+	store         storage.AggregatorStore
 }
 
 func NewEVMChainPoller(
@@ -91,39 +90,36 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)
 
-	// Load last processed block from storage
-	lastBlock, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
-	if err != nil && !errors.Is(err, storage.ErrNotFound) {
-		ecp.logger.Sugar().Warnw("Failed to get last processed block from storage",
-			"error", err,
-			"chainId", ecp.config.ChainId,
-		)
+	lastBlockRecord, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
 
-	} else if err == nil && lastBlock > 0 {
-		ecp.logger.Sugar().Infow("Recovered last processed block from storage",
-			"blockNumber", lastBlock,
-			"chainId", ecp.config.ChainId,
-		)
-
-		lastStoredBlock, err := ecp.store.GetBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId, lastBlock)
+	if err != nil {
+		ecp.logger.Sugar().Infow("Poller could not get last processed block so using latest block")
+		block, err := ecp.ethClient.GetLatestBlock(ctx)
 		if err != nil {
-			ecp.logger.Sugar().Warnw("Failed to get last processed block from storage")
-			block, err := ecp.ethClient.GetBlockByNumber(ctx, lastBlock)
-			if err != nil {
-				return err
-			}
-			ecp.lastObservedBlock = block
+			return fmt.Errorf("error getting latest block: %w", err)
 		}
 
-		if lastStoredBlock != nil {
-			ecp.lastObservedBlock = &ethereum.EthereumBlock{
-				Number:     ethereum.EthereumQuantity(lastBlock),
-				Hash:       ethereum.EthereumHexString(lastStoredBlock.Hash),
-				ParentHash: ethereum.EthereumHexString(lastStoredBlock.ParentHash),
-				Timestamp:  ethereum.EthereumQuantity(lastStoredBlock.Timestamp),
-				ChainId:    lastStoredBlock.ChainId,
-			}
+		lastCanonBlock, err := ecp.ethClient.GetBlockByNumber(ctx, block)
+		if err != nil {
+			return fmt.Errorf("couldn't get last canonical block: %w", err)
 		}
+
+		lastBlockRecord = &storage.BlockRecord{
+			Number:     lastCanonBlock.Number.Value(),
+			Hash:       lastCanonBlock.Hash.Value(),
+			ParentHash: lastCanonBlock.ParentHash.Value(),
+			Timestamp:  lastCanonBlock.Timestamp.Value(),
+			ChainId:    ecp.config.ChainId,
+		}
+
+		err = ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, lastBlockRecord)
+		if err != nil {
+			return fmt.Errorf("failed to save last processed block: %w", err)
+		}
+	}
+
+	if lastBlockRecord == nil || lastBlockRecord.Number > 0 {
+		return fmt.Errorf("last processed block must exist")
 	}
 
 	if err := ecp.recoverInProgressTasks(ctx); err != nil {
@@ -163,84 +159,72 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
 func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 
-	latestBlockNum, err := ecp.ethClient.GetLatestBlock(ctx)
+	latestBlockRecord, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
 	if err != nil {
+		ecp.logger.Sugar().Errorw("Error getting last processed block", "error", err)
 		return nil
 	}
 
-	if ecp.lastObservedBlock == nil {
-
-		ecp.logger.Sugar().Infow("no lastObservedBlock set, initializing last observed block to latest - 1",
-			zap.Uint64("latestBlockNumber", latestBlockNum),
-			zap.Int("chainId", int(ecp.config.ChainId)),
-			zap.String("avsAddress", ecp.config.AvsAddress),
-		)
-		targetBlockNum := latestBlockNum - 1
-		lastestBlock, err := ecp.ethClient.GetBlockByNumber(ctx, targetBlockNum)
-		if err != nil {
-			return fmt.Errorf("could not get last observed block from ethClient: %w", err)
-		}
-		ecp.lastObservedBlock = lastestBlock
-
-	} else {
-		ecp.logger.Sugar().Debugw("latest on chain block",
-			zap.Uint64("blockNumber", latestBlockNum),
-			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
-		)
+	latestBlockNum, err := ecp.ethClient.GetLatestBlock(ctx)
+	if err != nil {
+		ecp.logger.Sugar().Errorw("Error getting latest block number", "error", err)
+		return nil
 	}
 
-	if ecp.lastObservedBlock.Number.Value() == latestBlockNum {
+	if latestBlockRecord.Number == latestBlockNum {
 		ecp.logger.Sugar().Debugw("Skipping block processing as the last observed block is the same as the latest block",
-			zap.Uint64("lastObservedBlock", ecp.lastObservedBlock.Number.Value()),
+			zap.Uint64("lastObservedBlock", latestBlockRecord.Number),
 			zap.Uint64("latestBlock", latestBlockNum),
 		)
 		return nil
 	}
 
 	var blocksToFetch []uint64
-	if latestBlockNum > ecp.lastObservedBlock.Number.Value() {
-		for i := ecp.lastObservedBlock.Number.Value() + 1; i <= latestBlockNum; i++ {
+	if latestBlockNum > latestBlockRecord.Number {
+		for i := latestBlockRecord.Number + 1; i <= latestBlockNum; i++ {
 			blocksToFetch = append(blocksToFetch, i)
 		}
 	}
+
 	ecp.logger.Sugar().Debugw("Fetching blocks with logs",
 		zap.Any("blocksToFetch", blocksToFetch),
 	)
 
 	for _, blockNum := range blocksToFetch {
 
-		newBlock, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
+		newCanonBlock, err := ecp.ethClient.GetBlockByNumber(ctx, blockNum)
 		if err != nil {
 			ecp.logger.Sugar().Errorw("Failed to fetch block for reorg check",
 				zap.Uint64("blockNumber", blockNum),
 				zap.Error(err),
 			)
-			return err
+			return nil
 		}
 
-		if newBlock.ParentHash.Value() != ecp.lastObservedBlock.Hash.Value() {
+		if newCanonBlock.ParentHash.Value() != latestBlockRecord.Hash {
 			ecp.logger.Sugar().Warnw("Blockchain reorganization detected",
 				"blockNumber", blockNum,
-				"expectedParent", ecp.lastObservedBlock.Hash.Value(),
-				"actualParent", newBlock.ParentHash.Value(),
+				"expectedParent", latestBlockRecord.Hash,
+				"actualParent", newCanonBlock.ParentHash.Value(),
 				"chainId", ecp.config.ChainId)
 
-			return ecp.reconcileReorg(ctx, newBlock)
+			if err = ecp.reconcileReorg(ctx, newCanonBlock); err != nil {
+				ecp.logger.Sugar().Errorw("Failed to reconcile reorg", "error", err)
+			}
+			return nil
 		}
 
-		_, _, err = ecp.processBlockLogs(ctx, newBlock)
+		latestBlockRecord, err = ecp.processBlockLogs(ctx, newCanonBlock)
 		if err != nil {
 			ecp.logger.Sugar().Errorw("Error fetching block with logs",
 				zap.Uint64("blockNumber", blockNum),
 				zap.Error(err),
 			)
-			return err
+			return nil
 		}
 	}
 
-	ecp.logger.Sugar().Debugw("All blocks processed",
-		zap.Any("blocksToFetch", blocksToFetch),
-	)
+	ecp.logger.Sugar().Debugw("All blocks processed", zap.Any("blocksToFetch", blocksToFetch))
 
 	if len(blocksToFetch) > 0 && blocksToFetch[len(blocksToFetch)-1]%100 == 0 {
 		ecp.logger.Sugar().Infow("Processed block",
@@ -251,7 +235,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 	return nil
 }
 
-func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum.EthereumBlock) (*ethereum.EthereumBlock, []*ethereum.EthereumEventLog, error) {
+func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum.EthereumBlock) (*storage.BlockRecord, error) {
 
 	logs, err := ecp.fetchLogsForInterestingContractsForBlock(block.Number.Value())
 	if err != nil {
@@ -259,10 +243,8 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 			zap.Uint64("blockNumber", block.Number.Value()),
 			zap.Error(err),
 		)
-		return nil, nil, err
+		return nil, err
 	}
-
-	block.ChainId = ecp.config.ChainId
 
 	ecp.logger.Sugar().Infow("Block fetched with logs",
 		"latestBlockNum", block.Number.Value(),
@@ -280,7 +262,7 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 				zap.Uint64("logIndex", log.LogIndex.Value()),
 				zap.Error(err),
 			)
-			return nil, nil, err
+			return nil, err
 		}
 
 		lwb := &chainPoller.LogWithBlock{
@@ -290,15 +272,14 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 		}
 		err = ecp.handleLog(ctx, lwb)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	ecp.logger.Sugar().Debugw("Processed logs",
 		zap.Uint64("blockNumber", block.Number.Value()),
 	)
-	ecp.lastObservedBlock = block
 
-	blockInfo := &storage.BlockRecord{
+	blockRecord := &storage.BlockRecord{
 		Number:     block.Number.Value(),
 		Hash:       block.Hash.Value(),
 		ParentHash: block.ParentHash.Value(),
@@ -306,36 +287,23 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 		ChainId:    ecp.config.ChainId,
 	}
 
-	if err := ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo); err != nil {
+	if err = ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockRecord); err != nil {
 		ecp.logger.Sugar().Warnw("Failed to save block info",
 			"error", err,
-			"blockNumber", blockInfo.Number)
+			"blockNumber", blockRecord.Number)
 	}
 
-	if ecp.config.BlockHistorySize > 0 && blockInfo.Number > uint64(ecp.config.BlockHistorySize) {
-		oldBlockNum := blockInfo.Number - uint64(ecp.config.BlockHistorySize)
+	if ecp.config.BlockHistorySize > 0 && blockRecord.Number > uint64(ecp.config.BlockHistorySize) {
+		oldBlockNum := blockRecord.Number - uint64(ecp.config.BlockHistorySize)
 		if err := ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId, oldBlockNum); err != nil {
 			ecp.logger.Sugar().Debugw("Failed to prune old block",
 				"blockNumber", oldBlockNum,
 				"error", err)
-			// TODO: non-fatal for now. Does run the (low) risk of orphaned storage usage
+			// TODO: non-fatal for now. Does run the (low) risk of orphaned storage usage growth
 		}
 	}
 
-	if err := ecp.store.SetLastProcessedBlock(context.Background(), ecp.config.AvsAddress, ecp.config.ChainId, block.Number.Value()); err != nil {
-		ecp.logger.Sugar().Warnw("Failed to save last processed block to storage",
-			"error", err,
-			"chainId", ecp.config.ChainId,
-			"blockNumber", block.Number.Value(),
-		)
-	} else {
-		ecp.logger.Sugar().Debugw("Saved last processed block to storage",
-			"chainId", ecp.config.ChainId,
-			"blockNumber", block.Number.Value(),
-		)
-	}
-
-	return block, logs, nil
+	return blockRecord, nil
 }
 
 func (ecp *EVMChainPoller) listAllInterestingContracts() []string {
@@ -617,8 +585,7 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 // reconcileReorg finds the common ancestor of the previously processed block head and the new blocks
 func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ethereum.EthereumBlock) error {
-	maxDepth := ecp.config.MaxReorgDepth
-	orphanedBlocks, err := ecp.findOrphanedBlocks(ctx, startBlock, maxDepth)
+	orphanedBlocks, err := ecp.findOrphanedBlocks(ctx, startBlock, ecp.config.MaxReorgDepth)
 
 	if err != nil {
 		return err
@@ -629,88 +596,71 @@ func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ether
 	}
 
 	for _, orphanedBlock := range orphanedBlocks {
-		err = ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, orphanedBlock.ChainId, orphanedBlock.Number.Value())
-		if err != nil {
-			return err
+		err = ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, orphanedBlock.ChainId, orphanedBlock.Number)
+		if err != nil && !errors.Is(err, storage.ErrNotFound) {
+			return fmt.Errorf("failed to delete orphaned block: %w", err)
 		}
 	}
+
 	return nil
 }
 
-func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *ethereum.EthereumBlock, maxDepth int) ([]*ethereum.EthereumBlock, error) {
-	var orphanedBlocks []*ethereum.EthereumBlock
+func (ecp *EVMChainPoller) findOrphanedBlocks(ctx context.Context, startBlock *ethereum.EthereumBlock, maxDepth int) ([]*storage.BlockRecord, error) {
+	var parentBlockRecord *storage.BlockRecord
+	var orphanedBlocks []*storage.BlockRecord
 	startBlockNumber := startBlock.Number.Value()
 
-	for currentBlockNum := startBlockNumber - 1; startBlockNumber-currentBlockNum <= uint64(maxDepth) && currentBlockNum > 0; currentBlockNum-- {
+	for parentBlockNum := startBlockNumber - 1; startBlockNumber-parentBlockNum <= uint64(maxDepth) && parentBlockNum > 0; parentBlockNum-- {
 
-		chainBlock, err := ecp.ethClient.GetBlockByNumber(ctx, currentBlockNum)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch block %d from chain: %w", currentBlockNum, err)
+		canonParentBlock, err := ecp.ethClient.GetBlockByNumber(ctx, parentBlockNum)
+		if err != nil || canonParentBlock == nil {
+			return nil, fmt.Errorf("failed to fetch block %d from chain: %w", parentBlockNum, err)
 		}
 
-		blockInfo, err := ecp.store.GetBlock(
+		parentBlockRecord, err = ecp.store.GetBlock(
 			ctx, ecp.config.AvsAddress,
 			ecp.config.ChainId,
-			currentBlockNum,
+			parentBlockNum,
 		)
 
-		if err != nil {
+		if err != nil || parentBlockRecord == nil {
+
 			if errors.Is(err, storage.ErrNotFound) {
 				ecp.logger.Sugar().Debugw("Block not found in storage",
-					"blockNumber", currentBlockNum,
+					"blockNumber", parentBlockNum,
 					"error", err)
-				blockInfo = &storage.BlockRecord{
-					Number:     chainBlock.Number.Value(),
-					Hash:       chainBlock.Hash.Value(),
-					ParentHash: chainBlock.ParentHash.Value(),
-					Timestamp:  chainBlock.Timestamp.Value(),
-					ChainId:    chainBlock.ChainId,
+				parentBlockRecord = &storage.BlockRecord{
+					Number:     canonParentBlock.Number.Value(),
+					Hash:       canonParentBlock.Hash.Value(),
+					ParentHash: canonParentBlock.ParentHash.Value(),
+					Timestamp:  canonParentBlock.Timestamp.Value(),
+					ChainId:    canonParentBlock.ChainId,
 				}
-
-				ecp.lastObservedBlock = chainBlock
-
-				return orphanedBlocks, ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, blockInfo)
+			} else {
+				return nil, fmt.Errorf("failed to fetch block %d for : %w", parentBlockNum, err)
 			}
-			return nil, fmt.Errorf("failed to fetch block %d for : %w", currentBlockNum, err)
 		}
 
-		if blockInfo == nil {
-			return orphanedBlocks, fmt.Errorf("block info not found for block %d", currentBlockNum)
-		}
-
-		if chainBlock.Hash.Value() != blockInfo.Hash {
+		if canonParentBlock.Hash.Value() != parentBlockRecord.Hash {
 			ecp.logger.Sugar().Infow("Found orphaned block",
-				"blockNumber", currentBlockNum,
-				"storedBlockHash", blockInfo.Hash,
-				"chainBlockHash", chainBlock.Hash.Value(),
-				"searchDepth", startBlockNumber-currentBlockNum)
+				"blockNumber", parentBlockNum,
+				"storedBlockHash", parentBlockRecord.Hash,
+				"canonChildBlockHash", canonParentBlock.Hash.Value(),
+				"searchDepth", startBlockNumber-parentBlockNum)
 
-			// Create ethereum block from stored block info (the orphaned block)
-			orphanedBlock := &ethereum.EthereumBlock{
-				Number:     ethereum.EthereumQuantity(blockInfo.Number),
-				Hash:       ethereum.EthereumHexString(blockInfo.Hash),
-				ParentHash: ethereum.EthereumHexString(blockInfo.ParentHash),
-				Timestamp:  ethereum.EthereumQuantity(blockInfo.Timestamp),
-				ChainId:    blockInfo.ChainId,
-			}
-			orphanedBlocks = append(orphanedBlocks, orphanedBlock)
+			orphanedBlocks = append(orphanedBlocks, parentBlockRecord)
 			continue
 		}
 
-		ecp.logger.Sugar().Debugw("Block hash match, stopping reorg ancestry search",
-			"blockNumber", currentBlockNum,
-			"blockHash", blockInfo.Hash,
-			"chainHash", chainBlock.Hash.Value())
+		ecp.logger.Sugar().Infow("Block hash match, stopping reorg ancestry search",
+			"blockNumber", parentBlockNum,
+			"storedBlockHash", parentBlockRecord.Hash,
+			"canonChildBlockHash", canonParentBlock.Hash.Value())
 
-		ecp.lastObservedBlock = chainBlock
-
-		err = ecp.store.SetLastProcessedBlock(ctx, ecp.config.AvsAddress, chainBlock.ChainId, chainBlock.Number.Value())
-		if err != nil {
-			return nil, err
-		}
-
-		break
+		return orphanedBlocks, ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, parentBlockRecord)
 	}
 
-	return orphanedBlocks, nil
+	ecp.logger.Sugar().Warn("Reached max reorg search depth")
+
+	return orphanedBlocks, ecp.store.SaveBlock(ctx, ecp.config.AvsAddress, parentBlockRecord)
 }
