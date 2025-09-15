@@ -23,7 +23,14 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	// Simulate some state before "crash"
 	avsAddress := "0xtest"
 	chainId := config.ChainId(1) // Ethereum mainnet
-	require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
+	blockRecord := &storage.BlockRecord{
+		Number:     1000,
+		Hash:       "0xhash1000",
+		ParentHash: "0xhash999",
+		Timestamp:  1234567890,
+		ChainId:    chainId,
+	}
+	require.NoError(t, store.SaveBlock(ctx, avsAddress, blockRecord))
 
 	// Save some tasks
 	deadline1 := time.Now().Add(1 * time.Hour)
@@ -66,9 +73,9 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 	// Here we're just verifying that storage preserved the state correctly
 
 	// Verify state was preserved
-	recoveredBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
+	recoveredBlockRecord, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(1000), recoveredBlock)
+	assert.Equal(t, uint64(1000), recoveredBlockRecord.Number)
 
 	pendingTasks, err := store.ListPendingTasks(ctx)
 	require.NoError(t, err)
@@ -206,20 +213,26 @@ func TestChainPollerRecovery(t *testing.T) {
 	avsAddress := "0xtest"
 	for i, chain := range chains {
 		blockNum := uint64(1000 * (i + 1))
-		require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chain, blockNum))
+		blockRecord := &storage.BlockRecord{
+			Number:     blockNum,
+			Hash:       fmt.Sprintf("0xhash%d", blockNum),
+			ParentHash: fmt.Sprintf("0xhash%d", blockNum-1),
+			Timestamp:  uint64(1234567890 + i),
+			ChainId:    chain,
+		}
+		require.NoError(t, store.SaveBlock(ctx, avsAddress, blockRecord))
 	}
 
 	// Simulate recovery
 	for i, chain := range chains {
 		expectedBlock := uint64(1000 * (i + 1))
-		recoveredBlock, err := store.GetLastProcessedBlock(ctx, avsAddress, chain)
+		recoveredBlockRecord, err := store.GetLastProcessedBlock(ctx, avsAddress, chain)
 		require.NoError(t, err)
-		assert.Equal(t, expectedBlock, recoveredBlock, "Chain %d block mismatch", chain)
+		assert.Equal(t, expectedBlock, recoveredBlockRecord.Number, "Chain %d block mismatch", chain)
 	}
 
 	// Test non-existent chain
 	nonExistentChain := config.ChainId(99999)
-	block, err := store.GetLastProcessedBlock(ctx, avsAddress, nonExistentChain)
+	_, err := store.GetLastProcessedBlock(ctx, avsAddress, nonExistentChain)
 	assert.ErrorIs(t, err, storage.ErrNotFound)
-	assert.Equal(t, uint64(0), block)
 }

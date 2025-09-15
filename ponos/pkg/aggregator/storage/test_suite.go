@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -39,51 +40,79 @@ func (s *TestSuite) testChainPollingState(t *testing.T) {
 
 	// Test setting and getting block
 	blockNum := uint64(12345)
-	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
+	blockRecord := &BlockRecord{
+		Number:     blockNum,
+		Hash:       "0xhash12345",
+		ParentHash: "0xparent12344",
+		Timestamp:  1234567890,
+		ChainId:    chainId,
+	}
+	err = store.SaveBlock(ctx, avsAddress, blockRecord)
 	require.NoError(t, err)
 
 	retrieved, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, blockNum, retrieved)
+	assert.Equal(t, blockNum, retrieved.Number)
 
 	// Test updating block
 	newBlockNum := uint64(12346)
-	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId, newBlockNum)
+	newBlockRecord := &BlockRecord{
+		Number:     newBlockNum,
+		Hash:       "0xhash12346",
+		ParentHash: "0xhash12345",
+		Timestamp:  1234567891,
+		ChainId:    chainId,
+	}
+	err = store.SaveBlock(ctx, avsAddress, newBlockRecord)
 	require.NoError(t, err)
 
 	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, newBlockNum, retrieved)
+	assert.Equal(t, newBlockNum, retrieved.Number)
 
 	// Test multiple chains for same AVS
 	chainId2 := config.ChainId(2)
 	blockNum2 := uint64(54321)
-	err = store.SetLastProcessedBlock(ctx, avsAddress, chainId2, blockNum2)
+	blockRecord2 := &BlockRecord{
+		Number:     blockNum2,
+		Hash:       "0xhash54321",
+		ParentHash: "0xparent54320",
+		Timestamp:  1234567892,
+		ChainId:    chainId2,
+	}
+	err = store.SaveBlock(ctx, avsAddress, blockRecord2)
 	require.NoError(t, err)
 
 	retrieved2, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId2)
 	require.NoError(t, err)
-	assert.Equal(t, blockNum2, retrieved2)
+	assert.Equal(t, blockNum2, retrieved2.Number)
 
 	// Ensure first chain is unchanged
 	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, newBlockNum, retrieved)
+	assert.Equal(t, newBlockNum, retrieved.Number)
 
 	// Test different AVS on same chain
 	avsAddress2 := "0xavs456"
 	blockNum3 := uint64(99999)
-	err = store.SetLastProcessedBlock(ctx, avsAddress2, chainId, blockNum3)
+	blockRecord3 := &BlockRecord{
+		Number:     blockNum3,
+		Hash:       "0xhash99999",
+		ParentHash: "0xparent99998",
+		Timestamp:  1234567893,
+		ChainId:    chainId,
+	}
+	err = store.SaveBlock(ctx, avsAddress2, blockRecord3)
 	require.NoError(t, err)
 
 	retrieved3, err := store.GetLastProcessedBlock(ctx, avsAddress2, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, blockNum3, retrieved3)
+	assert.Equal(t, blockNum3, retrieved3.Number)
 
 	// Ensure original AVS on same chain is unchanged
 	retrieved, err = store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	assert.Equal(t, newBlockNum, retrieved)
+	assert.Equal(t, newBlockNum, retrieved.Number)
 }
 
 func (s *TestSuite) testTaskManagement(t *testing.T) {
@@ -219,7 +248,14 @@ func (s *TestSuite) testLifecycle(t *testing.T) {
 
 	// Add some data
 	avsAddress := "0xavs123"
-	err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12345)
+	blockRecord := &BlockRecord{
+		Number:     12345,
+		Hash:       "0xhash12345",
+		ParentHash: "0xparent12344",
+		Timestamp:  1234567890,
+		ChainId:    config.ChainId(1),
+	}
+	err = store.SaveBlock(ctx, avsAddress, blockRecord)
 	require.NoError(t, err)
 
 	// Close the store
@@ -227,7 +263,14 @@ func (s *TestSuite) testLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Operations after close should fail
-	err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12346)
+	newBlockRecord := &BlockRecord{
+		Number:     12346,
+		Hash:       "0xhash12346",
+		ParentHash: "0xhash12345",
+		Timestamp:  1234567891,
+		ChainId:    config.ChainId(1),
+	}
+	err = store.SaveBlock(ctx, avsAddress, newBlockRecord)
 	assert.ErrorIs(t, err, ErrStoreClosed)
 
 	_, err = store.GetLastProcessedBlock(ctx, avsAddress, config.ChainId(1))
@@ -248,7 +291,14 @@ func (s *TestSuite) testConcurrentAccess(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func(chainId config.ChainId) {
 			for j := 0; j < 10; j++ {
-				err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(j))
+				blockRecord := &BlockRecord{
+					Number:     uint64(j),
+					Hash:       fmt.Sprintf("0xhash%d_%d", chainId, j),
+					ParentHash: fmt.Sprintf("0xparent%d_%d", chainId, j-1),
+					Timestamp:  uint64(1234567890 + j),
+					ChainId:    chainId,
+				}
+				err := store.SaveBlock(ctx, avsAddress, blockRecord)
 				if err != nil {
 					errors <- err
 					return

@@ -160,13 +160,20 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 func BenchmarkBlockOperations(b *testing.B) {
 	ctx := context.Background()
 
-	b.Run("InMemoryStore/SetBlock", func(b *testing.B) {
+	b.Run("InMemoryStore/SaveBlock", func(b *testing.B) {
 		store := memory.NewInMemoryAggregatorStore()
 		avsAddress := "0xtest"
 		chain := config.ChainId(1)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = store.SetLastProcessedBlock(ctx, avsAddress, chain, uint64(i))
+			blockRecord := &storage.BlockRecord{
+				Number:     uint64(i),
+				Hash:       fmt.Sprintf("0xhash%d", i),
+				ParentHash: fmt.Sprintf("0xhash%d", i-1),
+				Timestamp:  uint64(1234567890 + i),
+				ChainId:    chain,
+			}
+			_ = store.SaveBlock(ctx, avsAddress, blockRecord)
 		}
 	})
 

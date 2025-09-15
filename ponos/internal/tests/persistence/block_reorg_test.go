@@ -273,16 +273,14 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			addBlocksToClient(mockClient, initialBlocks)
 
 			// Initialize the last processed block to 99 so poller starts from block 100
-			err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, 99)
-			require.NoError(t, err)
-			blockInfo := &storage.BlockRecord{
+			blockRecord := &storage.BlockRecord{
 				Number:     99,
 				Hash:       "0xhash99",
 				ParentHash: "0xhash98",
 				Timestamp:  10000,
 				ChainId:    chainId,
 			}
-			err = store.SaveBlock(ctx, avsAddress, blockInfo)
+			err := store.SaveBlock(ctx, avsAddress, blockRecord)
 			require.NoError(t, err)
 
 			// Step 2: Start poller and wait for initial processing
@@ -328,7 +326,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			// Wait for initial blocks to be processed
 			require.Eventually(t, func() bool {
 				lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
-				return err == nil && lastProcessed >= 105
+				return err == nil && lastProcessed != nil && lastProcessed.Number >= 105
 			}, 5*time.Second, 50*time.Millisecond, "Initial blocks not processed")
 
 			// Verify initial blocks were stored
@@ -345,7 +343,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			// Step 4: Verify reorg was handled correctly
 			require.Eventually(t, func() bool {
 				lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
-				return err == nil && lastProcessed >= 106
+				return err == nil && lastProcessed != nil && lastProcessed.Number >= 106
 			}, 5*time.Second, 50*time.Millisecond, "Reorged blocks not processed")
 
 			// Verify blocks before reorg point (100-102) are unchanged
@@ -363,7 +361,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 			// Verify last processed block is updated
 			lastProcessed, err := store.GetLastProcessedBlock(ctx, avsAddress, chainId)
 			require.NoError(t, err)
-			assert.Equal(t, uint64(106), lastProcessed, "Last processed should be 106")
+			assert.Equal(t, uint64(106), lastProcessed.Number, "Last processed should be 106")
 
 			// Step 5: Verify tasks in queue is empty since there is no log provided in events
 			select {

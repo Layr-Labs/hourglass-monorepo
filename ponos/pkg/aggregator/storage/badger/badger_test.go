@@ -71,7 +71,14 @@ func TestBadgerAggregatorStore_Persistence(t *testing.T) {
 
 		// Set last processed block
 		avsAddress := "0xtest"
-		err = store.SetLastProcessedBlock(ctx, avsAddress, config.ChainId(1), 12345)
+		blockRecord := &storage.BlockRecord{
+			Number:     12345,
+			Hash:       "0xhash12345",
+			ParentHash: "0xhash12344",
+			Timestamp:  1234567890,
+			ChainId:    config.ChainId(1),
+		}
+		err = store.SaveBlock(ctx, avsAddress, blockRecord)
 		require.NoError(t, err)
 
 		// Close store
@@ -92,9 +99,9 @@ func TestBadgerAggregatorStore_Persistence(t *testing.T) {
 
 		// Verify block number
 		avsAddress := "0xtest"
-		blockNum, err := store.GetLastProcessedBlock(ctx, avsAddress, config.ChainId(1))
+		blockRecord, err := store.GetLastProcessedBlock(ctx, avsAddress, config.ChainId(1))
 		require.NoError(t, err)
-		assert.Equal(t, uint64(12345), blockNum)
+		assert.Equal(t, uint64(12345), blockRecord.Number)
 	}
 }
 

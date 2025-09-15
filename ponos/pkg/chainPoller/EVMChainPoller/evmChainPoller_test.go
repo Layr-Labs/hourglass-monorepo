@@ -70,21 +70,16 @@ func TestFindOrphanedBlocks_NoReorg_AllBlocksMatch(t *testing.T) {
 	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(99)).Return(chainBlock99, nil)
 
 	poller := createTestPoller(mockClient, store)
-	poller.lastObservedBlock = &ethereum.EthereumBlock{
-		Number: ethereum.EthereumQuantity(98),
-		Hash:   "0x98",
-	}
 
 	orphaned, err := poller.findOrphanedBlocks(ctx, startBlock, 10)
 
 	assert.NoError(t, err)
 	assert.Empty(t, orphaned, "Should find no orphaned blocks when all blocks match")
-	assert.Equal(t, uint64(99), poller.lastObservedBlock.Number.Value(), "Should update lastObservedBlock to matching block")
 
-	// Verify SetLastProcessedBlock was called
+	// Verify block was saved via SaveBlock
 	lastProcessed, err := store.GetLastProcessedBlock(ctx, "0xtest", config.ChainId(1))
 	require.NoError(t, err)
-	assert.Equal(t, uint64(99), lastProcessed)
+	assert.Equal(t, uint64(99), lastProcessed.Number)
 }
 
 // Test Scenario 2: Simple reorg - finds orphaned blocks and common ancestor
@@ -153,14 +148,13 @@ func TestFindOrphanedBlocks_SimpleReorg_FindsOrphanedAndAncestor(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, orphaned, 2, "Should find 2 orphaned blocks")
-	assert.Equal(t, uint64(99), orphaned[0].Number.Value())
-	assert.Equal(t, uint64(98), orphaned[1].Number.Value())
-	assert.Equal(t, uint64(97), poller.lastObservedBlock.Number.Value(), "Should update lastObservedBlock to common ancestor")
+	assert.Equal(t, uint64(99), orphaned[0].Number)
+	assert.Equal(t, uint64(98), orphaned[1].Number)
 
-	// Verify SetLastProcessedBlock was called
+	// Verify block was saved via SaveBlock
 	lastProcessed, err := store.GetLastProcessedBlock(ctx, "0xtest", config.ChainId(1))
 	require.NoError(t, err)
-	assert.Equal(t, uint64(97), lastProcessed)
+	assert.Equal(t, uint64(97), lastProcessed.Number)
 }
 
 // Test Scenario 3: Deep reorg that hits maxDepth limit
@@ -209,9 +203,9 @@ func TestFindOrphanedBlocks_DeepReorg_HitsMaxDepth(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, orphaned, 3, "Should find orphaned blocks up to maxDepth")
-	assert.Equal(t, uint64(99), orphaned[0].Number.Value())
-	assert.Equal(t, uint64(98), orphaned[1].Number.Value())
-	assert.Equal(t, uint64(97), orphaned[2].Number.Value())
+	assert.Equal(t, uint64(99), orphaned[0].Number)
+	assert.Equal(t, uint64(98), orphaned[1].Number)
+	assert.Equal(t, uint64(97), orphaned[2].Number)
 }
 
 // Test Scenario 4: Block not found in storage (returns early)
@@ -248,7 +242,6 @@ func TestFindOrphanedBlocks_BlockNotInStorage_ReturnsEarly(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Empty(t, orphaned, "Should return empty orphaned list when block not found")
-	assert.Equal(t, uint64(99), poller.lastObservedBlock.Number.Value(), "Should update lastObservedBlock to chainBlock")
 
 	// Verify chainBlock99 info was saved when block not found in storage
 	savedBlock, err := store.GetBlock(ctx, "0xtest", config.ChainId(1), 99)
@@ -320,22 +313,17 @@ func TestFindOrphanedBlocks_StateChanges(t *testing.T) {
 	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(99)).Return(chainBlock99, nil)
 
 	poller := createTestPoller(mockClient, store)
-	// Initial state
-	initialLastObserved := &ethereum.EthereumBlock{
-		Number: ethereum.EthereumQuantity(95),
-		Hash:   ethereum.EthereumHexString("0x95"),
-	}
-	poller.lastObservedBlock = initialLastObserved
 
 	orphaned, err := poller.findOrphanedBlocks(ctx, startBlock, 10)
 
 	require.NoError(t, err)
 	assert.Empty(t, orphaned)
 
-	// Verify state change
-	assert.NotEqual(t, initialLastObserved, poller.lastObservedBlock, "lastObservedBlock should be updated")
-	assert.Equal(t, uint64(99), poller.lastObservedBlock.Number.Value(), "lastObservedBlock should be set to matching block")
-	assert.Equal(t, "0x99", poller.lastObservedBlock.Hash.Value(), "lastObservedBlock hash should match")
+	// Verify block was saved to storage
+	savedBlock, err := store.GetBlock(ctx, "0xtest", config.ChainId(1), 99)
+	require.NoError(t, err)
+	assert.Equal(t, "0x99", savedBlock.Hash)
+	assert.Equal(t, "0x98", savedBlock.ParentHash)
 }
 
 // Test reconcileReorg successfully deletes orphaned blocks
@@ -473,10 +461,6 @@ func TestReconcileReorg_NoOrphanedBlocks_ReturnsError(t *testing.T) {
 			MaxReorgDepth: 10,
 		},
 		logger: zap.NewNop(),
-	}
-	poller.lastObservedBlock = &ethereum.EthereumBlock{
-		Number: ethereum.EthereumQuantity(98),
-		Hash:   ethereum.EthereumHexString("0x98"),
 	}
 
 	// Execute reconcileReorg

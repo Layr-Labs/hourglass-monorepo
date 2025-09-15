@@ -80,7 +80,14 @@ func TestRollingUpgrade(t *testing.T) {
 			// Populate aggregator state
 			avsAddress := "0xtest"
 			chainId := config.ChainId(1)
-			require.NoError(t, aggStore1.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
+			blockRecord := &storage.BlockRecord{
+				Number:     1000,
+				Hash:       "0xhash1000",
+				ParentHash: "0xhash999",
+				Timestamp:  1234567890,
+				ChainId:    chainId,
+			}
+			require.NoError(t, aggStore1.SaveBlock(ctx, avsAddress, blockRecord))
 
 			task := &types.Task{
 				TaskId:                 "upgrade-task-1",
@@ -144,9 +151,9 @@ func TestRollingUpgrade(t *testing.T) {
 			// Verify state persisted (for BadgerDB)
 			if tt.name == "BadgerDB" {
 				// Check aggregator state
-				block, err := aggStore2.GetLastProcessedBlock(ctx, avsAddress, chainId)
+				blockRecord, err := aggStore2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 				require.NoError(t, err)
-				require.Equal(t, uint64(1000), block)
+				require.Equal(t, uint64(1000), blockRecord.Number)
 
 				loadedTask, err := aggStore2.GetTask(ctx, "upgrade-task-1")
 				require.NoError(t, err)
@@ -159,7 +166,14 @@ func TestRollingUpgrade(t *testing.T) {
 			}
 
 			// Phase 3: Continue operations
-			require.NoError(t, aggStore2.SetLastProcessedBlock(ctx, avsAddress, chainId, 2000))
+			newBlockRecord := &storage.BlockRecord{
+				Number:     2000,
+				Hash:       "0xhash2000",
+				ParentHash: "0xhash1999",
+				Timestamp:  1234567900,
+				ChainId:    chainId,
+			}
+			require.NoError(t, aggStore2.SaveBlock(ctx, avsAddress, newBlockRecord))
 
 			newTask := &types.Task{
 				TaskId:                 "upgrade-task-2",
@@ -185,7 +199,14 @@ func TestStorageMigration(t *testing.T) {
 	// Populate with test data
 	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
-	require.NoError(t, memStore.SetLastProcessedBlock(ctx, avsAddress, chainId, 5000))
+	blockRecord := &storage.BlockRecord{
+		Number:     5000,
+		Hash:       "0xhash5000",
+		ParentHash: "0xhash4999",
+		Timestamp:  1234567890,
+		ChainId:    chainId,
+	}
+	require.NoError(t, memStore.SaveBlock(ctx, avsAddress, blockRecord))
 
 	tasks := []*types.Task{
 		{TaskId: "task-1", AVSAddress: "0x123", OperatorSetId: 1, SourceBlockNumber: 4990, L1ReferenceBlockNumber: 4990, ChainId: chainId},
@@ -210,9 +231,16 @@ func TestStorageMigration(t *testing.T) {
 	defer badgerStore.Close()
 
 	// Migrate block heights
-	block, err := memStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
+	blockRecord, err = memStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.NoError(t, badgerStore.SetLastProcessedBlock(ctx, avsAddress, chainId, block))
+	blockRecord2 := &storage.BlockRecord{
+		Number:     blockRecord.Number,
+		Hash:       fmt.Sprintf("0xhash%d", blockRecord.Number),
+		ParentHash: fmt.Sprintf("0xhash%d", blockRecord.Number-1),
+		Timestamp:  uint64(1234567890 + int(blockRecord.Number)),
+		ChainId:    chainId,
+	}
+	require.NoError(t, badgerStore.SaveBlock(ctx, avsAddress, blockRecord2))
 
 	// Migrate all tasks (both pending and non-pending)
 	for _, task := range tasks {
@@ -234,9 +262,9 @@ func TestStorageMigration(t *testing.T) {
 	memStore.Close()
 
 	// Step 3: Verify migration
-	migratedBlock, err := badgerStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
+	migratedBlockRecord, err := badgerStore.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.Equal(t, uint64(5000), migratedBlock)
+	require.Equal(t, uint64(5000), migratedBlockRecord.Number)
 
 	pendingTasks, err := badgerStore.ListPendingTasks(ctx)
 	require.NoError(t, err)
@@ -270,7 +298,14 @@ func TestBackwardCompatibility(t *testing.T) {
 	// Save various data types
 	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
-	require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, 1000))
+	blockRecord := &storage.BlockRecord{
+		Number:     1000,
+		Hash:       "0xhash1000",
+		ParentHash: "0xhash999",
+		Timestamp:  1234567890,
+		ChainId:    chainId,
+	}
+	require.NoError(t, store.SaveBlock(ctx, avsAddress, blockRecord))
 
 	task := &types.Task{
 		TaskId:                 "compat-task",
@@ -294,9 +329,9 @@ func TestBackwardCompatibility(t *testing.T) {
 	defer store2.Close()
 
 	// Verify all data is readable
-	block, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
+	blockRecord, err = store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.Equal(t, uint64(1000), block)
+	require.Equal(t, uint64(1000), blockRecord.Number)
 
 	loadedTask, err := store2.GetTask(ctx, "compat-task")
 	require.NoError(t, err)
@@ -333,7 +368,14 @@ func TestUpgradeUnderLoad(t *testing.T) {
 				return
 			default:
 				// Write operations
-				_ = store1.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
+				blockRecord := &storage.BlockRecord{
+					Number:     blockNum,
+					Hash:       fmt.Sprintf("0xhash%d", blockNum),
+					ParentHash: fmt.Sprintf("0xhash%d", blockNum-1),
+					Timestamp:  uint64(1234567890 + int(blockNum)),
+					ChainId:    chainId,
+				}
+				_ = store1.SaveBlock(ctx, avsAddress, blockRecord)
 				task := &types.Task{
 					TaskId:                 fmt.Sprintf("load-task-%d", taskId),
 					AVSAddress:             "0x123",
@@ -376,17 +418,25 @@ func TestUpgradeUnderLoad(t *testing.T) {
 	// Verify state preserved
 	lastBlock2, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, lastBlock2, lastBlock1)
+	require.GreaterOrEqual(t, lastBlock2.Number, lastBlock1.Number)
 
 	// Verify can continue operations
-	require.NoError(t, store2.SetLastProcessedBlock(ctx, avsAddress, chainId, lastBlock2+100))
+	newBlockNum := lastBlock2.Number + 100
+	newBlockRecord := &storage.BlockRecord{
+		Number:     newBlockNum,
+		Hash:       fmt.Sprintf("0xhash%d", newBlockNum),
+		ParentHash: fmt.Sprintf("0xhash%d", newBlockNum-1),
+		Timestamp:  uint64(1234567890 + int(newBlockNum)),
+		ChainId:    chainId,
+	}
+	require.NoError(t, store2.SaveBlock(ctx, avsAddress, newBlockRecord))
 
 	newTask := &types.Task{
 		TaskId:                 "post-upgrade-task",
 		AVSAddress:             "0x123",
 		OperatorSetId:          9999,
-		SourceBlockNumber:      lastBlock2 + 100,
-		L1ReferenceBlockNumber: lastBlock2 + 100,
+		SourceBlockNumber:      newBlockNum,
+		L1ReferenceBlockNumber: newBlockNum,
 		ReferenceTimestamp:     100,
 		ChainId:                chainId,
 	}

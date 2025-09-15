@@ -18,10 +18,10 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixChainBlock   = "lastblock:%s:%d" // avsAddress:chainId
 	prefixTask         = "task:%s"
 	prefixTaskByStatus = "taskstatus:%s:%s" // status:taskId
 	prefixBlock        = "block:%s:%d:%d"   // avsAddress:chainId:blockNumber
+	prefixLatestBlock  = "block:%s:%d"      // avsAddress:chainId
 )
 
 // BadgerAggregatorStore implements the AggregatorStore interface using BadgerDB
@@ -96,66 +96,55 @@ func (s *BadgerAggregatorStore) runGC() {
 	}
 }
 
-// GetLastProcessedBlock retrieves the last processed block for a chain for a specific AVS
-func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (uint64, error) {
+// GetLastProcessedBlock retrieves the last processed block record for a chain for a specific AVS
+func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId) (*storage.BlockRecord, error) {
 	s.mu.RLock()
 	if s.closed {
 		s.mu.RUnlock()
-		return 0, storage.ErrStoreClosed
+		return nil, storage.ErrStoreClosed
 	}
 	s.mu.RUnlock()
 
-	var blockNum uint64
-	key := fmt.Sprintf(prefixChainBlock, avsAddress, chainId)
+	var blockRecord *storage.BlockRecord
+	var highestBlockNum uint64
+	prefix := fmt.Sprintf(prefixLatestBlock, avsAddress, chainId)
 
 	err := s.db.View(func(txn *badgerv3.Txn) error {
-		item, err := txn.Get([]byte(key))
-		if err != nil {
-			if errors.Is(err, badgerv3.ErrKeyNotFound) {
-				return storage.ErrNotFound
+		opts := badgerv3.DefaultIteratorOptions
+		opts.Prefix = []byte(prefix)
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+
+			var record storage.BlockRecord
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &record)
+			})
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal block record: %w", err)
 			}
-			return err
-		}
 
-		return item.Value(func(val []byte) error {
-			return json.Unmarshal(val, &blockNum)
-		})
+			if blockRecord == nil || record.Number > highestBlockNum {
+				highestBlockNum = record.Number
+				tempRecord := record
+				blockRecord = &tempRecord
+			}
+		}
+		return nil
 	})
 
 	if err != nil {
-		if errors.Is(err, storage.ErrNotFound) {
-			return 0, err
-		}
-		return 0, fmt.Errorf("failed to get last processed block: %w", err)
+		return nil, fmt.Errorf("failed to get last processed block: %w", err)
 	}
 
-	return blockNum, nil
-}
-
-// SetLastProcessedBlock updates the last processed block for a chain for a specific AVS
-func (s *BadgerAggregatorStore) SetLastProcessedBlock(ctx context.Context, avsAddress string, chainId config.ChainId, blockNum uint64) error {
-	s.mu.RLock()
-	if s.closed {
-		s.mu.RUnlock()
-		return storage.ErrStoreClosed
-	}
-	s.mu.RUnlock()
-
-	key := fmt.Sprintf(prefixChainBlock, avsAddress, chainId)
-	value, err := json.Marshal(blockNum)
-	if err != nil {
-		return fmt.Errorf("failed to marshal block number: %w", err)
+	if blockRecord == nil {
+		return nil, storage.ErrNotFound
 	}
 
-	err = s.db.Update(func(txn *badgerv3.Txn) error {
-		return txn.Set([]byte(key), value)
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to set last processed block: %w", err)
-	}
-
-	return nil
+	return blockRecord, nil
 }
 
 func (s *BadgerAggregatorStore) SavePendingTask(ctx context.Context, task *types.Task) error {

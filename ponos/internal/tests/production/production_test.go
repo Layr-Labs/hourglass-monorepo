@@ -178,7 +178,14 @@ func TestProductionRecovery(t *testing.T) {
 	avsAddress := "0xtest"
 	for i := 0; i < numTasks; i++ {
 		if i%100 == 0 {
-			require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)))
+			blockRecord := &storage.BlockRecord{
+				Number:     uint64(i),
+				Hash:       fmt.Sprintf("0xhash%d", i),
+				ParentHash: fmt.Sprintf("0xhash%d", i-1),
+				Timestamp:  uint64(1234567890 + i),
+				ChainId:    chainId,
+			}
+			require.NoError(t, store.SaveBlock(ctx, avsAddress, blockRecord))
 		}
 
 		task := &types.Task{
@@ -222,21 +229,29 @@ func TestProductionRecovery(t *testing.T) {
 	// Verify recovery
 	recoveredBlock, err := store2.GetLastProcessedBlock(ctx, avsAddress, chainId)
 	require.NoError(t, err)
-	require.Equal(t, lastBlock, recoveredBlock)
+	require.Equal(t, lastBlock.Number, recoveredBlock.Number)
 
 	recoveredPending, err := store2.ListPendingTasks(ctx)
 	require.NoError(t, err)
 	require.Equal(t, pendingCount, len(recoveredPending))
 
 	// Verify can continue operations
-	require.NoError(t, store2.SetLastProcessedBlock(ctx, avsAddress, chainId, lastBlock+1000))
+	newBlockNum := lastBlock.Number + 1000
+	newBlockRecord := &storage.BlockRecord{
+		Number:     newBlockNum,
+		Hash:       fmt.Sprintf("0xhash%d", newBlockNum),
+		ParentHash: fmt.Sprintf("0xhash%d", newBlockNum-1),
+		Timestamp:  uint64(1234567890 + int(newBlockNum)),
+		ChainId:    chainId,
+	}
+	require.NoError(t, store2.SaveBlock(ctx, avsAddress, newBlockRecord))
 
 	newTask := &types.Task{
 		TaskId:                 "post-recovery-task",
 		AVSAddress:             "0x123",
 		OperatorSetId:          uint32(numTasks),
-		SourceBlockNumber:      lastBlock + 1000,
-		L1ReferenceBlockNumber: lastBlock + 1000,
+		SourceBlockNumber:      newBlockNum,
+		L1ReferenceBlockNumber: newBlockNum,
 		ReferenceTimestamp:     1000,
 		ChainId:                chainId,
 	}
@@ -352,7 +367,14 @@ func TestProductionScale(t *testing.T) {
 
 		// Set block heights
 		for block := uint64(0); block < uint64(numTasksPerChain/100); block += 100 {
-			require.NoError(t, store.SetLastProcessedBlock(ctx, avsAddress, chainId, block))
+			blockRecord := &storage.BlockRecord{
+				Number:     block,
+				Hash:       fmt.Sprintf("0xhash%d_%d", c, block),
+				ParentHash: fmt.Sprintf("0xhash%d_%d", c, block-1),
+				Timestamp:  uint64(1234567890 + int(block)),
+				ChainId:    chainId,
+			}
+			require.NoError(t, store.SaveBlock(ctx, avsAddress, blockRecord))
 		}
 
 		// Create tasks

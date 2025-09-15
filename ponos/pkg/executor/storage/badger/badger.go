@@ -15,11 +15,8 @@ import (
 
 // Key prefixes for different data types
 const (
-	prefixPerformer      = "performer:%s"
-	prefixTask           = "task:%s"
-	prefixDeployment     = "deployment:%s"
-	prefixDeployByStatus = "deploystatus:%s:%s" // status:deploymentId
-	prefixProcessed      = "processed:%s"       // processed tasks
+	prefixPerformer = "performer:%s"
+	prefixProcessed = "processed:%s" // processed tasks
 )
 
 // BadgerExecutorStore implements the ExecutorStore interface using BadgerDB
