@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+// EnvironmentVarRecord represents a single environment variable configuration
+type EnvironmentVarRecord struct {
+	Name         string `json:"name"`
+	Value        string `json:"value,omitempty"`
+	ValueFromEnv string `json:"valueFromEnv,omitempty"`
+}
+
 // ExecutorStore defines the interface for executor state persistence
 type ExecutorStore interface {
 	SavePerformerState(ctx context.Context, performerId string, state *PerformerState) error
@@ -27,11 +34,16 @@ type PerformerState struct {
 	ArtifactRegistry   string
 	ArtifactDigest     string
 	ArtifactTag        string
-	DeploymentMode     string // "docker" or "kubernetes"
+	DeploymentMode     string
 	CreatedAt          time.Time
 	LastHealthCheck    time.Time
 	ContainerHealthy   bool
 	ApplicationHealthy bool
+	NetworkName        string
+	ContainerEndpoint  string
+	ContainerHostname  string
+	InternalPort       int
+	EnvironmentVars    []EnvironmentVarRecord
 }
 
 // TaskInfo represents information about an inflight task

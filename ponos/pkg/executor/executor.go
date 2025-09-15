@@ -39,10 +39,8 @@ type Executor struct {
 
 	peeringFetcher peering.IPeeringDataFetcher
 
-	// store is the persistence layer
 	store storage.ExecutorStore
 
-	// authVerifier handles authentication verification and token management
 	authVerifier *auth.Verifier
 }
 
@@ -92,16 +90,16 @@ func NewExecutor(
 		panic("store is required")
 	}
 
-	// Create challenge token manager
 	var verifier *auth.Verifier
 	if config.AuthConfig != nil && config.AuthConfig.IsEnabled {
-		// Choose the appropriate signer for authentication
 		var authSigner signer.ISigner
+
 		if signers.ECDSASigner != nil {
 			authSigner = signers.ECDSASigner
 		} else if signers.BLSSigner != nil {
 			authSigner = signers.BLSSigner
 		}
+
 		tokenManager := auth.NewChallengeTokenManager(config.Operator.Address, 5*time.Minute)
 		verifier = auth.NewVerifier(tokenManager, authSigner)
 	}
@@ -125,13 +123,20 @@ func NewExecutor(
 func (e *Executor) Initialize(ctx context.Context) error {
 	e.logger.Sugar().Infow("Initializing AVS performers")
 
+	if err := e.rehydratePerformersFromStorage(ctx); err != nil {
+		e.logger.Sugar().Warnw("Failed to rehydrate performers from storage, will create fresh performers",
+			"error", err,
+		)
+	}
+
 	for _, avs := range e.config.AvsPerformers {
 		avsAddress := strings.ToLower(avs.AvsAddress)
 		if _, ok := e.avsPerformers.Load(avsAddress); ok {
-			e.logger.Sugar().Errorw("AVS performer already exists",
+			e.logger.Sugar().Infow("AVS performer already exists",
 				zap.String("avsAddress", avsAddress),
 				zap.String("processType", avs.ProcessType),
 			)
+			continue
 		}
 
 		switch avs.ProcessType {
@@ -151,7 +156,6 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				serviceAccountName = avs.Kubernetes.ServiceAccountName
 			}
 
-			// Deploy performer using the performer's Deploy method
 			image := avsPerformer.PerformerImage{
 				Repository:         avs.Image.Repository,
 				Tag:                avs.Image.Tag,
@@ -178,7 +182,15 @@ func (e *Executor) Initialize(ctx context.Context) error {
 
 			e.avsPerformers.Store(avsAddress, performer)
 
-			// Save performer state to storage
+			var envRecords []storage.EnvironmentVarRecord
+			for _, env := range avs.Envs {
+				envRecords = append(envRecords, storage.EnvironmentVarRecord{
+					Name:         env.Name,
+					Value:        env.Value,
+					ValueFromEnv: env.ValueFromEnv,
+				})
+			}
+
 			performerState := &storage.PerformerState{
 				PerformerId:        result.PerformerID,
 				AvsAddress:         avsAddress,
@@ -186,13 +198,19 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				Status:             "running",
 				ArtifactRegistry:   avs.Image.Repository,
 				ArtifactTag:        avs.Image.Tag,
-				ArtifactDigest:     "", // Not available during initialization
+				ArtifactDigest:     "",
 				DeploymentMode:     string(avs.DeploymentMode),
 				CreatedAt:          result.StartTime,
 				LastHealthCheck:    result.EndTime,
 				ContainerHealthy:   true,
 				ApplicationHealthy: true,
+				NetworkName:        e.config.PerformerNetworkName,
+				ContainerEndpoint:  result.Endpoint,
+				ContainerHostname:  result.Hostname,
+				InternalPort:       8080,
+				EnvironmentVars:    envRecords,
 			}
+
 			if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
 				e.logger.Sugar().Warnw("Failed to save performer state to storage",
 					"error", err,
@@ -228,16 +246,126 @@ func (e *Executor) Initialize(ctx context.Context) error {
 					zap.Error(err),
 				)
 			}
-			return true // continue iteration
+			return true
 		})
 	}()
 
 	return nil
 }
 
+// rehydratePerformersFromStorage attempts to rehydrate performers from persisted state
+func (e *Executor) rehydratePerformersFromStorage(ctx context.Context) error {
+	e.logger.Sugar().Infow("Attempting to rehydrate performers from storage")
+
+	states, err := e.store.ListPerformerStates(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list performer states: %w", err)
+	}
+
+	if len(states) == 0 {
+		e.logger.Sugar().Infow("No persisted performer states found")
+		return nil
+	}
+
+	e.logger.Sugar().Infow("Found persisted performer states",
+		"count", len(states),
+	)
+
+	rehydratedCount := 0
+	failedCount := 0
+
+	for _, state := range states {
+		avsAddress := strings.ToLower(state.AvsAddress)
+
+		if _, exists := e.avsPerformers.Load(avsAddress); exists {
+			e.logger.Sugar().Infow("Performer already exists for AVS, skipping rehydration",
+				"avsAddress", avsAddress,
+			)
+			continue
+		}
+
+		if state.DeploymentMode != string(executorConfig.DeploymentModeDocker) {
+			e.logger.Sugar().Warnw("Rehydration not supported for deployment mode, skipping rehydration",
+				"deploymentMode", state.DeploymentMode,
+				"performerId", state.PerformerId,
+			)
+			continue
+		}
+
+		performer, err := avsContainerPerformer.NewAvsContainerPerformer(
+			&avsPerformer.AvsPerformerConfig{
+				AvsAddress:           avsAddress,
+				ProcessType:          avsPerformer.AvsProcessTypeServer,
+				PerformerNetworkName: state.NetworkName,
+			},
+			e.logger,
+		)
+
+		if err != nil {
+			e.logger.Sugar().Errorw("Failed to create container performer for rehydration",
+				"avsAddress", avsAddress,
+				"error", err,
+			)
+			failedCount++
+			continue
+		}
+
+		if err := performer.Initialize(ctx); err != nil {
+			e.logger.Sugar().Errorw("Failed to initialize performer for rehydration",
+				"avsAddress", avsAddress,
+				"error", err,
+			)
+			failedCount++
+			continue
+		}
+
+		e.logger.Sugar().Infow("Attempting to rehydrate performer",
+			"performerId", state.PerformerId,
+			"containerId", state.ContainerId,
+			"avsAddress", avsAddress,
+		)
+
+		err = performer.RehydrateFromState(ctx, state)
+
+		if err != nil {
+			e.logger.Sugar().Warnw("Failed to rehydrate performer, cleaning up state",
+				"performerId", state.PerformerId,
+				"containerId", state.ContainerId,
+				"error", err,
+			)
+
+			if err := e.store.DeletePerformerState(ctx, state.PerformerId); err != nil {
+				e.logger.Sugar().Warnw("Failed to delete stale performer state",
+					"performerId", state.PerformerId,
+					"error", err,
+				)
+			}
+			failedCount++
+
+		} else {
+			e.logger.Sugar().Infow("Successfully rehydrated performer",
+				"performerId", state.PerformerId,
+				"containerId", state.ContainerId,
+				"avsAddress", avsAddress,
+			)
+
+			e.avsPerformers.Store(avsAddress, performer)
+			rehydratedCount++
+		}
+	}
+
+	e.logger.Sugar().Infow("Performer rehydration complete",
+		"totalStates", len(states),
+		"rehydrated", rehydratedCount,
+		"failed", failedCount,
+	)
+
+	return nil
+}
+
 // createPerformer creates an AVS performer based on the deployment mode
 func (e *Executor) createPerformer(avs *executorConfig.AvsPerformerConfig, avsAddress string) (avsPerformer.IAvsPerformer, error) {
-	// Use default deployment mode if not specified
+
 	deploymentMode := avs.DeploymentMode
 	if deploymentMode == "" {
 		deploymentMode = executorConfig.DeploymentModeDocker
@@ -271,7 +399,6 @@ func (e *Executor) createKubernetesPerformer(avs *executorConfig.AvsPerformerCon
 		return nil, fmt.Errorf("kubernetes configuration is required for kubernetes deployment mode")
 	}
 
-	// Convert executor config to kubernetes manager config
 	kubernetesConfig := &kubernetesManager.Config{
 		Namespace:         e.config.Kubernetes.Namespace,
 		OperatorNamespace: e.config.Kubernetes.OperatorNamespace,
@@ -323,17 +450,13 @@ func (e *Executor) registerHandlers() error {
 
 // verifyAuth is a helper method to verify authentication
 func (e *Executor) verifyAuth(auth *commonV1.AuthSignature) error {
-	// If auth is not enabled, check if auth was provided
 	if e.authVerifier == nil {
-		// If auth was provided but not enabled, return unimplemented
 		if auth != nil {
 			return status.Error(codes.Unimplemented, "authentication is not enabled")
 		}
-		// No auth required and none provided - OK
 		return nil
 	}
 
-	// Auth is enabled, verify it
 	if err := e.authVerifier.VerifyAuthentication(auth); err != nil {
 		return err
 	}

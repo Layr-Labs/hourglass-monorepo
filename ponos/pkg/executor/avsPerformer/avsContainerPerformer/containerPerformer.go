@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/avsPerformerClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/containerManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	performerV1 "github.com/Layr-Labs/protocol-apis/gen/protos/eigenlayer/hourglass/v1/performer"
 	healthV1 "github.com/Layr-Labs/protocol-apis/gen/protos/grpc/health/v1"
@@ -624,6 +626,8 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 	return &avsPerformer.PerformerCreationResult{
 		PerformerID: newContainer.performerID,
 		StatusChan:  newContainer.statusChan,
+		Endpoint:    endpoint,
+		Hostname:    newContainer.info.Hostname,
 	}, nil
 }
 
@@ -1127,16 +1131,13 @@ func (aps *AvsContainerPerformer) performPeriodicApplicationHealthChecks(ctx con
 
 // Deploy performs a synchronous deployment - creates container, waits for health, and promotes
 func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer.PerformerImage) (*avsPerformer.DeploymentResult, error) {
-	// Use deployment mutex to prevent concurrent deployments
 	if !aps.activeDeploymentMu.TryLock() {
 		return nil, fmt.Errorf("deployment in progress for avs %s", aps.config.AvsAddress)
 	}
 	defer aps.activeDeploymentMu.Unlock()
 
-	// Generate deployment ID
 	deploymentID := fmt.Sprintf("deployment-%s-%s", aps.config.AvsAddress, uuid.New().String())
 
-	// Use default deployment timeout
 	timeout := defaultDeploymentTimeout
 
 	deploymentCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -1156,7 +1157,6 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 		zap.String("tag", image.Tag),
 	)
 
-	// Create the performer
 	creationResult, err := aps.CreatePerformer(deploymentCtx, image)
 	if err != nil {
 		result.Status = avsPerformer.DeploymentStatusFailed
@@ -1169,18 +1169,15 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 	result.PerformerID = creationResult.PerformerID
 	result.Status = avsPerformer.DeploymentStatusInProgress
 
-	// Monitor deployment until healthy
 	healthyCtx, healthyCancel := context.WithTimeout(deploymentCtx, timeout)
 	defer healthyCancel()
 
 	if err := aps.waitForHealthy(healthyCtx, creationResult.StatusChan); err != nil {
-		// Deployment failed, clean up
 		aps.logger.Error("Deployment health check failed",
 			zap.String("deploymentID", deploymentID),
 			zap.Error(err),
 		)
 
-		// Clean up the failed deployment
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 
@@ -1198,14 +1195,12 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 		return result, err
 	}
 
-	// Promote the performer
 	if err := aps.PromotePerformer(deploymentCtx, creationResult.PerformerID); err != nil {
 		aps.logger.Error("Failed to promote performer",
 			zap.String("deploymentID", deploymentID),
 			zap.Error(err),
 		)
 
-		// Clean up the failed deployment
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 
@@ -1223,14 +1218,23 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 		return result, err
 	}
 
-	// Deployment successful
 	result.Status = avsPerformer.DeploymentStatusCompleted
 	result.EndTime = time.Now()
 	result.Message = "Deployment completed successfully"
+	result.Endpoint = creationResult.Endpoint
+	result.Hostname = creationResult.Hostname
+
+	if current := aps.currentContainer.Load(); current != nil {
+		if currentContainer, ok := current.(*PerformerContainer); ok && currentContainer != nil {
+			result.ID = currentContainer.info.ID
+		}
+	}
 
 	aps.logger.Info("Deployment completed successfully",
 		zap.String("deploymentID", deploymentID),
 		zap.String("performerID", creationResult.PerformerID),
+		zap.String("containerEndpoint", result.Endpoint),
+		zap.String("containerHostname", result.Hostname),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
 
@@ -1284,4 +1288,124 @@ func convertPerformerContainer(avsAddress string, container *PerformerContainer)
 		LastHealthCheck:    container.performerHealth.LastHealthCheck,
 		ResourceID:         container.info.ID,
 	}
+}
+
+func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state *storage.PerformerState) error {
+	aps.logger.Info("Attempting to rehydrate performer from state",
+		zap.String("performerID", state.PerformerId),
+		zap.String("containerID", state.ContainerId),
+		zap.String("avsAddress", state.AvsAddress),
+	)
+
+	livenessConfig := &containerManager.LivenessConfig{
+		HealthCheckConfig: containerManager.HealthCheckConfig{
+			Enabled:          true,
+			Interval:         aps.config.ApplicationHealthCheckInterval,
+			FailureThreshold: maxConsecutiveApplicationHealthFailures,
+		},
+		RestartPolicy: containerManager.RestartPolicy{
+			Enabled:            true,
+			RestartOnCrash:     true,
+			RestartOnOOM:       true,
+			RestartOnUnhealthy: true,
+			MaxRestarts:        -1,
+		},
+	}
+
+	err := aps.containerManager.AdoptContainer(ctx, state.ContainerId, livenessConfig)
+	if err != nil {
+		aps.logger.Warn("Failed to adopt container, it may not be running",
+			zap.String("containerID", state.ContainerId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to adopt container %s: %w", state.ContainerId, err)
+	}
+
+	containerInfo, err := aps.containerManager.Inspect(ctx, state.ContainerId)
+	if err != nil {
+		return fmt.Errorf("failed to inspect adopted container: %w", err)
+	}
+
+	var endpoint string
+	if state.ContainerEndpoint != "" {
+		endpoint = state.ContainerEndpoint
+	} else {
+		endpoint, err = containerManager.GetContainerEndpoint(containerInfo, state.InternalPort, state.NetworkName)
+		if err != nil {
+			aps.logger.Error("Failed to get container endpoint",
+				zap.String("containerID", state.ContainerId),
+				zap.Error(err),
+			)
+			aps.containerManager.StopLivenessMonitoring(state.ContainerId)
+			return fmt.Errorf("failed to get container endpoint: %w", err)
+		}
+	}
+
+	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, false)
+	if err != nil {
+		aps.logger.Error("Failed to create performer client for adopted container",
+			zap.String("containerID", state.ContainerId),
+			zap.String("endpoint", endpoint),
+			zap.Error(err),
+		)
+		aps.containerManager.StopLivenessMonitoring(state.ContainerId)
+		return fmt.Errorf("failed to create performer client: %w", err)
+	}
+
+	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, state.ContainerId, livenessConfig)
+	if err != nil {
+		aps.logger.Error("Failed to start liveness monitoring for adopted container",
+			zap.String("containerID", state.ContainerId),
+			zap.Error(err),
+		)
+		return fmt.Errorf("failed to start liveness monitoring: %w", err)
+	}
+
+	// Convert environment variables from storage format to config format
+	var envs []config.AVSPerformerEnv
+	for _, envRecord := range state.EnvironmentVars {
+		envs = append(envs, config.AVSPerformerEnv{
+			Name:         envRecord.Name,
+			Value:        envRecord.Value,
+			ValueFromEnv: envRecord.ValueFromEnv,
+		})
+	}
+
+	container := &PerformerContainer{
+		performerID: state.PerformerId,
+		info:        containerInfo,
+		client:      perfClient,
+		eventChan:   eventChan,
+		performerHealth: &avsPerformer.PerformerHealth{
+			ContainerIsHealthy:   state.ContainerHealthy,
+			ApplicationIsHealthy: state.ApplicationHealthy,
+			LastHealthCheck:      state.LastHealthCheck,
+		},
+		statusChan: make(chan avsPerformer.PerformerStatusEvent, 10),
+		image: avsPerformer.PerformerImage{
+			Repository: state.ArtifactRegistry,
+			Tag:        state.ArtifactTag,
+			Digest:     state.ArtifactDigest,
+			Envs:       envs,
+		},
+		status: avsPerformer.PerformerResourceStatus(state.Status),
+	}
+
+	aps.performerContainersMu.Lock()
+	aps.currentContainer.Store(container)
+	aps.performerContainersMu.Unlock()
+
+	aps.taskWaitGroupsMu.Lock()
+	aps.taskWaitGroups[state.PerformerId] = &sync.WaitGroup{}
+	aps.taskWaitGroupsMu.Unlock()
+
+	go aps.monitorContainerEvents(ctx, container)
+
+	aps.logger.Info("Successfully rehydrated performer from state",
+		zap.String("performerID", state.PerformerId),
+		zap.String("containerID", state.ContainerId),
+		zap.String("endpoint", endpoint),
+	)
+
+	return nil
 }

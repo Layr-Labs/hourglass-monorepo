@@ -176,9 +176,12 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		ContainerId:        result.ID,
 		Status:             "running",
 		ArtifactRegistry:   req.GetRegistryUrl(),
-		ArtifactTag:        "", // Not available from request
+		ArtifactTag:        "",
 		ArtifactDigest:     req.GetDigest(),
-		DeploymentMode:     "docker", // Default for now
+		DeploymentMode:     "docker",
+		NetworkName:        e.config.PerformerNetworkName,
+		ContainerEndpoint:  result.Endpoint,
+		ContainerHostname:  result.Hostname,
 		CreatedAt:          result.StartTime,
 		LastHealthCheck:    result.EndTime,
 		ContainerHealthy:   true,

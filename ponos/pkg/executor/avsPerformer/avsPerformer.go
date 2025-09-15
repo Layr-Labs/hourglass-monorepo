@@ -2,8 +2,9 @@ package avsPerformer
 
 import (
 	"context"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"time"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 )
@@ -101,12 +102,16 @@ type DeploymentResult struct {
 	EndTime     time.Time
 	Message     string
 	Error       error
+	Endpoint    string
+	Hostname    string
 }
 
 // PerformerCreationResult contains information about a deployed performer
 type PerformerCreationResult struct {
 	PerformerID string
 	StatusChan  <-chan PerformerStatusEvent
+	Endpoint    string
+	Hostname    string
 }
 
 type IAvsPerformer interface {

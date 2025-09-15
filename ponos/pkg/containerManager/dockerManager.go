@@ -1447,3 +1447,88 @@ func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageN
 	dcm.logger.Info("Image pulled successfully", zap.String("image", imageName))
 	return nil
 }
+
+// ListContainers lists containers filtered by labels
+func (dcm *DockerContainerManager) ListContainers(ctx context.Context, labelFilter map[string]string) ([]*ContainerInfo, error) {
+	dcm.logger.Debug("Listing containers", zap.Any("labelFilter", labelFilter))
+
+	filterArgs := filters.NewArgs()
+	for key, value := range labelFilter {
+		filterArgs.Add("label", fmt.Sprintf("%s=%s", key, value))
+	}
+
+	containers, err := dcm.client.ContainerList(ctx, container.ListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list containers")
+	}
+
+	var result []*ContainerInfo
+	for _, c := range containers {
+
+		containerJSON, err := dcm.client.ContainerInspect(ctx, c.ID)
+		if err != nil {
+			dcm.logger.Warn("Failed to inspect container during listing",
+				zap.String("containerID", c.ID),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		info := &ContainerInfo{
+			ID:       containerJSON.ID,
+			Hostname: containerJSON.Config.Hostname,
+			Status:   containerJSON.State.Status,
+			Ports:    containerJSON.NetworkSettings.Ports,
+			Networks: containerJSON.NetworkSettings.Networks,
+		}
+		result = append(result, info)
+	}
+
+	dcm.logger.Info("Found containers",
+		zap.Int("count", len(result)),
+		zap.Any("labelFilter", labelFilter),
+	)
+
+	return result, nil
+}
+
+// AdoptContainer reconnects to an existing running container and starts monitoring it
+func (dcm *DockerContainerManager) AdoptContainer(ctx context.Context, containerID string, livenessConfig *LivenessConfig) error {
+	dcm.logger.Info("Attempting to adopt existing container",
+		zap.String("containerID", containerID),
+	)
+
+	containerJSON, err := dcm.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "No such container") {
+			return errors.Wrap(err, "container does not exist")
+		}
+		return errors.Wrap(err, "failed to inspect container for adoption")
+	}
+
+	if containerJSON.State.Status != "running" {
+		dcm.logger.Warn("Cannot adopt non-running container",
+			zap.String("containerID", containerID),
+			zap.String("status", containerJSON.State.Status),
+		)
+		return fmt.Errorf("container %s is not running (status: %s), cannot adopt", containerID, containerJSON.State.Status)
+	}
+
+	if livenessConfig != nil {
+		_, err := dcm.StartLivenessMonitoring(ctx, containerID, livenessConfig)
+		if err != nil {
+			return errors.Wrap(err, "failed to start liveness monitoring for adopted container")
+		}
+	}
+
+	dcm.logger.Info("Successfully adopted running container",
+		zap.String("containerID", containerID),
+		zap.String("hostname", containerJSON.Config.Hostname),
+		zap.String("status", containerJSON.State.Status),
+	)
+
+	return nil
+}
