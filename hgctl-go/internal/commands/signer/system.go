@@ -89,16 +89,16 @@ func systemKeystoreCommand() *cli.Command {
 			&cli.StringFlag{
 				Name:     "type",
 				Required: true,
-				Usage:    "Key type (ecdsa or bn254)",
+				Usage:    "Key type (only 'bn254' is supported)",
 			},
 		},
 		Action: func(c *cli.Context) error {
 			keystoreName := c.String("name")
 			keyType := strings.ToLower(c.String("type"))
 
-			// Validate key type
-			if keyType != "ecdsa" && keyType != "bn254" {
-				return fmt.Errorf("invalid key type: %s (must be 'ecdsa' or 'bn254')", keyType)
+			// Validate key type - only BN254 is supported for system keystores
+			if keyType != "bn254" {
+				return fmt.Errorf("invalid key type: %s (only 'bn254' is supported for system keystores)", keyType)
 			}
 
 			// Get context name
@@ -156,24 +156,16 @@ func systemKeystoreCommand() *cli.Command {
 				ctx.SystemSignerKeys = &signer.SigningKeys{}
 			}
 
-			// Configure system keys based on type
+			// Configure system BN254 keystore
 			keystoreRef := &signer.KeystoreReference{
 				Name: foundKeystore.Name,
 				Type: foundKeystore.Type,
 				Path: foundKeystore.Path,
 			}
 
-			if keyType == "ecdsa" {
-				ctx.SystemSignerKeys.ECDSA = &signer.ECDSAKeyConfig{
-					Keystore: keystoreRef,
-				}
-				fmt.Printf("✅ System ECDSA configured with keystore '%s' for context '%s'\n",
-					keystoreName, contextName)
-			} else { // bn254
-				ctx.SystemSignerKeys.BN254 = keystoreRef
-				fmt.Printf("✅ System BN254 configured with keystore '%s' for context '%s'\n",
-					keystoreName, contextName)
-			}
+			ctx.SystemSignerKeys.BN254 = keystoreRef
+			fmt.Printf("✅ System BN254 configured with keystore '%s' for context '%s'\n",
+				keystoreName, contextName)
 
 			// Save config
 			if err := config.SaveConfig(cfg); err != nil {

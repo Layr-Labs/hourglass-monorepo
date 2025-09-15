@@ -410,17 +410,10 @@ func (h *TestHarness) configureSigners() error {
 		return err
 	}
 
-	// Configure system signers
+	// Configure system BN254 keystore only
 	if err := h.withEnv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.OperatorKeystorePassword, func() error {
-		// ECDSA signer
-		result, err := h.ExecuteCLI("signer", "system", "keystore",
-			"--name", "aggregator-ecdsa", "--type", "ecdsa")
-		if err != nil && result.ExitCode != 0 {
-			return fmt.Errorf("failed to configure ECDSA signer: %w", err)
-		}
-
 		// BN254 signer
-		result, err = h.ExecuteCLI("signer", "system", "keystore",
+		result, err := h.ExecuteCLI("signer", "system", "keystore",
 			"--name", "aggregator", "--type", "bn254")
 		if err != nil && result.ExitCode != 0 {
 			return fmt.Errorf("failed to configure BN254 signer: %w", err)

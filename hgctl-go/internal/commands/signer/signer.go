@@ -515,7 +515,6 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	if m.keyType == "ecdsa" {
 		items := []list.Item{
 			signerItem{"Private Key", "Use SYSTEM_PRIVATE_KEY environment variable", "privatekey"},
-			signerItem{"Keystore", "Local encrypted key file", "keystore"},
 		}
 		// Only Web3Signer is experimental
 		if isExperimental {
