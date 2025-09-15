@@ -68,8 +68,8 @@ func BenchmarkAggregatorOperations(b *testing.B) {
 			fn:   benchmarkListPendingTasks,
 		},
 		{
-			name: "SetLastProcessedBlock",
-			fn:   benchmarkSetLastProcessedBlock,
+			name: "SaveBlock",
+			fn:   benchmarkSaveBlock,
 		},
 	}
 
@@ -205,14 +205,21 @@ func benchmarkListPendingTasks(b *testing.B, store storage.AggregatorStore) {
 	}
 }
 
-func benchmarkSetLastProcessedBlock(b *testing.B, store storage.AggregatorStore) {
+func benchmarkSaveBlock(b *testing.B, store storage.AggregatorStore) {
 	ctx := context.Background()
 	avsAddress := "0xtest"
 	chainId := config.ChainId(1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)); err != nil {
+		blockRecord := &storage.BlockRecord{
+			Number:     uint64(i),
+			Hash:       fmt.Sprintf("0xhash%d", i),
+			ParentHash: fmt.Sprintf("0xparent%d", i-1),
+			Timestamp:  uint64(1234567890 + i),
+			ChainId:    chainId,
+		}
+		if err := store.SaveBlock(ctx, avsAddress, blockRecord); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -317,7 +324,14 @@ func benchmarkConcurrentMixedOps(b *testing.B, store storage.AggregatorStore, co
 				case 3: // Update block
 					avsAddress := "0xtest"
 					chainId := config.ChainId(goroutineId%3 + 1)
-					if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, uint64(i)); err != nil {
+					blockRecord := &storage.BlockRecord{
+						Number:     uint64(i),
+						Hash:       fmt.Sprintf("0xhash%d_%d", goroutineId, i),
+						ParentHash: fmt.Sprintf("0xparent%d_%d", goroutineId, i-1),
+						Timestamp:  uint64(1234567890 + i),
+						ChainId:    chainId,
+					}
+					if err := store.SaveBlock(ctx, avsAddress, blockRecord); err != nil {
 						b.Error(err)
 					}
 				}

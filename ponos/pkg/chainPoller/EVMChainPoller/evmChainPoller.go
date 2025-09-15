@@ -118,7 +118,7 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 		}
 	}
 
-	if lastBlockRecord == nil || lastBlockRecord.Number > 0 {
+	if lastBlockRecord == nil {
 		return fmt.Errorf("last processed block must exist")
 	}
 
@@ -245,6 +245,8 @@ func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum
 		)
 		return nil, err
 	}
+
+	block.ChainId = ecp.config.ChainId
 
 	ecp.logger.Sugar().Infow("Block fetched with logs",
 		"latestBlockNum", block.Number.Value(),

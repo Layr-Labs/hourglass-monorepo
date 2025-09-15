@@ -214,9 +214,16 @@ func simulateAggregator(ctx context.Context, t *testing.T, store storage.Aggrega
 		case <-ticker.C:
 			// Simulate block processing
 			avsAddress := "0xtest"
-			err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum)
+			blockRecord := &storage.BlockRecord{
+				Number:     blockNum,
+				Hash:       fmt.Sprintf("0xhash%d", blockNum),
+				ParentHash: fmt.Sprintf("0xhash%d", blockNum-1),
+				Timestamp:  uint64(time.Now().Unix()),
+				ChainId:    chainId,
+			}
+			err := store.SaveBlock(ctx, avsAddress, blockRecord)
 			if err != nil {
-				t.Logf("Error setting block: %v", err)
+				t.Logf("Error saving block: %v", err)
 				atomic.AddInt64(&stats.errors, 1)
 				continue
 			}
@@ -406,7 +413,14 @@ func TestConcurrentLoad(t *testing.T) {
 							avsAddress := "0xtest"
 							chainId := config.ChainId(rand.Intn(3) + 1)
 							blockNum := uint64(rand.Intn(1000000))
-							if err := store.SetLastProcessedBlock(ctx, avsAddress, chainId, blockNum); err != nil {
+							blockRecord := &storage.BlockRecord{
+								Number:     blockNum,
+								Hash:       fmt.Sprintf("0xhash%d_%d", id, blockNum),
+								ParentHash: fmt.Sprintf("0xhash%d_%d", id, blockNum-1),
+								Timestamp:  uint64(time.Now().Unix()),
+								ChainId:    chainId,
+							}
+							if err := store.SaveBlock(ctx, avsAddress, blockRecord); err != nil {
 								errors <- err
 							}
 						case 2: // List tasks

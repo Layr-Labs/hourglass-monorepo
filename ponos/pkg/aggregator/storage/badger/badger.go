@@ -106,18 +106,17 @@ func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAd
 	s.mu.RUnlock()
 
 	var blockRecord *storage.BlockRecord
+	var highestBlockNum uint64
 	prefix := fmt.Sprintf(prefixLatestBlock, avsAddress, chainId)
 
 	err := s.db.View(func(txn *badgerv3.Txn) error {
 		opts := badgerv3.DefaultIteratorOptions
 		opts.Prefix = []byte(prefix)
-		opts.Reverse = true
 
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		it.Rewind()
-		if it.Valid() {
+		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 
 			var record storage.BlockRecord
@@ -128,7 +127,11 @@ func (s *BadgerAggregatorStore) GetLastProcessedBlock(ctx context.Context, avsAd
 				return fmt.Errorf("failed to unmarshal block record: %w", err)
 			}
 
-			blockRecord = &record
+			if blockRecord == nil || record.Number > highestBlockNum {
+				highestBlockNum = record.Number
+				tempRecord := record
+				blockRecord = &tempRecord
+			}
 		}
 		return nil
 	})
