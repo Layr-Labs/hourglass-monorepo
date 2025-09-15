@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"os/exec"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -483,7 +484,12 @@ func testWithBadgerStorage(
 	_ = testUtils.KillallAnvils()
 	l1Anvil, err := testUtils.StartL1Anvil(root, ctx)
 	require.NoError(t, err)
-	defer testUtils.KillAnvil(l1Anvil)
+	defer func(cmd *exec.Cmd) {
+		err := testUtils.KillAnvil(cmd)
+		if err != nil {
+			t.Logf("Failed to kill l1 anvil: %v", err)
+		}
+	}(l1Anvil)
 
 	anvilWg := &sync.WaitGroup{}
 	anvilWg.Add(1)
