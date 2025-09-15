@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/harness"
@@ -103,8 +104,6 @@ func TestOperatorRegistration(t *testing.T) {
 
 	t.Run("Register ECDSA Key", func(t *testing.T) {
 		// The aggregator operator should already be registered
-		// Get the aggregator ECDSA keystore
-		aggregatorKeystore := h.GetAggregatorECDSAKeystore()
 
 		// Set operator-set-id in context first
 		contextResult, err := h.ExecuteCLI(
@@ -115,13 +114,25 @@ func TestOperatorRegistration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
-		// Configure system signer with ECDSA
-		_, err = h.ExecuteCLI(
-			"signer", "system", "privatekey",
-		)
+		// First remove existing system signer configuration
+		removeResult, err := h.ExecuteCLI("signer", "system", "remove")
 		require.NoError(t, err)
-		// Set the system ECDSA address environment variable
-		t.Setenv("SYSTEM_ECDSA_ADDRESS", aggregatorKeystore.Address)
+		assert.Equal(t, 0, removeResult.ExitCode)
+
+		// Configure system signer with ECDSA using private key
+		// Need to provide SYSTEM_PRIVATE_KEY for this to work
+		systemPrivateKey := h.ChainConfig.OperatorAccountPk
+		if !strings.HasPrefix(systemPrivateKey, "0x") {
+			systemPrivateKey = "0x" + systemPrivateKey
+		}
+		t.Setenv("SYSTEM_PRIVATE_KEY", systemPrivateKey)
+
+		// Also set the SYSTEM_ECDSA_ADDRESS which is required when using private key
+		t.Setenv("SYSTEM_ECDSA_ADDRESS", h.ChainConfig.OperatorAccountAddress)
+
+		signerResult, err := h.ExecuteCLI("signer", "system", "privatekey")
+		require.NoError(t, err)
+		assert.Equal(t, 0, signerResult.ExitCode)
 
 		// Register ECDSA key (no flags needed - uses context)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
