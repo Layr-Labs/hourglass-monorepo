@@ -173,7 +173,6 @@ type ContainerManager interface {
 	TriggerRestart(containerID string, reason string) error
 
 	// Container discovery and adoption for rehydration
-	ListContainers(ctx context.Context, labelFilter map[string]string) ([]*ContainerInfo, error)
 	AdoptContainer(ctx context.Context, containerID string, livenessConfig *LivenessConfig) error
 
 	// Cleanup
