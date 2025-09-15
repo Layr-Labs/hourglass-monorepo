@@ -1224,12 +1224,6 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 	result.Endpoint = creationResult.Endpoint
 	result.Hostname = creationResult.Hostname
 
-	if current := aps.currentContainer.Load(); current != nil {
-		if currentContainer, ok := current.(*PerformerContainer); ok && currentContainer != nil {
-			result.ID = currentContainer.info.ID
-		}
-	}
-
 	aps.logger.Info("Deployment completed successfully",
 		zap.String("deploymentID", deploymentID),
 		zap.String("performerID", creationResult.PerformerID),
@@ -1291,33 +1285,17 @@ func convertPerformerContainer(avsAddress string, container *PerformerContainer)
 }
 
 func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state *storage.PerformerState) error {
-	aps.logger.Info("Attempting to rehydrate performer from state",
-		zap.String("performerID", state.PerformerId),
-		zap.String("containerID", state.ContainerId),
-		zap.String("avsAddress", state.AvsAddress),
-	)
-
 	livenessConfig := &containerManager.LivenessConfig{
 		HealthCheckConfig: containerManager.HealthCheckConfig{
 			Enabled:          true,
 			Interval:         aps.config.ApplicationHealthCheckInterval,
 			FailureThreshold: maxConsecutiveApplicationHealthFailures,
 		},
-		RestartPolicy: containerManager.RestartPolicy{
-			Enabled:            true,
-			RestartOnCrash:     true,
-			RestartOnOOM:       true,
-			RestartOnUnhealthy: true,
-			MaxRestarts:        -1,
-		},
+		RestartPolicy: *containerManager.NewConfigBuilder().BuildRestartPolicy(&containerManager.RestartPolicy{}),
 	}
 
 	err := aps.containerManager.AdoptContainer(ctx, state.ContainerId, livenessConfig)
 	if err != nil {
-		aps.logger.Warn("Failed to adopt container, it may not be running",
-			zap.String("containerID", state.ContainerId),
-			zap.Error(err),
-		)
 		return fmt.Errorf("failed to adopt container %s: %w", state.ContainerId, err)
 	}
 
@@ -1326,42 +1304,18 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 		return fmt.Errorf("failed to inspect adopted container: %w", err)
 	}
 
-	var endpoint string
-	if state.ContainerEndpoint != "" {
-		endpoint = state.ContainerEndpoint
-	} else {
-		endpoint, err = containerManager.GetContainerEndpoint(containerInfo, state.InternalPort, state.NetworkName)
-		if err != nil {
-			aps.logger.Error("Failed to get container endpoint",
-				zap.String("containerID", state.ContainerId),
-				zap.Error(err),
-			)
-			aps.containerManager.StopLivenessMonitoring(state.ContainerId)
-			return fmt.Errorf("failed to get container endpoint: %w", err)
-		}
-	}
-
+	endpoint := state.ContainerEndpoint
 	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, false)
 	if err != nil {
-		aps.logger.Error("Failed to create performer client for adopted container",
-			zap.String("containerID", state.ContainerId),
-			zap.String("endpoint", endpoint),
-			zap.Error(err),
-		)
 		aps.containerManager.StopLivenessMonitoring(state.ContainerId)
 		return fmt.Errorf("failed to create performer client: %w", err)
 	}
 
 	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, state.ContainerId, livenessConfig)
 	if err != nil {
-		aps.logger.Error("Failed to start liveness monitoring for adopted container",
-			zap.String("containerID", state.ContainerId),
-			zap.Error(err),
-		)
 		return fmt.Errorf("failed to start liveness monitoring: %w", err)
 	}
 
-	// Convert environment variables from storage format to config format
 	var envs []config.AVSPerformerEnv
 	for _, envRecord := range state.EnvironmentVars {
 		envs = append(envs, config.AVSPerformerEnv{
