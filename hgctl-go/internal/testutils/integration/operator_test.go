@@ -120,7 +120,6 @@ func TestOperatorRegistration(t *testing.T) {
 		assert.Equal(t, 0, removeResult.ExitCode)
 
 		// Configure system signer with ECDSA using private key
-		// Need to provide SYSTEM_PRIVATE_KEY for this to work
 		systemPrivateKey := h.ChainConfig.OperatorAccountPk
 		if !strings.HasPrefix(systemPrivateKey, "0x") {
 			systemPrivateKey = "0x" + systemPrivateKey
