@@ -57,30 +57,8 @@ type TaskInfo struct {
 	OperatorSetId     uint32
 }
 
-// DeploymentInfo tracks deployment information
-type DeploymentInfo struct {
-	DeploymentId     string
-	AvsAddress       string
-	ArtifactRegistry string
-	ArtifactDigest   string
-	Status           DeploymentStatus
-	StartedAt        time.Time
-	CompletedAt      *time.Time
-	Error            string
-}
-
 // ProcessedTask represents a task that has been processed
 type ProcessedTask struct {
 	TaskId      string    `json:"taskId"`
 	ProcessedAt time.Time `json:"processedAt"`
 }
-
-// DeploymentStatus represents the status of a deployment
-type DeploymentStatus string
-
-const (
-	DeploymentStatusPending   DeploymentStatus = "pending"
-	DeploymentStatusDeploying DeploymentStatus = "deploying"
-	DeploymentStatusRunning   DeploymentStatus = "running"
-	DeploymentStatusFailed    DeploymentStatus = "failed"
-)
