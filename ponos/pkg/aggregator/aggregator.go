@@ -15,6 +15,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager/taskBlockContextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
@@ -504,6 +505,7 @@ func (a *Aggregator) getChainPollers(supportedChains []config.ChainId, avsAddres
 			pollerConfig,
 			a.contractStore,
 			a.store,
+			taskBlockContextManager.NewTaskBlockContextManager(a.rootCtx, a.logger),
 			a.logger,
 		)
 		chainPollers[chainId] = poller

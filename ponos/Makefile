@@ -143,6 +143,8 @@ gen-mocks:
 	mockgen -source=pkg/clients/ethereum/client.go -destination=mocks/mock_ethereum_client.go -package=mocks Client
 	@echo "Generating mock for transactionLogParser.LogParser interface..."
 	mockgen -source=pkg/transactionLogParser/transactionLogParser.go -destination=mocks/mock_log_parser.go -package=mocks LogParser
+	@echo "Generating mock for IBlockContextManager interface..."
+	mockgen -source=pkg/chainPoller/EVMChainPoller/taskBlockContextManager.go -destination=mocks/mock_block_context_manager.go -package=mocks IBlockContextManager
 
 .PHONY: ci-test
 ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container build/operator-container test

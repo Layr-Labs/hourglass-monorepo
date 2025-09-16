@@ -1,40 +1,27 @@
-package EVMChainPoller
+package taskBlockContextManager
 
 import (
 	"context"
 	"sync"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
 )
 
-// IBlockContextManager manages contexts for blocks with proper cancellation on reorgs
-type IBlockContextManager interface {
-	GetContext(blockNumber uint64, task *types.Task) context.Context
-	CancelBlock(blockNumber uint64)
-}
-
-// blockContext holds both the context and its cancel function
-type blockContext struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-}
-
-// TaskBlockContextManager provides per-block context management with automatic cleanup
 type TaskBlockContextManager struct {
 	mu              sync.RWMutex
-	blockContexts   map[uint64]*blockContext
+	blockContexts   map[uint64]*contextManager.BlockContext
 	parentCtx       context.Context
 	logger          *zap.Logger
 	cleanupInterval time.Duration
 	done            chan struct{}
 }
 
-// NewTaskBlockContextManager creates a new TaskBlockContextManager instance
 func NewTaskBlockContextManager(parentCtx context.Context, logger *zap.Logger) *TaskBlockContextManager {
 	mgr := &TaskBlockContextManager{
-		blockContexts:   make(map[uint64]*blockContext),
+		blockContexts:   make(map[uint64]*contextManager.BlockContext),
 		parentCtx:       parentCtx,
 		logger:          logger.With(zap.String("component", "TaskBlockContextManager")),
 		cleanupInterval: 5 * time.Minute,
@@ -46,12 +33,11 @@ func NewTaskBlockContextManager(parentCtx context.Context, logger *zap.Logger) *
 	return mgr
 }
 
-// GetContext returns an existing context for the block or creates a new one with the task deadline
 func (bcm *TaskBlockContextManager) GetContext(blockNumber uint64, task *types.Task) context.Context {
 	bcm.mu.RLock()
 	if blockCtx, exists := bcm.blockContexts[blockNumber]; exists {
 		bcm.mu.RUnlock()
-		return blockCtx.ctx
+		return blockCtx.Ctx
 	}
 	bcm.mu.RUnlock()
 
@@ -61,7 +47,7 @@ func (bcm *TaskBlockContextManager) GetContext(blockNumber uint64, task *types.T
 
 	// Double-check in case another goroutine created it
 	if blockCtx, exists := bcm.blockContexts[blockNumber]; exists {
-		return blockCtx.ctx
+		return blockCtx.Ctx
 	}
 
 	// Create context with deadline from task
@@ -75,9 +61,9 @@ func (bcm *TaskBlockContextManager) GetContext(blockNumber uint64, task *types.T
 		ctx, cancel = context.WithCancel(bcm.parentCtx)
 	}
 
-	bcm.blockContexts[blockNumber] = &blockContext{
-		ctx:    ctx,
-		cancel: cancel,
+	bcm.blockContexts[blockNumber] = &contextManager.BlockContext{
+		Ctx:    ctx,
+		Cancel: cancel,
 	}
 
 	bcm.logger.Debug("Created new context for block",
@@ -95,7 +81,7 @@ func (bcm *TaskBlockContextManager) CancelBlock(blockNumber uint64) {
 	defer bcm.mu.Unlock()
 
 	if blockCtx, exists := bcm.blockContexts[blockNumber]; exists {
-		blockCtx.cancel()
+		blockCtx.Cancel()
 		delete(bcm.blockContexts, blockNumber)
 
 		bcm.logger.Info("Cancelled context for reorged block",
@@ -134,7 +120,7 @@ func (bcm *TaskBlockContextManager) doCleanup() {
 
 	for blockNum, blockCtx := range bcm.blockContexts {
 		select {
-		case <-blockCtx.ctx.Done():
+		case <-blockCtx.Ctx.Done():
 			// Context is cancelled or expired
 			blocksToRemove = append(blocksToRemove, blockNum)
 		default:
@@ -163,10 +149,10 @@ func (bcm *TaskBlockContextManager) Shutdown() {
 	defer bcm.mu.Unlock()
 
 	for _, blockCtx := range bcm.blockContexts {
-		blockCtx.cancel()
+		blockCtx.Cancel()
 	}
 
-	bcm.blockContexts = make(map[uint64]*blockContext)
+	bcm.blockContexts = make(map[uint64]*contextManager.BlockContext)
 
 	bcm.logger.Info("TaskBlockContextManager shut down")
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
@@ -38,7 +39,7 @@ type EVMChainPoller struct {
 	contractStore       contractStore.IContractStore
 	logger              *zap.Logger
 	store               storage.AggregatorStore
-	blockContextManager IBlockContextManager
+	blockContextManager contextManager.IBlockContextManager
 }
 
 func NewEVMChainPoller(
@@ -48,7 +49,7 @@ func NewEVMChainPoller(
 	config *EVMChainPollerConfig,
 	contractStore contractStore.IContractStore,
 	store storage.AggregatorStore,
-	blockContextManager IBlockContextManager,
+	blockContextManager contextManager.IBlockContextManager,
 	logger *zap.Logger,
 ) *EVMChainPoller {
 
