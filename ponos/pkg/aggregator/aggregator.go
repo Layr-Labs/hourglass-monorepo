@@ -505,7 +505,7 @@ func (a *Aggregator) getChainPollers(supportedChains []config.ChainId, avsAddres
 			pollerConfig,
 			a.contractStore,
 			a.store,
-			taskBlockContextManager.NewTaskBlockContextManager(a.rootCtx, a.logger),
+			taskBlockContextManager.NewTaskBlockContextManager(a.rootCtx, a.store, a.logger),
 			a.logger,
 		)
 		chainPollers[chainId] = poller

@@ -139,9 +139,6 @@ func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 
 	ecp.logger.Sugar().Infow("Starting Ethereum Chain Listener poll loop")
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	ticker := time.NewTicker(ecp.config.PollingInterval)
 	defer ticker.Stop()
 
@@ -151,27 +148,23 @@ func (ecp *EVMChainPoller) pollForBlocks(ctx context.Context) {
 			ecp.logger.Sugar().Infow("Polling loop context cancelled, stopping")
 			return
 		case <-ticker.C:
-			if err := ecp.processNextBlock(ctx); err != nil {
-				ecp.logger.Sugar().Errorw("Error processing Ethereum block.", err)
-				cancel()
-				return
-			}
+			ecp.processNextBlock(ctx)
 		}
 	}
 }
 
-func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
+func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) {
 
 	latestBlockRecord, err := ecp.store.GetLastProcessedBlock(ctx, ecp.config.AvsAddress, ecp.config.ChainId)
 	if err != nil {
 		ecp.logger.Sugar().Errorw("Error getting last processed block", "error", err)
-		return nil
+		return
 	}
 
 	latestBlockNum, err := ecp.ethClient.GetLatestBlock(ctx)
 	if err != nil {
 		ecp.logger.Sugar().Errorw("Error getting latest block number", "error", err)
-		return nil
+		return
 	}
 
 	if latestBlockRecord.Number == latestBlockNum {
@@ -179,7 +172,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			zap.Uint64("lastObservedBlock", latestBlockRecord.Number),
 			zap.Uint64("latestBlock", latestBlockNum),
 		)
-		return nil
+		return
 	}
 
 	var blocksToFetch []uint64
@@ -201,7 +194,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 				zap.Uint64("blockNumber", blockNum),
 				zap.Error(err),
 			)
-			return nil
+			return
 		}
 
 		if newCanonBlock.ParentHash.Value() != latestBlockRecord.Hash {
@@ -214,7 +207,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			if err = ecp.reconcileReorg(ctx, newCanonBlock); err != nil {
 				ecp.logger.Sugar().Errorw("Failed to reconcile reorg", "error", err)
 			}
-			return nil
+			return
 		}
 
 		latestBlockRecord, err = ecp.processBlockLogs(ctx, newCanonBlock)
@@ -223,7 +216,7 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 				zap.Uint64("blockNumber", blockNum),
 				zap.Error(err),
 			)
-			return nil
+			return
 		}
 	}
 
@@ -234,8 +227,6 @@ func (ecp *EVMChainPoller) processNextBlock(ctx context.Context) error {
 			zap.Uint64("blockNumber", blocksToFetch[len(blocksToFetch)-1]),
 		)
 	}
-
-	return nil
 }
 
 func (ecp *EVMChainPoller) processBlockLogs(ctx context.Context, block *ethereum.EthereumBlock) (*storage.BlockRecord, error) {
@@ -489,20 +480,16 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 			"taskId", task.TaskId)
 	}
 
-	if err := ecp.store.SavePendingTask(ctx, task); err != nil {
-		ecp.logger.Sugar().Errorw("Failed to save task to storage",
-			"error", err,
-			"taskId", task.TaskId)
-		// Continue processing even if initial save fails
-	} else {
-		ecp.logger.Sugar().Infow("Saved new task to storage as pending",
-			"taskId", task.TaskId)
-	}
-
 	select {
 	case ecp.taskQueue <- task:
 		ecp.logger.Sugar().Infow("Task in queue for processing",
 			"taskId", task.TaskId)
+
+		if err := ecp.store.SavePendingTask(ctx, task); err != nil {
+			ecp.logger.Sugar().Errorw("Failed to save task to storage",
+				"error", err,
+				"taskId", task.TaskId)
+		}
 
 	case <-time.After(100 * time.Millisecond):
 		ecp.logger.Sugar().Warnw("Failed to enqueue task (channel full or closed)",
@@ -513,7 +500,6 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 			zap.Uint64("logIndex", lwb.RawLog.LogIndex.Value()),
 		)
 
-		// Failed to queue, leave status as pending for retry
 		return fmt.Errorf("failed to enqueue task (channel full or closed)")
 	}
 
@@ -562,17 +548,13 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 			expired++
 			continue
+
 		default:
 		}
 
 		select {
 		case ecp.taskQueue <- task:
 
-			if err := ecp.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusProcessing); err != nil {
-				ecp.logger.Sugar().Warnw("Failed to mark recovered task as processing",
-					"error", err,
-					"taskId", task.TaskId)
-			}
 			recovered++
 			ecp.logger.Sugar().Infow("Re-queued recovered task",
 				"taskId", task.TaskId,

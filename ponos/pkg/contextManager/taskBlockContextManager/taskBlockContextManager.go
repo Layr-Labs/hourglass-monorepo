@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"go.uber.org/zap"
@@ -14,14 +15,16 @@ type TaskBlockContextManager struct {
 	mu              sync.RWMutex
 	blockContexts   map[uint64]*contextManager.BlockContext
 	parentCtx       context.Context
+	store           storage.AggregatorStore
 	logger          *zap.Logger
 	cleanupInterval time.Duration
 }
 
-func NewTaskBlockContextManager(parentCtx context.Context, logger *zap.Logger) *TaskBlockContextManager {
+func NewTaskBlockContextManager(parentCtx context.Context, store storage.AggregatorStore, logger *zap.Logger) *TaskBlockContextManager {
 	mgr := &TaskBlockContextManager{
 		blockContexts:   make(map[uint64]*contextManager.BlockContext),
 		parentCtx:       parentCtx,
+		store:           store,
 		logger:          logger.With(zap.String("component", "TaskBlockContextManager")),
 		cleanupInterval: 5 * time.Minute,
 	}
@@ -36,14 +39,16 @@ func (bcm *TaskBlockContextManager) GetContext(blockNumber uint64, task *types.T
 	defer bcm.mu.Unlock()
 
 	if blockCtx, exists := bcm.blockContexts[blockNumber]; exists {
+		blockCtx.TaskIDs[task.TaskId] = struct{}{}
 		return blockCtx.Ctx
 	}
 
 	ctx, cancel := context.WithDeadline(bcm.parentCtx, *task.DeadlineUnixSeconds)
 
 	bcm.blockContexts[blockNumber] = &contextManager.BlockContext{
-		Ctx:    ctx,
-		Cancel: cancel,
+		Ctx:     ctx,
+		Cancel:  cancel,
+		TaskIDs: map[string]struct{}{task.TaskId: {}},
 	}
 
 	bcm.logger.Debug("Created new context for block",
@@ -59,14 +64,29 @@ func (bcm *TaskBlockContextManager) CancelBlock(blockNumber uint64) {
 	bcm.mu.Lock()
 	defer bcm.mu.Unlock()
 
-	if blockCtx, exists := bcm.blockContexts[blockNumber]; exists {
-		blockCtx.Cancel()
-		delete(bcm.blockContexts, blockNumber)
-
-		bcm.logger.Info("Cancelled context for reorged block",
-			zap.Uint64("blockNumber", blockNumber),
-		)
+	blockCtx, exists := bcm.blockContexts[blockNumber]
+	if !exists {
+		return
 	}
+
+	blockCtx.Cancel()
+
+	for taskID := range blockCtx.TaskIDs {
+		if err := bcm.store.DeleteTask(context.Background(), taskID); err != nil {
+			bcm.logger.Error("Failed to delete task from storage",
+				zap.String("taskId", taskID),
+				zap.Uint64("blockNumber", blockNumber),
+				zap.Error(err),
+			)
+		}
+	}
+
+	delete(bcm.blockContexts, blockNumber)
+
+	bcm.logger.Info("Cancelled context for block",
+		zap.Uint64("blockNumber", blockNumber),
+		zap.Int("deletedTasks", len(blockCtx.TaskIDs)),
+	)
 }
 
 func (bcm *TaskBlockContextManager) cleanupExpiredContexts() {

@@ -1085,7 +1085,8 @@ func TestEVMChainPoller_ContextCancellationOnReorg(t *testing.T) {
 func TestTaskBlockContextManager_GetContext(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Create a task with deadline
 	deadline := time.Now().Add(1 * time.Hour)
@@ -1112,7 +1113,8 @@ func TestTaskBlockContextManager_GetContext(t *testing.T) {
 func TestTaskBlockContextManager_CancelBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Create contexts for multiple blocks
 	deadline := time.Now().Add(1 * time.Hour)
@@ -1269,8 +1271,17 @@ func TestRecoverInProgressTasks_PopulatesContextFromStorage(t *testing.T) {
 		// Expected - no more tasks
 	}
 
-	// Verify expired task was handled correctly (not in pending list)
+	// Verify that valid tasks remain pending (they're queued but not yet picked up by AvsExecutionManager)
 	pendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xtest")
 	assert.NoError(t, err)
-	assert.Equal(t, 0, len(pendingTasks), "No tasks should remain pending")
+	assert.Equal(t, 2, len(pendingTasks), "Valid tasks should remain pending until AvsExecutionManager processes them")
+
+	// Verify the pending tasks are the valid ones, not the expired one
+	pendingTaskIds := make(map[string]bool)
+	for _, task := range pendingTasks {
+		pendingTaskIds[task.TaskId] = true
+	}
+	assert.True(t, pendingTaskIds["task-1"], "task-1 should be pending")
+	assert.True(t, pendingTaskIds["task-2"], "task-2 should be pending")
+	assert.False(t, pendingTaskIds["expired-task"], "expired-task should not be pending")
 }

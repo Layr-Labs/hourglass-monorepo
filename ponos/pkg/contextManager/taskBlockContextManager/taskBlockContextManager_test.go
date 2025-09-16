@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,8 @@ import (
 func TestTaskBlockContextManager_BasicContextOperations(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Create a task with deadline
 	deadline := time.Now().Add(1 * time.Hour)
@@ -39,7 +41,8 @@ func TestTaskBlockContextManager_BasicContextOperations(t *testing.T) {
 func TestTaskBlockContextManager_ContextCaching(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task1 := &types.Task{
@@ -63,7 +66,8 @@ func TestTaskBlockContextManager_ContextCaching(t *testing.T) {
 func TestTaskBlockContextManager_CancelSpecificBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -106,7 +110,8 @@ func TestTaskBlockContextManager_CancelSpecificBlock(t *testing.T) {
 func TestTaskBlockContextManager_CancelNonExistentBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Cancel block that doesn't exist - should not panic
 	assert.NotPanics(t, func() {
@@ -118,11 +123,13 @@ func TestTaskBlockContextManager_CancelNonExistentBlock(t *testing.T) {
 func TestTaskBlockContextManager_AutoCleanupExpiredContexts(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
+	store := memory.NewInMemoryAggregatorStore()
 
 	// Create manager with very short cleanup interval for testing
 	mgr := &TaskBlockContextManager{
 		blockContexts:   make(map[uint64]*contextManager.BlockContext),
 		parentCtx:       parentCtx,
+		store:           store,
 		logger:          logger,
 		cleanupInterval: 100 * time.Millisecond, // Fast cleanup for testing
 	}
@@ -168,10 +175,13 @@ func TestTaskBlockContextManager_AutoCleanupExpiredContexts(t *testing.T) {
 func TestTaskBlockContextManager_AutoCleanupCancelledContexts(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
+	store := memory.NewInMemoryAggregatorStore()
 
+	// Create manager with short cleanup interval
 	mgr := &TaskBlockContextManager{
 		blockContexts:   make(map[uint64]*contextManager.BlockContext),
 		parentCtx:       parentCtx,
+		store:           store,
 		logger:          logger,
 		cleanupInterval: 100 * time.Millisecond,
 	}
@@ -206,7 +216,8 @@ func TestTaskBlockContextManager_AutoCleanupCancelledContexts(t *testing.T) {
 func TestTaskBlockContextManager_ParentContextCancellation(t *testing.T) {
 	parentCtx, parentCancel := context.WithCancel(context.Background())
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -236,7 +247,8 @@ func TestTaskBlockContextManager_ParentContextCancellation(t *testing.T) {
 func TestTaskBlockContextManager_MultipleCancellations(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -276,7 +288,8 @@ func TestTaskBlockContextManager_MultipleCancellations(t *testing.T) {
 func TestTaskBlockContextManager_CleanupDoesNotAffectActive(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Create contexts with various deadlines
 	now := time.Now()
@@ -325,7 +338,8 @@ func TestTaskBlockContextManager_CleanupDoesNotAffectActive(t *testing.T) {
 func BenchmarkTaskBlockContextManager_GetContext(b *testing.B) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -343,7 +357,8 @@ func BenchmarkTaskBlockContextManager_GetContext(b *testing.B) {
 func BenchmarkTaskBlockContextManager_ConcurrentOps(b *testing.B) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -370,10 +385,12 @@ func BenchmarkTaskBlockContextManager_ConcurrentOps(b *testing.B) {
 func TestTaskBlockContextManager_CleanupInterval(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
+	store := memory.NewInMemoryAggregatorStore()
 
 	mgr := &TaskBlockContextManager{
 		blockContexts:   make(map[uint64]*contextManager.BlockContext),
 		parentCtx:       parentCtx,
+		store:           store,
 		logger:          logger,
 		cleanupInterval: 50 * time.Millisecond, // Very short interval for testing
 	}
@@ -414,7 +431,8 @@ func TestTaskBlockContextManager_CleanupInterval(t *testing.T) {
 func TestTaskBlockContextManager_EmptyState(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(parentCtx, store, logger)
 
 	// Cleanup on empty manager should not panic
 	assert.NotPanics(t, func() {
