@@ -64,7 +64,6 @@ func NewEVMChainPoller(
 	if config.BlockHistorySize == 0 {
 		config.BlockHistorySize = 100
 	}
-	// ReorgCheckEnabled defaults to true unless explicitly set to false
 	if !config.ReorgCheckEnabled && config.MaxReorgDepth > 0 {
 		config.ReorgCheckEnabled = true
 	}
@@ -547,7 +546,10 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 	for _, task := range tasks {
 
-		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
+		task.Context = ecp.blockContextManager.GetContext(task.SourceBlockNumber, task)
+
+		select {
+		case <-task.Context.Done():
 			ecp.logger.Sugar().Warnw("Skipping expired task during recovery",
 				"taskId", task.TaskId,
 				"deadline", task.DeadlineUnixSeconds.Unix())
@@ -560,9 +562,9 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 			expired++
 			continue
+		default:
 		}
 
-		// Try to re-queue the task and mark as processing
 		select {
 		case ecp.taskQueue <- task:
 
@@ -578,7 +580,6 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 		case <-time.After(100 * time.Millisecond):
 			ecp.logger.Sugar().Warnw("Task queue full, cannot recover task",
 				"taskId", task.TaskId)
-			// Leave as pending for next recovery attempt
 			break
 		}
 	}
@@ -592,7 +593,6 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 	return nil
 }
 
-// reconcileReorg finds the common ancestor of the previously processed block head and the new blocks
 func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ethereum.EthereumBlock) error {
 	orphanedBlocks, err := ecp.findOrphanedBlocks(ctx, startBlock, ecp.config.MaxReorgDepth)
 

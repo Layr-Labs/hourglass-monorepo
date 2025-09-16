@@ -352,7 +352,7 @@ func TestTaskBlockContextManager_CleanupDoesNotAffectActive(t *testing.T) {
 	}
 
 	// Run cleanup manually
-	mgr.doCleanup()
+	mgr.cleanupContexts()
 
 	// Active context should still be there
 	mgr.mu.RLock()
@@ -472,7 +472,7 @@ func TestTaskBlockContextManager_EmptyState(t *testing.T) {
 
 	// Cleanup on empty manager should not panic
 	assert.NotPanics(t, func() {
-		mgr.doCleanup()
+		mgr.cleanupContexts()
 	})
 
 	// Cancel on empty manager should not panic

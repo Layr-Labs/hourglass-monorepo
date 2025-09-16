@@ -1086,7 +1086,6 @@ func TestTaskBlockContextManager_GetContext(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Create a task with deadline
 	deadline := time.Now().Add(1 * time.Hour)
@@ -1114,7 +1113,6 @@ func TestTaskBlockContextManager_CancelBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Create contexts for multiple blocks
 	deadline := time.Now().Add(1 * time.Hour)
@@ -1153,33 +1151,126 @@ func TestTaskBlockContextManager_CancelBlock(t *testing.T) {
 	}
 }
 
-// Test TaskBlockContextManager shutdown
-func TestTaskBlockContextManager_Shutdown(t *testing.T) {
-	parentCtx := context.Background()
-	logger := zap.NewNop()
-	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
+// Test that tasks loaded from storage are populated with their context
+func TestRecoverInProgressTasks_PopulatesContextFromStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Create multiple contexts
-	deadline := time.Now().Add(1 * time.Hour)
-	task := &types.Task{
+	ctx := context.Background()
+	store := memory.NewInMemoryAggregatorStore()
+	taskQueue := make(chan *types.Task, 10)
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(ctrl)
+
+	// Create tasks with different source block numbers
+	validDeadline := time.Now().Add(1 * time.Hour)
+	expiredDeadline := time.Now().Add(-1 * time.Hour)
+
+	task1 := &types.Task{
 		TaskId:              "task-1",
-		DeadlineUnixSeconds: &deadline,
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &validDeadline,
+		SourceBlockNumber:   100,
+		ReferenceTimestamp:  1234567890,
 	}
 
-	ctx1 := mgr.GetContext(100, task)
-	ctx2 := mgr.GetContext(101, task)
-	ctx3 := mgr.GetContext(102, task)
+	task2 := &types.Task{
+		TaskId:              "task-2",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &validDeadline,
+		SourceBlockNumber:   101,
+		ReferenceTimestamp:  1234567891,
+	}
 
-	// Shutdown the manager
-	mgr.Shutdown()
+	expiredTask := &types.Task{
+		TaskId:              "expired-task",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &expiredDeadline,
+		SourceBlockNumber:   99,
+		ReferenceTimestamp:  1234567889,
+	}
 
-	// All contexts should be cancelled
-	for _, ctx := range []context.Context{ctx1, ctx2, ctx3} {
+	// Save all tasks as pending
+	require.NoError(t, store.SavePendingTask(ctx, task1))
+	require.NoError(t, store.SavePendingTask(ctx, task2))
+	require.NoError(t, store.SavePendingTask(ctx, expiredTask))
+
+	// Create test contexts with different states
+	validCtx1 := context.WithValue(context.Background(), testContextKey("block"), "100")
+	validCtx2 := context.WithValue(context.Background(), testContextKey("block"), "101")
+	expiredCtx, cancelExpired := context.WithCancel(context.Background())
+	cancelExpired() // Make it expired
+
+	// Set up expectations for GetContext calls
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(100), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(100), blockNum)
+			assert.Equal(t, "task-1", task.TaskId)
+			return validCtx1
+		})
+
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(101), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(101), blockNum)
+			assert.Equal(t, "task-2", task.TaskId)
+			return validCtx2
+		})
+
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(99), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(99), blockNum)
+			assert.Equal(t, "expired-task", task.TaskId)
+			return expiredCtx
+		})
+
+	poller := &EVMChainPoller{
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		config: &EVMChainPollerConfig{
+			AvsAddress: "0xtest",
+			ChainId:    config.ChainId(1),
+		},
+		logger: zap.NewNop(),
+	}
+
+	// Execute recoverInProgressTasks
+	err := poller.recoverInProgressTasks(ctx)
+	assert.NoError(t, err)
+
+	// Verify that valid tasks are queued with proper contexts
+	queuedTasks := make(map[string]*types.Task)
+	for i := 0; i < 2; i++ {
 		select {
-		case <-ctx.Done():
-			// Expected
+		case task := <-taskQueue:
+			queuedTasks[task.TaskId] = task
 		case <-time.After(100 * time.Millisecond):
-			t.Fatal("Context should be cancelled after shutdown")
+			t.Fatal("Expected 2 tasks to be queued")
 		}
 	}
+
+	// Verify task 1 has the correct context
+	assert.NotNil(t, queuedTasks["task-1"])
+	assert.NotNil(t, queuedTasks["task-1"].Context)
+	assert.Equal(t, "100", queuedTasks["task-1"].Context.Value(testContextKey("block")))
+
+	// Verify task 2 has the correct context
+	assert.NotNil(t, queuedTasks["task-2"])
+	assert.NotNil(t, queuedTasks["task-2"].Context)
+	assert.Equal(t, "101", queuedTasks["task-2"].Context.Value(testContextKey("block")))
+
+	// Verify expired task was not queued
+	select {
+	case task := <-taskQueue:
+		t.Fatalf("Should not receive expired task, got: %s", task.TaskId)
+	case <-time.After(50 * time.Millisecond):
+		// Expected - no more tasks
+	}
+
+	// Verify expired task was handled correctly (not in pending list)
+	pendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xtest")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(pendingTasks), "No tasks should remain pending")
 }
