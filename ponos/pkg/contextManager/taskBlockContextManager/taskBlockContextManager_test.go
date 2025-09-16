@@ -2,13 +2,16 @@ package taskBlockContextManager
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -117,6 +120,107 @@ func TestTaskBlockContextManager_CancelNonExistentBlock(t *testing.T) {
 	assert.NotPanics(t, func() {
 		mgr.CancelBlock(999)
 	})
+}
+
+// Test that CancelBlock deletes tasks from store
+func TestTaskBlockContextManager_CancelBlock_DeletesTasksFromStore(t *testing.T) {
+	ctx := context.Background()
+	logger := zap.NewNop()
+	store := memory.NewInMemoryAggregatorStore()
+	mgr := NewTaskBlockContextManager(ctx, store, logger)
+
+	deadline := time.Now().Add(1 * time.Hour)
+
+	// Create multiple tasks for the same block
+	task1 := &types.Task{
+		TaskId:              "task-1",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &deadline,
+		SourceBlockNumber:   100,
+	}
+	task2 := &types.Task{
+		TaskId:              "task-2",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &deadline,
+		SourceBlockNumber:   100,
+	}
+	task3 := &types.Task{
+		TaskId:              "task-3",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &deadline,
+		SourceBlockNumber:   100,
+	}
+
+	// Create task for different block (should not be deleted)
+	task4 := &types.Task{
+		TaskId:              "task-4",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &deadline,
+		SourceBlockNumber:   101,
+	}
+
+	// Save all tasks to store
+	require.NoError(t, store.SavePendingTask(ctx, task1))
+	require.NoError(t, store.SavePendingTask(ctx, task2))
+	require.NoError(t, store.SavePendingTask(ctx, task3))
+	require.NoError(t, store.SavePendingTask(ctx, task4))
+
+	// Get contexts for the tasks (this registers them with the block)
+	_ = mgr.GetContext(100, task1)
+	_ = mgr.GetContext(100, task2)
+	_ = mgr.GetContext(100, task3)
+	_ = mgr.GetContext(101, task4)
+
+	// Verify all tasks exist in store before cancellation
+	storedTask1, err := store.GetTask(ctx, "task-1")
+	assert.NoError(t, err)
+	assert.NotNil(t, storedTask1)
+
+	storedTask2, err := store.GetTask(ctx, "task-2")
+	assert.NoError(t, err)
+	assert.NotNil(t, storedTask2)
+
+	storedTask3, err := store.GetTask(ctx, "task-3")
+	assert.NoError(t, err)
+	assert.NotNil(t, storedTask3)
+
+	storedTask4, err := store.GetTask(ctx, "task-4")
+	assert.NoError(t, err)
+	assert.NotNil(t, storedTask4)
+
+	// Cancel block 100 (should delete task-1, task-2, and task-3)
+	mgr.CancelBlock(100)
+
+	// Verify tasks from block 100 are deleted
+	_, err = store.GetTask(ctx, "task-1")
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, storage.ErrNotFound), "task-1 should be deleted")
+
+	_, err = store.GetTask(ctx, "task-2")
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, storage.ErrNotFound), "task-2 should be deleted")
+
+	_, err = store.GetTask(ctx, "task-3")
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, storage.ErrNotFound), "task-3 should be deleted")
+
+	// Verify task from block 101 still exists
+	storedTask4After, err := store.GetTask(ctx, "task-4")
+	assert.NoError(t, err)
+	assert.NotNil(t, storedTask4After)
+	assert.Equal(t, "task-4", storedTask4After.TaskId)
+
+	// Verify the block context is removed
+	mgr.mu.RLock()
+	_, exists := mgr.blockContexts[100]
+	mgr.mu.RUnlock()
+	assert.False(t, exists, "Block 100 context should be removed after cancellation")
+
+	// Verify block 101 context still exists
+	mgr.mu.RLock()
+	_, exists = mgr.blockContexts[101]
+	mgr.mu.RUnlock()
+	assert.True(t, exists, "Block 101 context should still exist")
 }
 
 // Test cleanup of expired contexts
