@@ -140,7 +140,7 @@ func TestE2E_KubernetesPerformer_FullWorkflow(t *testing.T) {
 
 		// Continue with test - we'll verify the performer was created even if CreatePerformer hangs
 	} else {
-		t.Logf("Created performer: %s", creationResult.PerformerID)
+		t.Logf("Created performer: %s", creationResult.PerformerId)
 	}
 
 	// Verify performer was created

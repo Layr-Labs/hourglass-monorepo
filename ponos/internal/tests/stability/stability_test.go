@@ -311,7 +311,7 @@ func simulateExecutor(ctx context.Context, t *testing.T, store executorStorage.E
 				state := &executorStorage.PerformerState{
 					PerformerId: performerId,
 					AvsAddress:  "0xavs123",
-					ContainerId: fmt.Sprintf("container-%s", performerId),
+					ResourceId:  fmt.Sprintf("container-%s", performerId),
 					Status:      "running",
 					CreatedAt:   time.Now(),
 				}

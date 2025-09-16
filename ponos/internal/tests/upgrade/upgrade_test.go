@@ -104,7 +104,7 @@ func TestRollingUpgrade(t *testing.T) {
 			performer := &executorStorage.PerformerState{
 				PerformerId: "performer-1",
 				AvsAddress:  "0x123",
-				ContainerId: "container-1",
+				ResourceId:  "container-1",
 				Status:      "running",
 				CreatedAt:   time.Now(),
 			}

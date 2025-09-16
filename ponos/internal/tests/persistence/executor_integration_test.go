@@ -23,7 +23,7 @@ func TestExecutorCrashRecovery(t *testing.T) {
 	performer1 := &storage.PerformerState{
 		PerformerId:        "performer-1",
 		AvsAddress:         "0xavs1",
-		ContainerId:        "container-1",
+		ResourceId:         "container-1",
 		Status:             "running",
 		ArtifactRegistry:   "registry.io/avs1",
 		ArtifactTag:        "v1.0.0",
@@ -39,7 +39,7 @@ func TestExecutorCrashRecovery(t *testing.T) {
 	performer2 := &storage.PerformerState{
 		PerformerId:        "performer-2",
 		AvsAddress:         "0xavs2",
-		ContainerId:        "container-2",
+		ResourceId:         "container-2",
 		Status:             "failed",
 		ArtifactRegistry:   "registry.io/avs2",
 		ArtifactTag:        "v2.0.0",
@@ -78,7 +78,7 @@ func TestPerformerStateManagement(t *testing.T) {
 		performer := &storage.PerformerState{
 			PerformerId:        fmt.Sprintf("performer-%d", i),
 			AvsAddress:         avsAddress,
-			ContainerId:        fmt.Sprintf("container-%d", i),
+			ResourceId:         fmt.Sprintf("container-%d", i),
 			Status:             "running",
 			ArtifactRegistry:   "registry.io/avs",
 			ArtifactTag:        fmt.Sprintf("v%d.0.0", i),
@@ -101,7 +101,7 @@ func TestPerformerStateManagement(t *testing.T) {
 	updatedPerformer := &storage.PerformerState{
 		PerformerId:        "performer-0",
 		AvsAddress:         avsAddress,
-		ContainerId:        "container-0-new",
+		ResourceId:         "container-0-new",
 		Status:             "failed",
 		ArtifactRegistry:   "registry.io/avs",
 		ArtifactTag:        "v0.1.0",
@@ -118,7 +118,7 @@ func TestPerformerStateManagement(t *testing.T) {
 	retrieved, err := store.GetPerformerState(ctx, "performer-0")
 	require.NoError(t, err)
 	assert.Equal(t, "failed", retrieved.Status)
-	assert.Equal(t, "container-0-new", retrieved.ContainerId)
+	assert.Equal(t, "container-0-new", retrieved.ResourceId)
 	assert.False(t, retrieved.ContainerHealthy)
 
 	// Delete a performer
@@ -145,7 +145,7 @@ func TestExecutorStorageIsolation(t *testing.T) {
 	performer1 := &storage.PerformerState{
 		PerformerId:        "isolated-performer-1",
 		AvsAddress:         "0xavs1",
-		ContainerId:        "container-1",
+		ResourceId:         "container-1",
 		Status:             "running",
 		ArtifactRegistry:   "registry.io/avs1",
 		ArtifactTag:        "v1.0.0",
@@ -162,7 +162,7 @@ func TestExecutorStorageIsolation(t *testing.T) {
 	performer2 := &storage.PerformerState{
 		PerformerId:        "isolated-performer-2",
 		AvsAddress:         "0xavs2",
-		ContainerId:        "container-2",
+		ResourceId:         "container-2",
 		Status:             "running",
 		ArtifactRegistry:   "registry.io/avs2",
 		ArtifactTag:        "v2.0.0",

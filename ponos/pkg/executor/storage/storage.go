@@ -29,7 +29,7 @@ type ExecutorStore interface {
 type PerformerState struct {
 	PerformerId        string
 	AvsAddress         string
-	ContainerId        string
+	ResourceId         string
 	Status             string
 	ArtifactRegistry   string
 	ArtifactDigest     string
@@ -44,17 +44,6 @@ type PerformerState struct {
 	ContainerHostname  string
 	InternalPort       int
 	EnvironmentVars    []EnvironmentVarRecord
-}
-
-// TaskInfo represents information about an inflight task
-type TaskInfo struct {
-	TaskId            string
-	AvsAddress        string
-	OperatorAddress   string
-	ReceivedAt        time.Time
-	Status            string
-	AggregatorAddress string
-	OperatorSetId     uint32
 }
 
 // ProcessedTask represents a task that has been processed

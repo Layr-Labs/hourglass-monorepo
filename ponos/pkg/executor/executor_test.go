@@ -670,7 +670,7 @@ func testWithBadgerStorage(
 		require.Len(t, states, 1, "Should have one performer state persisted")
 
 		deployedPerformerID = states[0].PerformerId
-		deployedContainerID = states[0].ContainerId
+		deployedContainerID = states[0].ResourceId
 		t.Logf("Captured performer ID: %s, container ID: %s", deployedPerformerID, deployedContainerID)
 
 		// Gracefully shutdown first executor
@@ -694,7 +694,7 @@ func testWithBadgerStorage(
 		require.NoError(t, err)
 		require.Len(t, states, 1, "Should have one performer state from previous executor")
 		assert.Equal(t, deployedPerformerID, states[0].PerformerId, "Should have same performer ID")
-		assert.Equal(t, deployedContainerID, states[0].ContainerId, "Should have same container ID")
+		assert.Equal(t, deployedContainerID, states[0].ResourceId, "Should have same container ID")
 
 		// Use different port to avoid conflicts
 		execConfig2 := *execConfig

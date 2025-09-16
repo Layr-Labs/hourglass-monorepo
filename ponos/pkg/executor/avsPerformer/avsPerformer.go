@@ -94,8 +94,9 @@ const (
 
 // DeploymentResult contains the result of a deployment operation
 type DeploymentResult struct {
-	ID          string
-	PerformerID string
+	Id          string
+	PerformerId string
+	ResourceId  string
 	Status      DeploymentStatus
 	Image       PerformerImage
 	StartTime   time.Time
@@ -108,7 +109,8 @@ type DeploymentResult struct {
 
 // PerformerCreationResult contains information about a deployed performer
 type PerformerCreationResult struct {
-	PerformerID string
+	PerformerId string
+	ResourceId  string
 	StatusChan  <-chan PerformerStatusEvent
 	Endpoint    string
 	Hostname    string

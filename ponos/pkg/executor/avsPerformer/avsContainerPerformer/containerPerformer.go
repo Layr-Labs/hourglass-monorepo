@@ -624,7 +624,8 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 	)
 
 	return &avsPerformer.PerformerCreationResult{
-		PerformerID: newContainer.performerID,
+		PerformerId: newContainer.performerID,
+		ResourceId:  newContainer.info.ID,
 		StatusChan:  newContainer.statusChan,
 		Endpoint:    endpoint,
 		Hostname:    newContainer.info.Hostname,
@@ -663,7 +664,7 @@ func (aps *AvsContainerPerformer) RemovePerformer(ctx context.Context, performer
 			zap.String("avsAddress", aps.config.AvsAddress),
 			zap.String("performerID", performerID),
 		)
-		return fmt.Errorf("performer with ID %s not found", performerID)
+		return fmt.Errorf("performer with DeploymentID %s not found", performerID)
 	}
 
 	// Close the status channel if it exists
@@ -1136,7 +1137,7 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 	}
 	defer aps.activeDeploymentMu.Unlock()
 
-	deploymentID := fmt.Sprintf("deployment-%s-%s", aps.config.AvsAddress, uuid.New().String())
+	deploymentId := fmt.Sprintf("deployment-%s-%s", aps.config.AvsAddress, uuid.New().String())
 
 	timeout := defaultDeploymentTimeout
 
@@ -1144,14 +1145,14 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 	defer cancel()
 
 	result := &avsPerformer.DeploymentResult{
-		ID:        deploymentID,
+		Id:        deploymentId,
 		Status:    avsPerformer.DeploymentStatusPending,
 		Image:     image,
 		StartTime: time.Now(),
 	}
 
 	aps.logger.Info("Starting deployment",
-		zap.String("deploymentID", deploymentID),
+		zap.String("deploymentID", deploymentId),
 		zap.String("avsAddress", aps.config.AvsAddress),
 		zap.String("repository", image.Repository),
 		zap.String("tag", image.Tag),
@@ -1166,7 +1167,7 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 		return result, err
 	}
 
-	result.PerformerID = creationResult.PerformerID
+	result.PerformerId = creationResult.PerformerId
 	result.Status = avsPerformer.DeploymentStatusInProgress
 
 	healthyCtx, healthyCancel := context.WithTimeout(deploymentCtx, timeout)
@@ -1174,16 +1175,16 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 
 	if err := aps.waitForHealthy(healthyCtx, creationResult.StatusChan); err != nil {
 		aps.logger.Error("Deployment health check failed",
-			zap.String("deploymentID", deploymentID),
+			zap.String("deploymentID", deploymentId),
 			zap.Error(err),
 		)
 
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 
-		if removeErr := aps.RemovePerformer(cleanupCtx, creationResult.PerformerID); removeErr != nil {
+		if removeErr := aps.RemovePerformer(cleanupCtx, creationResult.PerformerId); removeErr != nil {
 			aps.logger.Error("Failed to clean up failed deployment",
-				zap.String("deploymentID", deploymentID),
+				zap.String("deploymentID", deploymentId),
 				zap.Error(removeErr),
 			)
 		}
@@ -1195,18 +1196,18 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 		return result, err
 	}
 
-	if err := aps.PromotePerformer(deploymentCtx, creationResult.PerformerID); err != nil {
+	if err := aps.PromotePerformer(deploymentCtx, creationResult.PerformerId); err != nil {
 		aps.logger.Error("Failed to promote performer",
-			zap.String("deploymentID", deploymentID),
+			zap.String("deploymentID", deploymentId),
 			zap.Error(err),
 		)
 
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 
-		if removeErr := aps.RemovePerformer(cleanupCtx, creationResult.PerformerID); removeErr != nil {
+		if removeErr := aps.RemovePerformer(cleanupCtx, creationResult.PerformerId); removeErr != nil {
 			aps.logger.Error("Failed to clean up after promotion failure",
-				zap.String("deploymentID", deploymentID),
+				zap.String("deploymentID", deploymentId),
 				zap.Error(removeErr),
 			)
 		}
@@ -1220,13 +1221,14 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 
 	result.Status = avsPerformer.DeploymentStatusCompleted
 	result.EndTime = time.Now()
+	result.ResourceId = creationResult.ResourceId
 	result.Message = "Deployment completed successfully"
 	result.Endpoint = creationResult.Endpoint
 	result.Hostname = creationResult.Hostname
 
 	aps.logger.Info("Deployment completed successfully",
-		zap.String("deploymentID", deploymentID),
-		zap.String("performerID", creationResult.PerformerID),
+		zap.String("deploymentID", deploymentId),
+		zap.String("performerID", creationResult.PerformerId),
 		zap.String("containerEndpoint", result.Endpoint),
 		zap.String("containerHostname", result.Hostname),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
@@ -1294,12 +1296,12 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 		RestartPolicy: *containerManager.NewConfigBuilder().BuildRestartPolicy(&containerManager.RestartPolicy{}),
 	}
 
-	err := aps.containerManager.AdoptContainer(ctx, state.ContainerId, livenessConfig)
+	err := aps.containerManager.AdoptContainer(ctx, state.ResourceId, livenessConfig)
 	if err != nil {
-		return fmt.Errorf("failed to adopt container %s: %w", state.ContainerId, err)
+		return fmt.Errorf("failed to adopt container %s: %w", state.ResourceId, err)
 	}
 
-	containerInfo, err := aps.containerManager.Inspect(ctx, state.ContainerId)
+	containerInfo, err := aps.containerManager.Inspect(ctx, state.ResourceId)
 	if err != nil {
 		return fmt.Errorf("failed to inspect adopted container: %w", err)
 	}
@@ -1307,11 +1309,11 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 	endpoint := state.ContainerEndpoint
 	perfClient, err := avsPerformerClient.NewAvsPerformerClient(endpoint, false)
 	if err != nil {
-		aps.containerManager.StopLivenessMonitoring(state.ContainerId)
+		aps.containerManager.StopLivenessMonitoring(state.ResourceId)
 		return fmt.Errorf("failed to create performer client: %w", err)
 	}
 
-	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, state.ContainerId, livenessConfig)
+	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, state.ResourceId, livenessConfig)
 	if err != nil {
 		return fmt.Errorf("failed to start liveness monitoring: %w", err)
 	}
@@ -1357,7 +1359,7 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 
 	aps.logger.Info("Successfully rehydrated performer from state",
 		zap.String("performerID", state.PerformerId),
-		zap.String("containerID", state.ContainerId),
+		zap.String("containerID", state.ResourceId),
 		zap.String("endpoint", endpoint),
 	)
 

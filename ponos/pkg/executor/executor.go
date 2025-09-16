@@ -175,8 +175,8 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				e.logger.Sugar().Infow("AVS performer deployed successfully",
 					zap.String("avsAddress", avsAddress),
 					zap.String("deploymentMode", string(avs.DeploymentMode)),
-					zap.String("deploymentId", result.ID),
-					zap.String("performerId", result.PerformerID),
+					zap.String("deploymentId", result.Id),
+					zap.String("performerId", result.PerformerId),
 				)
 			}
 
@@ -192,9 +192,9 @@ func (e *Executor) Initialize(ctx context.Context) error {
 			}
 
 			performerState := &storage.PerformerState{
-				PerformerId:        result.PerformerID,
+				PerformerId:        result.PerformerId,
 				AvsAddress:         avsAddress,
-				ContainerId:        result.ID,
+				ResourceId:         result.ResourceId,
 				Status:             "running",
 				ArtifactRegistry:   avs.Image.Repository,
 				ArtifactTag:        avs.Image.Tag,
@@ -211,10 +211,10 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				EnvironmentVars:    envRecords,
 			}
 
-			if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+			if err := e.store.SavePerformerState(ctx, result.PerformerId, performerState); err != nil {
 				e.logger.Sugar().Warnw("Failed to save performer state to storage",
 					"error", err,
-					"performerId", result.PerformerID,
+					"performerId", result.PerformerId,
 				)
 			}
 
@@ -321,7 +321,7 @@ func (e *Executor) rehydratePerformersFromStorage(ctx context.Context) error {
 
 		e.logger.Sugar().Infow("Attempting to rehydrate performer",
 			"performerId", state.PerformerId,
-			"containerId", state.ContainerId,
+			"containerId", state.ResourceId,
 			"avsAddress", avsAddress,
 		)
 
@@ -330,7 +330,7 @@ func (e *Executor) rehydratePerformersFromStorage(ctx context.Context) error {
 		if err != nil {
 			e.logger.Sugar().Warnw("Failed to rehydrate performer, cleaning up state",
 				"performerId", state.PerformerId,
-				"containerId", state.ContainerId,
+				"containerId", state.ResourceId,
 				"error", err,
 			)
 
@@ -345,7 +345,7 @@ func (e *Executor) rehydratePerformersFromStorage(ctx context.Context) error {
 		} else {
 			e.logger.Sugar().Infow("Successfully rehydrated performer",
 				"performerId", state.PerformerId,
-				"containerId", state.ContainerId,
+				"containerId", state.ResourceId,
 				"avsAddress", avsAddress,
 			)
 

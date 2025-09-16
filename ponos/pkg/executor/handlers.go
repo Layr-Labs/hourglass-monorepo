@@ -164,16 +164,16 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 
 	e.logger.Info("Deployment completed successfully",
 		zap.String("avsAddress", avsAddress),
-		zap.String("deploymentId", result.ID),
-		zap.String("performerId", result.PerformerID),
+		zap.String("deploymentId", result.Id),
+		zap.String("performerId", result.PerformerId),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
 
 	// Save performer state
 	performerState := &storage.PerformerState{
-		PerformerId:        result.PerformerID,
+		PerformerId:        result.PerformerId,
 		AvsAddress:         avsAddress,
-		ContainerId:        result.ID,
+		ResourceId:         result.ResourceId,
 		Status:             "running",
 		ArtifactRegistry:   req.GetRegistryUrl(),
 		ArtifactTag:        "",
@@ -187,17 +187,17 @@ func (e *Executor) DeployArtifact(ctx context.Context, req *executorV1.DeployArt
 		ContainerHealthy:   true,
 		ApplicationHealthy: true,
 	}
-	if err := e.store.SavePerformerState(ctx, result.PerformerID, performerState); err != nil {
+	if err := e.store.SavePerformerState(ctx, result.PerformerId, performerState); err != nil {
 		e.logger.Sugar().Warnw("Failed to save performer state to storage",
 			"error", err,
-			"performerId", result.PerformerID,
+			"performerId", result.PerformerId,
 		)
 	}
 
 	return &executorV1.DeployArtifactResponse{
 		Success:      true,
 		Message:      result.Message,
-		DeploymentId: result.ID,
+		DeploymentId: result.Id,
 	}, nil
 }
 
@@ -536,7 +536,7 @@ func (e *Executor) ListPerformers(ctx context.Context, req *executorV1.ListPerfo
 					ResourceHealthy:    state.ContainerHealthy,
 					ApplicationHealthy: state.ApplicationHealthy,
 					LastHealthCheck:    state.LastHealthCheck.Format(time.RFC3339),
-					ContainerId:        state.ContainerId,
+					ContainerId:        state.ResourceId,
 				})
 			}
 		}

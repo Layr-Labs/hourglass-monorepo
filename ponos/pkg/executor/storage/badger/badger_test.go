@@ -53,7 +53,7 @@ func TestBadgerExecutorStore_Persistence(t *testing.T) {
 		state := &storage.PerformerState{
 			PerformerId:        performerId,
 			AvsAddress:         "0xAVS1",
-			ContainerId:        "container-123",
+			ResourceId:         "container-123",
 			Status:             "running",
 			ArtifactRegistry:   "registry.example.com",
 			ArtifactDigest:     "sha256:abcdef",
@@ -82,7 +82,7 @@ func TestBadgerExecutorStore_Persistence(t *testing.T) {
 		retrievedState, err := store.GetPerformerState(ctx, performerId)
 		require.NoError(t, err)
 		assert.Equal(t, performerId, retrievedState.PerformerId)
-		assert.Equal(t, "container-123", retrievedState.ContainerId)
+		assert.Equal(t, "container-123", retrievedState.ResourceId)
 	}
 }
 
@@ -102,7 +102,7 @@ func TestBadgerExecutorStore_InMemory(t *testing.T) {
 	state := &storage.PerformerState{
 		PerformerId:        "performer-1",
 		AvsAddress:         "0xAVS1",
-		ContainerId:        "container-1",
+		ResourceId:         "container-1",
 		Status:             "running",
 		ArtifactRegistry:   "registry.example.com",
 		ArtifactDigest:     "sha256:abcdef",
@@ -142,7 +142,7 @@ func BenchmarkBadgerExecutorStore(b *testing.B) {
 			state := &storage.PerformerState{
 				PerformerId:        fmt.Sprintf("performer-%d", i),
 				AvsAddress:         "0xAVS1",
-				ContainerId:        fmt.Sprintf("container-%d", i),
+				ResourceId:         fmt.Sprintf("container-%d", i),
 				Status:             "running",
 				ArtifactRegistry:   "registry.example.com",
 				ArtifactDigest:     "sha256:abcdef",
@@ -163,7 +163,7 @@ func BenchmarkBadgerExecutorStore(b *testing.B) {
 			state := &storage.PerformerState{
 				PerformerId:        fmt.Sprintf("performer-get-%d", i),
 				AvsAddress:         "0xAVS1",
-				ContainerId:        fmt.Sprintf("container-%d", i),
+				ResourceId:         fmt.Sprintf("container-%d", i),
 				Status:             "running",
 				ArtifactRegistry:   "registry.example.com",
 				ArtifactDigest:     "sha256:abcdef",

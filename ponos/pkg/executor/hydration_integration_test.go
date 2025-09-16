@@ -206,7 +206,7 @@ func TestContainerHydrationIntegration(t *testing.T) {
 
 		state := states[0]
 		assert.Equal(t, deployedPerformerID, state.PerformerId)
-		assert.Equal(t, deployedContainerID, state.ContainerId)
+		assert.Equal(t, deployedContainerID, state.ResourceId)
 		assert.Equal(t, "running", state.Status)
 		assert.NotEmpty(t, state.ContainerEndpoint)
 		assert.NotEmpty(t, state.ContainerHostname)
@@ -319,7 +319,7 @@ func TestContainerHydrationIntegration(t *testing.T) {
 		fakeState := &storage.PerformerState{
 			PerformerId:        "fake-performer-123",
 			AvsAddress:         "0xfake",
-			ContainerId:        "non-existent-container",
+			ResourceId:         "non-existent-container",
 			Status:             "running",
 			ArtifactRegistry:   "fake-registry",
 			ArtifactTag:        "v1.0.0",
@@ -432,7 +432,7 @@ func TestHydrationWithEnvironmentVariables(t *testing.T) {
 	testState := &storage.PerformerState{
 		PerformerId:        "env-test-performer",
 		AvsAddress:         "0xenvtest",
-		ContainerId:        "env-test-container",
+		ResourceId:         "env-test-container",
 		Status:             "running",
 		ArtifactRegistry:   "test-registry",
 		ArtifactTag:        "v1.0.0",

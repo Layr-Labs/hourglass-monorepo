@@ -33,7 +33,7 @@ func (s *TestSuite) testPerformerState(t *testing.T) {
 	performerState := &PerformerState{
 		PerformerId:        "performer-123",
 		AvsAddress:         "0xavs123",
-		ContainerId:        "container-abc",
+		ResourceId:         "container-abc",
 		Status:             "running",
 		ArtifactRegistry:   "registry.io/avs",
 		ArtifactDigest:     "sha256:abcdef",
@@ -57,7 +57,7 @@ func (s *TestSuite) testPerformerState(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, performerState.PerformerId, retrieved.PerformerId)
 	assert.Equal(t, performerState.AvsAddress, retrieved.AvsAddress)
-	assert.Equal(t, performerState.ContainerId, retrieved.ContainerId)
+	assert.Equal(t, performerState.ResourceId, retrieved.ResourceId)
 	assert.Equal(t, performerState.Status, retrieved.Status)
 
 	// Test listing performer states
