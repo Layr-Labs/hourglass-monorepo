@@ -16,7 +16,6 @@ func TestTaskBlockContextManager_BasicContextOperations(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Create a task with deadline
 	deadline := time.Now().Add(1 * time.Hour)
@@ -41,7 +40,6 @@ func TestTaskBlockContextManager_ContextCaching(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task1 := &types.Task{
@@ -66,7 +64,6 @@ func TestTaskBlockContextManager_CancelSpecificBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -110,7 +107,6 @@ func TestTaskBlockContextManager_CancelNonExistentBlock(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Cancel block that doesn't exist - should not panic
 	assert.NotPanics(t, func() {
@@ -129,10 +125,8 @@ func TestTaskBlockContextManager_AutoCleanupExpiredContexts(t *testing.T) {
 		parentCtx:       parentCtx,
 		logger:          logger,
 		cleanupInterval: 100 * time.Millisecond, // Fast cleanup for testing
-		done:            make(chan struct{}),
 	}
 	go mgr.cleanupExpiredContexts()
-	defer mgr.Shutdown()
 
 	// Create context with very short deadline
 	shortDeadline := time.Now().Add(50 * time.Millisecond)
@@ -180,10 +174,8 @@ func TestTaskBlockContextManager_AutoCleanupCancelledContexts(t *testing.T) {
 		parentCtx:       parentCtx,
 		logger:          logger,
 		cleanupInterval: 100 * time.Millisecond,
-		done:            make(chan struct{}),
 	}
 	go mgr.cleanupExpiredContexts()
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -210,49 +202,11 @@ func TestTaskBlockContextManager_AutoCleanupCancelledContexts(t *testing.T) {
 	mgr.mu.RUnlock()
 }
 
-// Test shutdown cancels all contexts
-func TestTaskBlockContextManager_ShutdownCancelsAll(t *testing.T) {
-	parentCtx := context.Background()
-	logger := zap.NewNop()
-	mgr := NewTaskBlockContextManager(parentCtx, logger)
-
-	deadline := time.Now().Add(1 * time.Hour)
-	task := &types.Task{
-		TaskId:              "task-1",
-		DeadlineUnixSeconds: &deadline,
-	}
-
-	// Create multiple contexts
-	contexts := make([]context.Context, 5)
-	for i := 0; i < 5; i++ {
-		contexts[i] = mgr.GetContext(uint64(100+i), task)
-	}
-
-	// Shutdown manager
-	mgr.Shutdown()
-
-	// All contexts should be cancelled
-	for i, ctx := range contexts {
-		select {
-		case <-ctx.Done():
-			// Expected
-		case <-time.After(100 * time.Millisecond):
-			t.Fatalf("Context %d should be cancelled after shutdown", i)
-		}
-	}
-
-	// Map should be empty
-	mgr.mu.RLock()
-	assert.Equal(t, 0, len(mgr.blockContexts), "All contexts should be removed after shutdown")
-	mgr.mu.RUnlock()
-}
-
 // Test that parent context cancellation propagates
 func TestTaskBlockContextManager_ParentContextCancellation(t *testing.T) {
 	parentCtx, parentCancel := context.WithCancel(context.Background())
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -283,7 +237,6 @@ func TestTaskBlockContextManager_MultipleCancellations(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -324,7 +277,6 @@ func TestTaskBlockContextManager_CleanupDoesNotAffectActive(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Create contexts with various deadlines
 	now := time.Now()
@@ -374,7 +326,6 @@ func BenchmarkTaskBlockContextManager_GetContext(b *testing.B) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -393,7 +344,6 @@ func BenchmarkTaskBlockContextManager_ConcurrentOps(b *testing.B) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	deadline := time.Now().Add(1 * time.Hour)
 	task := &types.Task{
@@ -426,7 +376,6 @@ func TestTaskBlockContextManager_CleanupInterval(t *testing.T) {
 		parentCtx:       parentCtx,
 		logger:          logger,
 		cleanupInterval: 50 * time.Millisecond, // Very short interval for testing
-		done:            make(chan struct{}),
 	}
 
 	// Create a context that will expire soon
@@ -459,8 +408,6 @@ func TestTaskBlockContextManager_CleanupInterval(t *testing.T) {
 	_, exists = mgr.blockContexts[100]
 	mgr.mu.RUnlock()
 	assert.False(t, exists, "Context should be cleaned up after interval")
-
-	mgr.Shutdown()
 }
 
 // Test empty manager state
@@ -468,7 +415,6 @@ func TestTaskBlockContextManager_EmptyState(t *testing.T) {
 	parentCtx := context.Background()
 	logger := zap.NewNop()
 	mgr := NewTaskBlockContextManager(parentCtx, logger)
-	defer mgr.Shutdown()
 
 	// Cleanup on empty manager should not panic
 	assert.NotPanics(t, func() {
