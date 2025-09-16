@@ -159,7 +159,7 @@ func (em *AvsExecutionManager) Start(ctx context.Context) error {
 				}
 			case <-ctx.Done():
 
-				em.logger.Sugar().Infow("AvsExecutionManager context cancelled, exiting")
+				em.logger.Sugar().Infow("AvsExecutionManager context done, exiting")
 				if ctx.Err() != nil {
 					em.logger.Sugar().Errorw("Error stopping AvsExecutionManager")
 				}
@@ -324,8 +324,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			"taskId", task.TaskId,
 		)
 	}
-	ctx, cancel := context.WithDeadline(ctx, *task.DeadlineUnixSeconds)
-	defer cancel()
 
 	executorTaskConfig, err := em.getExecutorTaskConfig(ctx, task)
 	if err != nil {
@@ -402,7 +400,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	if opsetCurveType == config.CurveTypeBN254 {
 		ts, err := taskSession.NewBN254TaskSession(
 			ctx,
-			cancel,
 			task,
 			l1Cc,
 			em.config.AggregatorAddress,
@@ -422,7 +419,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 	} else if opsetCurveType == config.CurveTypeECDSA {
 		ts, err := taskSession.NewECDSATaskSession(
 			ctx,
-			cancel,
 			task,
 			l1Cc,
 			em.config.AggregatorAddress,
@@ -522,6 +518,7 @@ func (em *AvsExecutionManager) processBN254Task(
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
 		return nil
+
 	case err := <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		// Update task status to failed
@@ -534,19 +531,23 @@ func (em *AvsExecutionManager) processBN254Task(
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
 		return err
-	case <-ctx.Done():
+
+	case <-task.Context.Done():
 		switch err := ctx.Err(); {
 		case errors.Is(err, context.Canceled):
 			em.logger.Sugar().Errorw("task session context done",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
+			return fmt.Errorf("task session context cancelled: %w", err)
+
 		case errors.Is(err, context.DeadlineExceeded):
 			em.logger.Sugar().Errorw("task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
+
 		default:
 			em.logger.Sugar().Errorw("task session encountered an error",
 				zap.String("taskId", task.TaskId),
@@ -555,7 +556,6 @@ func (em *AvsExecutionManager) processBN254Task(
 			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
 		}
 
-		return nil
 	}
 }
 
@@ -582,7 +582,9 @@ func (em *AvsExecutionManager) processECDSATask(
 		em.logger.Sugar().Infow("Processing task session",
 			zap.String("taskId", task.TaskId),
 		)
+
 		cert, err := ts.Process()
+
 		if err != nil {
 			em.logger.Sugar().Errorw("Failed to process task",
 				zap.String("taskId", task.TaskId),
@@ -591,6 +593,7 @@ func (em *AvsExecutionManager) processECDSATask(
 			errorsChan <- fmt.Errorf("failed to process task: %w", err)
 			return
 		}
+
 		if cert == nil {
 			em.logger.Sugar().Errorw("Received nil aggregate certificate",
 				zap.String("taskId", task.TaskId),
@@ -598,6 +601,7 @@ func (em *AvsExecutionManager) processECDSATask(
 			errorsChan <- fmt.Errorf("received nil aggregate certificate")
 			return
 		}
+
 		em.logger.Sugar().Infow("Received task response and certificate",
 			zap.String("taskId", task.TaskId),
 			zap.String("taskResponseDigest", hexutil.Encode(cert.TaskResponseDigest[:])),
@@ -610,12 +614,14 @@ func (em *AvsExecutionManager) processECDSATask(
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
 			return
+
 		} else {
 			em.logger.Sugar().Infow("Successfully submitted task result",
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("transactionHash", receipt.TxHash.String()),
 			)
 		}
+
 		doneChan <- true
 	}(chainCC)
 
@@ -624,6 +630,7 @@ func (em *AvsExecutionManager) processECDSATask(
 		em.logger.Sugar().Infow("Task session completed",
 			zap.String("taskId", task.TaskId),
 		)
+
 		// Update task status to completed
 		if err := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusCompleted); err != nil {
 			em.logger.Sugar().Warnw("Failed to update task status to completed",
@@ -631,9 +638,11 @@ func (em *AvsExecutionManager) processECDSATask(
 				"taskId", task.TaskId,
 			)
 		}
+
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
 		return nil
+
 	case err := <-errorsChan:
 		em.logger.Sugar().Errorw("Task session failed", zap.Error(err))
 		// Update task status to failed
@@ -643,16 +652,19 @@ func (em *AvsExecutionManager) processECDSATask(
 				"taskId", task.TaskId,
 			)
 		}
+
 		// Remove from inflight tasks
 		em.inflightTasks.Delete(task.TaskId)
 		return err
-	case <-ctx.Done():
+	case <-task.Context.Done():
 		switch err := ctx.Err(); {
 		case errors.Is(err, context.Canceled):
-			em.logger.Sugar().Errorw("task session context done",
+			em.logger.Sugar().Errorw("task session context cancelled",
 				zap.String("taskId", task.TaskId),
 				zap.Error(ctx.Err()),
 			)
+			return fmt.Errorf("task session context cancelled: %w", err)
+
 		case errors.Is(err, context.DeadlineExceeded):
 			em.logger.Sugar().Errorw("task session context deadline exceeded",
 				zap.String("taskId", task.TaskId),
@@ -665,6 +677,7 @@ func (em *AvsExecutionManager) processECDSATask(
 				)
 			}
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
+
 		default:
 			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
 				em.logger.Sugar().Warnw("Failed to update task status to failed",
@@ -677,9 +690,8 @@ func (em *AvsExecutionManager) processECDSATask(
 				zap.Error(ctx.Err()),
 			)
 			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
-		}
 
-		return nil
+		}
 	}
 }
 

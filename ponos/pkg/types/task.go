@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -48,6 +49,7 @@ type Task struct {
 	ReferenceTimestamp     uint32         `json:"referenceTimestamp"`
 	BlockHash              string         `json:"blockHash"`
 	Version                uint32         `json:"version"`
+	Context                context.Context `json:"-"`
 }
 
 type TaskResult struct {

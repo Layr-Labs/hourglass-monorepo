@@ -31,13 +31,14 @@ type EVMChainPollerConfig struct {
 }
 
 type EVMChainPoller struct {
-	ethClient     ethereum.Client
-	taskQueue     chan *types.Task
-	logParser     transactionLogParser.LogParser
-	config        *EVMChainPollerConfig
-	contractStore contractStore.IContractStore
-	logger        *zap.Logger
-	store         storage.AggregatorStore
+	ethClient           ethereum.Client
+	taskQueue           chan *types.Task
+	logParser           transactionLogParser.LogParser
+	config              *EVMChainPollerConfig
+	contractStore       contractStore.IContractStore
+	logger              *zap.Logger
+	store               storage.AggregatorStore
+	blockContextManager IBlockContextManager
 }
 
 func NewEVMChainPoller(
@@ -47,6 +48,7 @@ func NewEVMChainPoller(
 	config *EVMChainPollerConfig,
 	contractStore contractStore.IContractStore,
 	store storage.AggregatorStore,
+	blockContextManager IBlockContextManager,
 	logger *zap.Logger,
 ) *EVMChainPoller {
 
@@ -73,13 +75,14 @@ func NewEVMChainPoller(
 		zap.Uint("chainId", uint(config.ChainId)),
 	)
 	return &EVMChainPoller{
-		ethClient:     ethClient,
-		logger:        pollerLogger,
-		taskQueue:     taskQueue,
-		logParser:     logParser,
-		config:        config,
-		contractStore: contractStore,
-		store:         store,
+		ethClient:           ethClient,
+		logger:              pollerLogger,
+		taskQueue:           taskQueue,
+		logParser:           logParser,
+		config:              config,
+		contractStore:       contractStore,
+		store:               store,
+		blockContextManager: blockContextManager,
 	}
 }
 
@@ -458,6 +461,9 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 	if err != nil {
 		return fmt.Errorf("failed to convert task: %w", err)
 	}
+
+	task.Context = ecp.blockContextManager.GetContext(lwb.Block.Number.Value(), task)
+
 	ecp.logger.Sugar().Infow("Converted task",
 		zap.Any("task", task),
 	)
@@ -598,6 +604,9 @@ func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ether
 	}
 
 	for _, orphanedBlock := range orphanedBlocks {
+
+		ecp.blockContextManager.CancelBlock(orphanedBlock.Number)
+
 		err = ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, orphanedBlock.ChainId, orphanedBlock.Number)
 		if err != nil && !errors.Is(err, storage.ErrNotFound) {
 			return fmt.Errorf("failed to delete orphaned block: %w", err)
