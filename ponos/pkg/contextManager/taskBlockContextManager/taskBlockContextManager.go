@@ -26,7 +26,7 @@ func NewTaskBlockContextManager(parentCtx context.Context, store storage.Aggrega
 		parentCtx:       parentCtx,
 		store:           store,
 		logger:          logger.With(zap.String("component", "TaskBlockContextManager")),
-		cleanupInterval: 5 * time.Minute,
+		cleanupInterval: 15 * time.Minute,
 	}
 
 	go mgr.cleanupExpiredContexts()
@@ -120,12 +120,5 @@ func (bcm *TaskBlockContextManager) cleanupContexts() {
 
 	for _, blockNum := range blocksToRemove {
 		delete(bcm.blockContexts, blockNum)
-	}
-
-	if len(blocksToRemove) > 0 {
-		bcm.logger.Debug("Cleaned up expired/cancelled block contexts",
-			zap.Int("removedCount", len(blocksToRemove)),
-			zap.Int("remainingCount", len(bcm.blockContexts)),
-		)
 	}
 }
