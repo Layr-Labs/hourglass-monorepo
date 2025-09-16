@@ -42,7 +42,6 @@ type PerformerState struct {
 	NetworkName        string
 	ContainerEndpoint  string
 	ContainerHostname  string
-	InternalPort       int
 	EnvironmentVars    []EnvironmentVarRecord
 }
 

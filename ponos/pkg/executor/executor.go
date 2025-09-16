@@ -207,7 +207,6 @@ func (e *Executor) Initialize(ctx context.Context) error {
 				NetworkName:        e.config.PerformerNetworkName,
 				ContainerEndpoint:  result.Endpoint,
 				ContainerHostname:  result.Hostname,
-				InternalPort:       8080,
 				EnvironmentVars:    envRecords,
 			}
 

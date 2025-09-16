@@ -1168,6 +1168,7 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 	}
 
 	result.PerformerId = creationResult.PerformerId
+	result.ResourceId = creationResult.ResourceId
 	result.Status = avsPerformer.DeploymentStatusInProgress
 
 	healthyCtx, healthyCancel := context.WithTimeout(deploymentCtx, timeout)

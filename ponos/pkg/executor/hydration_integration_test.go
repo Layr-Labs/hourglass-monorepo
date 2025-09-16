@@ -331,7 +331,6 @@ func TestContainerHydrationIntegration(t *testing.T) {
 			NetworkName:        "test-network",
 			ContainerEndpoint:  "localhost:8080",
 			ContainerHostname:  "fake-host",
-			InternalPort:       8080,
 		}
 
 		err = store3.SavePerformerState(ctx, fakeState.PerformerId, fakeState)
@@ -444,7 +443,6 @@ func TestHydrationWithEnvironmentVariables(t *testing.T) {
 		NetworkName:        "test-network",
 		ContainerEndpoint:  "localhost:8080",
 		ContainerHostname:  "test-host",
-		InternalPort:       8080,
 		EnvironmentVars:    envRecords,
 	}
 
