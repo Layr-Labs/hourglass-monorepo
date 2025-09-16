@@ -54,12 +54,7 @@ func (bcm *TaskBlockContextManager) GetContext(blockNumber uint64, task *types.T
 	var ctx context.Context
 	var cancel context.CancelFunc
 
-	if task.DeadlineUnixSeconds != nil {
-		ctx, cancel = context.WithDeadline(bcm.parentCtx, *task.DeadlineUnixSeconds)
-	} else {
-		// No deadline specified, use parent context with cancel
-		ctx, cancel = context.WithCancel(bcm.parentCtx)
-	}
+	ctx, cancel = context.WithDeadline(bcm.parentCtx, *task.DeadlineUnixSeconds)
 
 	bcm.blockContexts[blockNumber] = &contextManager.BlockContext{
 		Ctx:    ctx,
