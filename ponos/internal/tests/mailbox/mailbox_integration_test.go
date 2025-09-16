@@ -16,6 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager/taskBlockContextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore/inMemoryContractStore"
@@ -117,7 +118,16 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	// Create an in-memory store for the poller
 	aggStore := aggregatorMemory.NewInMemoryAggregatorStore()
-	poller := EVMChainPoller.NewEVMChainPoller(pollerEthClient, taskQueue, tlp, pollerConfig, imContractStore, aggStore, l)
+	poller := EVMChainPoller.NewEVMChainPoller(
+		pollerEthClient,
+		taskQueue,
+		tlp,
+		pollerConfig,
+		imContractStore,
+		aggStore,
+		taskBlockContextManager.NewTaskBlockContextManager(context.Background(), l),
+		l,
+	)
 
 	l1EthClient, err := l1EthereumClient.GetEthereumContractCaller()
 	if err != nil {

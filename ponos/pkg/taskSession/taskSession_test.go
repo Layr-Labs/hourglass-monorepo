@@ -226,7 +226,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -258,7 +258,7 @@ func TestNewBN254TaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -285,7 +285,7 @@ func TestNewECDSATaskSession(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewECDSATaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -315,7 +315,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -442,7 +442,7 @@ func TestTaskSession_Process_ContextHandling(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -474,7 +474,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewECDSATaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -545,7 +545,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -599,7 +599,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -641,7 +641,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -745,7 +745,7 @@ func TestTaskSession_MockIntegration(t *testing.T) {
 
 		// This should fail because operator set 999 doesn't exist
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -865,7 +865,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -890,7 +890,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -916,7 +916,7 @@ func TestTaskSession_EdgeCases(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 
@@ -944,7 +944,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -975,7 +975,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 
 		bn254Session, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -991,7 +991,7 @@ func TestTaskSession_TaskValidation(t *testing.T) {
 		}
 
 		ecdsaSession, err := NewECDSATaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			ecdsaOperatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -1021,7 +1021,7 @@ func TestTaskSession_TLSConfiguration(t *testing.T) {
 
 		// Test with secure connections (tlsEnabled = false)
 		secureSession, err := NewBN254TaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, false, logger,
 		)
 		require.NoError(t, err)
@@ -1046,7 +1046,7 @@ func TestTaskSession_TLSConfiguration(t *testing.T) {
 
 		// Test with insecure connections (tlsEnabled = true)
 		insecureSession, err := NewECDSATaskSession(
-			ctx, cancel, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
+			ctx, task, &caller.ContractCaller{}, "0xaggregator", createMockSigner(),
 			operatorPeersWeight, true, logger,
 		)
 		require.NoError(t, err)

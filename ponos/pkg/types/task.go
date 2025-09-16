@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -35,19 +36,20 @@ type TaskEvent struct {
 }
 
 type Task struct {
-	TaskId                 string         `json:"taskId"`
-	AVSAddress             string         `json:"avsAddress"`
-	OperatorSetId          uint32         `json:"operatorSetId"`
-	CallbackAddr           string         `json:"callbackAddr"`
-	DeadlineUnixSeconds    *time.Time     `json:"deadline"`
-	ThresholdBips          uint16         `json:"stakeRequired"`
-	Payload                []byte         `json:"payload"`
-	ChainId                config.ChainId `json:"chainId"`
-	SourceBlockNumber      uint64         `json:"sourceBlockNumber"`
-	L1ReferenceBlockNumber uint64         `json:"l1ReferenceBlockNumber"`
-	ReferenceTimestamp     uint32         `json:"referenceTimestamp"`
-	BlockHash              string         `json:"blockHash"`
-	Version                uint32         `json:"version"`
+	TaskId                 string          `json:"taskId"`
+	AVSAddress             string          `json:"avsAddress"`
+	OperatorSetId          uint32          `json:"operatorSetId"`
+	CallbackAddr           string          `json:"callbackAddr"`
+	DeadlineUnixSeconds    *time.Time      `json:"deadline"`
+	ThresholdBips          uint16          `json:"stakeRequired"`
+	Payload                []byte          `json:"payload"`
+	ChainId                config.ChainId  `json:"chainId"`
+	SourceBlockNumber      uint64          `json:"sourceBlockNumber"`
+	L1ReferenceBlockNumber uint64          `json:"l1ReferenceBlockNumber"`
+	ReferenceTimestamp     uint32          `json:"referenceTimestamp"`
+	BlockHash              string          `json:"blockHash"`
+	Version                uint32          `json:"version"`
+	Context                context.Context `json:"-"`
 }
 
 type TaskResult struct {

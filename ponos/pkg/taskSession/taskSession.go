@@ -30,7 +30,6 @@ type TaskSession[SigT, CertT, PubKeyT any] struct {
 	Task              *types.Task
 	signer            signer.ISigner
 	context           context.Context
-	contextCancel     context.CancelFunc
 	logger            *zap.Logger
 	results           sync.Map
 	resultsCount      atomic.Uint32
@@ -41,13 +40,11 @@ type TaskSession[SigT, CertT, PubKeyT any] struct {
 	taskAggregator aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
 	thresholdMet   atomic.Bool
 
-	// tlsEnabled when true, disables TLS for executor client connections.
 	tlsEnabled bool
 }
 
 func NewBN254TaskSession(
 	ctx context.Context,
-	cancel context.CancelFunc,
 	task *types.Task,
 	l1ContractCaller contractCaller.IContractCaller,
 	aggregatorAddress string,
@@ -92,7 +89,6 @@ func NewBN254TaskSession(
 		signer:              signer,
 		results:             sync.Map{},
 		context:             ctx,
-		contextCancel:       cancel,
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,
@@ -108,7 +104,6 @@ func NewBN254TaskSession(
 
 func NewECDSATaskSession(
 	ctx context.Context,
-	cancel context.CancelFunc,
 	task *types.Task,
 	l1ContractCaller contractCaller.IContractCaller,
 	aggregatorAddress string,
@@ -152,7 +147,6 @@ func NewECDSATaskSession(
 		signer:              signer,
 		results:             sync.Map{},
 		context:             ctx,
-		contextCancel:       cancel,
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,

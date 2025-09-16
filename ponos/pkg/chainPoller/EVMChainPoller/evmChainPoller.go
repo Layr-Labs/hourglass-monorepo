@@ -10,6 +10,7 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractStore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 
@@ -31,13 +32,14 @@ type EVMChainPollerConfig struct {
 }
 
 type EVMChainPoller struct {
-	ethClient     ethereum.Client
-	taskQueue     chan *types.Task
-	logParser     transactionLogParser.LogParser
-	config        *EVMChainPollerConfig
-	contractStore contractStore.IContractStore
-	logger        *zap.Logger
-	store         storage.AggregatorStore
+	ethClient           ethereum.Client
+	taskQueue           chan *types.Task
+	logParser           transactionLogParser.LogParser
+	config              *EVMChainPollerConfig
+	contractStore       contractStore.IContractStore
+	logger              *zap.Logger
+	store               storage.AggregatorStore
+	blockContextManager contextManager.IBlockContextManager
 }
 
 func NewEVMChainPoller(
@@ -47,6 +49,7 @@ func NewEVMChainPoller(
 	config *EVMChainPollerConfig,
 	contractStore contractStore.IContractStore,
 	store storage.AggregatorStore,
+	blockContextManager contextManager.IBlockContextManager,
 	logger *zap.Logger,
 ) *EVMChainPoller {
 
@@ -61,7 +64,6 @@ func NewEVMChainPoller(
 	if config.BlockHistorySize == 0 {
 		config.BlockHistorySize = 100
 	}
-	// ReorgCheckEnabled defaults to true unless explicitly set to false
 	if !config.ReorgCheckEnabled && config.MaxReorgDepth > 0 {
 		config.ReorgCheckEnabled = true
 	}
@@ -73,13 +75,14 @@ func NewEVMChainPoller(
 		zap.Uint("chainId", uint(config.ChainId)),
 	)
 	return &EVMChainPoller{
-		ethClient:     ethClient,
-		logger:        pollerLogger,
-		taskQueue:     taskQueue,
-		logParser:     logParser,
-		config:        config,
-		contractStore: contractStore,
-		store:         store,
+		ethClient:           ethClient,
+		logger:              pollerLogger,
+		taskQueue:           taskQueue,
+		logParser:           logParser,
+		config:              config,
+		contractStore:       contractStore,
+		store:               store,
+		blockContextManager: blockContextManager,
 	}
 }
 
@@ -458,6 +461,9 @@ func (ecp *EVMChainPoller) processTask(ctx context.Context, lwb *chainPoller.Log
 	if err != nil {
 		return fmt.Errorf("failed to convert task: %w", err)
 	}
+
+	task.Context = ecp.blockContextManager.GetContext(lwb.Block.Number.Value(), task)
+
 	ecp.logger.Sugar().Infow("Converted task",
 		zap.Any("task", task),
 	)
@@ -540,7 +546,10 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 	for _, task := range tasks {
 
-		if task.DeadlineUnixSeconds != nil && time.Now().After(*task.DeadlineUnixSeconds) {
+		task.Context = ecp.blockContextManager.GetContext(task.SourceBlockNumber, task)
+
+		select {
+		case <-task.Context.Done():
 			ecp.logger.Sugar().Warnw("Skipping expired task during recovery",
 				"taskId", task.TaskId,
 				"deadline", task.DeadlineUnixSeconds.Unix())
@@ -553,9 +562,9 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 
 			expired++
 			continue
+		default:
 		}
 
-		// Try to re-queue the task and mark as processing
 		select {
 		case ecp.taskQueue <- task:
 
@@ -571,7 +580,6 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 		case <-time.After(100 * time.Millisecond):
 			ecp.logger.Sugar().Warnw("Task queue full, cannot recover task",
 				"taskId", task.TaskId)
-			// Leave as pending for next recovery attempt
 			break
 		}
 	}
@@ -585,7 +593,6 @@ func (ecp *EVMChainPoller) recoverInProgressTasks(ctx context.Context) error {
 	return nil
 }
 
-// reconcileReorg finds the common ancestor of the previously processed block head and the new blocks
 func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ethereum.EthereumBlock) error {
 	orphanedBlocks, err := ecp.findOrphanedBlocks(ctx, startBlock, ecp.config.MaxReorgDepth)
 
@@ -598,6 +605,9 @@ func (ecp *EVMChainPoller) reconcileReorg(ctx context.Context, startBlock *ether
 	}
 
 	for _, orphanedBlock := range orphanedBlocks {
+
+		ecp.blockContextManager.CancelBlock(orphanedBlock.Number)
+
 		err = ecp.store.DeleteBlock(ctx, ecp.config.AvsAddress, orphanedBlock.ChainId, orphanedBlock.Number)
 		if err != nil && !errors.Is(err, storage.ErrNotFound) {
 			return fmt.Errorf("failed to delete orphaned block: %w", err)

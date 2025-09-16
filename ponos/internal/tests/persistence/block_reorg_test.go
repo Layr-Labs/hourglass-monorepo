@@ -16,6 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager/taskBlockContextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contracts"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
@@ -311,6 +312,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 				pollerConfig,
 				contractStore,
 				store,
+				taskBlockContextManager.NewTaskBlockContextManager(ctx, logger),
 				logger,
 			)
 

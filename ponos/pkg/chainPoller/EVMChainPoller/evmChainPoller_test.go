@@ -4,21 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/mocks"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contextManager/taskBlockContextManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 )
+
+type testContextKey string
 
 // Test helper to create a test poller
 func createTestPoller(ethClient ethereum.Client, store storage.AggregatorStore) *EVMChainPoller {
@@ -333,6 +340,7 @@ func TestReconcileReorg_Success_DeletesOrphanedBlocks(t *testing.T) {
 
 	ctx := context.Background()
 	mockClient := mocks.NewMockClient(ctrl)
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(ctrl)
 	store := memory.NewInMemoryAggregatorStore()
 
 	// Setup: Save blocks 98-99 in store (will be orphaned)
@@ -386,9 +394,14 @@ func TestReconcileReorg_Success_DeletesOrphanedBlocks(t *testing.T) {
 	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(98)).Return(chainBlock98, nil)
 	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(97)).Return(chainBlock97, nil)
 
+	// Expect CancelBlock to be called for each orphaned block
+	mockBlockContextManager.EXPECT().CancelBlock(uint64(99))
+	mockBlockContextManager.EXPECT().CancelBlock(uint64(98))
+
 	poller := &EVMChainPoller{
-		ethClient: mockClient,
-		store:     store,
+		ethClient:           mockClient,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
 		config: &EVMChainPollerConfig{
 			AvsAddress:    "0xtest",
 			ChainId:       config.ChainId(1),
@@ -887,4 +900,377 @@ func TestPollerHandlesChannelFull(t *testing.T) {
 	require.NoError(t, err)
 	// Some tasks should remain pending since channel was full
 	assert.True(t, len(pendingTasks) > 0, "Some tasks should remain pending due to full channel")
+}
+
+func TestEVMChainPoller_TaskContextAssignment(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockClient := mocks.NewMockClient(ctrl)
+	mockLogParser := mocks.NewMockLogParser(ctrl)
+	mockContractStore := mocks.NewMockIContractStore(ctrl)
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(ctrl)
+	store := memory.NewInMemoryAggregatorStore()
+	taskQueue := make(chan *types.Task, 10)
+
+	// Use a valid hex address for AVS
+	avsAddress := "0x0000000000000000000000000000000000000001"
+
+	poller := NewEVMChainPoller(
+		mockClient,
+		taskQueue,
+		mockLogParser,
+		&EVMChainPollerConfig{
+			AvsAddress:           avsAddress,
+			ChainId:              config.ChainId(1),
+			InterestingContracts: []string{"0xmailbox"},
+		},
+		mockContractStore,
+		store,
+		mockBlockContextManager,
+		zap.NewNop(),
+	)
+
+	// Setup test data
+	blockNumber := uint64(100)
+	const testKey testContextKey = "test-key"
+	testContext := context.WithValue(context.Background(), testKey, "test-value")
+
+	block := &ethereum.EthereumBlock{
+		Number:     ethereum.EthereumQuantity(blockNumber),
+		Hash:       ethereum.EthereumHexString("0x100"),
+		ParentHash: ethereum.EthereumHexString("0x99"),
+		ChainId:    config.ChainId(1),
+	}
+
+	// Create a TaskCreated event log
+	// TaskCreated event has 3 indexed parameters
+	// The AVS address needs to be a common.Address type
+	decodedLog := &log.DecodedLog{
+		EventName: "TaskCreated",
+		Address:   "0xmailbox",
+		Arguments: []log.Argument{
+			{Name: "creator", Value: "0xmailbox", Indexed: true, Type: "address"},
+			{Name: "taskHash", Value: "0xtask1", Indexed: true, Type: "bytes32"},
+			{Name: "avs", Value: common.HexToAddress(avsAddress), Indexed: true, Type: "address"},
+		},
+		OutputData: map[string]interface{}{
+			"ExecutorOperatorSetId":           uint32(1),
+			"OperatorTableReferenceTimestamp": uint32(1234567890),
+			"TaskDeadline":                    big.NewInt(time.Now().Add(1 * time.Hour).Unix()),
+			"Payload":                         []byte("test-payload"),
+		},
+	}
+
+	lwb := &chainPoller.LogWithBlock{
+		Block: block,
+		RawLog: &ethereum.EthereumEventLog{
+			Address:         ethereum.EthereumHexString("0xmailbox"),
+			TransactionHash: ethereum.EthereumHexString("0xtx1"),
+			LogIndex:        ethereum.EthereumQuantity(0),
+		},
+		Log: decodedLog,
+	}
+
+	mockBlockContextManager.EXPECT().
+		GetContext(blockNumber, gomock.Any()).
+		DoAndReturn(func(bn uint64, task *types.Task) context.Context {
+			assert.Equal(t, blockNumber, bn)
+			assert.Equal(t, "0xtask1", task.TaskId)
+			assert.Equal(t, avsAddress, task.AVSAddress)
+			return testContext
+		})
+
+	// Process the task
+	err := poller.processTask(ctx, lwb)
+	require.NoError(t, err)
+
+	// Verify task was queued with context
+	select {
+	case task := <-taskQueue:
+		assert.NotNil(t, task.Context)
+		assert.Equal(t, "test-value", task.Context.Value(testKey))
+		assert.Equal(t, "0xtask1", task.TaskId)
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Task not queued")
+	}
+}
+
+func TestEVMChainPoller_ContextCancellationOnReorg(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	mockClient := mocks.NewMockClient(ctrl)
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(ctrl)
+	store := memory.NewInMemoryAggregatorStore()
+
+	// Setup: Save blocks 98-99 in store (will be orphaned)
+	for i := uint64(98); i <= 99; i++ {
+		err := store.SaveBlock(ctx, "0xavs", &storage.BlockRecord{
+			Number:     i,
+			Hash:       fmt.Sprintf("0x%d_old", i),
+			ParentHash: fmt.Sprintf("0x%d_old", i-1),
+			ChainId:    config.ChainId(1),
+		})
+		require.NoError(t, err)
+	}
+
+	// Save block 97 that will match (common ancestor)
+	err := store.SaveBlock(ctx, "0xavs", &storage.BlockRecord{
+		Number:     97,
+		Hash:       "0x97",
+		ParentHash: "0x96",
+		ChainId:    config.ChainId(1),
+	})
+	require.NoError(t, err)
+
+	startBlock := &ethereum.EthereumBlock{
+		Number:     ethereum.EthereumQuantity(100),
+		Hash:       ethereum.EthereumHexString("0x100_new"),
+		ParentHash: ethereum.EthereumHexString("0x99_new"),
+		ChainId:    config.ChainId(1),
+	}
+
+	// Mock chain blocks - different from stored until block 97
+	chainBlock99 := &ethereum.EthereumBlock{
+		Number:     ethereum.EthereumQuantity(99),
+		Hash:       ethereum.EthereumHexString("0x99_new"),
+		ParentHash: ethereum.EthereumHexString("0x98_new"),
+		ChainId:    config.ChainId(1),
+	}
+	chainBlock98 := &ethereum.EthereumBlock{
+		Number:     ethereum.EthereumQuantity(98),
+		Hash:       ethereum.EthereumHexString("0x98_new"),
+		ParentHash: ethereum.EthereumHexString("0x97"),
+		ChainId:    config.ChainId(1),
+	}
+	chainBlock97 := &ethereum.EthereumBlock{
+		Number:     ethereum.EthereumQuantity(97),
+		Hash:       ethereum.EthereumHexString("0x97"),
+		ParentHash: ethereum.EthereumHexString("0x96"),
+		ChainId:    config.ChainId(1),
+	}
+
+	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(99)).Return(chainBlock99, nil)
+	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(98)).Return(chainBlock98, nil)
+	mockClient.EXPECT().GetBlockByNumber(ctx, uint64(97)).Return(chainBlock97, nil)
+
+	// Expect CancelBlock to be called for orphaned blocks
+	mockBlockContextManager.EXPECT().CancelBlock(uint64(99))
+	mockBlockContextManager.EXPECT().CancelBlock(uint64(98))
+
+	poller := &EVMChainPoller{
+		ethClient:           mockClient,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		config: &EVMChainPollerConfig{
+			AvsAddress:    "0xavs",
+			ChainId:       config.ChainId(1),
+			MaxReorgDepth: 10,
+		},
+		logger: zap.NewNop(),
+	}
+
+	// Execute reconcileReorg
+	err = poller.reconcileReorg(ctx, startBlock)
+	assert.NoError(t, err)
+
+	// Verify CancelBlock was called for each orphaned block
+	ctrl.Finish() // This will verify all expectations were met
+}
+
+// Test TaskBlockContextManager implementation
+func TestTaskBlockContextManager_GetContext(t *testing.T) {
+	parentCtx := context.Background()
+	logger := zap.NewNop()
+	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
+
+	// Create a task with deadline
+	deadline := time.Now().Add(1 * time.Hour)
+	task := &types.Task{
+		TaskId:              "task-1",
+		DeadlineUnixSeconds: &deadline,
+	}
+
+	// Get context for block 100
+	ctx1 := mgr.GetContext(100, task)
+	assert.NotNil(t, ctx1)
+
+	// Get context again for same block - should return same context
+	ctx2 := mgr.GetContext(100, task)
+	assert.Equal(t, ctx1, ctx2)
+
+	// Verify context has deadline
+	deadline1, ok := ctx1.Deadline()
+	assert.True(t, ok)
+	assert.WithinDuration(t, deadline, deadline1, 100*time.Millisecond)
+}
+
+// Test TaskBlockContextManager cancellation
+func TestTaskBlockContextManager_CancelBlock(t *testing.T) {
+	parentCtx := context.Background()
+	logger := zap.NewNop()
+	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, logger)
+
+	// Create contexts for multiple blocks
+	deadline := time.Now().Add(1 * time.Hour)
+	task := &types.Task{
+		TaskId:              "task-1",
+		DeadlineUnixSeconds: &deadline,
+	}
+
+	ctx1 := mgr.GetContext(100, task)
+	ctx2 := mgr.GetContext(101, task)
+	ctx3 := mgr.GetContext(102, task)
+
+	// Cancel block 101
+	mgr.CancelBlock(101)
+
+	// Check context states
+	select {
+	case <-ctx1.Done():
+		t.Fatal("Context 1 should not be cancelled")
+	default:
+		// Expected
+	}
+
+	select {
+	case <-ctx2.Done():
+		// Expected - should be cancelled
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Context 2 should be cancelled")
+	}
+
+	select {
+	case <-ctx3.Done():
+		t.Fatal("Context 3 should not be cancelled")
+	default:
+		// Expected
+	}
+}
+
+// Test that tasks loaded from storage are populated with their context
+func TestRecoverInProgressTasks_PopulatesContextFromStorage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	store := memory.NewInMemoryAggregatorStore()
+	taskQueue := make(chan *types.Task, 10)
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(ctrl)
+
+	// Create tasks with different source block numbers
+	validDeadline := time.Now().Add(1 * time.Hour)
+	expiredDeadline := time.Now().Add(-1 * time.Hour)
+
+	task1 := &types.Task{
+		TaskId:              "task-1",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &validDeadline,
+		SourceBlockNumber:   100,
+		ReferenceTimestamp:  1234567890,
+	}
+
+	task2 := &types.Task{
+		TaskId:              "task-2",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &validDeadline,
+		SourceBlockNumber:   101,
+		ReferenceTimestamp:  1234567891,
+	}
+
+	expiredTask := &types.Task{
+		TaskId:              "expired-task",
+		AVSAddress:          "0xtest",
+		DeadlineUnixSeconds: &expiredDeadline,
+		SourceBlockNumber:   99,
+		ReferenceTimestamp:  1234567889,
+	}
+
+	// Save all tasks as pending
+	require.NoError(t, store.SavePendingTask(ctx, task1))
+	require.NoError(t, store.SavePendingTask(ctx, task2))
+	require.NoError(t, store.SavePendingTask(ctx, expiredTask))
+
+	// Create test contexts with different states
+	validCtx1 := context.WithValue(context.Background(), testContextKey("block"), "100")
+	validCtx2 := context.WithValue(context.Background(), testContextKey("block"), "101")
+	expiredCtx, cancelExpired := context.WithCancel(context.Background())
+	cancelExpired() // Make it expired
+
+	// Set up expectations for GetContext calls
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(100), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(100), blockNum)
+			assert.Equal(t, "task-1", task.TaskId)
+			return validCtx1
+		})
+
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(101), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(101), blockNum)
+			assert.Equal(t, "task-2", task.TaskId)
+			return validCtx2
+		})
+
+	mockBlockContextManager.EXPECT().
+		GetContext(uint64(99), gomock.Any()).
+		DoAndReturn(func(blockNum uint64, task *types.Task) context.Context {
+			assert.Equal(t, uint64(99), blockNum)
+			assert.Equal(t, "expired-task", task.TaskId)
+			return expiredCtx
+		})
+
+	poller := &EVMChainPoller{
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		config: &EVMChainPollerConfig{
+			AvsAddress: "0xtest",
+			ChainId:    config.ChainId(1),
+		},
+		logger: zap.NewNop(),
+	}
+
+	// Execute recoverInProgressTasks
+	err := poller.recoverInProgressTasks(ctx)
+	assert.NoError(t, err)
+
+	// Verify that valid tasks are queued with proper contexts
+	queuedTasks := make(map[string]*types.Task)
+	for i := 0; i < 2; i++ {
+		select {
+		case task := <-taskQueue:
+			queuedTasks[task.TaskId] = task
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("Expected 2 tasks to be queued")
+		}
+	}
+
+	// Verify task 1 has the correct context
+	assert.NotNil(t, queuedTasks["task-1"])
+	assert.NotNil(t, queuedTasks["task-1"].Context)
+	assert.Equal(t, "100", queuedTasks["task-1"].Context.Value(testContextKey("block")))
+
+	// Verify task 2 has the correct context
+	assert.NotNil(t, queuedTasks["task-2"])
+	assert.NotNil(t, queuedTasks["task-2"].Context)
+	assert.Equal(t, "101", queuedTasks["task-2"].Context.Value(testContextKey("block")))
+
+	// Verify expired task was not queued
+	select {
+	case task := <-taskQueue:
+		t.Fatalf("Should not receive expired task, got: %s", task.TaskId)
+	case <-time.After(50 * time.Millisecond):
+		// Expected - no more tasks
+	}
+
+	// Verify expired task was handled correctly (not in pending list)
+	pendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xtest")
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(pendingTasks), "No tasks should remain pending")
 }
