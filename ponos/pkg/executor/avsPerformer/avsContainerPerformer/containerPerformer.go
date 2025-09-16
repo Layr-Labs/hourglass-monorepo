@@ -1222,7 +1222,6 @@ func (aps *AvsContainerPerformer) Deploy(ctx context.Context, image avsPerformer
 
 	result.Status = avsPerformer.DeploymentStatusCompleted
 	result.EndTime = time.Now()
-	result.ResourceId = creationResult.ResourceId
 	result.Message = "Deployment completed successfully"
 	result.Endpoint = creationResult.Endpoint
 	result.Hostname = creationResult.Hostname
