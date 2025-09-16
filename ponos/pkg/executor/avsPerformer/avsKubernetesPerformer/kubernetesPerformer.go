@@ -386,7 +386,7 @@ func (akp *AvsKubernetesPerformer) CreatePerformer(
 	)
 
 	return &avsPerformer.PerformerCreationResult{
-		PerformerID: newPerformer.performerID,
+		PerformerId: newPerformer.performerID,
 		StatusChan:  newPerformer.statusChan,
 	}, nil
 }
@@ -557,7 +557,7 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 	defer cancel()
 
 	result := &avsPerformer.DeploymentResult{
-		ID:        deploymentID,
+		Id:        deploymentID,
 		Status:    avsPerformer.DeploymentStatusPending,
 		Image:     image,
 		StartTime: time.Now(),
@@ -578,16 +578,16 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 		return result, err
 	}
 
-	result.PerformerID = creationResult.PerformerID
+	result.PerformerId = creationResult.PerformerId
 	result.Status = avsPerformer.DeploymentStatusInProgress
 
 	// Monitor deployment until pod is ready (Kubernetes handles health checks)
-	if err := akp.waitForPerformerReady(deploymentCtx, creationResult.PerformerID); err != nil {
+	if err := akp.waitForPerformerReady(deploymentCtx, creationResult.PerformerId); err != nil {
 		// Deployment failed, clean up
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
-		if removeErr := akp.RemovePerformer(cleanupCtx, creationResult.PerformerID); removeErr != nil {
+		if removeErr := akp.RemovePerformer(cleanupCtx, creationResult.PerformerId); removeErr != nil {
 			akp.logger.Error("Failed to clean up failed deployment",
 				zap.String("deploymentID", deploymentID),
 				zap.Error(removeErr),
@@ -602,12 +602,12 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 	}
 
 	// Promote the performer
-	if err := akp.PromotePerformer(deploymentCtx, creationResult.PerformerID); err != nil {
+	if err := akp.PromotePerformer(deploymentCtx, creationResult.PerformerId); err != nil {
 		// Clean up failed deployment
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
-		if removeErr := akp.RemovePerformer(cleanupCtx, creationResult.PerformerID); removeErr != nil {
+		if removeErr := akp.RemovePerformer(cleanupCtx, creationResult.PerformerId); removeErr != nil {
 			akp.logger.Error("Failed to clean up after promotion failure",
 				zap.String("deploymentID", deploymentID),
 				zap.Error(removeErr),
@@ -628,7 +628,7 @@ func (akp *AvsKubernetesPerformer) Deploy(ctx context.Context, image avsPerforme
 
 	akp.logger.Info("Kubernetes deployment completed successfully",
 		zap.String("deploymentID", deploymentID),
-		zap.String("performerID", creationResult.PerformerID),
+		zap.String("performerID", creationResult.PerformerId),
 		zap.Duration("duration", result.EndTime.Sub(result.StartTime)),
 	)
 

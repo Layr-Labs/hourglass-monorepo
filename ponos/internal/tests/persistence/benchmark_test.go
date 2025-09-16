@@ -199,7 +199,7 @@ func BenchmarkExecutorOperations(b *testing.B) {
 			performer := &executorStorage.PerformerState{
 				PerformerId:        fmt.Sprintf("performer-%d", i),
 				AvsAddress:         "0xavs1",
-				ContainerId:        fmt.Sprintf("container-%d", i),
+				ResourceId:         fmt.Sprintf("container-%d", i),
 				Status:             "running",
 				ArtifactRegistry:   "registry.io/avs",
 				ArtifactTag:        "v1.0.0",
@@ -221,7 +221,7 @@ func BenchmarkExecutorOperations(b *testing.B) {
 			performer := &executorStorage.PerformerState{
 				PerformerId:        fmt.Sprintf("performer-%d", i),
 				AvsAddress:         fmt.Sprintf("0xavs%d", i%10),
-				ContainerId:        fmt.Sprintf("container-%d", i),
+				ResourceId:         fmt.Sprintf("container-%d", i),
 				Status:             "running",
 				ArtifactRegistry:   "registry.io/avs",
 				ArtifactTag:        "v1.0.0",

@@ -172,6 +172,9 @@ type ContainerManager interface {
 	// Manual restart trigger (for serverPerformer to call)
 	TriggerRestart(containerID string, reason string) error
 
+	// Container discovery and adoption for rehydration
+	AdoptContainer(ctx context.Context, containerID string, livenessConfig *LivenessConfig) error
+
 	// Cleanup
 	Shutdown(ctx context.Context) error
 }

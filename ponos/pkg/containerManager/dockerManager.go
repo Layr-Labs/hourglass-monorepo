@@ -1447,3 +1447,41 @@ func (dcm *DockerContainerManager) ensureImageExists(ctx context.Context, imageN
 	dcm.logger.Info("Image pulled successfully", zap.String("image", imageName))
 	return nil
 }
+
+// AdoptContainer reconnects to an existing running container and starts monitoring it
+func (dcm *DockerContainerManager) AdoptContainer(ctx context.Context, containerID string, livenessConfig *LivenessConfig) error {
+	dcm.logger.Info("Attempting to adopt existing container",
+		zap.String("containerID", containerID),
+	)
+
+	containerJSON, err := dcm.client.ContainerInspect(ctx, containerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "No such container") {
+			return errors.Wrap(err, "container does not exist")
+		}
+		return errors.Wrap(err, "failed to inspect container for adoption")
+	}
+
+	if containerJSON.State.Status != "running" {
+		dcm.logger.Warn("Cannot adopt non-running container",
+			zap.String("containerID", containerID),
+			zap.String("status", containerJSON.State.Status),
+		)
+		return fmt.Errorf("container %s is not running (status: %s), cannot adopt", containerID, containerJSON.State.Status)
+	}
+
+	if livenessConfig != nil {
+		_, err := dcm.StartLivenessMonitoring(ctx, containerID, livenessConfig)
+		if err != nil {
+			return errors.Wrap(err, "failed to start liveness monitoring for adopted container")
+		}
+	}
+
+	dcm.logger.Info("Successfully adopted running container",
+		zap.String("containerID", containerID),
+		zap.String("hostname", containerJSON.Config.Hostname),
+		zap.String("status", containerJSON.State.Status),
+	)
+
+	return nil
+}

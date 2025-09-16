@@ -391,7 +391,7 @@ func benchmarkSavePerformerState(b *testing.B, store executorStorage.ExecutorSto
 		state := &executorStorage.PerformerState{
 			PerformerId: performerId,
 			AvsAddress:  "0xavs123",
-			ContainerId: fmt.Sprintf("container-%d", i),
+			ResourceId:  fmt.Sprintf("container-%d", i),
 			Status:      "running",
 			CreatedAt:   time.Now(),
 		}

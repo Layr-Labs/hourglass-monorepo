@@ -121,7 +121,7 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 
 		// Verify old performer is in draining state
 		server.drainingPerformersMu.Lock()
-		_, isDraining := server.drainingPerformers[firstDeployment.PerformerID]
+		_, isDraining := server.drainingPerformers[firstDeployment.PerformerId]
 		server.drainingPerformersMu.Unlock()
 		assert.True(t, isDraining, "Old performer should be draining")
 
@@ -130,7 +130,7 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		for i := 0; i < 50; i++ {
 			time.Sleep(100 * time.Millisecond)
 			server.drainingPerformersMu.Lock()
-			_, stillDraining := server.drainingPerformers[firstDeployment.PerformerID]
+			_, stillDraining := server.drainingPerformers[firstDeployment.PerformerId]
 			server.drainingPerformersMu.Unlock()
 			if !stillDraining {
 				break
@@ -141,14 +141,14 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 
 		// Verify old performer is no longer draining
 		server.drainingPerformersMu.Lock()
-		_, isDraining = server.drainingPerformers[firstDeployment.PerformerID]
+		_, isDraining = server.drainingPerformers[firstDeployment.PerformerId]
 		server.drainingPerformersMu.Unlock()
 		assert.False(t, isDraining, "Old performer should no longer be draining")
 
 		// Verify only new performer remains
 		performers := server.ListPerformers()
 		require.Len(t, performers, 1)
-		assert.Equal(t, secondDeployment.PerformerID, performers[0].PerformerID)
+		assert.Equal(t, secondDeployment.PerformerId, performers[0].PerformerID)
 	})
 
 	t.Run("immediate drain when no tasks", func(t *testing.T) {
@@ -194,7 +194,7 @@ func TestPerformerDrainingIntegration(t *testing.T) {
 		// Verify only new performer remains
 		performers := server.ListPerformers()
 		require.Len(t, performers, 1)
-		assert.Equal(t, deployResult2.PerformerID, performers[0].PerformerID)
+		assert.Equal(t, deployResult2.PerformerId, performers[0].PerformerID)
 	})
 }
 
@@ -243,15 +243,15 @@ func TestDeploymentIntegration(t *testing.T) {
 
 		// Verify deployment result
 		assert.Equal(t, avsPerformer.DeploymentStatusCompleted, result.Status)
-		assert.NotEmpty(t, result.ID)
-		assert.NotEmpty(t, result.PerformerID)
+		assert.NotEmpty(t, result.Id)
+		assert.NotEmpty(t, result.PerformerId)
 		assert.Contains(t, result.Message, "successfully")
 		assert.True(t, result.EndTime.After(result.StartTime))
 
 		// Verify performer is in service
 		performers := server.ListPerformers()
 		require.Len(t, performers, 1)
-		assert.Equal(t, result.PerformerID, performers[0].PerformerID)
+		assert.Equal(t, result.PerformerId, performers[0].PerformerID)
 		assert.Equal(t, avsPerformer.PerformerResourceStatusInService, performers[0].Status)
 	})
 
@@ -514,7 +514,7 @@ func TestListPerformersIntegration(t *testing.T) {
 
 		// Verify performer details
 		p := performers[0]
-		assert.Equal(t, result.PerformerID, p.PerformerID)
+		assert.Equal(t, result.PerformerId, p.PerformerID)
 		assert.Equal(t, performerConfig.AvsAddress, p.AvsAddress)
 		assert.Equal(t, avsPerformer.PerformerResourceStatusInService, p.Status)
 		assert.Equal(t, "sleepy-hello-performer", p.ArtifactRegistry)

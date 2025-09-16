@@ -13,17 +13,11 @@ type InMemoryExecutorStore struct {
 	mu              sync.RWMutex
 	closed          bool
 	performerStates map[string]*storage.PerformerState
-	inflightTasks   map[string]*storage.TaskInfo
-	deployments     map[string]*storage.DeploymentInfo
 }
 
 // NewInMemoryExecutorStore creates a new in-memory executor store
 func NewInMemoryExecutorStore() *InMemoryExecutorStore {
-	return &InMemoryExecutorStore{
-		performerStates: make(map[string]*storage.PerformerState),
-		inflightTasks:   make(map[string]*storage.TaskInfo),
-		deployments:     make(map[string]*storage.DeploymentInfo),
-	}
+	return &InMemoryExecutorStore{performerStates: make(map[string]*storage.PerformerState)}
 }
 
 // SavePerformerState saves the state of a performer
@@ -147,8 +141,6 @@ func (s *InMemoryExecutorStore) Close() error {
 
 	// Clear all maps
 	s.performerStates = nil
-	s.inflightTasks = nil
-	s.deployments = nil
 
 	return nil
 }
