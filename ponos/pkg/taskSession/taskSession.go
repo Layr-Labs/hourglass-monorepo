@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
@@ -31,8 +29,6 @@ type TaskSession[SigT, CertT, PubKeyT any] struct {
 	signer              signer.ISigner
 	context             context.Context
 	logger              *zap.Logger
-	results             sync.Map
-	resultsCount        atomic.Uint32
 	operatorPeersWeight *operatorManager.PeerWeight
 	taskAggregator      aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
 	aggregatorAddress   string
@@ -83,15 +79,12 @@ func NewBN254TaskSession(
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		signer:              signer,
-		results:             sync.Map{},
 		context:             ctx,
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,
 		tlsEnabled:          tlsEnabled,
 	}
-
-	ts.resultsCount.Store(0)
 
 	return ts, nil
 }
@@ -139,15 +132,12 @@ func NewECDSATaskSession(
 		Task:                task,
 		aggregatorAddress:   aggregatorAddress,
 		signer:              signer,
-		results:             sync.Map{},
 		context:             ctx,
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,
 		tlsEnabled:          tlsEnabled,
 	}
-
-	ts.resultsCount.Store(0)
 
 	return ts, nil
 }

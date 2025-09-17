@@ -236,7 +236,6 @@ func TestNewBN254TaskSession(t *testing.T) {
 		assert.Equal(t, "0xaggregator", session.aggregatorAddress)
 		assert.NotNil(t, session.signer)
 		assert.Equal(t, operatorPeersWeight, session.operatorPeersWeight)
-		assert.Equal(t, uint32(0), session.resultsCount.Load())
 	})
 
 	t.Run("invalid operator set", func(t *testing.T) {
@@ -479,7 +478,6 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify initial state
-		assert.Equal(t, uint32(0), session.resultsCount.Load())
 		assert.NotNil(t, session.taskAggregator)
 		assert.Equal(t, task.TaskId, session.Task.TaskId)
 
@@ -511,7 +509,6 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify initial state
-		assert.Equal(t, uint32(0), session.resultsCount.Load())
 		assert.NotNil(t, session.taskAggregator)
 		assert.Equal(t, task.TaskId, session.Task.TaskId)
 
@@ -574,8 +571,6 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 			"Task aggregator should not have met signing threshold with insufficient responses")
 
 		// Verify initial state remained unchanged due to no successful responses
-		assert.Equal(t, uint32(0), session.resultsCount.Load(),
-			"Should have zero successful responses in complete deadlock")
 	})
 
 	t.Run("deadlock scenario with high threshold requirement", func(t *testing.T) {
@@ -643,9 +638,6 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Store initial state
-		initialResultsCount := session.resultsCount.Load()
-
 		// Attempt process - should deadlock
 		cert, err := session.Process()
 
@@ -654,8 +646,6 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		require.Nil(t, cert)
 
 		// Verify internal state consistency during deadlock
-		assert.Equal(t, initialResultsCount, session.resultsCount.Load(),
-			"Results count should remain unchanged in complete deadlock")
 
 		// Verify the task session maintains proper state even in failure scenarios
 		assert.NotNil(t, session.Task, "Task should remain accessible")
