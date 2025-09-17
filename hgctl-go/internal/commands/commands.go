@@ -14,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
@@ -95,10 +96,12 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 				return nil
 			},
 			middleware.MiddlewareBeforeFunc,
+			middleware.TelemetryBeforeFunc,
 		),
-		After: func(c *cli.Context) error {
-			return middleware.CleanupContractClient(c)
-		},
+		After: middleware.ChainAfterFuncs(
+			middleware.TelemetryAfterFunc,
+			middleware.CleanupContractClient,
+		),
 		Commands: []*cli.Command{
 			GetCommand(),
 			DescribeCommand(),
@@ -108,6 +111,7 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			KeystoreCommand(),
 			SignerCommand(),
 			EigenLayerCommand(),
+			TelemetryCommand(),
 		},
 		ExitErrHandler: middleware.ExitErrHandler,
 	}
@@ -118,7 +122,7 @@ func isConfigCommand(c *cli.Context) bool {
 		return false
 	}
 	cmd := c.Args().Get(0)
-	return cmd == "context"
+	return cmd == "context" || cmd == "telemetry"
 }
 
 // GetCommand returns the get command
@@ -173,4 +177,9 @@ func EigenLayerCommand() *cli.Command {
 	cmd := eigenlayer.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
+}
+
+// TelemetryCommand returns the telemetry command
+func TelemetryCommand() *cli.Command {
+	return telemetry.Command()
 }

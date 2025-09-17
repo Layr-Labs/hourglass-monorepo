@@ -19,28 +19,28 @@ import (
 
 var (
 	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4")).
-			MarginBottom(1)
+		Bold(true).
+		Foreground(lipgloss.Color("#7D56F4")).
+		MarginBottom(1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7D56F4")).
-			Bold(true)
+		Foreground(lipgloss.Color("#7D56F4")).
+		Bold(true)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575")).
-			Bold(true)
+		Foreground(lipgloss.Color("#04B575")).
+		Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#999999"))
+		Foreground(lipgloss.Color("#999999"))
 
 	warningStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFF00")).
-			Bold(true)
+		Foreground(lipgloss.Color("#FFFF00")).
+		Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000")).
-			Bold(true)
+		Foreground(lipgloss.Color("#FF0000")).
+		Bold(true)
 )
 
 // expandPath expands ~ to the user's home directory and returns absolute path
@@ -358,11 +358,15 @@ func (m signerWizardModel) handleEnter() (tea.Model, tea.Cmd) {
 				m.stage = stageConfirm
 			case "keystore":
 				// Check if there are existing keystores of the right type
-				items := m.getExistingKeystores()
+				items, err := m.getExistingKeystores()
+				if err != nil {
+					m.err = fmt.Errorf("could not get existing keystores: %w", err)
+					return m, tea.Quit
+				}
 				if len(items) == 0 {
 					// No keystores found, show error and exit
 					curveType := strings.ToUpper(m.keyType)
-					m.err = fmt.Errorf("No %s keystores found in context. Use 'hgctl keystore create' to add one first.", curveType)
+					m.err = fmt.Errorf("no %s keystores found in context. Use 'hgctl keystore create' to add one first", curveType)
 					return m, tea.Quit
 				}
 				// Show list of existing keystores
@@ -531,9 +535,12 @@ func (m signerWizardModel) getSignerTypeItems() []list.Item {
 	}
 }
 
-func (m signerWizardModel) getExistingKeystores() []list.Item {
+func (m signerWizardModel) getExistingKeystores() ([]list.Item, error) {
 	var items []list.Item
-	cfg, _ := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return items, err
+	}
 	ctx := cfg.Contexts[m.contextName]
 
 	for _, ks := range ctx.Keystores {
@@ -543,7 +550,7 @@ func (m signerWizardModel) getExistingKeystores() []list.Item {
 			items = append(items, keystoreItem{ks.Name, ks.Path})
 		}
 	}
-	return items
+	return items, nil
 }
 
 func (m signerWizardModel) View() string {

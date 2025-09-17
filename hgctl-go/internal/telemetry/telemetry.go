@@ -1,55 +1,153 @@
 package telemetry
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"runtime"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/spf13/cobra"
+	"github.com/urfave/cli/v2"
 )
 
-//nolint:unused
 var (
 	embeddedTelemetryApiKey string // Set by build flags
-	client                  *Client
+	globalClient            Client
+	namespace               = "hgctl"
 )
 
-type Client struct {
-	enabled bool
-	//nolint:unused
-	distinct string
+func Init(cfg *config.Config) {
+	client, err := NewPostHogClient(cfg, namespace)
+	if err != nil || client == nil {
+		globalClient = NewNoopClient()
+	} else {
+		globalClient = client
+	}
 }
 
-func Init() {
-	// For now, telemetry is disabled
-	// TODO: Implement proper telemetry
-	client = &Client{enabled: false}
-}
-
-//nolint:unused
 func TrackCommand(cmd *cobra.Command, startTime time.Time) func() {
-	// Return a no-op cleanup function
-	return func() {}
+	if globalClient == nil {
+		return func() {}
+	}
+
+	metricsCtx := NewMetricsContext()
+	metricsCtx.StartTime = startTime
+
+	return func() {
+		duration := time.Since(startTime).Milliseconds()
+
+		properties := map[string]interface{}{
+			"command":     getCommandPath(cmd),
+			"duration_ms": duration,
+			"version":     version.GetVersion(),
+			"commit":      version.GetCommit(),
+			"os":          runtime.GOOS,
+			"arch":        runtime.GOARCH,
+			"go_version":  runtime.Version(),
+			"success":     true,
+		}
+
+		if len(metricsCtx.Metrics) > 0 {
+			properties["metrics"] = metricsCtx.Metrics
+		}
+
+		_ = globalClient.Track(context.Background(), "command_executed", properties)
+	}
 }
 
-//nolint:unused
+func TrackCLICommand(c *cli.Context, commandName string, startTime time.Time) func() {
+	if globalClient == nil {
+		return func() {}
+	}
+
+	metricsCtx := NewMetricsContext()
+	metricsCtx.StartTime = startTime
+	ctx := WithMetricsContext(c.Context, metricsCtx)
+	c.Context = ctx
+
+	return func() {
+		duration := time.Since(startTime).Milliseconds()
+
+		properties := map[string]interface{}{
+			"command":     commandName,
+			"duration_ms": duration,
+			"version":     version.GetVersion(),
+			"commit":      version.GetCommit(),
+			"os":          runtime.GOOS,
+			"arch":        runtime.GOARCH,
+			"go_version":  runtime.Version(),
+			"success":     true, // Can be overridden if error occurred
+		}
+
+		if metrics, err := MetricsFromContext(ctx); err == nil && len(metrics.Metrics) > 0 {
+			properties["metrics"] = metrics.Metrics
+			for k, v := range metrics.Properties {
+				properties[k] = v
+			}
+		}
+
+		_ = globalClient.Track(context.Background(), "command_executed", properties)
+	}
+}
+
 func TrackEvent(event string, properties map[string]interface{}) {
-	// No-op for now
+	if globalClient == nil {
+		return
+	}
+
+	if properties == nil {
+		properties = make(map[string]interface{})
+	}
+
+	properties["version"] = version.GetVersion()
+	properties["commit"] = version.GetCommit()
+	properties["os"] = runtime.GOOS
+	properties["arch"] = runtime.GOARCH
+
+	_ = globalClient.Track(context.Background(), event, properties)
 }
 
-//nolint:unused
 func TrackError(err error, context map[string]interface{}) {
-	// No-op for now
+	if globalClient == nil || err == nil {
+		return
+	}
+
+	if context == nil {
+		context = make(map[string]interface{})
+	}
+
+	context["error"] = err.Error()
+	context["error_type"] = fmt.Sprintf("%T", err)
+
+	TrackEvent("error_occurred", context)
+}
+
+func EmitMetric(ctx context.Context, name string, value float64, dimensions map[string]string) {
+	if metricsCtx, err := MetricsFromContext(ctx); err == nil {
+		metricsCtx.AddMetricWithDimensions(name, value, dimensions)
+	}
+
+	if globalClient != nil {
+		metric := Metric{
+			Name:       name,
+			Value:      value,
+			Dimensions: dimensions,
+		}
+		_ = globalClient.AddMetric(ctx, metric)
+	}
 }
 
 func Close() {
-	// No-op for now
+	if globalClient != nil {
+		_ = globalClient.Close()
+	}
 }
 
-//nolint:unused
 func getCommandPath(cmd *cobra.Command) string {
 	if cmd == nil {
 		return "root"
@@ -62,22 +160,13 @@ func getCommandPath(cmd *cobra.Command) string {
 	return path
 }
 
-//nolint:unused
 func getAnonymousID() string {
-	// Try to get machine ID
 	id, err := machineid.ID()
 	if err != nil {
-		// Fallback to hostname-based ID
 		hostname, _ := os.Hostname()
 		id = fmt.Sprintf("%s-%s-%s", runtime.GOOS, runtime.GOARCH, hostname)
 	}
 
-	// Hash it for privacy
 	hash := sha256.Sum256([]byte(id))
 	return fmt.Sprintf("%x", hash[:8])
-}
-
-//nolint:unused
-func getVersion() string {
-	return "dev"
 }

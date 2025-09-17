@@ -2,16 +2,23 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
 )
 
 func main() {
-	telemetry.Init()
+	// Load config for telemetry initialization
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	telemetry.Init(cfg)
 	defer telemetry.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -4,26 +4,30 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"gopkg.in/yaml.v3"
-	"os"
-	"path/filepath"
 )
 
 // Define custom types for context keys to avoid collisions
 type contextKey string
 
 var (
-	ContextKey        contextKey = "currentContext"
-	ConfigKey         contextKey = "config"
-	EnvKey            contextKey = "env"
-	ContractClientKey contextKey = "contractClient"
-	LoggerKey         contextKey = "loggerKey"
-	KeystoreName      string     = "KEYSTORE_NAME"
-	KeystorePassword  string     = "KEYSTORE_PASSWORD"
+	ContextKey          contextKey = "currentContext"
+	ConfigKey           contextKey = "config"
+	EnvKey              contextKey = "env"
+	ContractClientKey   contextKey = "contractClient"
+	LoggerKey           contextKey = "loggerKey"
+	TelemetryContextKey contextKey = "telemetryContextKey"
+	MetricsContextKey   contextKey = "metricsContextKey"
+
+	KeystoreName     string = "KEYSTORE_NAME"
+	KeystorePassword string = "KEYSTORE_PASSWORD"
 )
 
 type ContractOverrides struct {
@@ -65,8 +69,11 @@ type Context struct {
 }
 
 type Config struct {
-	CurrentContext string              `yaml:"currentContext"`
-	Contexts       map[string]*Context `yaml:"contexts"`
+	CurrentContext     string              `yaml:"currentContext"`
+	Contexts           map[string]*Context `yaml:"contexts"`
+	TelemetryEnabled   *bool               `yaml:"telemetryEnabled,omitempty"`
+	TelemetryAnonymous bool                `yaml:"telemetryAnonymous,omitempty"`
+	PostHogAPIKey      string              `yaml:"posthogApiKey,omitempty"`
 }
 
 // OperatorSignerFromContext loads the operator key signer from context

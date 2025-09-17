@@ -3,14 +3,29 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 )
 
 // ChainBeforeFuncs chains multiple BeforeFuncs together
 func ChainBeforeFuncs(funcs ...cli.BeforeFunc) cli.BeforeFunc {
+	return func(c *cli.Context) error {
+		for _, fn := range funcs {
+			if err := fn(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// ChainAfterFuncs chains multiple AfterFuncs together
+func ChainAfterFuncs(funcs ...cli.AfterFunc) cli.AfterFunc {
 	return func(c *cli.Context) error {
 		for _, fn := range funcs {
 			if err := fn(c); err != nil {
@@ -82,6 +97,38 @@ func MiddlewareBeforeFunc(c *cli.Context) error {
 	return nil
 }
 
+// TelemetryBeforeFunc starts telemetry tracking for the command
+func TelemetryBeforeFunc(c *cli.Context) error {
+	// Skip telemetry for help commands
+	if c.Command == nil || c.Command.Name == "help" {
+		return nil
+	}
+
+	// Get the full command path
+	commandPath := c.Command.FullName()
+	if commandPath == "" && c.Command != nil {
+		commandPath = c.Command.Name
+	}
+
+	// Start tracking
+	startTime := time.Now()
+	finishFunc := telemetry.TrackCLICommand(c, commandPath, startTime)
+
+	// Store the finish function in context to be called after command execution
+	c.Context = context.WithValue(c.Context, config.TelemetryContextKey, finishFunc)
+
+	return nil
+}
+
+// TelemetryAfterFunc completes telemetry tracking
+func TelemetryAfterFunc(c *cli.Context) error {
+	// Retrieve and call the finish function if it exists
+	if finishFunc, ok := c.Context.Value(config.TelemetryContextKey).(func()); ok {
+		finishFunc()
+	}
+	return nil
+}
+
 func ExitErrHandler(c *cli.Context, err error) {
 	if err == nil {
 		return
@@ -103,5 +150,12 @@ func ExitErrHandler(c *cli.Context, err error) {
 			zap.Error(err))
 	} else {
 		log.Error("Command execution failed", zap.Error(err))
+	}
+
+	// Track error in telemetry
+	if c != nil && c.Command != nil {
+		telemetry.TrackError(err, map[string]interface{}{
+			"command": c.Command.Name,
+		})
 	}
 }

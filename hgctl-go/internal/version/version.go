@@ -1,8 +1,8 @@
 package version
 
 var (
-	Version = "dev"
-	Commit  = "unknown"
+	Version string
+	Commit  string
 )
 
 func GetVersion() string {
