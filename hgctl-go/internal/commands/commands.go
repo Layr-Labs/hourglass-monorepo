@@ -14,6 +14,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
@@ -43,41 +44,32 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			},
 		},
 		Before: middleware.ChainBeforeFuncs(
-			// First load config and context
 			func(c *cli.Context) error {
-				// Initialize logger early for debugging
 				verbose := c.Bool("verbose")
 				logger.InitGlobalLoggerWithWriter(verbose, c.App.Writer)
 				l := logger.GetLogger()
 
-				// Check if user is requesting help
 				for _, arg := range os.Args {
 					if arg == "--help" || arg == "-h" || arg == "help" {
-						// Set empty context for help display
 						c.Context = context.WithValue(c.Context, config.ConfigKey, &config.Config{})
 						c.Context = context.WithValue(c.Context, config.ContextKey, &config.Context{})
 						return nil
 					}
 				}
 
-				// Load config
 				cfg, err := config.LoadConfig()
 				if err != nil {
 					l.Error("Failed to load config", zap.Error(err))
-					// Create empty config if it doesn't exist
 					cfg = &config.Config{
 						Contexts: make(map[string]*config.Context),
 					}
 				}
 
-				// Get current context
 				currentCtx, err := config.GetCurrentContext()
 				if err != nil {
-					// Allow config commands to run without a context
 					if isConfigCommand(c) {
 						currentCtx = &config.Context{}
 					} else {
-						// Log helpful error message
 						l.Error("No context configured. Please create a context.")
 						fmt.Fprintf(os.Stderr, "\nError: No context configured\n\n")
 						fmt.Fprintf(os.Stderr, "To create a context, run:\n")
@@ -88,17 +80,18 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 					}
 				}
 
-				// Store in context
 				c.Context = context.WithValue(c.Context, config.ConfigKey, cfg)
 				c.Context = context.WithValue(c.Context, config.ContextKey, currentCtx)
 
 				return nil
 			},
 			middleware.MiddlewareBeforeFunc,
+			middleware.TelemetryBeforeFunc,
 		),
-		After: func(c *cli.Context) error {
-			return middleware.CleanupContractClient(c)
-		},
+		After: middleware.ChainAfterFuncs(
+			middleware.TelemetryAfterFunc,
+			middleware.CleanupContractClient,
+		),
 		Commands: []*cli.Command{
 			GetCommand(),
 			DescribeCommand(),
@@ -108,6 +101,7 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			KeystoreCommand(),
 			SignerCommand(),
 			EigenLayerCommand(),
+			TelemetryCommand(),
 		},
 		ExitErrHandler: middleware.ExitErrHandler,
 	}
@@ -118,59 +112,55 @@ func isConfigCommand(c *cli.Context) bool {
 		return false
 	}
 	cmd := c.Args().Get(0)
-	return cmd == "context"
+	return cmd == "context" || cmd == "telemetry"
 }
 
-// GetCommand returns the get command
 func GetCommand() *cli.Command {
 	cmd := get.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// DescribeCommand returns the describe command
 func DescribeCommand() *cli.Command {
 	cmd := describe.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// DeployCommand returns the deploy command
 func DeployCommand() *cli.Command {
 	cmd := deploy.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// RemoveCommand returns the remove command
 func RemoveCommand() *cli.Command {
 	cmd := remove.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// ContextCommand returns the context command
 func ContextCommand() *cli.Command {
 	return contextcmd.Command()
 }
 
-// KeystoreCommand returns the keystore command
 func KeystoreCommand() *cli.Command {
 	cmd := keystore.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// SignerCommand returns the web3signer command
 func SignerCommand() *cli.Command {
 	cmd := signer.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
 
-// EigenLayerCommand returns the eigenlayer command with all subcommands
 func EigenLayerCommand() *cli.Command {
 	cmd := eigenlayer.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
+}
+
+func TelemetryCommand() *cli.Command {
+	return telemetry.Command()
 }

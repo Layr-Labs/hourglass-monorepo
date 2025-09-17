@@ -103,9 +103,11 @@ jobs:
           go-version: '1.23'
       
       - name: Build binaries for all platforms
+        env:
+          HGCTL_POSTHOG_API_KEY: ${{ secrets.HGCTL_POSTHOG_API_KEY }}
         run: |
           cd hgctl-go
-          
+
           # Get version
           VERSION=$(cat VERSION | tr -d '[:space:]')
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
@@ -113,31 +115,40 @@ jobs:
             VERSION="${VERSION#hgctl-}" # Remove hgctl- prefix from tag
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          
+
           # Build for all platforms
           mkdir -p ./release
-          
+
+          # Set ldflags with API key injection
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          LDFLAGS="-X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Version=$VERSION' -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Commit=$COMMIT_HASH'"
+
+          # Add PostHog API key if available
+          if [ -n "${HGCTL_POSTHOG_API_KEY}" ]; then
+            LDFLAGS="$LDFLAGS -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry.embeddedTelemetryApiKey=${HGCTL_POSTHOG_API_KEY}'"
+          fi
+
           # Linux AMD64
           GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Version=$VERSION' -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Commit=$(git rev-parse --short HEAD)'" \
+            -ldflags "$LDFLAGS" \
             -o ./release/hgctl-linux-amd64 \
             ./cmd/hgctl
-          
+
           # Linux ARM64
           GOOS=linux GOARCH=arm64 go build \
-            -ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Version=$VERSION' -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Commit=$(git rev-parse --short HEAD)'" \
+            -ldflags "$LDFLAGS" \
             -o ./release/hgctl-linux-arm64 \
             ./cmd/hgctl
-          
+
           # Darwin AMD64
           GOOS=darwin GOARCH=amd64 go build \
-            -ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Version=$VERSION' -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Commit=$(git rev-parse --short HEAD)'" \
+            -ldflags "$LDFLAGS" \
             -o ./release/hgctl-darwin-amd64 \
             ./cmd/hgctl
-          
+
           # Darwin ARM64
           GOOS=darwin GOARCH=arm64 go build \
-            -ldflags "-X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Version=$VERSION' -X 'github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version.Commit=$(git rev-parse --short HEAD)'" \
+            -ldflags "$LDFLAGS" \
             -o ./release/hgctl-darwin-arm64 \
             ./cmd/hgctl
           
