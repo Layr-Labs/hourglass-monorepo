@@ -12,6 +12,7 @@ type IBlockContextManager interface {
 }
 
 type BlockContext struct {
-	Ctx    context.Context
-	Cancel context.CancelFunc
+	Ctx     context.Context
+	Cancel  context.CancelFunc
+	TaskIDs map[string]struct{}
 }

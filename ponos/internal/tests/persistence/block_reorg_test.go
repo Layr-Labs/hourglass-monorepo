@@ -312,7 +312,7 @@ func TestEVMChainPollerReorgDetection(t *testing.T) {
 				pollerConfig,
 				contractStore,
 				store,
-				taskBlockContextManager.NewTaskBlockContextManager(ctx, logger),
+				taskBlockContextManager.NewTaskBlockContextManager(ctx, store, logger),
 				logger,
 			)
 

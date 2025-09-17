@@ -125,7 +125,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		pollerConfig,
 		imContractStore,
 		aggStore,
-		taskBlockContextManager.NewTaskBlockContextManager(context.Background(), l),
+		taskBlockContextManager.NewTaskBlockContextManager(context.Background(), aggStore, l),
 		l,
 	)
 
