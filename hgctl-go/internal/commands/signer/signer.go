@@ -19,28 +19,28 @@ import (
 
 var (
 	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
-		MarginBottom(1)
+			Bold(true).
+			Foreground(lipgloss.Color("#7D56F4")).
+			MarginBottom(1)
 
 	selectedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
-		Bold(true)
+			Foreground(lipgloss.Color("#7D56F4")).
+			Bold(true)
 
 	successStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")).
-		Bold(true)
+			Foreground(lipgloss.Color("#04B575")).
+			Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#999999"))
+			Foreground(lipgloss.Color("#999999"))
 
 	warningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFFF00")).
-		Bold(true)
+			Foreground(lipgloss.Color("#FFFF00")).
+			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF0000")).
-		Bold(true)
+			Foreground(lipgloss.Color("#FF0000")).
+			Bold(true)
 )
 
 // expandPath expands ~ to the user's home directory and returns absolute path
