@@ -24,7 +24,6 @@ func NewPostHogClient(cfg *config.Config, namespace string) (*PostHogClient, err
 
 	apiKey := getPostHogAPIKey(cfg)
 	if apiKey == "" {
-		// No API key available, return nil without error
 		return nil, nil
 	}
 
@@ -38,7 +37,6 @@ func NewPostHogClient(cfg *config.Config, namespace string) (*PostHogClient, err
 	distinctID := getAnonymousID()
 
 	var operatorAddress string
-	// Only include operator address if not in anonymous mode
 	if cfg != nil && !cfg.TelemetryAnonymous && cfg.CurrentContext != "" {
 		if ctx, ok := cfg.Contexts[cfg.CurrentContext]; ok && ctx.OperatorAddress != "" {
 			operatorAddress = ctx.OperatorAddress

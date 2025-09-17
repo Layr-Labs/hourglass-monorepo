@@ -62,18 +62,11 @@ All data is privacy-preserving and you maintain full control.`,
 				Usage:  "Show current telemetry configuration",
 				Action: showStatus,
 			},
-			{
-				Name:    "configure",
-				Aliases: []string{"config"},
-				Usage:   "Configure telemetry interactively",
-				Action:  telemetryWizard,
-			},
 		},
-		Action: telemetryWizard, // Default to wizard if no subcommand
+		Action: telemetryWizard,
 	}
 }
 
-// enableTelemetry enables telemetry with optional anonymous mode
 func enableTelemetry(c *cli.Context) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -85,7 +78,6 @@ func enableTelemetry(c *cli.Context) error {
 	cfg.TelemetryEnabled = &enabled
 	cfg.TelemetryAnonymous = anonymous
 
-	// Track telemetry enablement
 	telemetry.TrackEvent("telemetry_enabled", map[string]interface{}{
 		"anonymous": anonymous,
 	})
@@ -109,9 +101,7 @@ func enableTelemetry(c *cli.Context) error {
 	return nil
 }
 
-// disableTelemetry disables telemetry completely
 func disableTelemetry(c *cli.Context) error {
-	// Track telemetry disablement before disabling
 	telemetry.TrackEvent("telemetry_disabled", map[string]interface{}{})
 
 	cfg, err := config.LoadConfig()
@@ -132,7 +122,6 @@ func disableTelemetry(c *cli.Context) error {
 	return nil
 }
 
-// showStatus displays the current telemetry configuration
 func showStatus(c *cli.Context) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -141,7 +130,6 @@ func showStatus(c *cli.Context) error {
 
 	outputFormat := c.String("output")
 
-	// Determine telemetry status
 	status := "Disabled"
 	mode := "N/A"
 
@@ -155,7 +143,6 @@ func showStatus(c *cli.Context) error {
 		}
 	}
 
-	// Check for API key
 	hasAPIKey := cfg.PostHogAPIKey != ""
 	apiKeyStatus := "Not configured"
 	if hasAPIKey {
@@ -185,14 +172,11 @@ func showStatus(c *cli.Context) error {
 		data["env_overrides"] = envOverrides
 	}
 
-	// Use formatter to output the data
 	formatter := output.NewFormatter(outputFormat)
 	return formatter.Print(data)
 }
 
-// telemetryWizard runs an interactive wizard for configuring telemetry
 func telemetryWizard(c *cli.Context) error {
-	// If args provided, show help
 	if c.Args().Present() {
 		return cli.ShowCommandHelp(c, "telemetry")
 	}
@@ -211,7 +195,6 @@ func telemetryWizard(c *cli.Context) error {
 		return fmt.Errorf("failed to run wizard: %w", err)
 	}
 
-	// Check if user completed the wizard
 	if m, ok := finalModel.(telemetryWizardModel); ok {
 		if m.completed {
 			return applyTelemetryConfig(m.choice)
@@ -225,7 +208,6 @@ func telemetryWizard(c *cli.Context) error {
 	return nil
 }
 
-// telemetryWizardModel is the model for the telemetry configuration wizard
 type telemetryWizardModel struct {
 	list      list.Model
 	choice    telemetryChoice
@@ -243,7 +225,6 @@ const (
 	choiceDisable         telemetryChoice = "disable"
 )
 
-// telemetryItem represents a telemetry configuration option
 type telemetryItem struct {
 	title       string
 	description string
@@ -327,7 +308,6 @@ func (m telemetryWizardModel) View() string {
 	return b.String()
 }
 
-// applyTelemetryConfig applies the selected telemetry configuration
 func applyTelemetryConfig(choice telemetryChoice) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -340,7 +320,6 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 		cfg.TelemetryEnabled = &enabled
 		cfg.TelemetryAnonymous = false
 
-		// Track telemetry enablement from wizard
 		telemetry.TrackEvent("telemetry_enabled", map[string]interface{}{
 			"anonymous": false,
 			"source":    "wizard",
@@ -374,7 +353,6 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 		fmt.Println(helpStyle.Render("To change settings later, run: hgctl telemetry configure"))
 
 	case choiceDisable:
-		// Track telemetry disablement from wizard before disabling
 		telemetry.TrackEvent("telemetry_disabled", map[string]interface{}{
 			"source": "wizard",
 		})
@@ -396,7 +374,6 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 	return nil
 }
 
-// getEnvVar safely gets an environment variable
 func getEnvVar(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
 }

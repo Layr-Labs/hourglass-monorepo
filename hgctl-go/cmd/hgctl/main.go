@@ -13,7 +13,6 @@ import (
 )
 
 func main() {
-	// Load config for telemetry initialization
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
