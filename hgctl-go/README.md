@@ -10,8 +10,6 @@
 * Configure multiple environments through contexts with hierarchical configuration
 * Fetch and deploy AVS releases from OCI registries via ReleaseManager contracts
 
-> **Note:** This is the Go implementation of hgctl, providing native performance, OCI artifact management via ORAS, and enhanced features for production AVS deployments.
-
 ## 📦 Installation
 
 ### Quick Install (Recommended)
@@ -35,16 +33,16 @@ Download pre-built binaries from [GitHub Releases](https://github.com/Layr-Labs/
 
 ```bash
 # Example for macOS ARM64
-curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.preview-rc.1/hgctl-darwin-arm64-v0.1.0.preview-rc.1.tar.gz
-tar -xzf hgctl-darwin-arm64-v0.1.0.preview-rc.1.tar.gz
-chmod +x hgctl
-sudo mv hgctl /usr/local/bin/
+curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.testnet-rc.2/hgctl-darwin-arm64-v0.1.0.testnet-rc.2.tar.gz
+tar -xzf hgctl-darwin-arm64-v0.1.0.testnet-rc.2.tar.gz
+chmod +x hgctl-darwin-arm64
+sudo mv hgctl-darwin-arm64 /usr/local/bin/hgctl
 
 # Example for Linux AMD64
-curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.preview-rc.1/hgctl-linux-amd64-v0.1.0.preview-rc.1.tar.gz
-tar -xzf hgctl-linux-amd64-v0.1.0.preview-rc.1.tar.gz
-chmod +x hgctl
-sudo mv hgctl /usr/local/bin/
+curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.testnet-rc.2/hgctl-linux-amd64-v0.1.0.testnet-rc.2.tar.gz
+tar -xzf hgctl-linux-amd64-v0.1.0.testnet-rc.2.tar.gz
+chmod +x hgctl-linux-amd64
+sudo mv hgctl-linux-amd64 /usr/local/bin/hgctl
 ```
 
 Available platforms:
@@ -70,6 +68,8 @@ make build    # Binary will be in ./bin/hgctl
 hgctl --version
 hgctl --help
 ```
+
+> **Note:** If you have multiple versions installed, ensure the correct version is in your PATH. You can check with `which hgctl` and update your PATH if needed. The install script installs to `~/bin` by default.
 
 ## 🌟 Key Commands Overview
 
@@ -108,6 +108,11 @@ hgctl --help
 | **Signer Configuration** |
 | `hgctl signer operator` | Configure operator signing keys |
 | `hgctl signer system` | Configure system signing keys |
+| **Telemetry Configuration** |
+| `hgctl telemetry` | Configure telemetry settings with interactive wizard |
+| `hgctl telemetry enable` | Enable telemetry data collection |
+| `hgctl telemetry disable` | Disable telemetry completely |
+| `hgctl telemetry status` | Show current telemetry configuration |
 | **Performer Management** |
 | `hgctl get performer` | List deployed performers |
 | `hgctl remove performer` | Remove a deployed performer |
@@ -509,6 +514,24 @@ hgctl signer system [options]        # Configure system signing
   keystore --keystore-name <name> --type <bn254|ecdsa>
   privatekey --key <key>
 ```
+
+### Telemetry Commands
+```bash
+# Configure telemetry settings
+hgctl telemetry                      # Interactive wizard to configure telemetry
+hgctl telemetry enable                # Enable telemetry data collection
+  --anonymous                         # Enable without operator address tracking
+
+hgctl telemetry disable               # Disable telemetry completely
+hgctl telemetry status                # Show current telemetry configuration
+  --output <format>                   # Output format (table|json|yaml)
+```
+
+Telemetry helps improve hgctl by collecting anonymous usage data. All data is privacy-preserving and you maintain full control. When enabled:
+- Usage metrics help us understand which features are most valuable
+- Error patterns help us improve reliability
+- Performance data helps us optimize operations
+- Optional anonymous mode excludes operator addresses for additional privacy
 
 ---
 
