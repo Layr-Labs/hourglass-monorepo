@@ -8,13 +8,12 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
-
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	executorV1 "github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/executorClient"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operatorManager"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
@@ -28,20 +27,16 @@ import (
 const maximumTaskResponseSize = 1.5 * 1024 * 1024
 
 type TaskSession[SigT, CertT, PubKeyT any] struct {
-	Task              *types.Task
-	signer            signer.ISigner
-	context           context.Context
-	logger            *zap.Logger
-	results           sync.Map
-	resultsCount      atomic.Uint32
-	aggregatorAddress string
-
+	Task                *types.Task
+	signer              signer.ISigner
+	context             context.Context
+	logger              *zap.Logger
+	results             sync.Map
+	resultsCount        atomic.Uint32
 	operatorPeersWeight *operatorManager.PeerWeight
-
-	taskAggregator aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
-	thresholdMet   atomic.Bool
-
-	tlsEnabled bool
+	taskAggregator      aggregation.ITaskResultAggregator[SigT, CertT, PubKeyT]
+	aggregatorAddress   string
+	tlsEnabled          bool
 }
 
 func NewBN254TaskSession(
@@ -93,12 +88,10 @@ func NewBN254TaskSession(
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,
-		thresholdMet:        atomic.Bool{},
 		tlsEnabled:          tlsEnabled,
 	}
 
 	ts.resultsCount.Store(0)
-	ts.thresholdMet.Store(false)
 
 	return ts, nil
 }
@@ -151,12 +144,10 @@ func NewECDSATaskSession(
 		logger:              logger,
 		taskAggregator:      ta,
 		operatorPeersWeight: operatorPeersWeight,
-		thresholdMet:        atomic.Bool{},
 		tlsEnabled:          tlsEnabled,
 	}
 
 	ts.resultsCount.Store(0)
-	ts.thresholdMet.Store(false)
 
 	return ts, nil
 }
@@ -204,7 +195,10 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 		zap.String("taskId", ts.Task.TaskId),
 		zap.Any("recipientOperators", ts.operatorPeersWeight.Operators),
 	)
-	resultsChan := make(chan *types.TaskResult)
+
+	resultsChan := make(chan *types.TaskResult, len(ts.operatorPeersWeight.Operators))
+	submissionContext, cancelSubmissions := context.WithCancel(ts.context)
+	defer cancelSubmissions()
 
 	for _, peer := range ts.operatorPeersWeight.Operators {
 		go func(peer *peering.OperatorPeerInfo) {
@@ -233,7 +227,6 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.String("networkAddress", socket),
 			)
 
-			// Generate executor-specific signature
 			signature, err := ts.generateSignatureForExecutor(peer.OperatorAddress)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to generate executor signature",
@@ -261,7 +254,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				zap.Any("operatorPeers", ts.operatorPeersWeight.Operators),
 			)
 
-			res, err := c.SubmitTask(ts.context, taskSubmission)
+			res, err := c.SubmitTask(submissionContext, taskSubmission)
 			if err != nil {
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
 					zap.String("executorAddress", peer.OperatorAddress),
@@ -297,20 +290,10 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				return
 			}
 
-			// Check if threshold already met before sending to prevent race condition
-			if ts.thresholdMet.Load() {
-				ts.logger.Sugar().Infow("task threshold already met, discarding result",
-					zap.String("taskId", ts.Task.TaskId),
-					zap.String("operatorAddress", peer.OperatorAddress),
-				)
-				return
-			}
-
 			resultsChan <- tr
 		}(peer)
 	}
 
-	// iterate over results until we meet the signing threshold
 	for {
 		select {
 		case taskResult := <-resultsChan:
@@ -345,7 +328,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				)
 				continue
 			}
-			ts.thresholdMet.Store(true)
+			cancelSubmissions()
 
 			ts.logger.Sugar().Infow("task completion threshold met, generating final certificate",
 				zap.String("taskId", taskResult.TaskId),
@@ -372,9 +355,7 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 	}
 }
 
-// generateSignatureForExecutor creates a signature for a specific executor
 func (ts *TaskSession[SigT, CertT, PubKeyT]) generateSignatureForExecutor(executorAddress string) ([]byte, error) {
-	// Use the preferred version from configuration
 	encodedMessage, err := util.EncodeTaskSubmissionMessageVersioned(
 		ts.Task.TaskId,
 		ts.Task.AVSAddress,
