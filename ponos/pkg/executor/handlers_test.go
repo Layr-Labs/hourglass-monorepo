@@ -3,10 +3,11 @@ package executor
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/avsPerformer"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/performerTask"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/signer"
-	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/gen/protos/eigenlayer/hourglass/v1/executor"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
@@ -243,5 +244,242 @@ func (m *MockPerformer) ExecuteWorkflow(task *executor.TaskSubmission) (*executo
 func (m *MockPerformer) ExecutorConfig() *executorConfig.AvsPerformerConfig {
 	return &executorConfig.AvsPerformerConfig{
 		AvsAddress: "0xtest",
+	}
+}
+
+func TestValidateTaskSubmission(t *testing.T) {
+	testCases := []struct {
+		name        string
+		request     *executor.TaskSubmission
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "valid task submission",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + "a" + fmt.Sprintf("%063d", 1), // 0x + 64 hex chars
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),       // 0x + 40 hex chars
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),       // 0x + 40 hex chars
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),       // 0x + 40 hex chars
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+				OperatorSetId:      1,
+				TaskBlockNumber:    100,
+				Payload:            []byte("test payload"),
+			},
+			expectError: false,
+		},
+		{
+			name: "task ID too short",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x1234",
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid task ID length: expected 66, got 6",
+		},
+		{
+			name: "task ID too long",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%065d", 1), // 0x + 65 chars (too long)
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid task ID length: expected 66, got 67",
+		},
+		{
+			name: "task ID missing 0x prefix",
+			request: &executor.TaskSubmission{
+				TaskId:             fmt.Sprintf("%064x", 1), // 64 hex chars without 0x
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid task ID length: expected 66, got 64",
+		},
+		{
+			name: "task ID invalid hex",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + "g" + fmt.Sprintf("%063d", 1), // invalid hex char 'g'
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid task ID format",
+		},
+		{
+			name: "aggregator address too short",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x1234",
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid aggregator address length: expected 42, got 6",
+		},
+		{
+			name: "aggregator address missing 0x prefix",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid aggregator address length: expected 42, got 40",
+		},
+		{
+			name: "aggregator address invalid hex",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + "g" + fmt.Sprintf("%039x", 1), // invalid hex char 'g'
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid aggregator address format",
+		},
+		{
+			name: "AVS address too long",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%041x", 2), // 41 hex chars (too long)
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid AVS address length: expected 42, got 43",
+		},
+		{
+			name: "AVS address missing 0x prefix",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid AVS address length: expected 42, got 40",
+		},
+		{
+			name: "executor address too short",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x123",
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid executor address length: expected 42, got 5",
+		},
+		{
+			name: "executor address missing 0x prefix",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "invalid executor address length: expected 42, got 40",
+		},
+		{
+			name: "empty signature",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte{},
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "signature cannot be empty",
+		},
+		{
+			name: "nil signature",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          nil,
+				ReferenceTimestamp: 1234567890,
+			},
+			expectError: true,
+			errorMsg:    "signature cannot be empty",
+		},
+		{
+			name: "zero reference timestamp",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x" + fmt.Sprintf("%064x", 1),
+				AggregatorAddress:  "0x" + fmt.Sprintf("%040x", 1),
+				AvsAddress:         "0x" + fmt.Sprintf("%040x", 2),
+				ExecutorAddress:    "0x" + fmt.Sprintf("%040x", 3),
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 0,
+			},
+			expectError: true,
+			errorMsg:    "reference timestamp cannot be zero",
+		},
+		{
+			name: "all fields valid with real ethereum addresses",
+			request: &executor.TaskSubmission{
+				TaskId:             "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				AggregatorAddress:  "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
+				AvsAddress:         "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+				ExecutorAddress:    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+				Signature:          []byte("signature"),
+				ReferenceTimestamp: 1234567890,
+				OperatorSetId:      1,
+				TaskBlockNumber:    100,
+				Payload:            []byte("test payload"),
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateTaskSubmission(tc.request)
+
+			if tc.expectError {
+				assert.NotNil(t, err, "Expected validation error but got nil")
+				if err != nil {
+					assert.Contains(t, err.Error(), tc.errorMsg, "Error message should contain expected text")
+				}
+			} else {
+				assert.Nil(t, err, "Expected no validation error but got: %w", err)
+			}
+		})
 	}
 }

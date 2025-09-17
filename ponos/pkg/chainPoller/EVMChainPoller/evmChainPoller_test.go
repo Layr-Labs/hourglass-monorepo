@@ -529,7 +529,8 @@ func TestRecoverInProgressTasks_ExpiredTasks_MarkedAsFailed(t *testing.T) {
 	// Setup mock to return expired context for expired tasks and valid context for valid task
 	expiredCtx, expiredCancel := context.WithCancel(ctx)
 	expiredCancel() // Cancel immediately to simulate expired context
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 
 	mockBlockContextManager.EXPECT().GetContext(uint64(1000), expiredTask1).Return(expiredCtx)
 	mockBlockContextManager.EXPECT().GetContext(uint64(1001), expiredTask2).Return(expiredCtx)
@@ -617,7 +618,8 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
 
 	// Setup mock to return valid contexts for all tasks
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 
 	mockBlockContextManager.EXPECT().GetContext(uint64(2000), task1).Return(validCtx)
 	mockBlockContextManager.EXPECT().GetContext(uint64(2001), task2).Return(validCtx)
@@ -726,7 +728,8 @@ func TestRecoverInProgressTasks_QueueFull_TasksRemainPending(t *testing.T) {
 	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
 
 	// Setup mock to return valid contexts for all tasks
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 
 	// We expect GetContext to be called for at least the first 2 tasks (queue capacity)
 	// Since the order of task recovery may vary, use AnyTimes()
@@ -804,7 +807,8 @@ func TestPollerProcessesTasksFromStorage(t *testing.T) {
 	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
 
 	// Setup mock to return valid contexts
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 	mockBlockContextManager.EXPECT().GetContext(uint64(4000), task1).Return(validCtx)
 	mockBlockContextManager.EXPECT().GetContext(uint64(4001), task2).Return(validCtx)
 
@@ -889,7 +893,8 @@ func TestPollerSkipsExpiredTasks(t *testing.T) {
 	// Setup mock to return expired context for expired task and valid context for valid task
 	expiredCtx, expiredCancel := context.WithCancel(ctx)
 	expiredCancel() // Cancel immediately to simulate expired context
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 
 	mockBlockContextManager.EXPECT().GetContext(uint64(5000), validTask).Return(validCtx)
 	mockBlockContextManager.EXPECT().GetContext(uint64(4999), expiredTask).Return(expiredCtx)
@@ -957,7 +962,8 @@ func TestPollerHandlesChannelFull(t *testing.T) {
 	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
 
 	// Setup mock to return valid contexts
-	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	validCtx, cancel := context.WithDeadline(ctx, validDeadline)
+	defer cancel()
 	mockBlockContextManager.EXPECT().GetContext(gomock.Any(), gomock.Any()).Return(validCtx).AnyTimes()
 
 	poller := &EVMChainPoller{
@@ -1204,9 +1210,9 @@ func TestTaskBlockContextManager_GetContext(t *testing.T) {
 // Test TaskBlockContextManager cancellation
 func TestTaskBlockContextManager_CancelBlock(t *testing.T) {
 	parentCtx := context.Background()
-	logger := zap.NewNop()
+	l := zap.NewNop()
 	store := memory.NewInMemoryAggregatorStore()
-	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, store, logger)
+	mgr := taskBlockContextManager.NewTaskBlockContextManager(parentCtx, store, l)
 
 	// Create contexts for multiple blocks
 	deadline := time.Now().Add(1 * time.Hour)

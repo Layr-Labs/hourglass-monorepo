@@ -26,7 +26,22 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	hexPrefixLen    = 2
+	bytes32HexLen   = 64
+	addressHexLen   = 40
+	taskIdTotalLen  = hexPrefixLen + bytes32HexLen
+	addressTotalLen = hexPrefixLen + addressHexLen
+	hexPrefix       = "0x"
+)
+
 func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmission) (*executorV1.TaskResult, error) {
+
+	err := validateTaskSubmission(req)
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := e.handleReceivedTask(ctx, req)
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to handle received task",
@@ -34,8 +49,9 @@ func (e *Executor) SubmitTask(ctx context.Context, req *executorV1.TaskSubmissio
 			"avsAddress", req.AvsAddress,
 			"error", err,
 		)
-		return nil, fmt.Errorf("Failed to handle received task: %w", err)
+		return nil, fmt.Errorf("failed to handle received task: %w", err)
 	}
+
 	return res, nil
 }
 
@@ -860,6 +876,63 @@ func (e *Executor) validateTaskSignature(task *executorV1.TaskSubmission) error 
 		zap.String("aggregatorAddress", task.AggregatorAddress),
 		zap.Uint32("operatorSetId", aggOpSet.OperatorSetID),
 	)
+
+	return nil
+}
+
+func validateTaskSubmission(req *executorV1.TaskSubmission) error {
+
+	if len(req.GetTaskId()) != taskIdTotalLen {
+		return fmt.Errorf("invalid task ID length: expected %d, got %d", taskIdTotalLen, len(req.GetTaskId()))
+	}
+	if !strings.HasPrefix(req.GetTaskId(), hexPrefix) {
+		return fmt.Errorf("task ID must start with %s prefix", hexPrefix)
+	}
+	var taskHash common.Hash
+	if err := taskHash.UnmarshalText([]byte(req.GetTaskId())); err != nil {
+		return fmt.Errorf("invalid task ID format: %w", err)
+	}
+
+	if len(req.GetAggregatorAddress()) != addressTotalLen {
+		return fmt.Errorf("invalid aggregator address length: expected %d, got %d", addressTotalLen, len(req.GetAggregatorAddress()))
+	}
+	if !strings.HasPrefix(req.GetAggregatorAddress(), hexPrefix) {
+		return fmt.Errorf("aggregator address must start with %s prefix", hexPrefix)
+	}
+	var agg common.Address
+	if err := agg.UnmarshalText([]byte(req.GetAggregatorAddress())); err != nil {
+		return fmt.Errorf("invalid aggregator address format: %w", err)
+	}
+
+	if len(req.GetAvsAddress()) != addressTotalLen {
+		return fmt.Errorf("invalid AVS address length: expected %d, got %d", addressTotalLen, len(req.GetAvsAddress()))
+	}
+	if !strings.HasPrefix(req.GetAvsAddress(), hexPrefix) {
+		return fmt.Errorf("AVS address must start with %s prefix", hexPrefix)
+	}
+	var avs common.Address
+	if err := avs.UnmarshalText([]byte(req.GetAvsAddress())); err != nil {
+		return fmt.Errorf("invalid AVS address format: %w", err)
+	}
+
+	if len(req.GetExecutorAddress()) != addressTotalLen {
+		return fmt.Errorf("invalid executor address length: expected %d, got %d", addressTotalLen, len(req.GetExecutorAddress()))
+	}
+	if !strings.HasPrefix(req.GetExecutorAddress(), hexPrefix) {
+		return fmt.Errorf("executor address must start with %s prefix", hexPrefix)
+	}
+	var executor common.Address
+	if err := executor.UnmarshalText([]byte(req.GetExecutorAddress())); err != nil {
+		return fmt.Errorf("invalid executor address format: %w", err)
+	}
+
+	if len(req.GetSignature()) == 0 {
+		return fmt.Errorf("signature cannot be empty")
+	}
+
+	if req.GetReferenceTimestamp() == 0 {
+		return fmt.Errorf("reference timestamp cannot be zero")
+	}
 
 	return nil
 }
