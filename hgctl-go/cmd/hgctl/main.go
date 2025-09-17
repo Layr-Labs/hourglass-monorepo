@@ -8,18 +8,10 @@ import (
 	"syscall"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/hooks"
 )
 
 func main() {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
-	telemetry.Init(cfg)
-	defer telemetry.Close()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -32,8 +24,12 @@ func main() {
 
 	app := commands.Hgctl()
 
+	actionChain := hooks.NewActionChain()
+	actionChain.Use(hooks.WithMetricEmission)
+
+	hooks.ApplyMiddleware(app.Commands, actionChain)
+
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		// Error already logged by middleware
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }

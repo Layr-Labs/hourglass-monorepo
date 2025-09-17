@@ -16,6 +16,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/hooks"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/version"
 
@@ -83,15 +84,11 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 				c.Context = context.WithValue(c.Context, config.ConfigKey, cfg)
 				c.Context = context.WithValue(c.Context, config.ContextKey, currentCtx)
 
-				return nil
+				return hooks.WithCommandMetricsContext(c)
 			},
 			middleware.MiddlewareBeforeFunc,
-			middleware.TelemetryBeforeFunc,
 		),
-		After: middleware.ChainAfterFuncs(
-			middleware.TelemetryAfterFunc,
-			middleware.CleanupContractClient,
-		),
+		After: middleware.CleanupContractClient,
 		Commands: []*cli.Command{
 			GetCommand(),
 			DescribeCommand(),

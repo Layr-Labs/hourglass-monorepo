@@ -17,19 +17,19 @@ import (
 
 var (
 	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#7D56F4")).
-			MarginBottom(1)
+		Bold(true).
+		Foreground(lipgloss.Color("#7D56F4")).
+		MarginBottom(1)
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575")).
-			Bold(true)
+		Foreground(lipgloss.Color("#04B575")).
+		Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#999999"))
+		Foreground(lipgloss.Color("#999999"))
 
 	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00BFFF"))
+		Foreground(lipgloss.Color("#00BFFF"))
 )
 
 func Command() *cli.Command {
@@ -76,14 +76,17 @@ func enableTelemetry(c *cli.Context) error {
 	anonymous := c.Bool("anonymous")
 	enabled := true
 	cfg.TelemetryEnabled = &enabled
-	cfg.TelemetryAnonymous = anonymous
-
-	telemetry.TrackEvent("telemetry_enabled", map[string]interface{}{
-		"anonymous": anonymous,
-	})
+	cfg.TelemetryAnonymous = &anonymous
 
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	if metrics, err := telemetry.MetricsFromContext(c.Context); err == nil {
+		metrics.AddMetricWithDimensions("TelemetryConfigChanged", 1, map[string]string{
+			"action":    "enabled",
+			"anonymous": fmt.Sprintf("%v", anonymous),
+		})
 	}
 
 	if anonymous {
@@ -102,8 +105,6 @@ func enableTelemetry(c *cli.Context) error {
 }
 
 func disableTelemetry(c *cli.Context) error {
-	telemetry.TrackEvent("telemetry_disabled", map[string]interface{}{})
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -114,6 +115,12 @@ func disableTelemetry(c *cli.Context) error {
 
 	if err := config.SaveConfig(cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	if metrics, err := telemetry.MetricsFromContext(c.Context); err == nil {
+		metrics.AddMetricWithDimensions("TelemetryConfigChanged", 1, map[string]string{
+			"action": "disabled",
+		})
 	}
 
 	fmt.Println(successStyle.Render("✓ Telemetry disabled"))
@@ -136,7 +143,7 @@ func showStatus(c *cli.Context) error {
 	if cfg.TelemetryEnabled != nil && *cfg.TelemetryEnabled {
 		status = "Enabled"
 
-		if cfg.TelemetryAnonymous {
+		if cfg.TelemetryAnonymous != nil && *cfg.TelemetryAnonymous {
 			mode = "Anonymous"
 		} else {
 			mode = "Full"
@@ -156,7 +163,6 @@ func showStatus(c *cli.Context) error {
 		"endpoint": "https://us.i.posthog.com",
 	}
 
-	// Add environment variable overrides if present
 	envOverrides := make(map[string]string)
 	if envEnabled := getEnvVar("HGCTL_TELEMETRY_ENABLED"); envEnabled != "" {
 		envOverrides["HGCTL_TELEMETRY_ENABLED"] = envEnabled
@@ -197,7 +203,7 @@ func telemetryWizard(c *cli.Context) error {
 
 	if m, ok := finalModel.(telemetryWizardModel); ok {
 		if m.completed {
-			return applyTelemetryConfig(m.choice)
+			return applyTelemetryConfig(c, m.choice)
 		}
 		if m.cancelled {
 			fmt.Println(helpStyle.Render("Configuration cancelled"))
@@ -308,7 +314,7 @@ func (m telemetryWizardModel) View() string {
 	return b.String()
 }
 
-func applyTelemetryConfig(choice telemetryChoice) error {
+func applyTelemetryConfig(c *cli.Context, choice telemetryChoice) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -317,13 +323,21 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 	switch choice {
 	case choiceEnableFull:
 		enabled := true
+		anonymous := false
 		cfg.TelemetryEnabled = &enabled
-		cfg.TelemetryAnonymous = false
+		cfg.TelemetryAnonymous = &anonymous
 
-		telemetry.TrackEvent("telemetry_enabled", map[string]interface{}{
-			"anonymous": false,
-			"source":    "wizard",
-		})
+		if err := config.SaveConfig(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		if metrics, err := telemetry.MetricsFromContext(c.Context); err == nil {
+			metrics.AddMetricWithDimensions("TelemetryConfigChanged", 1, map[string]string{
+				"action":    "enabled",
+				"anonymous": "false",
+				"source":    "wizard",
+			})
+		}
 
 		fmt.Println()
 		fmt.Println(successStyle.Render("✓ Telemetry enabled"))
@@ -335,14 +349,21 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 
 	case choiceEnableAnonymous:
 		enabled := true
+		anonymous := true
 		cfg.TelemetryEnabled = &enabled
-		cfg.TelemetryAnonymous = true
+		cfg.TelemetryAnonymous = &anonymous
 
-		// Track anonymous telemetry enablement from wizard
-		telemetry.TrackEvent("telemetry_enabled", map[string]interface{}{
-			"anonymous": true,
-			"source":    "wizard",
-		})
+		if err := config.SaveConfig(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		if metrics, err := telemetry.MetricsFromContext(c.Context); err == nil {
+			metrics.AddMetricWithDimensions("TelemetryConfigChanged", 1, map[string]string{
+				"action":    "enabled",
+				"anonymous": "true",
+				"source":    "wizard",
+			})
+		}
 
 		fmt.Println()
 		fmt.Println(successStyle.Render("✓ Telemetry enabled (anonymous mode)"))
@@ -353,22 +374,36 @@ func applyTelemetryConfig(choice telemetryChoice) error {
 		fmt.Println(helpStyle.Render("To change settings later, run: hgctl telemetry configure"))
 
 	case choiceDisable:
-		telemetry.TrackEvent("telemetry_disabled", map[string]interface{}{
-			"source": "wizard",
-		})
-
 		disabled := false
+		prevEnabled := cfg.TelemetryEnabled
+		if prevEnabled != nil && *prevEnabled {
+			if metrics, err := telemetry.MetricsFromContext(c.Context); err == nil {
+				metrics.AddMetricWithDimensions("TelemetryConfigChanged", 1, map[string]string{
+					"action": "disabled",
+					"source": "wizard",
+				})
+				client, ok := telemetry.ClientFromContext(c.Context)
+				if ok {
+					for _, metric := range metrics.Metrics {
+						_ = client.AddMetric(c.Context, metric)
+					}
+				}
+				_ = client.Close()
+			}
+
+		}
+
 		cfg.TelemetryEnabled = &disabled
+
+		if err := config.SaveConfig(cfg); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
 
 		fmt.Println()
 		fmt.Println(successStyle.Render("✓ Telemetry disabled"))
 		fmt.Println(helpStyle.Render("  No data will be collected"))
 		fmt.Println()
 		fmt.Println(helpStyle.Render("To enable telemetry later, run: hgctl telemetry enable"))
-	}
-
-	if err := config.SaveConfig(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	return nil

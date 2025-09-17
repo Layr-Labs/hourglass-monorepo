@@ -72,7 +72,7 @@ type Config struct {
 	CurrentContext     string              `yaml:"currentContext"`
 	Contexts           map[string]*Context `yaml:"contexts"`
 	TelemetryEnabled   *bool               `yaml:"telemetryEnabled,omitempty"`
-	TelemetryAnonymous bool                `yaml:"telemetryAnonymous,omitempty"`
+	TelemetryAnonymous *bool               `yaml:"telemetryAnonymous,omitempty"`
 	PostHogAPIKey      string              `yaml:"posthogApiKey,omitempty"`
 }
 

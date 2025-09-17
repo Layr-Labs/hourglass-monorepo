@@ -3,27 +3,13 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/telemetry"
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 )
 
 func ChainBeforeFuncs(funcs ...cli.BeforeFunc) cli.BeforeFunc {
-	return func(c *cli.Context) error {
-		for _, fn := range funcs {
-			if err := fn(c); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-}
-
-func ChainAfterFuncs(funcs ...cli.AfterFunc) cli.AfterFunc {
 	return func(c *cli.Context) error {
 		for _, fn := range funcs {
 			if err := fn(c); err != nil {
@@ -84,30 +70,6 @@ func MiddlewareBeforeFunc(c *cli.Context) error {
 	return nil
 }
 
-func TelemetryBeforeFunc(c *cli.Context) error {
-	if c.Command == nil || c.Command.Name == "help" {
-		return nil
-	}
-
-	commandPath := c.Command.FullName()
-	if commandPath == "" && c.Command != nil {
-		commandPath = c.Command.Name
-	}
-
-	startTime := time.Now()
-	finishFunc := telemetry.TrackCLICommand(c, commandPath, startTime)
-
-	c.Context = context.WithValue(c.Context, config.TelemetryContextKey, finishFunc)
-
-	return nil
-}
-
-func TelemetryAfterFunc(c *cli.Context) error {
-	if finishFunc, ok := c.Context.Value(config.TelemetryContextKey).(func()); ok {
-		finishFunc()
-	}
-	return nil
-}
 
 func ExitErrHandler(c *cli.Context, err error) {
 	if err == nil {
@@ -130,9 +92,4 @@ func ExitErrHandler(c *cli.Context, err error) {
 		log.Error("Command execution failed", zap.Error(err))
 	}
 
-	if c != nil && c.Command != nil {
-		telemetry.TrackError(err, map[string]interface{}{
-			"command": c.Command.Name,
-		})
-	}
 }

@@ -2,7 +2,6 @@ package telemetry
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
@@ -37,7 +36,8 @@ func NewPostHogClient(cfg *config.Config, namespace string) (*PostHogClient, err
 	distinctID := getAnonymousID()
 
 	var operatorAddress string
-	if cfg != nil && !cfg.TelemetryAnonymous && cfg.CurrentContext != "" {
+	isAnonymous := cfg.TelemetryAnonymous != nil && *cfg.TelemetryAnonymous
+	if cfg != nil && !isAnonymous && cfg.CurrentContext != "" {
 		if ctx, ok := cfg.Contexts[cfg.CurrentContext]; ok && ctx.OperatorAddress != "" {
 			operatorAddress = ctx.OperatorAddress
 		}
@@ -50,25 +50,6 @@ func NewPostHogClient(cfg *config.Config, namespace string) (*PostHogClient, err
 		operatorAddress: operatorAddress,
 		enabled:         true,
 	}, nil
-}
-
-func (c *PostHogClient) Track(_ context.Context, event string, properties map[string]interface{}) error {
-	if c == nil || c.client == nil || !c.enabled {
-		return nil
-	}
-
-	eventName := fmt.Sprintf("%s_%s", c.namespace, event)
-
-	if c.operatorAddress != "" {
-		properties["operator_address"] = c.operatorAddress
-	}
-
-	_ = c.client.Enqueue(posthog.Capture{
-		DistinctId: c.distinctID,
-		Event:      eventName,
-		Properties: properties,
-	})
-	return nil
 }
 
 func (c *PostHogClient) AddMetric(_ context.Context, metric Metric) error {
@@ -90,7 +71,7 @@ func (c *PostHogClient) AddMetric(_ context.Context, metric Metric) error {
 
 	_ = c.client.Enqueue(posthog.Capture{
 		DistinctId: c.distinctID,
-		Event:      fmt.Sprintf("%s_metric", c.namespace),
+		Event:      c.namespace,
 		Properties: props,
 	})
 	return nil
