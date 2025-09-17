@@ -237,7 +237,6 @@ func TestNewBN254TaskSession(t *testing.T) {
 		assert.NotNil(t, session.signer)
 		assert.Equal(t, operatorPeersWeight, session.operatorPeersWeight)
 		assert.Equal(t, uint32(0), session.resultsCount.Load())
-		assert.False(t, session.thresholdMet.Load())
 	})
 
 	t.Run("invalid operator set", func(t *testing.T) {
@@ -481,7 +480,6 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 
 		// Verify initial state
 		assert.Equal(t, uint32(0), session.resultsCount.Load())
-		assert.False(t, session.thresholdMet.Load())
 		assert.NotNil(t, session.taskAggregator)
 		assert.Equal(t, task.TaskId, session.Task.TaskId)
 
@@ -514,7 +512,6 @@ func TestTaskSession_BasicFunctionality(t *testing.T) {
 
 		// Verify initial state
 		assert.Equal(t, uint32(0), session.resultsCount.Load())
-		assert.False(t, session.thresholdMet.Load())
 		assert.NotNil(t, session.taskAggregator)
 		assert.Equal(t, task.TaskId, session.Task.TaskId)
 
@@ -569,7 +566,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "deadline exceeded")
 
 		// Verify that no threshold was met (core deadlock condition)
-		assert.False(t, session.thresholdMet.Load(), "Threshold should not be met in deadlock scenario")
+		assert.False(t, session.taskAggregator.SigningThresholdMet(), "Threshold should not be met in deadlock scenario")
 
 		// Verify that the aggregator never reached the signing threshold
 		// This is the core of the deadlock: we need responses but don't get enough
@@ -617,7 +614,7 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "deadline exceeded")
 
 		// Verify deadlock conditions
-		assert.False(t, session.thresholdMet.Load(),
+		assert.False(t, session.taskAggregator.SigningThresholdMet(),
 			"High threshold should not be met in deadlock scenario")
 		assert.False(t, session.taskAggregator.SigningThresholdMet(),
 			"90% threshold should be impossible to meet with failed connections")
@@ -648,7 +645,6 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 
 		// Store initial state
 		initialResultsCount := session.resultsCount.Load()
-		initialThresholdMet := session.thresholdMet.Load()
 
 		// Attempt process - should deadlock
 		cert, err := session.Process()
@@ -660,8 +656,6 @@ func TestTaskSession_DeadlockScenario(t *testing.T) {
 		// Verify internal state consistency during deadlock
 		assert.Equal(t, initialResultsCount, session.resultsCount.Load(),
 			"Results count should remain unchanged in complete deadlock")
-		assert.Equal(t, initialThresholdMet, session.thresholdMet.Load(),
-			"Threshold met flag should remain unchanged in deadlock")
 
 		// Verify the task session maintains proper state even in failure scenarios
 		assert.NotNil(t, session.Task, "Task should remain accessible")

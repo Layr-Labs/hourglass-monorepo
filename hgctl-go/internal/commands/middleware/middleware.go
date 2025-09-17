@@ -70,7 +70,6 @@ func MiddlewareBeforeFunc(c *cli.Context) error {
 	return nil
 }
 
-
 func ExitErrHandler(c *cli.Context, err error) {
 	if err == nil {
 		return
