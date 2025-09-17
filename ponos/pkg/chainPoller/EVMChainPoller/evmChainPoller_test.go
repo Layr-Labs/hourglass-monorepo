@@ -500,18 +500,21 @@ func TestRecoverInProgressTasks_ExpiredTasks_MarkedAsFailed(t *testing.T) {
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &expiredDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   1000,
 	}
 	expiredTask2 := &types.Task{
 		TaskId:              "expired-task-2",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &expiredDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   1001,
 	}
 	validTask := &types.Task{
 		TaskId:              "valid-task",
 		AVSAddress:          "0xtest",
 		DeadlineUnixSeconds: &validDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   1002,
 	}
 
 	// Save all tasks as pending
@@ -519,9 +522,23 @@ func TestRecoverInProgressTasks_ExpiredTasks_MarkedAsFailed(t *testing.T) {
 	require.NoError(t, store.SavePendingTask(ctx, expiredTask2))
 	require.NoError(t, store.SavePendingTask(ctx, validTask))
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return expired context for expired tasks and valid context for valid task
+	expiredCtx, expiredCancel := context.WithCancel(ctx)
+	expiredCancel() // Cancel immediately to simulate expired context
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+
+	mockBlockContextManager.EXPECT().GetContext(uint64(1000), expiredTask1).Return(expiredCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(1001), expiredTask2).Return(expiredCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(1002), validTask).Return(validCtx)
+
 	poller := &EVMChainPoller{
-		taskQueue: taskQueue,
-		store:     store,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
 		config: &EVMChainPollerConfig{
 			AvsAddress: "0xtest",
 			ChainId:    config.ChainId(1),
@@ -538,15 +555,16 @@ func TestRecoverInProgressTasks_ExpiredTasks_MarkedAsFailed(t *testing.T) {
 	recoveredTask := <-taskQueue
 	assert.Equal(t, "valid-task", recoveredTask.TaskId)
 
-	// Verify expired tasks are no longer in pending list
+	// Verify expired tasks are no longer pending and valid task remains pending
 	pendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xtest")
 	assert.NoError(t, err)
-	assert.Equal(t, 0, len(pendingTasks), "No tasks should remain pending after recovery")
+	assert.Equal(t, 1, len(pendingTasks), "Valid task should remain pending until processed by AvsExecutionManager")
+	assert.Equal(t, "valid-task", pendingTasks[0].TaskId, "Only valid task should be pending")
 
-	// Expired tasks should not be in pending list
+	// Verify expired tasks are not in the pending list
 	for _, task := range pendingTasks {
 		assert.NotContains(t, []string{"expired-task-1", "expired-task-2"}, task.TaskId,
-			"Expired tasks should not be in pending list")
+			"Expired tasks should not be in pending list after being marked as failed")
 	}
 }
 
@@ -565,6 +583,7 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-1"),
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   2000,
 	}
 	task2 := &types.Task{
 		TaskId:              "task-2",
@@ -572,6 +591,7 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-2"),
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   2001,
 	}
 	task3 := &types.Task{
 		TaskId:              "task-3",
@@ -579,6 +599,7 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 		DeadlineUnixSeconds: &validDeadline,
 		Payload:             []byte("payload-3"),
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   2002,
 	}
 
 	// Save all tasks as pending
@@ -591,9 +612,21 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(pendingBefore), "Should have 3 pending tasks before recovery")
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return valid contexts for all tasks
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+
+	mockBlockContextManager.EXPECT().GetContext(uint64(2000), task1).Return(validCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(2001), task2).Return(validCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(2002), task3).Return(validCtx)
+
 	poller := &EVMChainPoller{
-		taskQueue: taskQueue,
-		store:     store,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
 		config: &EVMChainPollerConfig{
 			AvsAddress: "0xtest",
 			ChainId:    config.ChainId(1),
@@ -632,10 +665,10 @@ func TestRecoverInProgressTasks_TasksQueued_StatusUpdated(t *testing.T) {
 	assert.Equal(t, []byte("payload-2"), tasksFromQueue["task-2"].Payload)
 	assert.Equal(t, []byte("payload-3"), tasksFromQueue["task-3"].Payload)
 
-	// After recovery, no tasks should remain in pending list (all moved to processing)
+	// After recovery, tasks remain in pending status until processed by AvsExecutionManager
 	pendingAfter, err := store.ListPendingTasksForAVS(ctx, "0xtest")
 	assert.NoError(t, err)
-	assert.Equal(t, 0, len(pendingAfter), "No tasks should remain pending after recovery")
+	assert.Equal(t, 3, len(pendingAfter), "All tasks should remain pending until processed by AvsExecutionManager")
 }
 
 // Test recovery with no pending tasks
@@ -644,9 +677,14 @@ func TestRecoverInProgressTasks_NoPendingTasks_NoError(t *testing.T) {
 	store := memory.NewInMemoryAggregatorStore()
 	taskQueue := make(chan *types.Task, 10)
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
 	poller := &EVMChainPoller{
-		taskQueue: taskQueue,
-		store:     store,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
 		config: &EVMChainPollerConfig{
 			AvsAddress: "0xtest",
 			ChainId:    config.ChainId(1),
@@ -671,19 +709,33 @@ func TestRecoverInProgressTasks_QueueFull_TasksRemainPending(t *testing.T) {
 	validDeadline := time.Now().Add(1 * time.Hour)
 
 	// Create 4 tasks but queue can only hold 2
-	for i := 1; i <= 4; i++ {
-		task := &types.Task{
-			TaskId:              fmt.Sprintf("task-%d", i),
+	tasks := make([]*types.Task, 4)
+	for i := 0; i < 4; i++ {
+		tasks[i] = &types.Task{
+			TaskId:              fmt.Sprintf("task-%d", i+1),
 			AVSAddress:          "0xtest",
 			DeadlineUnixSeconds: &validDeadline,
 			ReferenceTimestamp:  100,
+			SourceBlockNumber:   uint64(3000 + i),
 		}
-		require.NoError(t, store.SavePendingTask(ctx, task))
+		require.NoError(t, store.SavePendingTask(ctx, tasks[i]))
 	}
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return valid contexts for all tasks
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+
+	// We expect GetContext to be called for at least the first 2 tasks (queue capacity)
+	// Since the order of task recovery may vary, use AnyTimes()
+	mockBlockContextManager.EXPECT().GetContext(gomock.Any(), gomock.Any()).Return(validCtx).AnyTimes()
+
 	poller := &EVMChainPoller{
-		taskQueue: taskQueue,
-		store:     store,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
 		config: &EVMChainPollerConfig{
 			AvsAddress: "0xtest",
 			ChainId:    config.ChainId(1),
@@ -708,11 +760,11 @@ func TestRecoverInProgressTasks_QueueFull_TasksRemainPending(t *testing.T) {
 	// Exactly 2 tasks should have been queued
 	assert.Equal(t, 2, len(queuedTaskIds), "Exactly 2 tasks should have been queued")
 
-	// The remaining tasks should still be in pending state
+	// All tasks should still be in pending state (they're queued but not yet processed)
 	pendingTasks, err := store.ListPendingTasksForAVS(ctx, "0xtest")
 	assert.NoError(t, err)
-	// Since the queue was full, 2 tasks should remain pending
-	assert.Equal(t, 2, len(pendingTasks), "2 tasks should remain pending when queue is full")
+	// All 4 tasks remain pending until AvsExecutionManager processes them
+	assert.Equal(t, 4, len(pendingTasks), "All tasks remain pending until processed by AvsExecutionManager")
 }
 
 func TestPollerProcessesTasksFromStorage(t *testing.T) {
@@ -727,12 +779,14 @@ func TestPollerProcessesTasksFromStorage(t *testing.T) {
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   4000,
 	}
 	task2 := &types.Task{
 		TaskId:              "task-2",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   4001,
 	}
 
 	// Pre-populate storage with pending tasks
@@ -745,13 +799,23 @@ func TestPollerProcessesTasksFromStorage(t *testing.T) {
 
 	taskQueue := make(chan *types.Task, 10)
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return valid contexts
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	mockBlockContextManager.EXPECT().GetContext(uint64(4000), task1).Return(validCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(4001), task2).Return(validCtx)
+
 	poller := &EVMChainPoller{
 		config: &EVMChainPollerConfig{
 			AvsAddress: avsAddress,
 		},
-		taskQueue: taskQueue,
-		store:     store,
-		logger:    l,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		logger:              l,
 	}
 
 	// Call recoverInProgressTasks directly - this loads from storage and queues
@@ -774,12 +838,14 @@ func TestPollerProcessesTasksFromStorage(t *testing.T) {
 	assert.True(t, receivedTasks["task-1"], "task-1 should be processed")
 	assert.True(t, receivedTasks["task-2"], "task-2 should be processed")
 
-	// Verify tasks were marked as processing
-	err = store.UpdateTaskStatus(ctx, "task-1", storage.TaskStatusCompleted)
-	assert.NoError(t, err, "Should be able to complete task-1")
+	// Verify tasks are still accessible in storage
+	task1FromStore, err := store.GetTask(ctx, "task-1")
+	assert.NoError(t, err, "Should be able to get task-1 from store")
+	assert.Equal(t, "task-1", task1FromStore.TaskId)
 
-	err = store.UpdateTaskStatus(ctx, "task-2", storage.TaskStatusCompleted)
-	assert.NoError(t, err, "Should be able to complete task-2")
+	task2FromStore, err := store.GetTask(ctx, "task-2")
+	assert.NoError(t, err, "Should be able to get task-2 from store")
+	assert.Equal(t, "task-2", task2FromStore.TaskId)
 }
 
 func TestPollerSkipsExpiredTasks(t *testing.T) {
@@ -798,12 +864,14 @@ func TestPollerSkipsExpiredTasks(t *testing.T) {
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &validDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   5000,
 	}
 	expiredTask := &types.Task{
 		TaskId:              "expired-task",
 		AVSAddress:          avsAddress,
 		DeadlineUnixSeconds: &expiredDeadline,
 		ReferenceTimestamp:  100,
+		SourceBlockNumber:   4999,
 	}
 
 	// Save both tasks to storage
@@ -814,13 +882,26 @@ func TestPollerSkipsExpiredTasks(t *testing.T) {
 	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	taskQueue := make(chan *types.Task, 10)
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return expired context for expired task and valid context for valid task
+	expiredCtx, expiredCancel := context.WithCancel(ctx)
+	expiredCancel() // Cancel immediately to simulate expired context
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+
+	mockBlockContextManager.EXPECT().GetContext(uint64(5000), validTask).Return(validCtx)
+	mockBlockContextManager.EXPECT().GetContext(uint64(4999), expiredTask).Return(expiredCtx)
+
 	poller := &EVMChainPoller{
 		config: &EVMChainPollerConfig{
 			AvsAddress: avsAddress,
 		},
-		taskQueue: taskQueue,
-		store:     store,
-		logger:    l,
+		taskQueue:           taskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		logger:              l,
 	}
 
 	// Call recoverInProgressTasks directly
@@ -855,27 +936,38 @@ func TestPollerHandlesChannelFull(t *testing.T) {
 
 	// Create more tasks than channel capacity
 	validDeadline := time.Now().Add(1 * time.Hour)
+	tasks := make([]*types.Task, 5)
 	for i := 0; i < 5; i++ {
-		task := &types.Task{
+		tasks[i] = &types.Task{
 			TaskId:              fmt.Sprintf("task-%d", i),
 			AVSAddress:          avsAddress,
 			DeadlineUnixSeconds: &validDeadline,
 			ReferenceTimestamp:  100,
+			SourceBlockNumber:   uint64(6000 + i),
 		}
-		require.NoError(t, store.SavePendingTask(ctx, task))
+		require.NoError(t, store.SavePendingTask(ctx, tasks[i]))
 	}
 
 	// Create poller with small channel
 	l, _ := logger.NewLogger(&logger.LoggerConfig{Debug: false})
 	smallTaskQueue := make(chan *types.Task, 2)
 
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mockBlockContextManager := mocks.NewMockIBlockContextManager(mockCtrl)
+
+	// Setup mock to return valid contexts
+	validCtx, _ := context.WithDeadline(ctx, validDeadline)
+	mockBlockContextManager.EXPECT().GetContext(gomock.Any(), gomock.Any()).Return(validCtx).AnyTimes()
+
 	poller := &EVMChainPoller{
 		config: &EVMChainPollerConfig{
 			AvsAddress: avsAddress,
 		},
-		taskQueue: smallTaskQueue,
-		store:     store,
-		logger:    l,
+		taskQueue:           smallTaskQueue,
+		store:               store,
+		blockContextManager: mockBlockContextManager,
+		logger:              l,
 	}
 
 	// Call recovery directly

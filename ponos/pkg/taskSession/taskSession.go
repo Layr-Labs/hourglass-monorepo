@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -270,6 +271,16 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 				)
 				return
 			}
+
+			if !strings.EqualFold(res.OperatorAddress, peer.OperatorAddress) {
+				ts.logger.Sugar().Errorw("Operator address mismatch in response",
+					zap.String("taskId", ts.Task.TaskId),
+					zap.String("expected", peer.OperatorAddress),
+					zap.String("claimed", res.OperatorAddress),
+				)
+				return
+			}
+
 			ts.logger.Sugar().Infow("received task result from executor",
 				zap.String("taskId", ts.Task.TaskId),
 				zap.String("operatorAddress", peer.OperatorAddress),
