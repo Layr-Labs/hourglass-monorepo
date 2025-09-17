@@ -256,6 +256,12 @@ func (ts *TaskSession[SigT, CertT, PubKeyT]) Broadcast() (*CertT, error) {
 
 			res, err := c.SubmitTask(submissionContext, taskSubmission)
 			if err != nil {
+
+				if err.Error() == context.Canceled.Error() {
+					ts.logger.Sugar().Infow("task session submission cancelled")
+					return
+				}
+
 				ts.logger.Sugar().Errorw("Failed to submit task to executor",
 					zap.String("executorAddress", peer.OperatorAddress),
 					zap.String("networkAddress", socket),
