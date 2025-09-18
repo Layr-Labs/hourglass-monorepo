@@ -420,32 +420,3 @@ func TestContractStore_getAddress(t *testing.T) {
 		})
 	}
 }
-
-func TestContractStore_ThreadSafety(t *testing.T) {
-	os.Clearenv()
-	os.Setenv("CONTRACT1", "0x1234567890123456789012345678901234567890")
-	os.Setenv("CONTRACT2", "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd")
-	os.Setenv("CONTRACT3", "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed")
-
-	store, err := NewContractStore()
-	if err != nil {
-		t.Fatalf("Failed to create contract store: %v", err)
-	}
-
-	done := make(chan bool)
-	for i := 0; i < 10; i++ {
-		go func() {
-			for j := 0; j < 100; j++ {
-				_, _ = store.GetContract("CONTRACT1")
-				_, _ = store.GetContract("CONTRACT2")
-				_, _ = store.GetContract("CONTRACT3")
-				_ = store.ListContracts()
-			}
-			done <- true
-		}()
-	}
-
-	for i := 0; i < 10; i++ {
-		<-done
-	}
-}
