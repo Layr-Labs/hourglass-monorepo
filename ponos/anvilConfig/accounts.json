@@ -1,67 +1,67 @@
 [
   {
     "name": "deployer",
-    "address": "0xd9b095a3382624483704a42cbed3dce39b4e426e",
-    "private_key": "003bb8d3819d6a6b801a71313801c7104f5d26a87ec8d71abc6b96b20f87f5b4"
+    "address": "0xF7abec2Cf9c8cC86d5255C9e55B3353E06108b8c",
+    "private_key": "46bd0c591596452067f7bc440943dfb4bd28afc0f846dc11611c640860f25eb6"
   },
   {
     "name": "avs",
-    "address": "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B",
-    "private_key": "24d26c6b3af64cd6e3297e39f91738c662ceae85c3250dc3a853421c9f05b4a7"
+    "address": "0x19509B14FEE40dE48942Ac38ebA5C313b5539a1b",
+    "private_key": "02173f76c06ea086dc0122df7e84371402ebd7a96a7c2880d78deea69490cbfc"
   },
   {
     "name": "app",
-    "address": "0x328F90292b9fD8e25AA757D254cBDaBc39e45ee9",
-    "private_key": "f717c76dbbdefe55711d4e80dfd22cb21764c9e3be84ad6678f94c34947e489b"
+    "address": "0xd28Fbb5deC023C104b1357b751b086522e39566A",
+    "private_key": "459b61a3cd4bf4074f80e4c973ce19b1f840302cbf89d369d5dbc8629808834e"
   },
   {
     "name": "operator",
-    "address": "0x204AFca2CBE13C81140f16Fe05063D1b62B56d7D",
-    "private_key": "ebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"
+    "address": "0x76A8C481b7a85d3E2ec01B0DD70752D4C1e3F397",
+    "private_key": "ab7a678a0c022a77b5acecc1b6a3366b736fd21746cb9fbae43a1f7d4f05bc7e"
   },
   {
     "name": "exec_operator",
-    "address": "0x8A07AFaD6AbF7cB9B9da595d0301Fef5145a0BE8",
-    "private_key": "afc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"
+    "address": "0x3E120d6D4941C2431462159b89055B3CaEcd1412",
+    "private_key": "42e433bc6082a21da7499dd9e4dc6d5c5bd396c7bcbe66070a5d955d2475a89c"
   },
   {
     "name": "exec_operator2",
-    "address": "0x5C3e7D2C9a78A4b5e0dC8C8F8e5B7D6A1F2E3A4B",
-    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde2"
+    "address": "0x5A10572a7dDdbfB0752f859589A25bf7f198AE18",
+    "private_key": "57274306bc22e4fab2c370c745ac1cb9743271cd967cd7db9793adbb7f6c17fe"
   },
   {
     "name": "exec_operator3",
-    "address": "0x6D4f8E3D5a67B8c9e1eF7D8B5A6C4E2F1D3A5B7C",
-    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde3"
+    "address": "0xa8c4C9971C59A0Efa863eD9CE4be86dE595Ef1A1",
+    "private_key": "9531e3abe0c5822775aa5a20e6e6b9fbd6b8611621eec6bb0381908f68baa586"
   },
   {
     "name": "exec_operator4",
-    "address": "0x7E5f9F4E6b78C9D0f2f8E9C6B7D5F3E2C4A6B8D9",
-    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde4"
+    "address": "0xd793bf93023e103d06e45fC60D80Bb871342D752",
+    "private_key": "52d64d9963de6102e46ddc22723ea7cfc037b025a6ef69dda4da14a55cce9656"
   },
   {
     "name": "agg_staker",
-    "address": "0x9B37Dd36826A7c3B726ECBdAed42EbC964630173",
-    "private_key": "2ffceafd559b33c4591df4258b11f812bcdaee6a69e15e0269628428a2ff6ee3"
+    "address": "0xDba510eEdd85D62BB3998b4199B488238102FcB5",
+    "private_key": "2ea9771bb023520f1c8f7d23980a8976554c2ef8175901ce137c51e5ca5288c1"
   },
   {
     "name": "exec_staker",
-    "address": "0xb698fD4189e5C9F2d9939bf6364E0F4C3BBEf480",
-    "private_key": "5591b10c33325b5852c668def80185523cbc3d7bd87c2566b33d8638d3d79b3b"
+    "address": "0x01336B2FF1b109C5665E7432cE12C3Cf6340F220",
+    "private_key": "2161ed464267f4fd1cf549cc87da247bbf4d137bc9ba0414acdf30afe9bc1352"
   },
   {
     "name": "exec_staker2",
-    "address": "0x8F6f0A5D7c89D1E3f3f9F0D7C8E6A4B2E5F7C9D1",
-    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567892"
+    "address": "0x12B9ba961C3d86e330C217C06293Dd06C261d47F",
+    "private_key": "d7e93a94eeabd98e196ff7a1a51259abb6bcc1295aee5fab6eecac4836629f34"
   },
   {
     "name": "exec_staker3",
-    "address": "0x9A7A1B6E8d90E2F4A4A0A1E8D9F7B5C3F6D8A2",
-    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567893"
+    "address": "0x5072EF78b636aC200cA5F831F782639dA363A2b7",
+    "private_key": "8006d0e113be1d35c660f146c3f9109ef9477ce740c31f076eaa9f7ae51265af"
   },
   {
     "name": "exec_staker4",
-    "address": "0xAB8B2C7F9e01F3C5B5B1B2F9E0C8C6D4C7E9B3",
-    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567894"
+    "address": "0xA11867Faf76dFA64C1FB8a4b7c3E289b9dA63477",
+    "private_key": "a7b5e2c86f6f955a83a60a01ab14cc45ab079681a4af71348c2dbd79b4ce435c"
   }
 ]
