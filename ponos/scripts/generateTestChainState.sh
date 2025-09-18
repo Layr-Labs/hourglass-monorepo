@@ -64,17 +64,43 @@ OPERATOR_ACCOUNT=$(generate_account "operator")
 operatorAccountPk=$(echo $OPERATOR_ACCOUNT | jq -r '.private_key')
 operatorAccountAddress=$(echo $OPERATOR_ACCOUNT | jq -r '.address')
 
+# Generate 4 executor operator accounts
 EXEC_OPERATOR_ACCOUNT=$(generate_account "exec_operator")
 execOperatorAccountPk=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.private_key')
 execOperatorAccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.address')
+
+EXEC_OPERATOR_ACCOUNT2=$(generate_account "exec_operator2")
+execOperator2AccountPk=$(echo $EXEC_OPERATOR_ACCOUNT2 | jq -r '.private_key')
+execOperator2AccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT2 | jq -r '.address')
+
+EXEC_OPERATOR_ACCOUNT3=$(generate_account "exec_operator3")
+execOperator3AccountPk=$(echo $EXEC_OPERATOR_ACCOUNT3 | jq -r '.private_key')
+execOperator3AccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT3 | jq -r '.address')
+
+EXEC_OPERATOR_ACCOUNT4=$(generate_account "exec_operator4")
+execOperator4AccountPk=$(echo $EXEC_OPERATOR_ACCOUNT4 | jq -r '.private_key')
+execOperator4AccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT4 | jq -r '.address')
 
 AGG_STAKER_ACCOUNT=$(generate_account "agg_staker")
 aggStakerAccountPk=$(echo $AGG_STAKER_ACCOUNT | jq -r '.private_key')
 aggStakerAccountAddress=$(echo $AGG_STAKER_ACCOUNT | jq -r '.address')
 
+# Generate 4 executor staker accounts
 EXEC_STAKER_ACCOUNT=$(generate_account "exec_staker")
 execStakerAccountPk=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.private_key')
 execStakerAccountAddress=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.address')
+
+EXEC_STAKER_ACCOUNT2=$(generate_account "exec_staker2")
+execStaker2AccountPk=$(echo $EXEC_STAKER_ACCOUNT2 | jq -r '.private_key')
+execStaker2AccountAddress=$(echo $EXEC_STAKER_ACCOUNT2 | jq -r '.address')
+
+EXEC_STAKER_ACCOUNT3=$(generate_account "exec_staker3")
+execStaker3AccountPk=$(echo $EXEC_STAKER_ACCOUNT3 | jq -r '.private_key')
+execStaker3AccountAddress=$(echo $EXEC_STAKER_ACCOUNT3 | jq -r '.address')
+
+EXEC_STAKER_ACCOUNT4=$(generate_account "exec_staker4")
+execStaker4AccountPk=$(echo $EXEC_STAKER_ACCOUNT4 | jq -r '.private_key')
+execStaker4AccountAddress=$(echo $EXEC_STAKER_ACCOUNT4 | jq -r '.address')
 
 # Export environment variables (with 0x prefix for Forge compatibility)
 export PRIVATE_KEY_DEPLOYER="0x$deployAccountPk"
@@ -89,9 +115,15 @@ echo "Deploy account: $deployAccountAddress"
 echo "AVS account: $avsAccountAddress"
 echo "App account: $appAccountAddress"
 echo "Operator account: $operatorAccountAddress"
-echo "Exec Operator account: $execOperatorAccountAddress"
+echo "Exec Operator 1: $execOperatorAccountAddress"
+echo "Exec Operator 2: $execOperator2AccountAddress"
+echo "Exec Operator 3: $execOperator3AccountAddress"
+echo "Exec Operator 4: $execOperator4AccountAddress"
 echo "Agg staker account: $aggStakerAccountAddress"
-echo "Exec staker account: $execStakerAccountAddress"
+echo "Exec staker 1: $execStakerAccountAddress"
+echo "Exec staker 2: $execStaker2AccountAddress"
+echo "Exec staker 3: $execStaker3AccountAddress"
+echo "Exec staker 4: $execStaker4AccountAddress"
 
 # Save accounts to a file for reference
 cat <<EOF > ./generated-accounts.json
@@ -122,6 +154,21 @@ cat <<EOF > ./generated-accounts.json
     "private_key": "$execOperatorAccountPk"
   },
   {
+    "name": "exec_operator2",
+    "address": "$execOperator2AccountAddress",
+    "private_key": "$execOperator2AccountPk"
+  },
+  {
+    "name": "exec_operator3",
+    "address": "$execOperator3AccountAddress",
+    "private_key": "$execOperator3AccountPk"
+  },
+  {
+    "name": "exec_operator4",
+    "address": "$execOperator4AccountAddress",
+    "private_key": "$execOperator4AccountPk"
+  },
+  {
     "name": "agg_staker",
     "address": "$aggStakerAccountAddress",
     "private_key": "$aggStakerAccountPk"
@@ -130,6 +177,21 @@ cat <<EOF > ./generated-accounts.json
     "name": "exec_staker",
     "address": "$execStakerAccountAddress",
     "private_key": "$execStakerAccountPk"
+  },
+  {
+    "name": "exec_staker2",
+    "address": "$execStaker2AccountAddress",
+    "private_key": "$execStaker2AccountPk"
+  },
+  {
+    "name": "exec_staker3",
+    "address": "$execStaker3AccountAddress",
+    "private_key": "$execStaker3AccountPk"
+  },
+  {
+    "name": "exec_staker4",
+    "address": "$execStaker4AccountAddress",
+    "private_key": "$execStaker4AccountPk"
   }
 ]
 EOF
@@ -180,8 +242,14 @@ fundAccount "$avsAccountAddress"
 fundAccount "$appAccountAddress"
 fundAccount "$operatorAccountAddress"
 fundAccount "$execOperatorAccountAddress"
+fundAccount "$execOperator2AccountAddress"
+fundAccount "$execOperator3AccountAddress"
+fundAccount "$execOperator4AccountAddress"
 fundAccount "$aggStakerAccountAddress"
 fundAccount "$execStakerAccountAddress"
+fundAccount "$execStaker2AccountAddress"
+fundAccount "$execStaker3AccountAddress"
+fundAccount "$execStaker4AccountAddress"
 
 # Fund the special accounts used for table transport and whitelisting
 fundAccount "0x8736311E6b706AfF3D8132Adf351387092802bA6"
@@ -237,6 +305,9 @@ taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChainId/r
 echo "Registering operators"
 export AGGREGATOR_PRIVATE_KEY="0x$operatorAccountPk"
 export EXECUTOR_PRIVATE_KEY="0x$execOperatorAccountPk"
+export EXECUTOR2_PRIVATE_KEY="0x$execOperator2AccountPk"
+export EXECUTOR3_PRIVATE_KEY="0x$execOperator3AccountPk"
+export EXECUTOR4_PRIVATE_KEY="0x$execOperator4AccountPk"
 forge script script/local/SetupOperators.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
 
 # -----------------------------------------------------------------------------
@@ -250,6 +321,9 @@ echo "Exec staker address: ${execStakerAccountAddress}"
 echo "Staking all the things"
 export AGG_STAKER_PRIVATE_KEY="0x$aggStakerAccountPk"
 export EXEC_STAKER_PRIVATE_KEY="0x$execStakerAccountPk"
+export EXEC_STAKER2_PRIVATE_KEY="0x$execStaker2AccountPk"
+export EXEC_STAKER3_PRIVATE_KEY="0x$execStaker3AccountPk"
+export EXEC_STAKER4_PRIVATE_KEY="0x$execStaker4AccountPk"
 forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()" -vvvv
 
 # move past the global ALLOCATION_CONFIGURATION_DELAY which is 75 blocks for sepolia
@@ -289,8 +363,14 @@ avsAccountPublicKey=$(cast wallet public-key --private-key "0x$avsAccountPk")
 appAccountPublicKey=$(cast wallet public-key --private-key "0x$appAccountPk")
 operatorAccountPublicKey=$(cast wallet public-key --private-key "0x$operatorAccountPk")
 execOperatorAccountPublicKey=$(cast wallet public-key --private-key "0x$execOperatorAccountPk")
+execOperator2AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator2AccountPk")
+execOperator3AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator3AccountPk")
+execOperator4AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator4AccountPk")
 aggStakerAccountPublicKey=$(cast wallet public-key --private-key "0x$aggStakerAccountPk")
 execStakerAccountPublicKey=$(cast wallet public-key --private-key "0x$execStakerAccountPk")
+execStaker2AccountPublicKey=$(cast wallet public-key --private-key "0x$execStaker2AccountPk")
+execStaker3AccountPublicKey=$(cast wallet public-key --private-key "0x$execStaker3AccountPk")
+execStaker4AccountPublicKey=$(cast wallet public-key --private-key "0x$execStaker4AccountPk")
 deployAccountAddress=$(lowercaseAddress $deployAccountAddress)
 
 # create a heredoc json file and dump it to internal/testData/chain-config.json
@@ -311,12 +391,30 @@ cat <<EOF > internal/testData/chain-config.json
       "execOperatorAccountAddress": "$execOperatorAccountAddress",
       "execOperatorAccountPk": "$execOperatorAccountPk",
       "execOperatorAccountPublicKey": "$execOperatorAccountPublicKey",
+      "execOperator2AccountAddress": "$execOperator2AccountAddress",
+      "execOperator2AccountPk": "$execOperator2AccountPk",
+      "execOperator2AccountPublicKey": "$execOperator2AccountPublicKey",
+      "execOperator3AccountAddress": "$execOperator3AccountAddress",
+      "execOperator3AccountPk": "$execOperator3AccountPk",
+      "execOperator3AccountPublicKey": "$execOperator3AccountPublicKey",
+      "execOperator4AccountAddress": "$execOperator4AccountAddress",
+      "execOperator4AccountPk": "$execOperator4AccountPk",
+      "execOperator4AccountPublicKey": "$execOperator4AccountPublicKey",
       "aggStakerAccountAddress": "$aggStakerAccountAddress",
       "aggStakerAccountPk": "$aggStakerAccountPk",
       "aggStakerAccountPublicKey": "$aggStakerAccountPublicKey",
       "execStakerAccountAddress": "$execStakerAccountAddress",
       "execStakerAccountPk": "$execStakerAccountPk",
       "execStakerAccountPublicKey": "$execStakerAccountPublicKey",
+      "execStaker2AccountAddress": "$execStaker2AccountAddress",
+      "execStaker2AccountPk": "$execStaker2AccountPk",
+      "execStaker2AccountPublicKey": "$execStaker2AccountPublicKey",
+      "execStaker3AccountAddress": "$execStaker3AccountAddress",
+      "execStaker3AccountPk": "$execStaker3AccountPk",
+      "execStaker3AccountPublicKey": "$execStaker3AccountPublicKey",
+      "execStaker4AccountAddress": "$execStaker4AccountAddress",
+      "execStaker4AccountPk": "$execStaker4AccountPk",
+      "execStaker4AccountPublicKey": "$execStaker4AccountPublicKey",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
       "avsTaskHookAddressL1": "$taskHookAddressL1",
       "avsTaskHookAddressL2": "$taskHookAddressL2",

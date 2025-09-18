@@ -52,10 +52,15 @@ func NewBN254TaskSession(
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
+
+		// Retrieve weights from the PeerWeight structure
+		weights := operatorPeersWeight.Weights[peer.OperatorAddress]
+
 		operators = append(operators, &aggregation.Operator[signing.PublicKey]{
 			Address:       peer.OperatorAddress,
 			PublicKey:     opset.WrappedPublicKey.PublicKey,
 			OperatorIndex: opset.OperatorIndex,
+			Weights:       weights,
 		})
 	}
 
@@ -105,10 +110,15 @@ func NewECDSATaskSession(
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set %d for peer %s: %w", task.OperatorSetId, peer.OperatorAddress, err)
 		}
+
+		// Retrieve weights from the PeerWeight structure
+		weights := operatorPeersWeight.Weights[peer.OperatorAddress]
+
 		operators = append(operators, &aggregation.Operator[common.Address]{
 			Address:       peer.OperatorAddress,
 			PublicKey:     opset.WrappedPublicKey.ECDSAAddress,
 			OperatorIndex: opset.OperatorIndex,
+			Weights:       weights,
 		})
 	}
 

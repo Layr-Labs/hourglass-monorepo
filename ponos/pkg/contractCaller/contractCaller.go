@@ -23,6 +23,15 @@ type OperatorTableData struct {
 	LatestReferenceTimestamp   uint32
 	LatestReferenceBlockNumber uint32
 	TableUpdaterAddresses      map[uint64]common.Address
+	OperatorInfoTreeRoot       [32]byte            // Tree root for merkle proof validation
+	OperatorInfos              []BN254OperatorInfo // All operator infos for merkle tree construction
+}
+
+// BN254OperatorInfo contains BN254 operator public key and weights for merkle proof generation
+type BN254OperatorInfo struct {
+	PubkeyX *big.Int
+	PubkeyY *big.Int
+	Weights []*big.Int
 }
 
 type LatestReferenceTimeAndBlock struct {
@@ -53,12 +62,21 @@ func (tm *TaskMailboxExecutorOperatorSetConfig) GetCurveType() (config.CurveType
 
 // BN254TaskResultParams contains all fields needed to submit a BN254 task result
 type BN254TaskResultParams struct {
-	TaskId             []byte
-	TaskResponse       []byte
-	TaskResponseDigest [32]byte
-	SignersSignature   *bn254.Signature
-	SignersPublicKey   *bn254.G2Point
-	NonSignerOperators []BN254NonSignerOperator
+	TaskId                 []byte
+	TaskResponse           []byte
+	TaskResponseDigest     [32]byte
+	SignersSignature       *bn254.Signature
+	SignersPublicKey       *bn254.G2Point
+	NonSignerOperators     []BN254NonSignerOperator
+	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
+	OperatorInfoTreeRoot   [32]byte                   // Tree root for merkle proof validation
+}
+
+// BN254OperatorWithWeights contains operator info including weights for merkle proof generation
+type BN254OperatorWithWeights struct {
+	OperatorIndex uint32
+	PublicKey     []byte     // BN254 public key bytes
+	Weights       []*big.Int // Operator stake weights
 }
 
 // BN254NonSignerOperator contains operator info for non-signers
@@ -110,13 +128,7 @@ type IContractCaller interface {
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorTableDataForOperatorSet(
-		ctx context.Context,
-		avsAddress common.Address,
-		operatorSetId uint32,
-		chainId config.ChainId,
-		referenceBlocknumber uint64,
-	) (*OperatorTableData, error)
+	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64) (*OperatorTableData, error)
 
 	GetTableUpdaterReferenceTimeAndBlock(
 		ctx context.Context,
