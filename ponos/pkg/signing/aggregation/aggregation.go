@@ -3,6 +3,8 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"math/big"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -24,6 +26,7 @@ type Operator[PubKeyT any] struct {
 	Address       string
 	PublicKey     PubKeyT
 	OperatorIndex uint32
+	Weights       []*big.Int
 }
 
 func (o *Operator[PubKeyT]) GetAddress() common.Address {

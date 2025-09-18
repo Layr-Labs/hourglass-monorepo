@@ -88,7 +88,12 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 
 	l1BlockForTableData := task.L1ReferenceBlockNumber
 
-	tableData, err := om.fetchOperatorTableData(ctx, l1ChainCc, task.OperatorSetId, l1BlockForTableData)
+	curveType, err := l1ChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
+	}
+
+	tableData, err := om.fetchOperatorTableData(ctx, l1ChainCc, task.OperatorSetId, curveType, l1BlockForTableData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch operator table data: %w", err)
 	}
@@ -101,11 +106,6 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 	}
 
 	filteredOperators := om.filterOperatorsForSet(operators, operatorWeights, task.OperatorSetId)
-
-	curveType, err := l1ChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
-	}
 
 	return &PeerWeight{
 		ChainId:                task.ChainId,
@@ -237,7 +237,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	}
 
 	// weights and table data come from the L1
-	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, om.config.L1ChainId, blockForTableData)
+	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, "", om.config.L1ChainId, blockForTableData)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get operator table data",
 			zap.String("avsAddress", om.config.AvsAddress),
@@ -316,12 +316,14 @@ func (om *OperatorManager) fetchOperatorTableData(
 	ctx context.Context,
 	l1Cc contractCaller.IContractCaller,
 	operatorSetId uint32,
+	curveType config.CurveType,
 	l1BlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
 	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(
 		ctx,
 		common.HexToAddress(om.config.AvsAddress),
 		operatorSetId,
+		curveType,
 		om.config.L1ChainId,
 		l1BlockNumber,
 	)
