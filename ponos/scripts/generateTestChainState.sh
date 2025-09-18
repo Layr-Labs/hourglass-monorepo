@@ -198,6 +198,11 @@ EOF
 
 echo "Saved generated accounts to ./generated-accounts.json"
 
+# Also save to anvilConfig directory for Web3Signer key generation
+mkdir -p ../ponos/anvilConfig
+mv ./generated-accounts.json ../ponos/anvilConfig/accounts.json
+echo "Copied accounts to ../ponos/anvilConfig/accounts.json for Web3Signer key generation"
+
 # -----------------------------------------------------------------------------
 # Start Ethereum L1
 # -----------------------------------------------------------------------------
