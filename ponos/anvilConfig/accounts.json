@@ -1,37 +1,67 @@
 [
   {
     "name": "deployer",
-    "address": "0x31BeCD0376A36d1991dA7ee7d8a4535cfeE3419B",
-    "private_key": "055b25105a388ea3a75d047cde71dc20e78968d35717ce9e6b91ee4b7f68a00d"
+    "address": "0xF7abec2Cf9c8cC86d5255C9e55B3353E06108b8c",
+    "private_key": "46bd0c591596452067f7bc440943dfb4bd28afc0f846dc11611c640860f25eb6"
   },
   {
     "name": "avs",
-    "address": "0xe8CD5D81A575F79CF066c6d37b906D51a2308035",
-    "private_key": "08e6c1680c80601ab07b4bf20c4c47d78c7702f352f346f1531ae70fffc711bf"
+    "address": "0x19509B14FEE40dE48942Ac38ebA5C313b5539a1b",
+    "private_key": "02173f76c06ea086dc0122df7e84371402ebd7a96a7c2880d78deea69490cbfc"
   },
   {
     "name": "app",
-    "address": "0x87A20d14ca71bf4021aE6Da94d94eaD914d91C49",
-    "private_key": "a145c2aec43dbc29a49f433c5ab8b9a1e7d1e05439c65209b27078522889a36f"
+    "address": "0xd28Fbb5deC023C104b1357b751b086522e39566A",
+    "private_key": "459b61a3cd4bf4074f80e4c973ce19b1f840302cbf89d369d5dbc8629808834e"
   },
   {
     "name": "operator",
-    "address": "0x54316749B1613AA18782edDb9F21Cef1d95C7357",
-    "private_key": "89d7404a597f6210a673cd0d07ae3c43df0344d233a0957f7682afdd2922e3e0"
+    "address": "0x76A8C481b7a85d3E2ec01B0DD70752D4C1e3F397",
+    "private_key": "ab7a678a0c022a77b5acecc1b6a3366b736fd21746cb9fbae43a1f7d4f05bc7e"
   },
   {
     "name": "exec_operator",
-    "address": "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e",
-    "private_key": "474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+    "address": "0x3E120d6D4941C2431462159b89055B3CaEcd1412",
+    "private_key": "42e433bc6082a21da7499dd9e4dc6d5c5bd396c7bcbe66070a5d955d2475a89c"
+  },
+  {
+    "name": "exec_operator2",
+    "address": "0x5A10572a7dDdbfB0752f859589A25bf7f198AE18",
+    "private_key": "57274306bc22e4fab2c370c745ac1cb9743271cd967cd7db9793adbb7f6c17fe"
+  },
+  {
+    "name": "exec_operator3",
+    "address": "0xa8c4C9971C59A0Efa863eD9CE4be86dE595Ef1A1",
+    "private_key": "9531e3abe0c5822775aa5a20e6e6b9fbd6b8611621eec6bb0381908f68baa586"
+  },
+  {
+    "name": "exec_operator4",
+    "address": "0xd793bf93023e103d06e45fC60D80Bb871342D752",
+    "private_key": "52d64d9963de6102e46ddc22723ea7cfc037b025a6ef69dda4da14a55cce9656"
   },
   {
     "name": "agg_staker",
-    "address": "0x48D9aADeAa7FcdBb7335B9A3E5e293B5c0f9eb44",
-    "private_key": "2db0d10543b6782eeb51385f1d5394bd531823cff47e55b61424a5b3c7dd8c75"
+    "address": "0xDba510eEdd85D62BB3998b4199B488238102FcB5",
+    "private_key": "2ea9771bb023520f1c8f7d23980a8976554c2ef8175901ce137c51e5ca5288c1"
   },
   {
     "name": "exec_staker",
-    "address": "0x9d8Db8ecfF8c28A5398732a9E14990160AA08811",
-    "private_key": "5e8607d5b3e408e87361f93dabec9f469a14ed5a8be2533593924670039e4919"
+    "address": "0x01336B2FF1b109C5665E7432cE12C3Cf6340F220",
+    "private_key": "2161ed464267f4fd1cf549cc87da247bbf4d137bc9ba0414acdf30afe9bc1352"
+  },
+  {
+    "name": "exec_staker2",
+    "address": "0x12B9ba961C3d86e330C217C06293Dd06C261d47F",
+    "private_key": "d7e93a94eeabd98e196ff7a1a51259abb6bcc1295aee5fab6eecac4836629f34"
+  },
+  {
+    "name": "exec_staker3",
+    "address": "0x5072EF78b636aC200cA5F831F782639dA363A2b7",
+    "private_key": "8006d0e113be1d35c660f146c3f9109ef9477ce740c31f076eaa9f7ae51265af"
+  },
+  {
+    "name": "exec_staker4",
+    "address": "0xA11867Faf76dFA64C1FB8a4b7c3E289b9dA63477",
+    "private_key": "a7b5e2c86f6f955a83a60a01ab14cc45ab079681a4af71348c2dbd79b4ce435c"
   }
 ]
