@@ -304,9 +304,9 @@ func TestContractStore_ListContracts(t *testing.T) {
 		{
 			name: "skip non-contract env vars",
 			envVars: map[string]string{
-				"CONTRACT1":      "0x1234567890123456789012345678901234567890",
-				"PATH":           "/usr/bin",
-				"HOME":           "/home/user",
+				"CONTRACT1":        "0x1234567890123456789012345678901234567890",
+				"PATH":             "/usr/bin",
+				"HOME":             "/home/user",
 				"TASKAVSREGISTRAR": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
 			},
 			wantContains: []string{"CONTRACT1", "TASKAVSREGISTRAR"},
