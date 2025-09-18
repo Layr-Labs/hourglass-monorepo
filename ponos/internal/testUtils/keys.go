@@ -2,12 +2,13 @@ package testUtils
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/ethereum/go-ethereum/common"
-	"testing"
 )
 
 type WrappedKeyPair struct {

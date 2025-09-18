@@ -3,6 +3,11 @@ package certificateVerifier
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -24,10 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func Test_CertificateVerifier(t *testing.T) {
