@@ -25,6 +25,21 @@
     "private_key": "afc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"
   },
   {
+    "name": "exec_operator2",
+    "address": "0x5C3e7D2C9a78A4b5e0dC8C8F8e5B7D6A1F2E3A4B",
+    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde2"
+  },
+  {
+    "name": "exec_operator3",
+    "address": "0x6D4f8E3D5a67B8c9e1eF7D8B5A6C4E2F1D3A5B7C",
+    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde3"
+  },
+  {
+    "name": "exec_operator4",
+    "address": "0x7E5f9F4E6b78C9D0f2f8E9C6B7D5F3E2C4A6B8D9",
+    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde4"
+  },
+  {
     "name": "agg_staker",
     "address": "0x9B37Dd36826A7c3B726ECBdAed42EbC964630173",
     "private_key": "2ffceafd559b33c4591df4258b11f812bcdaee6a69e15e0269628428a2ff6ee3"
@@ -33,5 +48,20 @@
     "name": "exec_staker",
     "address": "0xb698fD4189e5C9F2d9939bf6364E0F4C3BBEf480",
     "private_key": "5591b10c33325b5852c668def80185523cbc3d7bd87c2566b33d8638d3d79b3b"
+  },
+  {
+    "name": "exec_staker2",
+    "address": "0x8F6f0A5D7c89D1E3f3f9F0D7C8E6A4B2E5F7C9D1",
+    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567892"
+  },
+  {
+    "name": "exec_staker3",
+    "address": "0x9A7A1B6E8d90E2F4A4A0A1E8D9F7B5C3F6D8A2",
+    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567893"
+  },
+  {
+    "name": "exec_staker4",
+    "address": "0xAB8B2C7F9e01F3C5B5B1B2F9E0C8C6D4C7E9B3",
+    "private_key": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567894"
   }
 ]
