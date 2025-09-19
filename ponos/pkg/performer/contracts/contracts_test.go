@@ -21,8 +21,8 @@ func TestNewContractStore(t *testing.T) {
 		{
 			name: "with contract addresses",
 			envVars: map[string]string{
-				"TASKAVSREGISTRAR": "0x1234567890123456789012345678901234567890",
-				"HELLOWORLDL1":     "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+				"TASK_AVS_REGISTRAR": "0x1234567890123456789012345678901234567890",
+				"HELLO_WORLD_L1":     "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
 			},
 			wantErr: false,
 		},
@@ -158,7 +158,7 @@ func TestContractStore_GetTaskAVSRegistrar(t *testing.T) {
 		{
 			name: "get task AVS registrar",
 			envVars: map[string]string{
-				"TASKAVSREGISTRAR": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+				"TASK_AVS_REGISTRAR": "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
 			},
 			wantAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
 			wantErr:     false,
@@ -210,7 +210,7 @@ func TestContractStore_GetTaskMailbox(t *testing.T) {
 		{
 			name: "get task mailbox",
 			envVars: map[string]string{
-				"TASKMAILBOX": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+				"TASK_MAILBOX": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
 			},
 			wantAddress: "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
 			wantErr:     false,
