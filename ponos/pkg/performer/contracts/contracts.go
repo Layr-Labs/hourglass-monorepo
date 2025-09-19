@@ -38,11 +38,11 @@ func (cs *ContractStore) GetContract(envVarName string) (common.Address, error) 
 }
 
 func (cs *ContractStore) GetTaskAVSRegistrar() (common.Address, error) {
-	return cs.getAddress("TASKAVSREGISTRAR")
+	return cs.getAddress("TASK_AVS_REGISTRAR")
 }
 
 func (cs *ContractStore) GetTaskMailbox() (common.Address, error) {
-	return cs.getAddress("TASKMAILBOX")
+	return cs.getAddress("TASK_MAILBOX")
 }
 
 func (cs *ContractStore) ListContracts() []string {
