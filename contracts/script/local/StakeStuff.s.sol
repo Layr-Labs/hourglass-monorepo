@@ -76,7 +76,7 @@ contract StakeStuff is Script {
         uint256 depositedAmount = STRATEGY_MANAGER.stakerDepositShares(aggStakerAddr, STRATEGY_WETH);
         console.log("Aggregator staker deposit shares in STRATEGY_WETH:", depositedAmount);
 
-        // Stake for executor 1 (stETH) - Different amounts for different weights
+        // Stake for all executors using stETH (since operator set 1 only supports STETH)
         // Executor 1: 2 ETH
         vm.deal(execStakerAddr, 100_000e18);
         vm.startBroadcast(execStakerPrivateKey);
@@ -90,18 +90,18 @@ contract StakeStuff is Script {
         depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStakerAddr, STRATEGY_STETH);
         console.log("Executor 1 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
-        // Stake for executor 2 (WETH) - 1.5 ETH
+        // Stake for executor 2 (stETH) - 1.5 ETH
         vm.deal(execStaker2Addr, 100_000e18);
         vm.startBroadcast(execStaker2PrivateKey);
-        IWETH(address(wethToken)).deposit{value: 20e18}();
-        wethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_WETH, wethToken, 1.5 ether);
+        IStETH(address(stethToken)).submit{value: 20e18}(address(0));
+        stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 1.5 ether);
         vm.stopBroadcast();
 
-        balance = IERC20(wethToken).balanceOf(execStaker2Addr);
-        console.log("WETH balance for executor 2 staker:", balance);
-        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker2Addr, STRATEGY_WETH);
-        console.log("Executor 2 staker deposit shares in STRATEGY_WETH:", depositedAmount);
+        balance = IERC20(stethToken).balanceOf(execStaker2Addr);
+        console.log("stETH balance for executor 2 staker:", balance);
+        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker2Addr, STRATEGY_STETH);
+        console.log("Executor 2 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
         // Stake for executor 3 (stETH) - 1 ETH
         vm.deal(execStaker3Addr, 100_000e18);
@@ -116,25 +116,25 @@ contract StakeStuff is Script {
         depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker3Addr, STRATEGY_STETH);
         console.log("Executor 3 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
-        // Stake for executor 4 (WETH) - 0.5 ETH
+        // Stake for executor 4 (stETH) - 0.5 ETH
         vm.deal(execStaker4Addr, 100_000e18);
         vm.startBroadcast(execStaker4PrivateKey);
-        IWETH(address(wethToken)).deposit{value: 20e18}();
-        wethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_WETH, wethToken, 0.5 ether);
+        IStETH(address(stethToken)).submit{value: 20e18}(address(0));
+        stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 0.5 ether);
         vm.stopBroadcast();
 
-        balance = IERC20(wethToken).balanceOf(execStaker4Addr);
-        console.log("WETH balance for executor 4 staker:", balance);
-        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker4Addr, STRATEGY_WETH);
-        console.log("Executor 4 staker deposit shares in STRATEGY_WETH:", depositedAmount);
+        balance = IERC20(stethToken).balanceOf(execStaker4Addr);
+        console.log("stETH balance for executor 4 staker:", balance);
+        depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker4Addr, STRATEGY_STETH);
+        console.log("Executor 4 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
         console.log("All staking operations completed successfully!");
         console.log("Stake weights summary:");
         console.log("- Aggregator: 1 ETH (WETH)");
         console.log("- Executor 1: 2 ETH (stETH)");
-        console.log("- Executor 2: 1.5 ETH (WETH)");
+        console.log("- Executor 2: 1.5 ETH (stETH)");
         console.log("- Executor 3: 1 ETH (stETH)");
-        console.log("- Executor 4: 0.5 ETH (WETH)");
+        console.log("- Executor 4: 0.5 ETH (stETH)");
     }
 }

@@ -149,10 +149,11 @@ func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp, operatorInfoTreeRoot)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
@@ -178,6 +179,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
 
 	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
@@ -222,10 +224,12 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		}
 	}
 
-	operatorInfoTreeRoot := params.OperatorInfoTreeRoot
+	if operatorInfoTreeRoot == [32]byte{} {
+		return nil, fmt.Errorf("failed to submit task result: operatorInfoTreeRoot is empty")
+	}
 
-	if operatorInfoTreeRoot == [32]byte{} || len(allOperators) < 1 {
-		return nil, fmt.Errorf("failed to submit task result: incomplete operator state provided")
+	if len(allOperators) < 1 {
+		return nil, fmt.Errorf("failed to submit task result: allOperators is empty (SortedOperatorsByIndex has %d operators)", len(params.SortedOperatorsByIndex))
 	}
 
 	cc.logger.Sugar().Infow("Generating merkle proofs for non-signers",
@@ -1077,6 +1081,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		cc.logger.Sugar().Infow("Fetching BN254 operator infos and tree root",
 			zap.String("avsAddress", avsAddress.String()),
 			zap.Uint32("operatorSetId", operatorSetId),
+			zap.Uint32("latestReferenceTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
 		)
 
 		// Create BN254 table calculator caller
@@ -1098,6 +1103,13 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		}
 
 		// Get operator set info from BN254CertificateVerifier (includes tree root)
+		cc.logger.Sugar().Infow("Getting operator set info from BN254CertificateVerifier",
+			zap.String("avsAddress", avsAddress.String()),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.Uint32("referenceTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
+			zap.Uint64("atBlockNumber", atBlockNumber),
+		)
+
 		operatorSetInfo, err := cc.bn254CertVerifier.GetOperatorSetInfo(&bind.CallOpts{
 			Context:     ctx,
 			BlockNumber: new(big.Int).SetUint64(atBlockNumber),
@@ -1108,6 +1120,11 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set info from BN254 verifier: %w", err)
 		}
+
+		cc.logger.Sugar().Infow("Retrieved operator set info from BN254CertificateVerifier",
+			zap.String("operatorInfoTreeRoot", hexutil.Encode(operatorSetInfo.OperatorInfoTreeRoot[:])),
+			zap.Uint32("numOperators", uint32(operatorSetInfo.NumOperators.Uint64())),
+		)
 
 		// Convert operator infos to our internal format
 		operatorTableData.OperatorInfos = make([]contractCaller.BN254OperatorInfo, len(operatorInfos))

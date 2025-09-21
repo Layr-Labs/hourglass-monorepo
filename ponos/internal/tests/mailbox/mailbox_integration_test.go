@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	aggregatorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/chainPoller/EVMChainPoller"
@@ -502,7 +502,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 			signer := inMemorySigner.NewInMemorySigner(execKeysECDSA.PrivateKey, config.CurveTypeECDSA)
 			// Log the actual signing address derived from the private key
-			if ecdsaPK, ok := execKeysECDSA.PrivateKey.(*ecdsa.PrivateKey); ok {
+			if ecdsaPK, ok := execKeysECDSA.PrivateKey.(*cryptoLibsEcdsa.PrivateKey); ok {
 				signerAddress, _ := ecdsaPK.DeriveAddress()
 				t.Logf("Signer address derived from private key: %s", signerAddress.Hex())
 			}

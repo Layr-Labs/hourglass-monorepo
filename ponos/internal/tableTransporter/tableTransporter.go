@@ -236,7 +236,6 @@ func TransportTable(
 
 		// Now you need to register the BLS key in the KeyRegistrar
 		// This requires creating a contractCaller and registering the key
-		// (This is the part you're completely missing)
 		opEOA := mustKey(l, transporterPrivateKey)
 		operatorAddress := crypto.PubkeyToAddress(opEOA.PublicKey)
 

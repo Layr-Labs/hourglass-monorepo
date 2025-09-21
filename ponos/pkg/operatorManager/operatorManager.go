@@ -29,6 +29,7 @@ type PeerWeight struct {
 	Weights                map[string][]*big.Int
 	Operators              []*peering.OperatorPeerInfo
 	CurveType              config.CurveType
+	OperatorInfoTreeRoot   [32]byte
 }
 
 type OperatorManager struct {
@@ -114,6 +115,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 		Weights:                operatorWeights,
 		Operators:              filteredOperators,
 		CurveType:              curveType,
+		OperatorInfoTreeRoot:   tableData.OperatorInfoTreeRoot,
 	}, nil
 }
 
@@ -236,24 +238,59 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		blockForTableData = uint64(latestReferenceTimeAndBlock.LatestReferenceBlockNumber)
 	}
 
+	// First get the curve type for this operator set
+	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId, blockForTableData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
+	}
+	om.logger.Sugar().Infow("Got operator set curve type",
+		zap.String("avsAddress", om.config.AvsAddress),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.Uint64("blockForTableData", blockForTableData),
+		zap.String("curveType", curveType.String()),
+	)
+
 	// weights and table data come from the L1
-	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, "", om.config.L1ChainId, blockForTableData)
+	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, curveType, om.config.L1ChainId, blockForTableData)
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get operator table data",
 			zap.String("avsAddress", om.config.AvsAddress),
 			zap.Uint32("operatorSetId", operatorSetId),
 			zap.Uint64("sourceBlockNumber", sourceBlockNumber),
+			zap.String("curveType", curveType.String()),
 			zap.Error(err),
 		)
 		return nil, err
 	}
+
+	// Log detailed information about the operator info tree root
 	om.logger.Sugar().Infow("Fetched operator table data",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Uint64("sourceBlockNumber", sourceBlockNumber),
+		zap.String("curveType", curveType.String()),
 		zap.Int("operatorCount", len(tableData.Operators)),
 		zap.Int("weightCount", len(tableData.OperatorWeights)),
+		zap.String("operatorInfoTreeRoot", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
 	)
+
+	// Check if OperatorInfoTreeRoot is empty and log a warning
+	emptyRoot := [32]byte{}
+	if tableData.OperatorInfoTreeRoot == emptyRoot {
+		om.logger.Sugar().Warnw("OperatorInfoTreeRoot is EMPTY after fetching table data",
+			zap.String("avsAddress", om.config.AvsAddress),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.String("curveType", curveType.String()),
+			zap.Uint64("blockForTableData", blockForTableData),
+		)
+	} else {
+		om.logger.Sugar().Infow("OperatorInfoTreeRoot is SET",
+			zap.String("avsAddress", om.config.AvsAddress),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.String("curveType", curveType.String()),
+			zap.String("root", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
+		)
+	}
 
 	operatorWeights := make(map[string][]*big.Int, len(tableData.Operators))
 	for i, operator := range tableData.Operators {
@@ -288,11 +325,6 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		referenceTimestamp = latestReferenceTimeAndBlock.LatestReferenceTimestamp // use latest reference timestamp for L2
 	}
 
-	curveType, err := l1Cc.GetOperatorSetCurveType(om.config.AvsAddress, operatorSetId, blockForTableData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
-	}
-
 	return &PeerWeight{
 		ChainId:                chainId,
 		OperatorSetId:          operatorSetId,
@@ -300,6 +332,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		Weights:                operatorWeights,
 		Operators:              operators,
 		CurveType:              curveType,
+		OperatorInfoTreeRoot:   tableData.OperatorInfoTreeRoot,
 	}, nil
 }
 
@@ -319,6 +352,13 @@ func (om *OperatorManager) fetchOperatorTableData(
 	curveType config.CurveType,
 	l1BlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
+	om.logger.Sugar().Debugw("Fetching operator table data with curve type",
+		zap.String("avsAddress", om.config.AvsAddress),
+		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("curveType", curveType.String()),
+		zap.Uint64("l1BlockNumber", l1BlockNumber),
+	)
+
 	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(
 		ctx,
 		common.HexToAddress(om.config.AvsAddress),
@@ -331,12 +371,24 @@ func (om *OperatorManager) fetchOperatorTableData(
 		return nil, err
 	}
 
-	om.logger.Sugar().Debugw("Fetched operator table data",
+	om.logger.Sugar().Infow("Fetched operator table data in helper",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
+		zap.String("curveType", curveType.String()),
 		zap.Uint64("l1BlockNumber", l1BlockNumber),
 		zap.Int("operatorCount", len(tableData.Operators)),
+		zap.String("operatorInfoTreeRoot", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
 	)
+
+	// Check if OperatorInfoTreeRoot is empty
+	emptyRoot := [32]byte{}
+	if tableData.OperatorInfoTreeRoot == emptyRoot {
+		om.logger.Sugar().Warnw("OperatorInfoTreeRoot is EMPTY in fetchOperatorTableData",
+			zap.String("avsAddress", om.config.AvsAddress),
+			zap.Uint32("operatorSetId", operatorSetId),
+			zap.String("curveType", curveType.String()),
+		)
+	}
 
 	return tableData, nil
 }

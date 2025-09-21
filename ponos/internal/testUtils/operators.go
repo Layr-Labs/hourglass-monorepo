@@ -264,6 +264,36 @@ func DelegateStakeToOperators(
 	return nil
 }
 
+// DelegateStakeToMultipleOperators delegates stake to multiple operators in a single call
+func DelegateStakeToMultipleOperators(
+	t *testing.T,
+	ctx context.Context,
+	configs []*StakerDelegationConfig,
+	avsAddress string,
+	ethClient *ethclient.Client,
+	l *zap.Logger,
+) error {
+	for i, config := range configs {
+		t.Logf("------------------------ Delegating Operator %d ------------------------", i+1)
+		err := DelegateStakeToOperator(
+			ctx,
+			config.StakerPrivateKey,
+			config.StakerAddress,
+			config.OperatorPrivateKey,
+			config.OperatorAddress,
+			avsAddress,
+			config.OperatorSetId,
+			config.StrategyAddress,
+			ethClient,
+			l,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to delegate stake to operator %d (%s): %v", i+1, config.OperatorAddress, err)
+		}
+	}
+	return nil
+}
+
 func DelegateStakeToOperator(
 	ctx context.Context,
 	stakerPrivateKey string,

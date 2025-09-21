@@ -69,7 +69,6 @@ type BN254TaskResultParams struct {
 	SignersPublicKey       *bn254.G2Point
 	NonSignerOperators     []BN254NonSignerOperator
 	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
-	OperatorInfoTreeRoot   [32]byte                   // Tree root for merkle proof validation
 }
 
 // BN254OperatorWithWeights contains operator info including weights for merkle proof generation
@@ -98,12 +97,14 @@ type IContractCaller interface {
 		ctx context.Context,
 		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
 		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitECDSATaskResult(
