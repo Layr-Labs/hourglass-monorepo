@@ -17,7 +17,8 @@ contract DeployAVSL1Contracts is Script {
     // Eigenlayer Core Contracts
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
     IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0xA4dB30D08d8bbcA00D40600bee9F029984dB162a);
-    IPermissionController public PERMISSION_CONTROLLER = IPermissionController(0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37);
+    IPermissionController public PERMISSION_CONTROLLER =
+        IPermissionController(0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37);
 
     function setUp() public {}
 
@@ -45,7 +46,8 @@ contract DeployAVSL1Contracts is Script {
         console.log("ProxyAdmin deployed to:", address(proxyAdmin));
 
         // Deploy implementation
-        MockTaskAVSRegistrar taskAVSRegistrarImpl = new MockTaskAVSRegistrar(ALLOCATION_MANAGER, KEY_REGISTRAR, PERMISSION_CONTROLLER);
+        MockTaskAVSRegistrar taskAVSRegistrarImpl =
+            new MockTaskAVSRegistrar(ALLOCATION_MANAGER, KEY_REGISTRAR, PERMISSION_CONTROLLER);
         console.log("TaskAVSRegistrar implementation deployed to:", address(taskAVSRegistrarImpl));
 
         // Deploy proxy with initialization
