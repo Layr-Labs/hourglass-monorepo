@@ -1,0 +1,8 @@
+{
+  "contracts/lib/eigenlayer-middleware": {
+    "rev": "8f8cb97b3097dc5adbcba2db4b80073e4df3b9f8"
+  },
+  "contracts/lib/forge-std": {
+    "rev": "60acb7aaadcce2d68e52986a0a66fe79f07d138f"
+  }
+}
