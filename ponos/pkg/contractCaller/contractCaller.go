@@ -130,6 +130,8 @@ type IContractCaller interface {
 
 	CalculateBN254CertificateDigestBytes(ctx context.Context, referenceTimestamp uint32, messageHash [32]byte) ([]byte, error)
 
+	CalculateTaskHashMessage(ctx context.Context, taskHash [32]byte, result []byte) ([32]byte, error)
+
 	GetExecutorOperatorSetTaskConfig(ctx context.Context, avsAddress common.Address, opsetId uint32, blockNumber uint64) (*TaskMailboxExecutorOperatorSetConfig, error)
 
 	CreateGenerationReservation(

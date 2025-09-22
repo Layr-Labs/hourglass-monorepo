@@ -25,6 +25,11 @@ type MockContractCaller struct {
 	contractCaller.IContractCaller
 }
 
+func (m *MockContractCaller) CalculateTaskHashMessage(_ context.context.Context, taskHash [32]byte, result []byte)  ([]byte, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (m *MockContractCaller) GetAVSConfig(avsAddress string, blockNumber uint64) (*contractCaller.AVSConfig, error) {
 	args := m.Called(avsAddress, blockNumber)
 	if args.Get(0) == nil {

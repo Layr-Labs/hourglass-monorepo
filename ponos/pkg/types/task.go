@@ -53,13 +53,14 @@ type Task struct {
 }
 
 type TaskResult struct {
-	TaskId          string
-	AvsAddress      string
-	OperatorSetId   uint32
-	Output          []byte
-	OperatorAddress string
-	ResultSignature []byte // Signs: hash(Output) - for aggregation
-	AuthSignature   []byte // Signs: hash(TaskId || AvsAddress || OperatorAddress || OperatorSetId || ResultSigDigest)
+	TaskId            string
+	AvsAddress        string
+	OperatorSetId     uint32
+	Output            []byte
+	OutputTaskMessage [32]byte
+	OperatorAddress   string
+	ResultSignature   []byte // Signs: hash(Output) - for aggregation
+	AuthSignature     []byte // Signs: hash(TaskId || AvsAddress || OperatorAddress || OperatorSetId || ResultSigDigest)
 }
 
 // AuthSignatureData represents the authentication data that binds operator identity

@@ -351,7 +351,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 		return nil, status.Errorf(codes.Internal, "Failed to run task %s", err.Error())
 	}
 
-	resultSig, authSig, err := e.signResult(pt, response)
+	resultSig, authSig, err := e.signResult(ctx, pt, response)
 
 	if err != nil {
 		e.logger.Sugar().Errorw("Failed to sign result",
@@ -390,7 +390,7 @@ func (e *Executor) handleReceivedTask(ctx context.Context, task *executorV1.Task
 }
 
 // signResult creates both result signature (for aggregation) and auth signature (for identity)
-func (e *Executor) signResult(task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
+func (e *Executor) signResult(ctx context.Context, task *performerTask.PerformerTask, result *performerTask.PerformerTaskResult) ([]byte, []byte, error) {
 	// Get the curve type for the operator set using the task's block number for historical accuracy
 	curveType, err := e.l1ContractCaller.GetOperatorSetCurveType(task.Avs, task.OperatorSetId, task.TaskBlockNumber)
 	if err != nil {
@@ -408,7 +408,12 @@ func (e *Executor) signResult(task *performerTask.PerformerTask, result *perform
 	var digestToSign []byte
 	var signerToUse signer.ISigner
 
-	outputDigest := util.GetKeccak256Digest(result.Result)
+	var taskHash [32]byte
+	copy(taskHash[:], task.TaskID)
+	outputDigest, err := e.l1ContractCaller.CalculateTaskHashMessage(ctx, taskHash, result.Result)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to calculate task hash: %w", err)
+	}
 
 	if curveType == config.CurveTypeBN254 {
 		if e.bn254Signer == nil {

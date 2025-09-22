@@ -237,8 +237,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// Calculate output digest for consensus tracking
-	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
+	outputDigest := taskResponse.OutputTaskMessage
 
 	// Verify both signatures
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)

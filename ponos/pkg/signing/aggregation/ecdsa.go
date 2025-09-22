@@ -223,7 +223,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
+	outputDigest := taskResponse.OutputTaskMessage
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)

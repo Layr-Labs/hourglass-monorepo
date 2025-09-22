@@ -3,6 +3,7 @@ package caller
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 	"sort"
@@ -376,6 +377,42 @@ func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(
 	messageHash [32]byte,
 ) ([]byte, error) {
 	return cc.ecdsaCertVerifier.CalculateCertificateDigestBytes(&bind.CallOpts{}, referenceTimestamp, messageHash)
+}
+
+func (cc *ContractCaller) CalculateTaskMessageHash(
+	_ context.Context,
+	taskHash [32]byte,
+	result []byte,
+) ([32]byte, error) {
+	// ABI encode: taskHash (bytes32) || result (dynamic bytes)
+	// For dynamic bytes: offset (32 bytes) || length (32 bytes) || data (padded to 32 bytes)
+
+	encoded := make([]byte, 0)
+
+	// Add taskHash (32 bytes)
+	encoded = append(encoded, taskHash[:]...)
+
+	// Add offset for dynamic bytes (points to byte 64, after taskHash and offset)
+	offset := make([]byte, 32)
+	binary.BigEndian.PutUint64(offset[24:], 32) // Offset is 32 (after taskHash)
+	encoded = append(encoded, offset...)
+
+	// Add length of result
+	lengthBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(lengthBytes[24:], uint64(len(result)))
+	encoded = append(encoded, lengthBytes...)
+
+	// Add result data (padded to 32 byte boundary)
+	encoded = append(encoded, result...)
+
+	// Pad to 32 byte boundary if needed
+	if remainder := len(result) % 32; remainder != 0 {
+		padding := make([]byte, 32-remainder)
+		encoded = append(encoded, padding...)
+	}
+
+	// Return keccak256 hash
+	return util.GetKeccak256Digest(encoded), nil
 }
 
 func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(
