@@ -403,14 +403,12 @@ func (e *Executor) signResult(ctx context.Context, task *performerTask.Performer
 		return nil, nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
 
-	// Calculate the bytes that need to be signed for the result signature
-	// This uses the contract's certificate digest calculation
 	var digestToSign []byte
 	var signerToUse signer.ISigner
-
 	var taskHash [32]byte
 	copy(taskHash[:], task.TaskID)
-	outputDigest, err := e.l1ContractCaller.CalculateTaskHashMessage(ctx, taskHash, result.Result)
+
+	outputDigestHash, err := e.l1ContractCaller.CalculateTaskMessageHash(ctx, taskHash, result.Result)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate task hash: %w", err)
 	}
@@ -423,9 +421,9 @@ func (e *Executor) signResult(ctx context.Context, task *performerTask.Performer
 
 		// Use the contract's BN254 certificate digest calculation
 		digestToSign, err = e.l1ContractCaller.CalculateBN254CertificateDigestBytes(
-			context.Background(),
+			ctx,
 			task.ReferenceTimestamp,
-			outputDigest,
+			outputDigestHash,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate BN254 certificate digest: %w", err)
@@ -439,9 +437,9 @@ func (e *Executor) signResult(ctx context.Context, task *performerTask.Performer
 
 		// Use the contract's ECDSA certificate digest calculation
 		digestToSign, err = e.l1ContractCaller.CalculateECDSACertificateDigestBytes(
-			context.Background(),
+			ctx,
 			task.ReferenceTimestamp,
-			outputDigest,
+			outputDigestHash,
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to calculate ECDSA certificate digest: %w", err)

@@ -4,7 +4,7 @@ go 1.23.6
 
 require (
 	github.com/Layr-Labs/crypto-libs v0.0.4
-	github.com/Layr-Labs/eigenlayer-contracts v1.8.0-testnet-final
+	github.com/Layr-Labs/eigenlayer-contracts v1.8.0-testnet-final.0.20250922221242-73644e201541
 	github.com/Layr-Labs/multichain-go v0.0.13
 	github.com/Layr-Labs/protocol-apis v1.17.0
 	github.com/dgraph-io/badger/v3 v3.2103.5

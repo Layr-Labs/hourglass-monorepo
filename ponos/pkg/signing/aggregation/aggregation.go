@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/ethereum/go-ethereum/common"
 )

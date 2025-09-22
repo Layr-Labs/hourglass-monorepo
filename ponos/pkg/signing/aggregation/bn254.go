@@ -237,10 +237,14 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	outputDigest := taskResponse.OutputTaskMessage
-
+	var taskMessage [32]byte
+	copy(taskMessage[:], taskResponse.ResultSignature)
+	outputTaskMessage, err := tra.l1ContractCaller.CalculateTaskMessageHash(ctx, taskMessage, taskResponse.Output)
+	if err != nil {
+		return fmt.Errorf("failed to calculate task hash: %w", err)
+	}
 	// Verify both signatures
-	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
+	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputTaskMessage)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)
 	}
@@ -249,7 +253,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		TaskId:       tra.TaskId,
 		TaskResult:   taskResponse,
 		Signature:    sig,
-		OutputDigest: outputDigest,
+		OutputDigest: outputTaskMessage,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -267,14 +271,14 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Get or create the digest group for this output
-	group, exists := tra.aggregatedOperators.digestGroups[outputDigest]
+	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &digestGroup{
 			signers:  make(map[string]*signerInfo),
 			response: rr,
 			count:    0,
 		}
-		tra.aggregatedOperators.digestGroups[outputDigest] = group
+		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
 
 	// Store signer info for later aggregation
@@ -288,7 +292,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	// Update most common tracking
 	if group.count > tra.aggregatedOperators.mostCommonCount {
 		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputDigest
+		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
 	}
 
 	// Increment total signer count

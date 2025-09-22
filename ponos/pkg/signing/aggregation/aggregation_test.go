@@ -3,15 +3,16 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
-	"sync"
-	"testing"
-	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/ethereum/go-ethereum/common"
@@ -114,9 +115,16 @@ func createSignedBN254TaskResult(
 	}
 
 	// Step 1: Sign the result (same for all operators)
+	// First convert taskId to [32]byte and calculate the task message hash
+	var taskHash [32]byte
+	taskIdBytes := common.HexToHash(taskId).Bytes()
+	copy(taskHash[:], taskIdBytes)
+	outputDigestHash, err := l1ContractCaller.CalculateTaskMessageHash(context.Background(), taskHash, output)
+	if err != nil {
+		return nil, err
+	}
 	// Calculate the certificate digest that includes the reference timestamp
-	outputDigest := util.GetKeccak256Digest(output)
-	certDigest, err := l1ContractCaller.CalculateBN254CertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
+	certDigest, err := l1ContractCaller.CalculateBN254CertificateDigestBytes(context.Background(), referenceTimestamp, outputDigestHash)
 	if err != nil {
 		return nil, err
 	}
@@ -171,9 +179,16 @@ func createSignedECDSATaskResult(
 	}
 
 	// Step 1: Sign the result (same for all operators)
+	// First convert taskId to [32]byte and calculate the task message hash
+	var taskHash [32]byte
+	taskIdBytes := common.HexToHash(taskId).Bytes()
+	copy(taskHash[:], taskIdBytes)
+	outputDigestHash, err := l1ContractCaller.CalculateTaskMessageHash(context.Background(), taskHash, output)
+	if err != nil {
+		return nil, err
+	}
 	// Calculate the certificate digest that includes the reference timestamp
-	outputDigest := util.GetKeccak256Digest(output)
-	certDigestBytes, err := l1ContractCaller.CalculateECDSACertificateDigestBytes(context.Background(), referenceTimestamp, outputDigest)
+	certDigestBytes, err := l1ContractCaller.CalculateECDSACertificateDigestBytes(context.Background(), referenceTimestamp, outputDigestHash)
 	if err != nil {
 		return nil, err
 	}

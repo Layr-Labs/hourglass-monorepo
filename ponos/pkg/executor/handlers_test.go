@@ -25,7 +25,7 @@ type MockContractCaller struct {
 	contractCaller.IContractCaller
 }
 
-func (m *MockContractCaller) CalculateTaskHashMessage(_ context.context.Context, taskHash [32]byte, result []byte)  ([]byte, error) {
+func (m *MockContractCaller) CalculateTaskHashMessage(_ context.Context, taskHash [32]byte, result []byte) ([]byte, error) {
 	//TODO implement me
 	panic("implement me")
 }
