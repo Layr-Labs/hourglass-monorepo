@@ -508,13 +508,17 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			}
 
 			// Step 1: Sign the result using certificate digest (matching the executor)
-			outputDigest := util.GetKeccak256Digest(outputResult)
-
-			// Calculate the certificate digest exactly as the executor does
+			var taskIdBytes [32]byte
+			copy(taskIdBytes[:], common.HexToHash(taskResult.TaskId).Bytes())
+			messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, outputResult)
+			if err != nil {
+				t.Errorf("Failed to calculate task message hash: %v", err)
+				return
+			}
 			certificateDigestBytes, err := l1CC.CalculateECDSACertificateDigestBytes(
 				ctx,
 				operatorPeersWeight.RootReferenceTimestamp,
-				outputDigest,
+				messageHash,
 			)
 			if err != nil {
 				hasErrors = true
@@ -527,7 +531,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				"taskId", taskResult.TaskId,
 				"operatorAddress", taskResult.OperatorAddress,
 				"outputLength", len(outputResult),
-				"outputDigest", fmt.Sprintf("%x", outputDigest),
+				"outputDigest", fmt.Sprintf("%x", messageHash),
 				"certificateDigest", fmt.Sprintf("%x", certificateDigestBytes),
 				"referenceTimestamp", operatorPeersWeight.RootReferenceTimestamp,
 			)

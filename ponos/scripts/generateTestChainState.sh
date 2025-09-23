@@ -16,7 +16,7 @@ set -e
 L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
 
 anvilL1ChainId=31337
-anvilL1StartBlock=9085290
+anvilL1StartBlock=9259025
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -26,55 +26,46 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=30327360
+anvilL2StartBlock=31408197
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
 anvilL2RpcUrl="http://localhost:${anvilL2RpcPort}"
 
 # -----------------------------------------------------------------------------
-# Generate new accounts instead of loading from file
+# Load accounts from anvilConfig/accounts.json for reproducible testing
 # -----------------------------------------------------------------------------
-echo "Generating new accounts for testing..."
+echo "Loading accounts from anvilConfig/accounts.json..."
 
-# Function to generate a new account
-generate_account() {
-    local name=$1
-    # Generate a new private key and address
-    local wallet_output=$(cast wallet new)
-    local address=$(echo "$wallet_output" | grep "Address:" | awk '{print $2}')
-    local private_key=$(echo "$wallet_output" | grep "Private key:" | awk '{print $3}' | sed 's/0x//')
-    echo "{\"name\": \"$name\", \"private_key\": \"$private_key\", \"address\": \"$address\"}"
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACCOUNTS_FILE="$SCRIPT_DIR/../anvilConfig/accounts.json"
 
-# Generate all required accounts
-DEPLOY_ACCOUNT=$(generate_account "deployer")
-deployAccountPk=$(echo $DEPLOY_ACCOUNT | jq -r '.private_key')
-deployAccountAddress=$(echo $DEPLOY_ACCOUNT | jq -r '.address')
+if [ ! -f "$ACCOUNTS_FILE" ]; then
+    echo "Error: accounts.json not found at $ACCOUNTS_FILE"
+    exit 1
+fi
 
-AVS_ACCOUNT=$(generate_account "avs")
-avsAccountPk=$(echo $AVS_ACCOUNT | jq -r '.private_key')
-avsAccountAddress=$(echo $AVS_ACCOUNT | jq -r '.address')
+# Load accounts from JSON file
+deployAccountPk=$(jq -r '.[] | select(.name == "deployer") | .private_key' "$ACCOUNTS_FILE")
+deployAccountAddress=$(jq -r '.[] | select(.name == "deployer") | .address' "$ACCOUNTS_FILE")
 
-APP_ACCOUNT=$(generate_account "app")
-appAccountPk=$(echo $APP_ACCOUNT | jq -r '.private_key')
-appAccountAddress=$(echo $APP_ACCOUNT | jq -r '.address')
+avsAccountPk=$(jq -r '.[] | select(.name == "avs") | .private_key' "$ACCOUNTS_FILE")
+avsAccountAddress=$(jq -r '.[] | select(.name == "avs") | .address' "$ACCOUNTS_FILE")
 
-OPERATOR_ACCOUNT=$(generate_account "operator")
-operatorAccountPk=$(echo $OPERATOR_ACCOUNT | jq -r '.private_key')
-operatorAccountAddress=$(echo $OPERATOR_ACCOUNT | jq -r '.address')
+appAccountPk=$(jq -r '.[] | select(.name == "app") | .private_key' "$ACCOUNTS_FILE")
+appAccountAddress=$(jq -r '.[] | select(.name == "app") | .address' "$ACCOUNTS_FILE")
 
-EXEC_OPERATOR_ACCOUNT=$(generate_account "exec_operator")
-execOperatorAccountPk=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.private_key')
-execOperatorAccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.address')
+operatorAccountPk=$(jq -r '.[] | select(.name == "operator") | .private_key' "$ACCOUNTS_FILE")
+operatorAccountAddress=$(jq -r '.[] | select(.name == "operator") | .address' "$ACCOUNTS_FILE")
 
-AGG_STAKER_ACCOUNT=$(generate_account "agg_staker")
-aggStakerAccountPk=$(echo $AGG_STAKER_ACCOUNT | jq -r '.private_key')
-aggStakerAccountAddress=$(echo $AGG_STAKER_ACCOUNT | jq -r '.address')
+execOperatorAccountPk=$(jq -r '.[] | select(.name == "exec_operator") | .private_key' "$ACCOUNTS_FILE")
+execOperatorAccountAddress=$(jq -r '.[] | select(.name == "exec_operator") | .address' "$ACCOUNTS_FILE")
 
-EXEC_STAKER_ACCOUNT=$(generate_account "exec_staker")
-execStakerAccountPk=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.private_key')
-execStakerAccountAddress=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.address')
+aggStakerAccountPk=$(jq -r '.[] | select(.name == "agg_staker") | .private_key' "$ACCOUNTS_FILE")
+aggStakerAccountAddress=$(jq -r '.[] | select(.name == "agg_staker") | .address' "$ACCOUNTS_FILE")
+
+execStakerAccountPk=$(jq -r '.[] | select(.name == "exec_staker") | .private_key' "$ACCOUNTS_FILE")
+execStakerAccountAddress=$(jq -r '.[] | select(.name == "exec_staker") | .address' "$ACCOUNTS_FILE")
 
 # Export environment variables (with 0x prefix for Forge compatibility)
 export PRIVATE_KEY_DEPLOYER="0x$deployAccountPk"
@@ -230,6 +221,13 @@ taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChainId/r
 echo "Deploying L2 contracts on L2..."
 forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
 taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+
+# -----------------------------------------------------------------------------
+# Allowlist aggregator operator
+# -----------------------------------------------------------------------------
+echo "Allowlisting aggregator operator"
+export AGGREGATOR_PRIVATE_KEY="0x$operatorAccountPk"
+forge script script/local/AllowlistOperators.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "$avsTaskRegistrarAddress"
 
 # -----------------------------------------------------------------------------
 # Create operators

@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -237,11 +238,15 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	// Calculate output digest for consensus tracking
-	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
+	var taskMessageHash [32]byte
+	copy(taskMessageHash[:], common.HexToHash(taskResponse.TaskId).Bytes())
 
+	outputTaskMessage, err := tra.l1ContractCaller.CalculateTaskMessageHash(ctx, taskMessageHash, taskResponse.Output)
+	if err != nil {
+		return fmt.Errorf("failed to calculate task hash: %w", err)
+	}
 	// Verify both signatures
-	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
+	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputTaskMessage)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)
 	}
@@ -250,7 +255,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		TaskId:       tra.TaskId,
 		TaskResult:   taskResponse,
 		Signature:    sig,
-		OutputDigest: outputDigest,
+		OutputDigest: outputTaskMessage,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -268,14 +273,14 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Get or create the digest group for this output
-	group, exists := tra.aggregatedOperators.digestGroups[outputDigest]
+	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &digestGroup{
 			signers:  make(map[string]*signerInfo),
 			response: rr,
 			count:    0,
 		}
-		tra.aggregatedOperators.digestGroups[outputDigest] = group
+		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
 
 	// Store signer info for later aggregation
@@ -289,7 +294,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	// Update most common tracking
 	if group.count > tra.aggregatedOperators.mostCommonCount {
 		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputDigest
+		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
 	}
 
 	// Increment total signer count

@@ -178,7 +178,7 @@ func NewECDSATaskResultAggregator(
 }
 
 func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
-	_ context.Context,
+	ctx context.Context,
 	taskResponse *types.TaskResult,
 ) error {
 	tra.mu.Lock()
@@ -223,8 +223,15 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	outputDigest := util.GetKeccak256Digest(taskResponse.Output)
-	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputDigest)
+	var taskMessageHash [32]byte
+	copy(taskMessageHash[:], common.HexToHash(taskResponse.TaskId).Bytes())
+
+	outputTaskMessage, err := tra.L1ContractCaller.CalculateTaskMessageHash(ctx, taskMessageHash, taskResponse.Output)
+	if err != nil {
+		return fmt.Errorf("failed to calculate task message hash: %w", err)
+	}
+
+	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputTaskMessage)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)
 	}
@@ -233,7 +240,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		TaskId:       tra.TaskId,
 		TaskResult:   taskResponse,
 		Signature:    sig,
-		OutputDigest: outputDigest,
+		OutputDigest: outputTaskMessage,
 	}
 
 	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
@@ -246,14 +253,14 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Get or create the digest group for this output
-	group, exists := tra.aggregatedOperators.digestGroups[outputDigest]
+	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &ecdsaDigestGroup{
 			signers:  make(map[string]*ecdsaSignerInfo),
 			response: rr,
 			count:    0,
 		}
-		tra.aggregatedOperators.digestGroups[outputDigest] = group
+		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
 
 	// Store signer info for later aggregation
@@ -267,7 +274,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	// Update most common tracking
 	if group.count > tra.aggregatedOperators.mostCommonCount {
 		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputDigest
+		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
 	}
 
 	return nil

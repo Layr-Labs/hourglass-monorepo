@@ -378,6 +378,14 @@ func (cc *ContractCaller) CalculateECDSACertificateDigestBytes(
 	return cc.ecdsaCertVerifier.CalculateCertificateDigestBytes(&bind.CallOpts{}, referenceTimestamp, messageHash)
 }
 
+func (cc *ContractCaller) CalculateTaskMessageHash(
+	_ context.Context,
+	taskHash [32]byte,
+	result []byte,
+) ([32]byte, error) {
+	return cc.taskMailbox.GetMessageHash(&bind.CallOpts{}, taskHash, result)
+}
+
 func (cc *ContractCaller) CalculateBN254CertificateDigestBytes(
 	_ context.Context,
 	referenceTimestamp uint32,

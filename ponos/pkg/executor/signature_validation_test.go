@@ -474,7 +474,7 @@ func TestSignResult_ECDSA(t *testing.T) {
 	}
 
 	// Test
-	resultSig, authSig, err := e.signResult(task, result)
+	resultSig, authSig, err := e.signResult(context.Background(), task, result)
 
 	// Assert
 	assert.NoError(t, err, "ECDSA signing should succeed")
@@ -534,7 +534,7 @@ func TestSignResult_BN254(t *testing.T) {
 	}
 
 	// Test
-	resultSig, authSig, err := e.signResult(task, result)
+	resultSig, authSig, err := e.signResult(context.Background(), task, result)
 
 	// Assert
 	assert.NoError(t, err, "BN254 signing should succeed")
@@ -609,10 +609,10 @@ func TestSignResult_BindsToExecutor(t *testing.T) {
 	}
 
 	// Sign with both executors
-	resultSig1, authSig1, err := e1.signResult(task, result)
+	resultSig1, authSig1, err := e1.signResult(context.Background(), task, result)
 	require.NoError(t, err)
 
-	resultSig2, authSig2, err := e2.signResult(task, result)
+	resultSig2, authSig2, err := e2.signResult(context.Background(), task, result)
 	require.NoError(t, err)
 
 	// Assert
@@ -668,7 +668,7 @@ func TestSignResult_IncludesAllFields(t *testing.T) {
 	}
 
 	// Test
-	resultSig, authSig, err := e.signResult(task, result)
+	resultSig, authSig, err := e.signResult(context.Background(), task, result)
 
 	// Assert
 	assert.NoError(t, err, "Signing should succeed")
@@ -716,7 +716,7 @@ func TestSignResult_MissingSignerError(t *testing.T) {
 	}
 
 	// Test
-	resultSig, authSig, err := e.signResult(task, result)
+	resultSig, authSig, err := e.signResult(context.Background(), task, result)
 
 	// Assert
 	assert.Error(t, err, "Should fail when signer is not configured")
@@ -740,6 +740,14 @@ type EnhancedMockContractCaller struct {
 	avsConfigs   map[string]*contractCaller.AVSConfig
 	operatorSets map[string]*peering.OperatorSet
 	curveTypes   map[string]config.CurveType
+}
+
+func (m *EnhancedMockContractCaller) CalculateTaskMessageHash(_ context.Context, taskHash [32]byte, result []byte) ([32]byte, error) {
+	combined := append(taskHash[:], result...)
+	hash := crypto.Keccak256Hash(combined)
+	var hashArray [32]byte
+	copy(hashArray[:], hash.Bytes())
+	return hashArray, nil
 }
 
 // NewEnhancedMockContractCaller creates a new enhanced mock contract caller
