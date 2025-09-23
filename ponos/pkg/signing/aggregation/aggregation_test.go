@@ -518,9 +518,15 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		payloadB := []byte("response-B")
 		payloadC := []byte("response-C")
 
-		digestA := util.GetKeccak256Digest(payloadA)
-		digestB := util.GetKeccak256Digest(payloadB)
-		digestC := util.GetKeccak256Digest(payloadC)
+		// Calculate the expected digests using CalculateTaskMessageHash
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digestA, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadA)
+		require.NoError(t, err)
+		digestB, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadB)
+		require.NoError(t, err)
+		digestC, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadC)
+		require.NoError(t, err)
 
 		// Test scenario:
 		// - Operator 0: submits digest A
@@ -632,7 +638,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Single operator submits response
 		payload := []byte("single-operator-response")
-		digest := util.GetKeccak256Digest(payload)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payload)
+		require.NoError(t, err)
 
 		// Create properly signed task result using the helper function
 		taskResult, err := createSignedBN254TaskResult(
@@ -725,7 +734,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// All operators submit the same response
 		commonPayload := []byte("unanimous-response")
-		digest := util.GetKeccak256Digest(commonPayload)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, commonPayload)
+		require.NoError(t, err)
 
 		for i := 0; i < 3; i++ {
 			// Create properly signed task result using the helper function
@@ -794,7 +806,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// Create a common response payload
 		commonPayload := []byte("unanimous-response")
-		digest := util.GetKeccak256Digest(commonPayload)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, commonPayload)
+		require.NoError(t, err)
 
 		// Only 2 operators participate (both signing the same message)
 		// This is below the 60% threshold (need 3 out of 5)
@@ -878,9 +893,15 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 		payloadB := []byte("response-B")
 		payloadC := []byte("response-C")
 
-		digestA := util.GetKeccak256Digest(payloadA)
-		digestB := util.GetKeccak256Digest(payloadB)
-		digestC := util.GetKeccak256Digest(payloadC)
+		// Calculate the expected digests using CalculateTaskMessageHash
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digestA, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadA)
+		require.NoError(t, err)
+		digestB, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadB)
+		require.NoError(t, err)
+		digestC, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, payloadC)
+		require.NoError(t, err)
 
 		// Test scenario:
 		// - Operator 0: submits digest A
@@ -997,7 +1018,10 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 
 		// All operators submit the same response
 		commonPayload := []byte("unanimous-response")
-		digest := util.GetKeccak256Digest(commonPayload)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		digest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, commonPayload)
+		require.NoError(t, err)
 
 		for i := 0; i < 3; i++ {
 			// Create properly signed task result using the helper function
@@ -1071,14 +1095,20 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Calculate the legitimate output digest (for consensus)
-		legitimateOutputDigest := util.GetKeccak256Digest(legitimateOutput)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		legitimateOutputDigest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, legitimateOutput)
+		require.NoError(t, err)
 
 		// Process the signature
 		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
 		// Verify that the aggregator stored the correct response
-		legitimateDigest := util.GetKeccak256Digest(legitimateOutput)
+		var taskHashForDigest [32]byte
+		copy(taskHashForDigest[:], common.HexToHash(taskId).Bytes())
+		legitimateDigest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHashForDigest, legitimateOutput)
+		require.NoError(t, err)
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[legitimateDigest])
 		// Verify the output is correct
 		assert.Equal(t, legitimateOutput, agg.aggregatedOperators.digestGroups[legitimateDigest].response.TaskResult.Output)
@@ -1149,14 +1179,20 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Calculate the legitimate output digest (for consensus)
-		legitimateOutputDigest := util.GetKeccak256Digest(legitimateOutput)
+		var taskHash [32]byte
+		copy(taskHash[:], common.HexToHash(taskId).Bytes())
+		legitimateOutputDigest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHash, legitimateOutput)
+		require.NoError(t, err)
 
 		// Process the properly signed signature
 		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
 		// Verify that the aggregator stored the correct response
-		legitimateDigest := util.GetKeccak256Digest(legitimateOutput)
+		var taskHashForDigest [32]byte
+		copy(taskHashForDigest[:], common.HexToHash(taskId).Bytes())
+		legitimateDigest, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHashForDigest, legitimateOutput)
+		require.NoError(t, err)
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[legitimateDigest])
 		// Verify the output is correct
 		assert.Equal(t, legitimateOutput, agg.aggregatedOperators.digestGroups[legitimateDigest].response.TaskResult.Output)
@@ -1535,7 +1571,10 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		assert.Equal(t, messageA, cert.TaskResponse, "Certificate should contain message A (the majority message)")
 
 		// Verify the aggregated signature only includes operators who signed message A
-		digestA := util.GetKeccak256Digest(messageA)
+		var taskHashForA [32]byte
+		copy(taskHashForA[:], common.HexToHash(taskId).Bytes())
+		digestA, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHashForA, messageA)
+		require.NoError(t, err)
 		assert.Equal(t, digestA, cert.TaskResponseDigest, "Certificate should use digest of message A")
 
 		// Verify operator 2 (who signed message B) is in the non-signers list
@@ -1563,7 +1602,10 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		assert.True(t, verified, "Aggregated signature should be valid for certificate digest")
 
 		// Additional verification: check digest groups to ensure proper segregation
-		digestB := util.GetKeccak256Digest(messageB)
+		var taskHashForB [32]byte
+		copy(taskHashForB[:], common.HexToHash(taskId).Bytes())
+		digestB, err := l1CC.CalculateTaskMessageHash(context.Background(), taskHashForB, messageB)
+		require.NoError(t, err)
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[digestA], "Digest A group should exist")
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[digestB], "Digest B group should exist")
 		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count,

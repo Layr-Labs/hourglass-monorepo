@@ -742,9 +742,12 @@ type EnhancedMockContractCaller struct {
 	curveTypes   map[string]config.CurveType
 }
 
-func (m *EnhancedMockContractCaller) CalculateTaskHashMessage(_ context.Context, taskHash [32]byte, result []byte) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+func (m *EnhancedMockContractCaller) CalculateTaskMessageHash(_ context.Context, taskHash [32]byte, result []byte) ([32]byte, error) {
+	combined := append(taskHash[:], result...)
+	hash := crypto.Keccak256Hash(combined)
+	var hashArray [32]byte
+	copy(hashArray[:], hash.Bytes())
+	return hashArray, nil
 }
 
 // NewEnhancedMockContractCaller creates a new enhanced mock contract caller
