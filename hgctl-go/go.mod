@@ -7,7 +7,7 @@ replace github.com/Layr-Labs/hourglass-monorepo/ponos => ../ponos
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Layr-Labs/crypto-libs v0.0.4
-	github.com/Layr-Labs/eigenlayer-contracts v1.8.0-testnet-final
+	github.com/Layr-Labs/eigenlayer-contracts v1.8.0-testnet-final.0.20250922221242-73644e201541
 	github.com/Layr-Labs/hourglass-monorepo/ponos v0.0.0-00010101000000-000000000000
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
