@@ -232,6 +232,13 @@ forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_UR
 taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
 
 # -----------------------------------------------------------------------------
+# Allowlist aggregator operator
+# -----------------------------------------------------------------------------
+echo "Allowlisting aggregator operator"
+export AGGREGATOR_PRIVATE_KEY="0x$operatorAccountPk"
+forge script script/local/AllowlistOperators.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "$avsTaskRegistrarAddress"
+
+# -----------------------------------------------------------------------------
 # Create operators
 # -----------------------------------------------------------------------------
 echo "Registering operators"
