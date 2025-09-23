@@ -223,11 +223,13 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	var taskIdBytes [32]byte
-	copy(taskIdBytes[:], taskResponse.TaskId)
-	outputTaskMessage, err := tra.L1ContractCaller.CalculateTaskMessageHash(ctx, taskIdBytes, taskResponse.Output)
+	taskIdBytes := common.HexToHash(taskResponse.TaskId).Bytes()
+	var taskMessageHash [32]byte
+	copy(taskMessageHash[:], taskIdBytes)
+
+	outputTaskMessage, err := tra.L1ContractCaller.CalculateTaskMessageHash(ctx, taskMessageHash, taskResponse.Output)
 	if err != nil {
-		return fmt.Errorf("failed to calculate task hash: %w", err)
+		return fmt.Errorf("failed to calculate task message hash: %w", err)
 	}
 
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputTaskMessage)

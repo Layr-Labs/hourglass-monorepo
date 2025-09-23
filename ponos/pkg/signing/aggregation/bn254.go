@@ -13,6 +13,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -237,9 +238,11 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	var taskMessage [32]byte
-	copy(taskMessage[:], taskResponse.TaskId)
-	outputTaskMessage, err := tra.l1ContractCaller.CalculateTaskMessageHash(ctx, taskMessage, taskResponse.Output)
+	taskIdBytes := common.HexToHash(taskResponse.TaskId).Bytes()
+	var taskMessageHash [32]byte
+	copy(taskMessageHash[:], taskIdBytes)
+
+	outputTaskMessage, err := tra.l1ContractCaller.CalculateTaskMessageHash(ctx, taskMessageHash, taskResponse.Output)
 	if err != nil {
 		return fmt.Errorf("failed to calculate task hash: %w", err)
 	}

@@ -405,8 +405,10 @@ func (e *Executor) signResult(ctx context.Context, task *performerTask.Performer
 
 	var digestToSign []byte
 	var signerToUse signer.ISigner
+
+	taskIdBytes := common.HexToHash(task.TaskID).Bytes()
 	var taskHash [32]byte
-	copy(taskHash[:], task.TaskID)
+	copy(taskHash[:], taskIdBytes)
 
 	outputDigestHash, err := e.l1ContractCaller.CalculateTaskMessageHash(ctx, taskHash, result.Result)
 	if err != nil {
