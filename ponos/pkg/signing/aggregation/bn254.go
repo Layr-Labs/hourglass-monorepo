@@ -238,9 +238,8 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
-	taskIdBytes := common.HexToHash(taskResponse.TaskId).Bytes()
 	var taskMessageHash [32]byte
-	copy(taskMessageHash[:], taskIdBytes)
+	copy(taskMessageHash[:], common.HexToHash(taskResponse.TaskId).Bytes())
 
 	outputTaskMessage, err := tra.l1ContractCaller.CalculateTaskMessageHash(ctx, taskMessageHash, taskResponse.Output)
 	if err != nil {

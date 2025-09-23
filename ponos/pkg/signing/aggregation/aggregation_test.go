@@ -115,10 +115,8 @@ func createSignedBN254TaskResult(
 	}
 
 	// Step 1: Sign the result (same for all operators)
-	// First convert taskId to [32]byte and calculate the task message hash
 	var taskHash [32]byte
-	taskIdBytes := common.HexToHash(taskId).Bytes()
-	copy(taskHash[:], taskIdBytes)
+	copy(taskHash[:], common.HexToHash(taskId).Bytes())
 	outputDigestHash, err := l1ContractCaller.CalculateTaskMessageHash(context.Background(), taskHash, output)
 	if err != nil {
 		return nil, err
@@ -179,10 +177,8 @@ func createSignedECDSATaskResult(
 	}
 
 	// Step 1: Sign the result (same for all operators)
-	// First convert taskId to [32]byte and calculate the task message hash
 	var taskHash [32]byte
-	taskIdBytes := common.HexToHash(taskId).Bytes()
-	copy(taskHash[:], taskIdBytes)
+	copy(taskHash[:], common.HexToHash(taskId).Bytes())
 	outputDigestHash, err := l1ContractCaller.CalculateTaskMessageHash(context.Background(), taskHash, output)
 	if err != nil {
 		return nil, err

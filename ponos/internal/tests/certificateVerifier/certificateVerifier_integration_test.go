@@ -409,7 +409,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	}
 
 	var taskIdBytes [32]byte
-	copy(taskIdBytes[:], taskId)
+	copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
 	messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, taskInputData)
 	if err != nil {
 		t.Fatalf("Failed to calculate task message hash: %v", err)

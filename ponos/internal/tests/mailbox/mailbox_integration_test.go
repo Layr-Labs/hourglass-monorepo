@@ -509,7 +509,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 			// Step 1: Sign the result using certificate digest (matching the executor)
 			var taskIdBytes [32]byte
-			copy(taskIdBytes[:], taskResult.TaskId)
+			copy(taskIdBytes[:], common.HexToHash(taskResult.TaskId).Bytes())
 			messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, outputResult)
 			if err != nil {
 				t.Errorf("Failed to calculate task message hash: %v", err)
