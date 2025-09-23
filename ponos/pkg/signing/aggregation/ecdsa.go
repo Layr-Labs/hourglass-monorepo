@@ -224,7 +224,7 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	}
 
 	var taskMessage [32]byte
-	copy(taskMessage[:], taskResponse.ResultSignature)
+	copy(taskMessage[:], taskResponse.TaskId)
 	outputTaskMessage, err := tra.L1ContractCaller.CalculateTaskMessageHash(ctx, taskMessage, taskResponse.Output)
 	if err != nil {
 		return fmt.Errorf("failed to calculate task hash: %w", err)
