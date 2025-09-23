@@ -3,6 +3,11 @@ package certificateVerifier
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
@@ -24,10 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"strings"
-	"sync"
-	"testing"
-	"time"
 )
 
 func Test_CertificateVerifier(t *testing.T) {
@@ -407,7 +408,12 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to create ECDSA task result aggregator: %v", err)
 	}
 
-	messageHash := util.GetKeccak256Digest(taskInputData)
+	var taskIdBytes [32]byte
+	copy(taskIdBytes[:], taskId)
+	messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, taskInputData)
+	if err != nil {
+		t.Fatalf("Failed to calculate task message hash: %v", err)
+	}
 	ecdsaDigestBytes, err := l1CC.CalculateECDSACertificateDigestBytes(
 		ctx,
 		operatorPeersWeight.RootReferenceTimestamp,
@@ -542,7 +548,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	valid, signers, err := l1CC.VerifyECDSACertificate(
 		ctx,
-		util.GetKeccak256Digest(finalCert.TaskResponse),
+		messageHash,
 		finalSig,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		taskResult.OperatorSetId,
