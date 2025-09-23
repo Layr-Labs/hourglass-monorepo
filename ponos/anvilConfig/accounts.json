@@ -1,37 +1,37 @@
 [
   {
     "name": "deployer",
-    "address": "0x31BeCD0376A36d1991dA7ee7d8a4535cfeE3419B",
-    "private_key": "055b25105a388ea3a75d047cde71dc20e78968d35717ce9e6b91ee4b7f68a00d"
+    "address": "0xd9b095a3382624483704a42cbed3dce39b4e426e",
+    "private_key": "003bb8d3819d6a6b801a71313801c7104f5d26a87ec8d71abc6b96b20f87f5b4"
   },
   {
     "name": "avs",
-    "address": "0xe8CD5D81A575F79CF066c6d37b906D51a2308035",
-    "private_key": "08e6c1680c80601ab07b4bf20c4c47d78c7702f352f346f1531ae70fffc711bf"
+    "address": "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B",
+    "private_key": "24d26c6b3af64cd6e3297e39f91738c662ceae85c3250dc3a853421c9f05b4a7"
   },
   {
     "name": "app",
-    "address": "0x87A20d14ca71bf4021aE6Da94d94eaD914d91C49",
-    "private_key": "a145c2aec43dbc29a49f433c5ab8b9a1e7d1e05439c65209b27078522889a36f"
+    "address": "0x328F90292b9fD8e25AA757D254cBDaBc39e45ee9",
+    "private_key": "f717c76dbbdefe55711d4e80dfd22cb21764c9e3be84ad6678f94c34947e489b"
   },
   {
     "name": "operator",
-    "address": "0x54316749B1613AA18782edDb9F21Cef1d95C7357",
-    "private_key": "89d7404a597f6210a673cd0d07ae3c43df0344d233a0957f7682afdd2922e3e0"
+    "address": "0x204AFca2CBE13C81140f16Fe05063D1b62B56d7D",
+    "private_key": "ebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"
   },
   {
     "name": "exec_operator",
-    "address": "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e",
-    "private_key": "474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+    "address": "0x8A07AFaD6AbF7cB9B9da595d0301Fef5145a0BE8",
+    "private_key": "afc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"
   },
   {
     "name": "agg_staker",
-    "address": "0x48D9aADeAa7FcdBb7335B9A3E5e293B5c0f9eb44",
-    "private_key": "2db0d10543b6782eeb51385f1d5394bd531823cff47e55b61424a5b3c7dd8c75"
+    "address": "0x9B37Dd36826A7c3B726ECBdAed42EbC964630173",
+    "private_key": "2ffceafd559b33c4591df4258b11f812bcdaee6a69e15e0269628428a2ff6ee3"
   },
   {
     "name": "exec_staker",
-    "address": "0x9d8Db8ecfF8c28A5398732a9E14990160AA08811",
-    "private_key": "5e8607d5b3e408e87361f93dabec9f469a14ed5a8be2533593924670039e4919"
+    "address": "0xb698fD4189e5C9F2d9939bf6364E0F4C3BBEf480",
+    "private_key": "5591b10c33325b5852c668def80185523cbc3d7bd87c2566b33d8638d3d79b3b"
   }
 ]
