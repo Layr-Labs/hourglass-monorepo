@@ -861,7 +861,7 @@ func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string, curveType config.CurveTy
 	if curveType == config.CurveTypeECDSA {
 		signingKeysSection = `  signingKeys:
     ecdsa:
-      privateKey: "0x89d7404a597f6210a673cd0d07ae3c43df0344d233a0957f7682afdd2922e3e0"`
+      privateKey: "0xebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"`
 	} else {
 		// BN254 keystore - using the actual test keystore from testKeys/aggregator
 		signingKeysSection = `  signingKeys:
@@ -917,15 +917,15 @@ chains:
     pollIntervalSeconds: 5
 l1ChainId: 31337
 operator:
-  address: "0xf701291C8276DFbc3A7ea29c13A16304Dbc9F845"
+  address: "0x204AFca2CBE13C81140f16Fe05063D1b62B56d7D"
   operatorPrivateKey:
-    privateKey: "0x97c00ea4a86647f8b5c885ec3a685999c4b59e8693dbe26172748084ba0deec7"
+    privateKey: "0xebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"
 %s
 avss:
-  - address: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
+  - address: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
     responseTimeout: 3000
     chainIds: [31338]
-    avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
+    avsRegistrarAddress: "0x005ba0ba463b0709380afdf8ff5045c461878c90"
 `, l1RpcUrl, l2RpcUrl, signingKeysSection)
 }
 
@@ -970,7 +970,7 @@ func getExecutorConfigYaml(mode string, curveType config.CurveType) string {
 	if curveType == config.CurveTypeECDSA {
 		signingKeysSection = `  signingKeys:
     ecdsa:
-      privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"`
+      privateKey: "0xafc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"`
 	} else {
 		signingKeysSection = fmt.Sprintf(`  signingKeys:
     bls:
@@ -983,9 +983,9 @@ func getExecutorConfigYaml(mode string, curveType config.CurveType) string {
 ---
 grpcPort: 9000
 operator:
-  address: "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e"
+  address: "0x8A07AFaD6AbF7cB9B9da595d0301Fef5145a0BE8"
   operatorPrivateKey:
-    privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+    privateKey: "0xafc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"
 %s
 l1Chain:
   rpcUrl: "http://localhost:8545"
@@ -1003,7 +1003,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
+  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "kubernetes"
   kubernetes:
@@ -1015,9 +1015,9 @@ avsPerformers:
 debug: true
 grpcPort: 9000
 operator:
-  address: "0xC8a0fCe66353F1b0b520eAFF3c4087284c8c740e"
+  address: "0x8A07AFaD6AbF7cB9B9da595d0301Fef5145a0BE8"
   operatorPrivateKey:
-    privateKey: "0x474b4caa1f774da696558bdadcee149744e17a6b7c3f0d8d8d7a77a65cf07816"
+    privateKey: "0xafc712ca53b54dd37c0fdd382213912e469e617a6e81a8defbc5affcbde4284b"
 %s
 l1Chain:
   rpcUrl: "http://localhost:8545"
@@ -1027,7 +1027,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0xe8CD5D81A575F79CF066c6d37b906D51a2308035"
+  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "docker"
 `, signingKeysSection)

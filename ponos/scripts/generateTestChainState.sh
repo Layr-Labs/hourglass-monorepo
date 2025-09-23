@@ -33,48 +33,39 @@ anvilL2RpcPort=9545
 anvilL2RpcUrl="http://localhost:${anvilL2RpcPort}"
 
 # -----------------------------------------------------------------------------
-# Generate new accounts instead of loading from file
+# Load accounts from anvilConfig/accounts.json for reproducible testing
 # -----------------------------------------------------------------------------
-echo "Generating new accounts for testing..."
+echo "Loading accounts from anvilConfig/accounts.json..."
 
-# Function to generate a new account
-generate_account() {
-    local name=$1
-    # Generate a new private key and address
-    local wallet_output=$(cast wallet new)
-    local address=$(echo "$wallet_output" | grep "Address:" | awk '{print $2}')
-    local private_key=$(echo "$wallet_output" | grep "Private key:" | awk '{print $3}' | sed 's/0x//')
-    echo "{\"name\": \"$name\", \"private_key\": \"$private_key\", \"address\": \"$address\"}"
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ACCOUNTS_FILE="$SCRIPT_DIR/../anvilConfig/accounts.json"
 
-# Generate all required accounts
-DEPLOY_ACCOUNT=$(generate_account "deployer")
-deployAccountPk=$(echo $DEPLOY_ACCOUNT | jq -r '.private_key')
-deployAccountAddress=$(echo $DEPLOY_ACCOUNT | jq -r '.address')
+if [ ! -f "$ACCOUNTS_FILE" ]; then
+    echo "Error: accounts.json not found at $ACCOUNTS_FILE"
+    exit 1
+fi
 
-AVS_ACCOUNT=$(generate_account "avs")
-avsAccountPk=$(echo $AVS_ACCOUNT | jq -r '.private_key')
-avsAccountAddress=$(echo $AVS_ACCOUNT | jq -r '.address')
+# Load accounts from JSON file
+deployAccountPk=$(jq -r '.[] | select(.name == "deployer") | .private_key' "$ACCOUNTS_FILE")
+deployAccountAddress=$(jq -r '.[] | select(.name == "deployer") | .address' "$ACCOUNTS_FILE")
 
-APP_ACCOUNT=$(generate_account "app")
-appAccountPk=$(echo $APP_ACCOUNT | jq -r '.private_key')
-appAccountAddress=$(echo $APP_ACCOUNT | jq -r '.address')
+avsAccountPk=$(jq -r '.[] | select(.name == "avs") | .private_key' "$ACCOUNTS_FILE")
+avsAccountAddress=$(jq -r '.[] | select(.name == "avs") | .address' "$ACCOUNTS_FILE")
 
-OPERATOR_ACCOUNT=$(generate_account "operator")
-operatorAccountPk=$(echo $OPERATOR_ACCOUNT | jq -r '.private_key')
-operatorAccountAddress=$(echo $OPERATOR_ACCOUNT | jq -r '.address')
+appAccountPk=$(jq -r '.[] | select(.name == "app") | .private_key' "$ACCOUNTS_FILE")
+appAccountAddress=$(jq -r '.[] | select(.name == "app") | .address' "$ACCOUNTS_FILE")
 
-EXEC_OPERATOR_ACCOUNT=$(generate_account "exec_operator")
-execOperatorAccountPk=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.private_key')
-execOperatorAccountAddress=$(echo $EXEC_OPERATOR_ACCOUNT | jq -r '.address')
+operatorAccountPk=$(jq -r '.[] | select(.name == "operator") | .private_key' "$ACCOUNTS_FILE")
+operatorAccountAddress=$(jq -r '.[] | select(.name == "operator") | .address' "$ACCOUNTS_FILE")
 
-AGG_STAKER_ACCOUNT=$(generate_account "agg_staker")
-aggStakerAccountPk=$(echo $AGG_STAKER_ACCOUNT | jq -r '.private_key')
-aggStakerAccountAddress=$(echo $AGG_STAKER_ACCOUNT | jq -r '.address')
+execOperatorAccountPk=$(jq -r '.[] | select(.name == "exec_operator") | .private_key' "$ACCOUNTS_FILE")
+execOperatorAccountAddress=$(jq -r '.[] | select(.name == "exec_operator") | .address' "$ACCOUNTS_FILE")
 
-EXEC_STAKER_ACCOUNT=$(generate_account "exec_staker")
-execStakerAccountPk=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.private_key')
-execStakerAccountAddress=$(echo $EXEC_STAKER_ACCOUNT | jq -r '.address')
+aggStakerAccountPk=$(jq -r '.[] | select(.name == "agg_staker") | .private_key' "$ACCOUNTS_FILE")
+aggStakerAccountAddress=$(jq -r '.[] | select(.name == "agg_staker") | .address' "$ACCOUNTS_FILE")
+
+execStakerAccountPk=$(jq -r '.[] | select(.name == "exec_staker") | .private_key' "$ACCOUNTS_FILE")
+execStakerAccountAddress=$(jq -r '.[] | select(.name == "exec_staker") | .address' "$ACCOUNTS_FILE")
 
 # Export environment variables (with 0x prefix for Forge compatibility)
 export PRIVATE_KEY_DEPLOYER="0x$deployAccountPk"
