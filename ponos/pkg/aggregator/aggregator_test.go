@@ -922,7 +922,7 @@ operator:
     privateKey: "0xebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"
 %s
 avss:
-  - address: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
+  - address: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
     responseTimeout: 3000
     chainIds: [31338]
     avsRegistrarAddress: "0x005ba0ba463b0709380afdf8ff5045c461878c90"
@@ -1003,8 +1003,8 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
-  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
+  avsAddress: "%s"
+  avsRegistrarAddress: "%s"
   deploymentMode: "kubernetes"
   kubernetes:
     endpointOverride: "localhost:30080"
@@ -1027,8 +1027,8 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
-  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
+  avsAddress: "%s"
+  avsRegistrarAddress: "%s"
   deploymentMode: "docker"
 `, signingKeysSection)
 	}
