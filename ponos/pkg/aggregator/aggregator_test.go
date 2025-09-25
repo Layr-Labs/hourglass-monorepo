@@ -1003,8 +1003,8 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "%s"
-  avsRegistrarAddress: "%s"
+  avsAddress: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
+  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "kubernetes"
   kubernetes:
     endpointOverride: "localhost:30080"
@@ -1027,8 +1027,8 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "%s"
-  avsRegistrarAddress: "%s"
+  avsAddress: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
+  avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "docker"
 `, signingKeysSection)
 	}
