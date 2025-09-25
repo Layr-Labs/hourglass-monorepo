@@ -547,7 +547,6 @@ func Test_CertificateVerifier(t *testing.T) {
 	)
 
 	valid, signers, err := l1CC.VerifyECDSACertificate(
-		ctx,
 		messageHash,
 		finalSig,
 		common.HexToAddress(chainConfig.AVSAccountAddress),

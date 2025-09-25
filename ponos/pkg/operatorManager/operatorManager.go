@@ -30,6 +30,7 @@ type PeerWeight struct {
 	Operators              []*peering.OperatorPeerInfo
 	CurveType              config.CurveType
 	OperatorInfoTreeRoot   [32]byte
+	OperatorInfos          []contractCaller.BN254OperatorInfo
 }
 
 type OperatorManager struct {
@@ -74,14 +75,6 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 	task *types.Task,
 ) (*PeerWeight, error) {
 
-	om.logger.Sugar().Infow("Getting executor peers and weights for task",
-		zap.String("taskId", task.TaskId),
-		zap.Uint32("chainId", uint32(task.ChainId)),
-		zap.Uint64("l1ReferenceBlockNumber", task.L1ReferenceBlockNumber),
-		zap.Uint32("referenceTimestamp", task.ReferenceTimestamp),
-		zap.Uint32("operatorSetId", task.OperatorSetId),
-	)
-
 	l1ChainCc, err := om.getContractCallerForChainId(om.config.L1ChainId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
@@ -116,6 +109,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 		Operators:              filteredOperators,
 		CurveType:              curveType,
 		OperatorInfoTreeRoot:   tableData.OperatorInfoTreeRoot,
+		OperatorInfos:          tableData.OperatorInfos,
 	}, nil
 }
 
@@ -274,24 +268,6 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		zap.String("operatorInfoTreeRoot", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
 	)
 
-	// Check if OperatorInfoTreeRoot is empty and log a warning
-	emptyRoot := [32]byte{}
-	if tableData.OperatorInfoTreeRoot == emptyRoot {
-		om.logger.Sugar().Warnw("OperatorInfoTreeRoot is EMPTY after fetching table data",
-			zap.String("avsAddress", om.config.AvsAddress),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.String("curveType", curveType.String()),
-			zap.Uint64("blockForTableData", blockForTableData),
-		)
-	} else {
-		om.logger.Sugar().Infow("OperatorInfoTreeRoot is SET",
-			zap.String("avsAddress", om.config.AvsAddress),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.String("curveType", curveType.String()),
-			zap.String("root", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
-		)
-	}
-
 	operatorWeights := make(map[string][]*big.Int, len(tableData.Operators))
 	for i, operator := range tableData.Operators {
 		weight := tableData.OperatorWeights[i]
@@ -333,6 +309,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		Operators:              operators,
 		CurveType:              curveType,
 		OperatorInfoTreeRoot:   tableData.OperatorInfoTreeRoot,
+		OperatorInfos:          tableData.OperatorInfos,
 	}, nil
 }
 
@@ -378,6 +355,7 @@ func (om *OperatorManager) fetchOperatorTableData(
 		zap.Uint64("l1BlockNumber", l1BlockNumber),
 		zap.Int("operatorCount", len(tableData.Operators)),
 		zap.String("operatorInfoTreeRoot", fmt.Sprintf("0x%x", tableData.OperatorInfoTreeRoot)),
+		zap.Int("operatorInfosCount", len(tableData.OperatorInfos)),
 	)
 
 	// Check if OperatorInfoTreeRoot is empty

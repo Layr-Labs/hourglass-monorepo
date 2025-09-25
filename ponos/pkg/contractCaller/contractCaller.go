@@ -23,8 +23,8 @@ type OperatorTableData struct {
 	LatestReferenceTimestamp   uint32
 	LatestReferenceBlockNumber uint32
 	TableUpdaterAddresses      map[uint64]common.Address
-	OperatorInfoTreeRoot       [32]byte            // Tree root for merkle proof validation
-	OperatorInfos              []BN254OperatorInfo // All operator infos for merkle tree construction
+	OperatorInfoTreeRoot       [32]byte
+	OperatorInfos              []BN254OperatorInfo
 }
 
 // BN254OperatorInfo contains BN254 operator public key and weights for merkle proof generation
@@ -69,6 +69,7 @@ type BN254TaskResultParams struct {
 	SignersPublicKey       *bn254.G2Point
 	NonSignerOperators     []BN254NonSignerOperator
 	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
+	OperatorInfos          []BN254OperatorInfo
 }
 
 // BN254OperatorWithWeights contains operator info including weights for merkle proof generation
@@ -118,6 +119,16 @@ type IContractCaller interface {
 		params *ECDSATaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
+
+	VerifyBN254Certificate(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		params *BN254TaskResultParams,
+		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
+		thresholdPercentage uint16,
+	) (bool, error)
 
 	GetAVSConfig(avsAddress string, blockNumber uint64) (*AVSConfig, error)
 

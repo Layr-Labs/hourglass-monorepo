@@ -326,7 +326,6 @@ func DelegateStakeToOperator(
 
 	if _, err := stakerCc.DelegateToOperator(
 		ctx,
-		common.HexToAddress(stakerAddress),
 		common.HexToAddress(operatorAddress),
 	); err != nil {
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)

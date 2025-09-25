@@ -362,7 +362,6 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
 	}
 
-	// TODO: populate and use tra avs address and operator address to properly verify the expected result
 	authData := &types.AuthSignatureData{
 		TaskId:          tra.TaskId,
 		AvsAddress:      taskResponse.AvsAddress,

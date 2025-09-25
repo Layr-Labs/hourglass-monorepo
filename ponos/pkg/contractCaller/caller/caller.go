@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
-	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/BN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -28,13 +27,13 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	geth "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/wealdtech/go-merkletree/v2"
+	merkletree "github.com/wealdtech/go-merkletree/v2"
 	"github.com/wealdtech/go-merkletree/v2/keccak256"
 	"go.uber.org/zap"
 )
@@ -215,12 +214,17 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 	digest := params.TaskResponseDigest
 
-	allOperators := make([]OperatorInfo, len(params.SortedOperatorsByIndex))
-	for i, op := range params.SortedOperatorsByIndex {
+	var allOperators []OperatorInfo
+	if len(params.OperatorInfos) <= 0 {
+		return nil, fmt.Errorf("OperatorInfos must be provided for BN254 task submission")
+	}
+
+	allOperators = make([]OperatorInfo, len(params.OperatorInfos))
+	for i, info := range params.OperatorInfos {
 		allOperators[i] = OperatorInfo{
-			PubkeyX: new(big.Int).SetBytes(op.PublicKey[0:32]),
-			PubkeyY: new(big.Int).SetBytes(op.PublicKey[32:64]),
-			Weights: op.Weights,
+			PubkeyX: info.PubkeyX,
+			PubkeyY: info.PubkeyY,
+			Weights: info.Weights,
 		}
 	}
 
@@ -238,7 +242,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		zap.Int("numOperators", len(allOperators)),
 	)
 
-	proofs, err := cc.generateOperatorMerkleProofs(ctx, params.NonSignerOperators, operatorInfoTreeRoot, allOperators)
+	proofs, err := cc.generateOperatorMerkleProofs(params.NonSignerOperators, operatorInfoTreeRoot, allOperators)
 	if err != nil {
 		cc.logger.Sugar().Warnw("Failed to generate merkle proofs", zap.Error(err))
 		return nil, fmt.Errorf("failed to generate merkle proofs for non-signers: %w", err)
@@ -247,10 +251,13 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(params.NonSignerOperators))
 	for _, nonSigner := range params.NonSignerOperators {
 
+		// Check bounds before accessing SortedOperatorsByIndex
 		var operatorWeights []*big.Int
-		if int(nonSigner.OperatorIndex) < len(params.SortedOperatorsByIndex) {
-			operatorWeights = params.SortedOperatorsByIndex[nonSigner.OperatorIndex].Weights
+		if int(nonSigner.OperatorIndex) >= len(params.SortedOperatorsByIndex) {
+			return nil, fmt.Errorf("non-signer operator index %d out of range for SortedOperatorsByIndex (length %d)",
+				nonSigner.OperatorIndex, len(params.SortedOperatorsByIndex))
 		}
+		operatorWeights = params.SortedOperatorsByIndex[nonSigner.OperatorIndex].Weights
 
 		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
 			OperatorIndex:     nonSigner.OperatorIndex,
@@ -264,11 +271,11 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 			},
 		}
 
-		if proofs != nil {
-			if proof, ok := proofs[nonSigner.OperatorIndex]; ok {
-				witness.OperatorInfoProof = proof
-			}
+		proof, ok := proofs[nonSigner.OperatorIndex]
+		if !ok {
+			return nil, fmt.Errorf("missing merkle proof for non-signer operator at index %d", nonSigner.OperatorIndex)
 		}
+		witness.OperatorInfoProof = proof
 
 		nonSignerWitnesses = append(nonSignerWitnesses, witness)
 	}
@@ -491,26 +498,37 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, op
 		return common.HexToAddress(address)
 	})
 
-	allMembers := make([]*peering.OperatorPeerInfo, 0)
-	for i, member := range operatorSetMemberAddrs {
-		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, 0)
+	allMembers := make([]*peering.OperatorPeerInfo, len(operatorSetMemberAddrs))
+	for index, member := range operatorSetMemberAddrs {
+		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, blockNumber)
+
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
-			return nil, err
+			continue
 		}
-		// Set the operator's index in this operator set based on their position in the members array
-		operatorSetInfo.OperatorIndex = uint32(i)
+		operatorSetInfo.OperatorIndex = uint32(index)
 
-		allMembers = append(allMembers, &peering.OperatorPeerInfo{
-			OperatorAddress: operatorSetStringAddrs[i],
+		allMembers[index] = &peering.OperatorPeerInfo{
+			OperatorAddress: operatorSetStringAddrs[index],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
-		})
+		}
 	}
+
+	if len(allMembers) == 0 {
+		return nil, fmt.Errorf("no valid operators found")
+	}
+
 	return allMembers, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error) {
-	opset := IKeyRegistrar.OperatorSet{
+func (cc *ContractCaller) GetOperatorSetDetailsForOperator(
+	operatorAddress common.Address,
+	avsAddress string,
+	operatorSetId uint32,
+	blockNumber uint64,
+) (*peering.OperatorSet, error) {
+
+	opSet := IKeyRegistrar.OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
@@ -537,7 +555,7 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
 
-	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, opset)
+	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, opSet)
 	if err != nil {
 		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
 		return nil, err
@@ -549,14 +567,14 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		return nil, fmt.Errorf("failed to convert curve type: %w", err)
 	}
 
-	peeringOpset := &peering.OperatorSet{
+	peeringOpSet := &peering.OperatorSet{
 		OperatorSetID:  operatorSetId,
 		NetworkAddress: socket,
 		CurveType:      curveType,
 	}
 
 	if curveType == config.CurveTypeBN254 {
-		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(blockHeightOpts, opset, operatorAddress)
+		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(blockHeightOpts, opSet, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
@@ -578,28 +596,31 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 				},
 			},
 		)
+
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err
 		}
-		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+
+		peeringOpSet.WrappedPublicKey = peering.WrappedPublicKey{
 			PublicKey: pubKey,
 		}
-		return peeringOpset, nil
+
+		return peeringOpSet, nil
 	}
 
 	if curveType == config.CurveTypeECDSA {
-		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(blockHeightOpts, opset, operatorAddress)
+		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(blockHeightOpts, opSet, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
 		}
-		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+		peeringOpSet.WrappedPublicKey = peering.WrappedPublicKey{
 			ECDSAAddress: ecdsaAddr,
 		}
-		return peeringOpset, nil
+		return peeringOpSet, nil
 	}
-	cc.logger.Sugar().Errorf("unsupported curve type: %s", curveType)
+
 	return nil, fmt.Errorf("unsupported curve type: %s", curveType)
 }
 
@@ -751,14 +772,6 @@ func (cc *ContractCaller) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, e
 	)
 }
 
-func (cc *ContractCaller) CreateOperatorRegistrationPayload(
-	publicKey *bn254.PublicKey,
-	signature *bn254.Signature,
-	socket string,
-) ([]byte, error) {
-	return nil, nil
-}
-
 // ConfigureAVSOperatorSet is called on the KeyRegistry to configure an operator set for a given AVS,
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
@@ -857,7 +870,6 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 		zap.Any("receipt", createdOperator),
 	)
 
-	// Register socket with AVS
 	cc.logger.Sugar().Infow("Registering operator socket with AVS")
 	socketReceipt, err := cc.registerOperatorWithAvs(ctx, operatorAddress, avsAddress, operatorSetIds, socket)
 	if err != nil {
@@ -867,7 +879,6 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 		zap.Any("receipt", socketReceipt),
 	)
 
-	// Return the socket registration receipt as the primary receipt
 	return socketReceipt, nil
 }
 
@@ -877,6 +888,7 @@ func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId
 	if blockNumber > 0 {
 		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
 	}
+
 	operatorSet, err := cc.allocationManager.GetMembers(blockHeightOpts, IAllocationManager.OperatorSet{
 		Avs: avsAddr,
 		Id:  operatorSetId,
@@ -884,9 +896,10 @@ func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set members: %w", err)
 	}
+
 	members := make([]string, len(operatorSet))
-	for i, member := range operatorSet {
-		members[i] = member.String()
+	for index, member := range operatorSet {
+		members[index] = member.String()
 	}
 	return members, nil
 }
@@ -921,20 +934,6 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 	return cc.signAndSendTransaction(ctx, tx, "RegisterAsOperator")
 }
 
-func encodeString(str string) ([]byte, error) {
-	// Define the ABI for a single string parameter
-	stringType, _ := abi.NewType("string", "", nil)
-	arguments := abi.Arguments{{Type: stringType}}
-
-	// Encode the string
-	encoded, err := arguments.Pack(str)
-	if err != nil {
-		return nil, err
-	}
-
-	return encoded, nil
-}
-
 func (cc *ContractCaller) registerOperatorWithAvs(
 	ctx context.Context,
 	operatorAddress common.Address,
@@ -947,7 +946,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
-	encodedSocket, err := encodeString(socket)
+	encodedSocket, err := util.EncodeString(socket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode socket string: %w", err)
 	}
@@ -963,11 +962,6 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	}
 
 	return cc.signAndSendTransaction(ctx, tx, "registerOperatorWithAvs")
-}
-
-//nolint:unused
-func (cc *ContractCaller) getTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
-	return cc.signer.GetTransactOpts(ctx)
 }
 
 func (cc *ContractCaller) buildTransactionOpts(ctx context.Context) (*bind.TransactOpts, error) {
@@ -1067,7 +1061,6 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		return nil, fmt.Errorf("failed to get latest reference time and block: %w", err)
 	}
 
-	// Initialize return data structure
 	operatorTableData := &contractCaller.OperatorTableData{
 		OperatorWeights:            operatorWeights.Weights,
 		Operators:                  operatorWeights.Operators,
@@ -1076,21 +1069,12 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		TableUpdaterAddresses:      tableUpdaterAddressMap,
 	}
 
-	// For BN254 curve type, retrieve operator infos and tree root
 	if curveType == config.CurveTypeBN254 {
-		cc.logger.Sugar().Infow("Fetching BN254 operator infos and tree root",
-			zap.String("avsAddress", avsAddress.String()),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.Uint32("latestReferenceTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
-		)
-
-		// Create BN254 table calculator caller
 		bn254TableCalculator, err := IBN254TableCalculator.NewIBN254TableCalculatorCaller(otcAddr, cc.ethclient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create BN254 table calculator caller: %w", err)
 		}
 
-		// Get all operator infos from the table calculator
 		operatorInfos, err := bn254TableCalculator.GetOperatorInfos(&bind.CallOpts{
 			Context:     ctx,
 			BlockNumber: new(big.Int).SetUint64(atBlockNumber),
@@ -1099,16 +1083,8 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			Id:  operatorSetId,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get operator infos: %w", err)
+			return nil, fmt.Errorf("failed to get operator infos from BN254TableCalculator: %w", err)
 		}
-
-		// Get operator set info from BN254CertificateVerifier (includes tree root)
-		cc.logger.Sugar().Infow("Getting operator set info from BN254CertificateVerifier",
-			zap.String("avsAddress", avsAddress.String()),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.Uint32("referenceTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
-			zap.Uint64("atBlockNumber", atBlockNumber),
-		)
 
 		operatorSetInfo, err := cc.bn254CertVerifier.GetOperatorSetInfo(&bind.CallOpts{
 			Context:     ctx,
@@ -1121,12 +1097,6 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			return nil, fmt.Errorf("failed to get operator set info from BN254 verifier: %w", err)
 		}
 
-		cc.logger.Sugar().Infow("Retrieved operator set info from BN254CertificateVerifier",
-			zap.String("operatorInfoTreeRoot", hexutil.Encode(operatorSetInfo.OperatorInfoTreeRoot[:])),
-			zap.Uint32("numOperators", uint32(operatorSetInfo.NumOperators.Uint64())),
-		)
-
-		// Convert operator infos to our internal format
 		operatorTableData.OperatorInfos = make([]contractCaller.BN254OperatorInfo, len(operatorInfos))
 		for i, info := range operatorInfos {
 			operatorTableData.OperatorInfos[i] = contractCaller.BN254OperatorInfo{
@@ -1136,13 +1106,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			}
 		}
 
-		// Store the operator info tree root
 		operatorTableData.OperatorInfoTreeRoot = operatorSetInfo.OperatorInfoTreeRoot
-
-		cc.logger.Sugar().Infow("Successfully retrieved BN254 operator data",
-			zap.String("operatorInfoTreeRoot", hexutil.Encode(operatorSetInfo.OperatorInfoTreeRoot[:])),
-			zap.Int("numOperatorInfos", len(operatorTableData.OperatorInfos)),
-		)
 	}
 
 	return operatorTableData, nil
@@ -1196,9 +1160,7 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 
 		mailboxCfg := ITaskMailbox.ITaskMailboxTypesExecutorOperatorSetTaskConfig{
 			TaskHook: taskHookAddress,
-			//FeeToken:                 common.HexToAddress("0x"),
-			//FeeCollector:             common.HexToAddress("0x"),
-			TaskSLA: big.NewInt(60),
+			TaskSLA:  big.NewInt(60),
 			Consensus: ITaskMailbox.ITaskMailboxTypesConsensus{
 				ConsensusType: 1,
 				Value:         util.AbiEncodeUint16(6667), // 66.67% consensus threshold
@@ -1243,7 +1205,6 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 
 func (cc *ContractCaller) DelegateToOperator(
 	ctx context.Context,
-	stakerAddress common.Address,
 	operatorAddress common.Address,
 ) (*types.Receipt, error) {
 
@@ -1323,7 +1284,6 @@ func (cc *ContractCaller) ModifyAllocations(
 }
 
 func (cc *ContractCaller) VerifyECDSACertificate(
-	ctx context.Context,
 	messageHash [32]byte,
 	signature []byte,
 	avsAddress common.Address,
@@ -1456,39 +1416,213 @@ func (cc *ContractCaller) GetTableCalculatorAddress(curveType config.CurveType) 
 	}
 }
 
-func (cc *ContractCaller) generateOperatorMerkleProofs(
+// VerifyBN254Certificate verifies a BN254 certificate directly with the BN254CertificateVerifier contract
+// This replicates the certificate construction from SubmitBN254TaskResult and calls verifyCertificateProportion directly
+// Returns true if the certificate meets the threshold percentage (e.g., 2500 for 25%)
+//
+// Testing use only
+func (cc *ContractCaller) VerifyBN254Certificate(
 	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	params *contractCaller.BN254TaskResultParams,
+	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
+	thresholdPercentage uint16,
+) (bool, error) {
+	g1Point := &bn254.G1Point{
+		G1Affine: params.SignersSignature.GetG1Point(),
+	}
+
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return false, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
+
+	g2Bytes, err := params.SignersPublicKey.ToPrecompileFormat()
+	if err != nil {
+		return false, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	digest := params.TaskResponseDigest
+
+	var allOperators []OperatorInfo
+	if len(params.OperatorInfos) > 0 {
+		allOperators = make([]OperatorInfo, len(params.OperatorInfos))
+		for i, info := range params.OperatorInfos {
+			allOperators[i] = OperatorInfo{
+				PubkeyX: info.PubkeyX,
+				PubkeyY: info.PubkeyY,
+				Weights: info.Weights,
+			}
+		}
+	} else {
+		return false, fmt.Errorf("OperatorInfos must be provided for BN254 merkle proof generation")
+	}
+
+	proofs, err := cc.generateOperatorMerkleProofs(params.NonSignerOperators, operatorInfoTreeRoot, allOperators)
+	if err != nil {
+		return false, fmt.Errorf("failed to generate merkle proofs for non-signers: %w", err)
+	}
+
+	nonSignerWitnesses := make([]IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(params.NonSignerOperators))
+	for _, nonSigner := range params.NonSignerOperators {
+		if int(nonSigner.OperatorIndex) >= len(allOperators) {
+			return false, fmt.Errorf("non-signer operator index %d out of range (have %d operators)",
+				nonSigner.OperatorIndex, len(allOperators))
+		}
+
+		proof, ok := proofs[nonSigner.OperatorIndex]
+		if !ok {
+			return false, fmt.Errorf("missing merkle proof for non-signer operator at index %d", nonSigner.OperatorIndex)
+		}
+
+		operatorInfo := allOperators[nonSigner.OperatorIndex]
+
+		witness := IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
+			OperatorIndex:     nonSigner.OperatorIndex,
+			OperatorInfoProof: proof,
+			OperatorInfo: IBN254CertificateVerifier.IOperatorTableCalculatorTypesBN254OperatorInfo{
+				Pubkey: IBN254CertificateVerifier.BN254G1Point{
+					X: operatorInfo.PubkeyX,
+					Y: operatorInfo.PubkeyY,
+				},
+				Weights: operatorInfo.Weights,
+			},
+		}
+		nonSignerWitnesses = append(nonSignerWitnesses, witness)
+	}
+
+	cert := IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254Certificate{
+		ReferenceTimestamp: globalTableRootReferenceTimestamp,
+		MessageHash:        digest,
+		Signature: IBN254CertificateVerifier.BN254G1Point{
+			X: new(big.Int).SetBytes(g1Bytes[0:32]),
+			Y: new(big.Int).SetBytes(g1Bytes[32:64]),
+		},
+		Apk: IBN254CertificateVerifier.BN254G2Point{
+			X: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[0:32]),
+				new(big.Int).SetBytes(g2Bytes[32:64]),
+			},
+			Y: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[64:96]),
+				new(big.Int).SetBytes(g2Bytes[96:128]),
+			},
+		},
+		NonSignerWitnesses: nonSignerWitnesses,
+	}
+
+	// Call verifyCertificateProportion directly to get a bool result
+	operatorSet := IBN254CertificateVerifier.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}
+
+	// Log what we're about to send to the verifier
+	cc.logger.Sugar().Infow("Calling verifyCertificateProportion",
+		"contractAddress", cc.coreContracts.BN254CertificateVerifier,
+		"threshold", fmt.Sprintf("%d/10000 (%.1f%%)", thresholdPercentage, float64(thresholdPercentage)/100),
+	)
+
+	opts, err := cc.signer.GetTransactOpts(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get transaction options: %w", err)
+	}
+
+	// Get the parsed ABI from the metadata
+	parsedABI, err := IBN254CertificateVerifier.IBN254CertificateVerifierMetaData.GetAbi()
+	if err != nil {
+		return false, fmt.Errorf("failed to get ABI: %w", err)
+	}
+
+	// Pack the method call data
+	data, err := parsedABI.Pack(
+		"verifyCertificateProportion",
+		operatorSet,
+		cert,
+		[]uint16{thresholdPercentage},
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to pack method data: %w", err)
+	}
+
+	contractAddr := common.HexToAddress(cc.coreContracts.BN254CertificateVerifier)
+	callMsg := geth.CallMsg{
+		From: opts.From,
+		To:   &contractAddr,
+		Data: data,
+	}
+
+	// TODO: set block number
+	result, err := cc.ethclient.CallContract(ctx, callMsg, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to call contract: %w", err)
+	}
+
+	// Unpack the boolean result from the bytes
+	var verified bool
+	err = parsedABI.UnpackIntoInterface(&verified, "verifyCertificateProportion", result)
+	if err != nil {
+		return false, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("Certificate verification simulation result",
+		"verified", verified,
+		"avsAddress", avsAddress.Hex(),
+		"operatorSetId", operatorSetId,
+		"threshold", thresholdPercentage,
+	)
+
+	// Only proceed with transaction if verification would succeed
+	if !verified {
+		return false, nil
+	}
+
+	tx, err := cc.bn254CertVerifier.VerifyCertificateProportion(
+		opts,
+		operatorSet,
+		cert,
+		[]uint16{thresholdPercentage},
+	)
+	if err != nil {
+		return false, fmt.Errorf("certificate verification failed: %w", err)
+	}
+
+	// Send the transaction and wait for receipt
+	receipt, err := cc.signAndSendTransaction(ctx, tx, "VerifyBN254Certificate")
+	if err != nil {
+		return false, fmt.Errorf("failed to send verification transaction: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("BN254 certificate verification result",
+		"verified", verified,
+		"avsAddress", avsAddress.Hex(),
+		"operatorSetId", operatorSetId,
+		"threshold", thresholdPercentage,
+		"txHash", receipt.TxHash.Hex(),
+		"gasUsed", receipt.GasUsed,
+	)
+
+	return verified, nil
+}
+
+func (cc *ContractCaller) generateOperatorMerkleProofs(
 	nonSignerOperators []contractCaller.BN254NonSignerOperator,
 	operatorInfoTreeRoot [32]byte,
-	allOperators []OperatorInfo, // All operators in the set with their weights
+	allOperators []OperatorInfo,
 ) (map[uint32][]byte, error) {
-	// Build merkle tree leaves for all operators
+
 	leaves := make([][]byte, len(allOperators))
-
-	// Create a concrete BN254CertificateVerifier instance to access calculateOperatorInfoLeaf
-	bn254CertVerifier, err := BN254CertificateVerifier.NewBN254CertificateVerifier(common.HexToAddress(cc.coreContracts.BN254CertificateVerifier), cc.ethclient)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create BN254CertificateVerifier: %w", err)
-	}
-
 	for i, op := range allOperators {
-		// Use the contract's calculateOperatorInfoLeaf function
-		operatorInfo := BN254CertificateVerifier.IOperatorTableCalculatorTypesBN254OperatorInfo{
-			Pubkey: BN254CertificateVerifier.BN254G1Point{
-				X: op.PubkeyX,
-				Y: op.PubkeyY,
-			},
-			Weights: op.Weights,
+		encodedLeaf, err := util.EncodeOperatorInfoLeaf(op.PubkeyX, op.PubkeyY, op.Weights)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode leaf for operator %d: %w", i, err)
 		}
 
-		leaf, err := bn254CertVerifier.CalculateOperatorInfoLeaf(&bind.CallOpts{Context: ctx}, operatorInfo)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate leaf for operator %d: %w", i, err)
-		}
-		leaves[i] = leaf[:]
+		leaves[i] = encodedLeaf
 	}
 
-	// Create merkle tree
 	tree, err := merkletree.NewTree(
 		merkletree.WithData(leaves),
 		merkletree.WithHashType(keccak256.New()),
@@ -1497,13 +1631,19 @@ func (cc *ContractCaller) generateOperatorMerkleProofs(
 		return nil, fmt.Errorf("failed to create merkle tree: %w", err)
 	}
 
-	// Verify the root matches
-	if common.BytesToHash(tree.Root()) != operatorInfoTreeRoot {
+	calculatedRoot := tree.Root()
+
+	if !bytes.Equal(calculatedRoot, operatorInfoTreeRoot[:]) {
+		cc.logger.Sugar().Errorw("Merkle root mismatch",
+			"calculatedRoot", fmt.Sprintf("0x%x", calculatedRoot),
+			"expectedRoot", fmt.Sprintf("0x%x", operatorInfoTreeRoot),
+			"numLeaves", len(leaves),
+		)
+
 		return nil, fmt.Errorf("merkle root mismatch: calculated %x, expected %x",
-			tree.Root(), operatorInfoTreeRoot)
+			calculatedRoot, operatorInfoTreeRoot)
 	}
 
-	// Generate proofs for non-signers
 	proofs := make(map[uint32][]byte)
 	for _, nonSigner := range nonSignerOperators {
 		proof, err := tree.GenerateProofWithIndex(uint64(nonSigner.OperatorIndex), 0)
@@ -1512,14 +1652,21 @@ func (cc *ContractCaller) generateOperatorMerkleProofs(
 				nonSigner.OperatorIndex, err)
 		}
 
-		// Flatten the proof hashes
-		proofBytes := make([]byte, 0, len(proof.Hashes)*32)
-		for _, hash := range proof.Hashes {
-			proofBytes = append(proofBytes, hash...)
-		}
-
+		proofBytes := flattenProofHashes(proof.Hashes)
 		proofs[nonSigner.OperatorIndex] = proofBytes
 	}
 
 	return proofs, nil
+}
+
+func flattenProofHashes(hashes [][]byte) []byte {
+	if len(hashes) == 0 {
+		return []byte{}
+	}
+
+	proofBytes := make([]byte, 0, len(hashes)*32)
+	for _, hash := range hashes {
+		proofBytes = append(proofBytes, hash...)
+	}
+	return proofBytes
 }
