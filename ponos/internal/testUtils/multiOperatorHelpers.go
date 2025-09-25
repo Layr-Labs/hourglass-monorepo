@@ -21,29 +21,29 @@ import (
 
 // MultiOperatorTestConfig contains configuration for multi-operator tests
 type MultiOperatorTestConfig struct {
-	NumOperators       int
-	OperatorSetId      uint32
-	CurveType          config.CurveType
-	AVSAddress         string
-	AVSPrivateKey      string
-	ChainConfig        *ChainConfig
-	L1EthClient        *ethclient.Client
-	Logger             *zap.Logger
-	EqualWeights       bool // If true, all operators get equal weights
-	CustomWeights      []float64 // Custom weights per operator (converted to proper values)
+	NumOperators  int
+	OperatorSetId uint32
+	CurveType     config.CurveType
+	AVSAddress    string
+	AVSPrivateKey string
+	ChainConfig   *ChainConfig
+	L1EthClient   *ethclient.Client
+	Logger        *zap.Logger
+	EqualWeights  bool      // If true, all operators get equal weights
+	CustomWeights []float64 // Custom weights per operator (converted to proper values)
 }
 
 // OperatorTestData contains all the data for a test operator
 type OperatorTestData struct {
-	Operator          *operator.Operator
-	KeyPair           *WrappedKeyPair
-	PrivateKey        string
-	Address           string
-	StakerPrivateKey  string
-	StakerAddress     string
-	Socket            string
-	Weight            *big.Int
-	BLSInfo           tableTransporter.OperatorBLSInfo
+	Operator         *operator.Operator
+	KeyPair          *WrappedKeyPair
+	PrivateKey       string
+	Address          string
+	StakerPrivateKey string
+	StakerAddress    string
+	Socket           string
+	Weight           *big.Int
+	BLSInfo          tableTransporter.OperatorBLSInfo
 }
 
 // MultiOperatorTestEnvironment contains the complete test environment
