@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
@@ -563,8 +564,41 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	time.Sleep(time.Second * 6)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
-	// transport the tables for good measure
-	testUtils.TransportStakeTables(l, true)
+	// Build operator BLS info for table transport based on curve types
+	var operatorBLSInfos []tableTransporter.OperatorBLSInfo
+
+	// Add executor BLS info if using BN254
+	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
+		execBLSInfo := tableTransporter.OperatorBLSInfo{
+			OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
+			PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),
+		}
+		operatorBLSInfos = append(operatorBLSInfos, execBLSInfo)
+		l.Sugar().Infow("Added executor BN254 operator",
+			zap.String("address", chainConfig.ExecOperatorAccountAddress),
+			zap.Uint32("opsetId", sigConfig.ExecutorOpsetId))
+	}
+
+	// Transport tables with the correct operator BLS keys
+	if len(operatorBLSInfos) > 0 {
+		l.Sugar().Infow("Transporting tables for BN254 operators",
+			zap.Int("numOperators", len(operatorBLSInfos)))
+
+		err = testUtils.TransportStakeTablesWithMultipleOperators(
+			l,
+			operatorBLSInfos,
+			chainConfig.AVSAccountPrivateKey,
+			1,
+			chainConfig.AVSAccountAddress,
+		)
+		if err != nil {
+			t.Fatalf("Failed to transport operator tables: %v", err)
+		}
+	} else {
+		// For ECDSA-only setups, use the simple transport
+		l.Sugar().Infow("Using simple table transport for ECDSA-only setup")
+		testUtils.TransportStakeTables(l, true)
+	}
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
 
