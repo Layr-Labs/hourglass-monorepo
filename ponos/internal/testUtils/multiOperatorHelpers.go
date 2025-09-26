@@ -248,7 +248,7 @@ func TransportTablesForEnvironment(t *testing.T, env *MultiOperatorTestEnvironme
 	// We limit transport to only our operator set to avoid breaking others
 	t.Logf("Transporting tables for %d operators (limiting to operator set %d)",
 		len(blsInfos), env.Config.OperatorSetId)
-	err = TransportStakeTablesWithMultipleOperators(
+	err = TransportStakeTablesWithMultipleOperatorsAndNoL2(
 		env.Config.Logger,
 		blsInfos,
 		env.Config.AVSPrivateKey,

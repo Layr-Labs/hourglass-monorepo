@@ -581,15 +581,26 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	// Transport tables with the correct operator BLS keys
 	if len(operatorBLSInfos) > 0 {
-		l.Sugar().Infow("Transporting tables for BN254 operators",
-			zap.Int("numOperators", len(operatorBLSInfos)))
+		l.Sugar().Infow("Transporting tables for BN254 operators (including L2)",
+			zap.Int("numOperators", len(operatorBLSInfos)),
+			zap.Uint32("executorOperatorSetId", sigConfig.ExecutorOpsetId))
 
-		err = testUtils.TransportStakeTablesWithMultipleOperators(
+		// For aggregator test, we need L2 transport - don't ignore L2 chain
+		chainIdsToIgnore := []*big.Int{
+			new(big.Int).SetUint64(11155111), // eth sepolia
+			new(big.Int).SetUint64(17000),    // holesky
+			new(big.Int).SetUint64(84532),    // base sepolia
+		}
+
+		err = testUtils.TransportStakeTablesWithMultipleOperatorsConfig(
 			l,
 			operatorBLSInfos,
 			chainConfig.AVSAccountPrivateKey,
-			1,
+			sigConfig.ExecutorOpsetId,
 			chainConfig.AVSAccountAddress,
+			"http://localhost:9545",
+			31338,
+			chainIdsToIgnore,
 		)
 		if err != nil {
 			t.Fatalf("Failed to transport operator tables: %v", err)

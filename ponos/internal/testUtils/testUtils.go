@@ -319,9 +319,9 @@ func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 	)
 }
 
-// TransportStakeTablesWithMultipleOperators transports stake tables with support for multiple operators
+// TransportStakeTablesWithMultipleOperatorsAndNoL2 transports stake tables with support for multiple operators
 // This is needed for tests that have multiple operators with different BLS keys
-func TransportStakeTablesWithMultipleOperators(
+func TransportStakeTablesWithMultipleOperatorsAndNoL2(
 	l *zap.Logger,
 	operators []tableTransporter.OperatorBLSInfo,
 	transporterPrivateKey string,
@@ -335,17 +335,39 @@ func TransportStakeTablesWithMultipleOperators(
 		new(big.Int).SetUint64(31338),    // L2 anvil
 	}
 
+	return TransportStakeTablesWithMultipleOperatorsConfig(
+		l,
+		operators,
+		transporterPrivateKey,
+		operatorSetId,
+		avsAddress,
+		"",
+		0,
+		chainIdsToIgnore,
+	)
+}
+
+// TransportStakeTablesWithMultipleOperatorsConfig transports stake tables with configurable L2 support
+func TransportStakeTablesWithMultipleOperatorsConfig(
+	l *zap.Logger,
+	operators []tableTransporter.OperatorBLSInfo,
+	transporterPrivateKey string,
+	operatorSetId uint32,
+	avsAddress string,
+	l2RpcUrl string,
+	l2ChainId uint64,
+	chainIdsToIgnore []*big.Int,
+) error {
 	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
 
-	// Use the fixed BLS transport key
 	transportBLSKey := "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 
 	cfg := &tableTransporter.SimpleMultiOperatorConfig{
 		TransporterPrivateKey:     transporterPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
 		L1ChainId:                 31337,
-		L2RpcUrl:                  "", // No L2
-		L2ChainId:                 0,  // No L2
+		L2RpcUrl:                  l2RpcUrl,
+		L2ChainId:                 l2ChainId,
 		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
 		ChainIdsToIgnore:          chainIdsToIgnore,
 		Logger:                    l,
