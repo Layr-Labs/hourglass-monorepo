@@ -87,7 +87,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
 
-	tableData, err := om.fetchOperatorTableData(ctx, l1ChainCc, task.OperatorSetId, curveType, l1BlockForTableData)
+	tableData, err := om.fetchOperatorTableData(ctx, l1ChainCc, task.OperatorSetId, curveType, l1BlockForTableData, task.SourceBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch operator table data: %w", err)
 	}
@@ -245,13 +245,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	)
 
 	// weights and table data come from the L1
-	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(
-		ctx, common.HexToAddress(om.config.AvsAddress),
-		operatorSetId,
-		curveType,
-		om.config.L1ChainId,
-		blockForTableData,
-	)
+	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, curveType, om.config.L1ChainId, blockForTableData, 0)
 
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get operator table data",
@@ -329,13 +323,7 @@ func (om *OperatorManager) getContractCallerForChainId(chainId config.ChainId) (
 }
 
 // fetchOperatorTableData retrieves operator table data from L1
-func (om *OperatorManager) fetchOperatorTableData(
-	ctx context.Context,
-	l1Cc contractCaller.IContractCaller,
-	operatorSetId uint32,
-	curveType config.CurveType,
-	l1BlockNumber uint64,
-) (*contractCaller.OperatorTableData, error) {
+func (om *OperatorManager) fetchOperatorTableData(ctx context.Context, l1Cc contractCaller.IContractCaller, operatorSetId uint32, curveType config.CurveType, l1BlockNumber uint64, number uint64) (*contractCaller.OperatorTableData, error) {
 	om.logger.Sugar().Debugw("Fetching operator table data with curve type",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
@@ -350,6 +338,7 @@ func (om *OperatorManager) fetchOperatorTableData(
 		curveType,
 		om.config.L1ChainId,
 		l1BlockNumber,
+		number,
 	)
 	if err != nil {
 		return nil, err

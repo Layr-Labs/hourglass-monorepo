@@ -140,7 +140,7 @@ type IContractCaller interface {
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64) (*OperatorTableData, error)
+	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64, number uint64) (*OperatorTableData, error)
 
 	GetTableUpdaterReferenceTimeAndBlock(
 		ctx context.Context,

@@ -978,14 +978,7 @@ func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, r
 	return cc.crossChainRegistry.GetSupportedChains(opts)
 }
 
-func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
-	ctx context.Context,
-	avsAddress common.Address,
-	operatorSetId uint32,
-	curveType config.CurveType,
-	chainId config.ChainId,
-	atBlockNumber uint64,
-) (*contractCaller.OperatorTableData, error) {
+func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64, l2blocknumber uint64) (*contractCaller.OperatorTableData, error) {
 
 	operatorSet := ICrossChainRegistry.OperatorSet{
 		Avs: avsAddress,
@@ -1070,6 +1063,46 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	}
 
 	if curveType == config.CurveTypeBN254 {
+		// Create L2 client
+		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{BaseUrl: "http://127.0.0.1:9545"}, cc.logger)
+		calcClient, err := ec.GetEthereumContractCaller()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get ethereum contract caller: %w", err)
+		}
+
+		// Get the L2 OperatorTableUpdater to find L2's reference timestamp
+		l2TableUpdater, err := IOperatorTableUpdater.NewIOperatorTableUpdater(
+			tableUpdaterAddr, // This is the L2 table updater address from the map
+			calcClient,       // Use L2 client
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create L2 operator table updater: %w", err)
+		}
+
+		// Get L2's latest reference timestamp (not L1's!)
+		l2LatestTimestamp, err := l2TableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
+			Context: ctx,
+			// Don't specify block number - get the latest
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get L2 latest reference timestamp: %w", err)
+		}
+
+		// Get L2's reference block number for that timestamp
+		l2RefBlockNumber, err := l2TableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{
+			Context: ctx,
+		}, l2LatestTimestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get L2 reference block number: %w", err)
+		}
+
+		cc.logger.Sugar().Infow("L2 reference data",
+			zap.Uint32("l2LatestTimestamp", l2LatestTimestamp),
+			zap.Uint32("l2RefBlockNumber", l2RefBlockNumber),
+			zap.Uint32("l1LatestTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
+		)
+
+		// Get operator infos from BN254TableCalculator (still using L1 client)
 		bn254TableCalculator, err := IBN254TableCalculator.NewIBN254TableCalculatorCaller(otcAddr, cc.ethclient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create BN254 table calculator caller: %w", err)
@@ -1086,17 +1119,28 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			return nil, fmt.Errorf("failed to get operator infos from BN254TableCalculator: %w", err)
 		}
 
-		operatorSetInfo, err := cc.bn254CertVerifier.GetOperatorSetInfo(&bind.CallOpts{
+		// Query L2 BN254CertificateVerifier with L2's reference data
+		verifier, err := IBN254CertificateVerifier.NewIBN254CertificateVerifier(
+			common.HexToAddress("0xff58A373c18268F483C1F5cA03Cf885c0C43373a"),
+			calcClient, // L2 client
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Use L2's timestamp and query at L2's reference block
+		operatorSetInfo, err := verifier.GetOperatorSetInfo(&bind.CallOpts{
 			Context:     ctx,
-			BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+			BlockNumber: new(big.Int).SetUint64(l2blocknumber),
 		}, IBN254CertificateVerifier.OperatorSet{
 			Avs: avsAddress,
 			Id:  operatorSetId,
-		}, latestReferenceTimeAndBlock.LatestReferenceTimestamp)
+		}, l2LatestTimestamp) // Use L2 timestamp, not L1!
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set info from BN254 verifier: %w", err)
 		}
 
+		// Populate operator infos
 		operatorTableData.OperatorInfos = make([]contractCaller.BN254OperatorInfo, len(operatorInfos))
 		for i, info := range operatorInfos {
 			operatorTableData.OperatorInfos[i] = contractCaller.BN254OperatorInfo{
@@ -1106,7 +1150,12 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			}
 		}
 
+		// This should now have the correct L2 operator info tree root
 		operatorTableData.OperatorInfoTreeRoot = operatorSetInfo.OperatorInfoTreeRoot
+
+		// Also update the timestamp to reflect L2's timestamp
+		// This ensures consistency when used for verification
+		operatorTableData.LatestReferenceTimestamp = l2LatestTimestamp
 	}
 
 	return operatorTableData, nil
