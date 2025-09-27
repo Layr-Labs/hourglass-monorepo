@@ -319,34 +319,6 @@ func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 	)
 }
 
-// TransportStakeTablesWithMultipleOperatorsAndNoL2 transports stake tables with support for multiple operators
-// This is needed for tests that have multiple operators with different BLS keys
-func TransportStakeTablesWithMultipleOperatorsAndNoL2(
-	l *zap.Logger,
-	operators []tableTransporter.OperatorBLSInfo,
-	transporterPrivateKey string,
-	operatorSetId uint32,
-	avsAddress string,
-) error {
-	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(11155111), // eth sepolia
-		new(big.Int).SetUint64(17000),    // holesky
-		new(big.Int).SetUint64(84532),    // base sepolia
-		new(big.Int).SetUint64(31338),    // L2 anvil
-	}
-
-	return TransportStakeTablesWithMultipleOperatorsConfig(
-		l,
-		operators,
-		transporterPrivateKey,
-		operatorSetId,
-		avsAddress,
-		"",
-		0,
-		chainIdsToIgnore,
-	)
-}
-
 // TransportStakeTablesWithMultipleOperatorsConfig transports stake tables with configurable L2 support
 func TransportStakeTablesWithMultipleOperatorsConfig(
 	l *zap.Logger,
@@ -362,7 +334,7 @@ func TransportStakeTablesWithMultipleOperatorsConfig(
 
 	transportBLSKey := "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 
-	cfg := &tableTransporter.SimpleMultiOperatorConfig{
+	cfg := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     transporterPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
 		L1ChainId:                 31337,

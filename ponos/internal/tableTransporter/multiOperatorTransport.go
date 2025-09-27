@@ -35,8 +35,8 @@ type OperatorBLSInfo struct {
 	OperatorAddress common.Address // ECDSA address of the operator
 }
 
-// SimpleMultiOperatorConfig contains configuration for multi-operator transport
-type SimpleMultiOperatorConfig struct {
+// MultipleOperatorConfig contains configuration for multi-operator transport
+type MultipleOperatorConfig struct {
 	TransporterPrivateKey     string
 	L1RpcUrl                  string
 	L1ChainId                 uint64
@@ -59,7 +59,7 @@ type SimpleMultiOperatorConfig struct {
 // 2. Building a merkle tree of operator info
 // 3. Updating the generator with aggregate pubkey and merkle root
 // 4. Calculating and transporting the stake table
-func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) error {
+func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 	ctx := context.Background()
 
 	cm := chainManager.NewChainManager()
@@ -73,7 +73,7 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 		return fmt.Errorf("failed to add chain: %v", err)
 	}
 
-	holeskyClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
+	l1ChainClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
 	if err != nil {
 		return fmt.Errorf("failed to get chain for ID %d: %v", l1AnvilConfig.ChainID, err)
 	}
@@ -100,12 +100,12 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 	)
 
 	// Get current block info
-	blockNumber, err := holeskyClient.RPCClient.BlockNumber(ctx)
+	blockNumber, err := l1ChainClient.RPCClient.BlockNumber(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get block number: %v", err)
 	}
 
-	block, err := holeskyClient.RPCClient.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+	block, err := l1ChainClient.RPCClient.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
 		return fmt.Errorf("failed to get block by number: %v", err)
 	}
@@ -115,20 +115,22 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 	// Transfer ownership of CrossChainRegistry
 	transferOwnership(cfg.Logger, cfg.L1RpcUrl,
 		common.HexToAddress(cfg.CrossChainRegistryAddress),
-		cfg.TransporterPrivateKey)
+		cfg.TransporterPrivateKey,
+	)
 
 	// Get supported chains
 	ccRegistryCaller, err := ICrossChainRegistry.NewICrossChainRegistryCaller(
 		common.HexToAddress(cfg.CrossChainRegistryAddress),
-		holeskyClient.RPCClient)
+		l1ChainClient.RPCClient)
 	if err != nil {
 		return fmt.Errorf("failed to create cross chain registry caller: %v", err)
 	}
 
-	chainIds, addresses, err := ccRegistryCaller.GetSupportedChains(&bind.CallOpts{})
+	chainIds, updaterAddresses, err := ccRegistryCaller.GetSupportedChains(&bind.CallOpts{})
 	if err != nil {
 		return fmt.Errorf("failed to get supported chains: %v", err)
 	}
+	cfg.Logger.Sugar().Infow("Found supported chains", zap.Any("chainIds", chainIds))
 
 	// Create L1 client and contract caller for KeyRegistrar operations
 	client, err := ethclient.Dial(cfg.L1RpcUrl)
@@ -150,18 +152,15 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 	const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2
 	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
 
-	// Register BLS keys in KeyRegistrar once (it's only on L1)
-	// Do this before processing chains to avoid duplicate registrations
 	gen := IOperatorTableUpdater.OperatorSet{
 		Avs: cfg.AVSAddress,
 		Id:  cfg.OperatorSetId,
 	}
 
-	// Configure curve type for the operator set (only once, on L1)
 	if err := configureCurveTypeAsAVS(
 		ctx,
 		cfg.Logger,
-		cfg.L1RpcUrl, // KeyRegistrar is on L1
+		cfg.L1RpcUrl,
 		keyRegistrarAddress,
 		gen.Avs,
 		gen.Id,
@@ -170,7 +169,6 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 		return fmt.Errorf("failed to configure curve type: %v", err)
 	}
 
-	// Register BLS keys in KeyRegistrar for all operators (only once, on L1)
 	if err := registerOperatorKeysInKeyRegistrar(
 		ctx,
 		cfg.Logger,
@@ -182,23 +180,20 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 		return fmt.Errorf("failed to register operators: %v", err)
 	}
 
-	// Process each chain
 	for i, chainId := range chainIds {
-		addr := addresses[i]
+		updaterAddress := updaterAddresses[i]
 		if chainId.Uint64() != cfg.L1ChainId && chainId.Uint64() != cfg.L2ChainId {
 			continue
 		}
 
-		// Determine the correct RPC URL for this chain
 		rpcURL := cfg.L1RpcUrl
 		if chainId.Uint64() == cfg.L2ChainId {
 			rpcURL = cfg.L2RpcUrl
 		}
 
-		// Transfer ownership of OperatorTableUpdater
-		transferOwnership(cfg.Logger, rpcURL, addr, cfg.TransporterPrivateKey)
+		transferOwnership(cfg.Logger, rpcURL, updaterAddress, cfg.TransporterPrivateKey)
 
-		currentGen, err := getGenerator(ctx, cfg.Logger, cm, chainId, addr)
+		currentGen, err := getGenerator(ctx, cfg.Logger, cm, chainId, updaterAddress)
 		if err != nil {
 			return fmt.Errorf("failed to get current generator: %v", err)
 		}
@@ -222,7 +217,7 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 			zap.Uint32("currentGeneratorId", currentGen.Id),
 			zap.String("newGeneratorAvs", generatorOpSet.Avs.String()),
 			zap.Uint32("newGeneratorId", generatorOpSet.Id),
-			zap.String("operatorTableUpdaterAddress", addr.String()),
+			zap.String("operatorTableUpdaterAddress", updaterAddress.String()),
 			zap.String("chainId", chainId.String()),
 		)
 
@@ -233,7 +228,7 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 			cfg.Logger,
 			cm,
 			chainId,
-			addr,
+			updaterAddress,
 			txSign,
 			cfg.TransportBLSPrivateKey,
 			generatorOpSet,
@@ -258,7 +253,7 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 
 	tableCalc, err := operatorTableCalculator.NewStakeTableRootCalculator(&operatorTableCalculator.Config{
 		CrossChainRegistryAddress: common.HexToAddress(cfg.CrossChainRegistryAddress),
-	}, holeskyClient.RPCClient, cfg.Logger)
+	}, l1ChainClient.RPCClient, cfg.Logger)
 	if err != nil {
 		return fmt.Errorf("failed to create StakeTableRootCalculator: %v", err)
 	}
@@ -322,10 +317,8 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 	}
 
 	stakeTransport, err := transport.NewTransport(
-		&transport.TransportConfig{
-			L1CrossChainRegistryAddress: common.HexToAddress(cfg.CrossChainRegistryAddress),
-		},
-		holeskyClient.RPCClient,
+		&transport.TransportConfig{L1CrossChainRegistryAddress: common.HexToAddress(cfg.CrossChainRegistryAddress)},
+		l1ChainClient.RPCClient,
 		inMemSigner,
 		txSign,
 		cm,
@@ -335,7 +328,6 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 		return fmt.Errorf("failed to create transport: %v", err)
 	}
 
-	// Transport global table root
 	err = stakeTransport.SignAndTransportGlobalTableRoot(
 		ctx,
 		root,
@@ -418,7 +410,7 @@ func TransportTableWithSimpleMultiOperators(cfg *SimpleMultiOperatorConfig) erro
 
 	// For each chain, call updateOperatorTable to propagate the data
 	for i, chainId := range chainIds {
-		addr := addresses[i]
+		addr := updaterAddresses[i]
 		if chainId.Uint64() != cfg.L1ChainId && chainId.Uint64() != cfg.L2ChainId {
 			continue
 		}
@@ -515,6 +507,8 @@ func updateOperatorTableInVerifier(
 		"referenceTimestamp", referenceTimestamp,
 		"operatorSetIndex", operatorSetIndex,
 		"operatorTableBytesLen", len(operatorTableBytes),
+		"chainId", chainId.String(),
+		"updaterAddress", updaterAddr,
 	)
 
 	tx, err := updaterContract.UpdateOperatorTable(
@@ -566,10 +560,6 @@ func registerOperatorKeysInKeyRegistrar(
 	operators []OperatorBLSInfo,
 	gen IOperatorTableUpdater.OperatorSet,
 ) error {
-	if len(operators) == 0 {
-		return fmt.Errorf("no operators provided")
-	}
-
 	for _, op := range operators {
 		if err := registerSingleOperatorKey(ctx, logger, contractCaller, client, op, gen); err != nil {
 			logger.Sugar().Warnw("Failed to register operator key",

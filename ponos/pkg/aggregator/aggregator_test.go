@@ -45,10 +45,11 @@ import (
 )
 
 const (
-	L1RPCUrl = "http://127.0.0.1:8545"
-	L2RPCUrl = "http://127.0.0.1:9545"
-	L2WSUrl  = "ws://127.0.0.1:9545"
-	L1WsUrl  = "ws://127.0.0.1:8545"
+	L1RPCUrl        = "http://127.0.0.1:8545"
+	L2RPCUrl        = "http://127.0.0.1:9545"
+	L2WSUrl         = "ws://127.0.0.1:9545"
+	L1WsUrl         = "ws://127.0.0.1:8545"
+	transportBlsKey = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 )
 
 // SignatureModeConfig defines the signature curve configuration for testing
@@ -517,9 +518,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	}
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
-	maxStalenessPeriod := uint32(604800) // 1 week in seconds
+	maxStalenessPeriod := uint32(604800)
 
-	// Create generation reservation for aggregator operator set based on its curve type
 	aggCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.AggregatorCurve)
 	t.Logf("Creating generation reservation with %s table calculator %s for aggregator operator set %d",
 		sigConfig.AggregatorCurve, aggCalculatorAddr.Hex(), sigConfig.AggregatorOpsetId)
@@ -528,7 +528,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		avsAddr,
 		sigConfig.AggregatorOpsetId,
 		aggCalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
@@ -544,7 +544,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		avsAddr,
 		sigConfig.ExecutorOpsetId,
 		execCalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
@@ -564,25 +564,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	time.Sleep(time.Second * 6)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
-	// Build operator BLS info for table transport based on curve types
-	var operatorBLSInfos []tableTransporter.OperatorBLSInfo
-
-	// Add executor BLS info if using BN254
 	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
-		execBLSInfo := tableTransporter.OperatorBLSInfo{
-			OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
-			PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),
-		}
-		operatorBLSInfos = append(operatorBLSInfos, execBLSInfo)
-		l.Sugar().Infow("Added executor BN254 operator",
-			zap.String("address", chainConfig.ExecOperatorAccountAddress),
-			zap.Uint32("opsetId", sigConfig.ExecutorOpsetId))
-	}
-
-	// Transport tables with the correct operator BLS keys
-	if len(operatorBLSInfos) > 0 {
-		l.Sugar().Infow("Transporting tables for BN254 operators (including L2)",
-			zap.Int("numOperators", len(operatorBLSInfos)),
+		l.Sugar().Infow("Transporting tables for BN254 executor operator set (including L2)",
 			zap.Uint32("executorOperatorSetId", sigConfig.ExecutorOpsetId))
 
 		// For aggregator test, we need L2 transport - don't ignore L2 chain
@@ -592,15 +575,32 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			new(big.Int).SetUint64(84532),    // base sepolia
 		}
 
-		err = testUtils.TransportStakeTablesWithMultipleOperatorsConfig(
-			l,
-			operatorBLSInfos,
-			chainConfig.AVSAccountPrivateKey,
-			sigConfig.ExecutorOpsetId,
-			chainConfig.AVSAccountAddress,
-			"http://localhost:9545",
-			31338,
-			chainIdsToIgnore,
+		// Pass the executor's BLS info for proper operator info tree root calculation
+		// The operator is already registered via SetupOperatorPeering, so KeyRegistrar registration will be skipped
+		operatorBLSInfos := []tableTransporter.OperatorBLSInfo{
+			{
+				OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
+				PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),
+				Weights:         []*big.Int{big.NewInt(2000000000000000000)},
+			},
+		}
+		contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+
+		err = tableTransporter.TransportTableWithSimpleMultiOperators(
+			&tableTransporter.MultipleOperatorConfig{
+				TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
+				L1RpcUrl:                  "http://localhost:8545",
+				L1ChainId:                 31337,
+				L2RpcUrl:                  l2RpcUrl,
+				L2ChainId:                 31338,
+				CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
+				ChainIdsToIgnore:          chainIdsToIgnore,
+				Logger:                    l,
+				Operators:                 operatorBLSInfos,
+				AVSAddress:                avsAddr,
+				OperatorSetId:             sigConfig.ExecutorOpsetId,
+				TransportBLSPrivateKey:    transportBlsKey,
+			},
 		)
 		if err != nil {
 			t.Fatalf("Failed to transport operator tables: %v", err)

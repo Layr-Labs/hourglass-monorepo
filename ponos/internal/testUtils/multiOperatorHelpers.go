@@ -28,6 +28,9 @@ type MultiOperatorTestConfig struct {
 	AVSPrivateKey string
 	ChainConfig   *ChainConfig
 	L1EthClient   *ethclient.Client
+	L2EthClient   *ethclient.Client // Optional: L2 client for L2 transport
+	L2RpcUrl      string            // Optional: L2 RPC URL
+	L2ChainId     uint64            // Optional: L2 chain ID
 	Logger        *zap.Logger
 	EqualWeights  bool      // If true, all operators get equal weights
 	CustomWeights []float64 // Custom weights per operator (converted to proper values)
@@ -248,12 +251,28 @@ func TransportTablesForEnvironment(t *testing.T, env *MultiOperatorTestEnvironme
 	// We limit transport to only our operator set to avoid breaking others
 	t.Logf("Transporting tables for %d operators (limiting to operator set %d)",
 		len(blsInfos), env.Config.OperatorSetId)
-	err = TransportStakeTablesWithMultipleOperatorsAndNoL2(
+
+	// Determine which chains to ignore based on L2 config
+	chainIdsToIgnore := []*big.Int{
+		new(big.Int).SetUint64(11155111), // eth sepolia
+		new(big.Int).SetUint64(17000),    // holesky
+		new(big.Int).SetUint64(84532),    // base sepolia
+	}
+
+	// If L2 is not configured, also ignore L2 anvil
+	if env.Config.L2EthClient == nil || env.Config.L2ChainId == 0 {
+		chainIdsToIgnore = append(chainIdsToIgnore, new(big.Int).SetUint64(31338)) // L2 anvil
+	}
+
+	err = TransportStakeTablesWithMultipleOperatorsConfig(
 		env.Config.Logger,
 		blsInfos,
 		env.Config.AVSPrivateKey,
 		env.Config.OperatorSetId,
 		env.Config.AVSAddress,
+		env.Config.L2RpcUrl,
+		env.Config.L2ChainId,
+		chainIdsToIgnore,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to transport tables: %w", err)

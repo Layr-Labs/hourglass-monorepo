@@ -310,7 +310,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		}
 	}
 
-	cfg := &tableTransporter.SimpleMultiOperatorConfig{
+	cfg := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
 		L1ChainId:                 31337,

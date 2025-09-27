@@ -245,7 +245,14 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	)
 
 	// weights and table data come from the L1
-	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(ctx, common.HexToAddress(om.config.AvsAddress), operatorSetId, curveType, om.config.L1ChainId, blockForTableData)
+	tableData, err := l1Cc.GetOperatorTableDataForOperatorSet(
+		ctx, common.HexToAddress(om.config.AvsAddress),
+		operatorSetId,
+		curveType,
+		om.config.L1ChainId,
+		blockForTableData,
+	)
+
 	if err != nil {
 		om.logger.Sugar().Errorw("Failed to get operator table data",
 			zap.String("avsAddress", om.config.AvsAddress),

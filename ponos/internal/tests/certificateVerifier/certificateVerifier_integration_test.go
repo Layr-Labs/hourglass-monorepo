@@ -234,7 +234,6 @@ func Test_CertificateVerifier(t *testing.T) {
 	t.Logf("------------------------ Creating generation reservations ------------------------")
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
-	maxStalenessPeriod := uint32(604800) // 1 week in seconds
 
 	// Create generation reservation for aggregator operator set (BN254)
 	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
