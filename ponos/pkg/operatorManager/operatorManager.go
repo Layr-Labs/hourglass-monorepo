@@ -209,7 +209,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		)
 		return nil, err
 	}
-	om.logger.Sugar().Infow("Latest reference time and block for table updater",
+	om.logger.Sugar().Debugw("Latest reference time and block for table updater",
 		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("taskBlockNumber", taskBlockNumber),
 		zap.Uint32("latestReferenceBlockNumber", latestReferenceTimeAndBlock.LatestReferenceBlockNumber),
@@ -230,7 +230,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
-	om.logger.Sugar().Infow("Got operator set curve type",
+	om.logger.Sugar().Debugw("Got operator set curve type",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Uint64("blockForTableData", blockForTableData),
@@ -245,6 +245,10 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		blockForTableData,
 	)
 
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator table: %w", err)
+	}
+
 	if curveType == config.CurveTypeBN254 {
 		err = om.decorateOperatorTableRoot(
 			ctx,
@@ -255,20 +259,12 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			operatorSetId,
 			latestReferenceTimeAndBlock,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to populate operator table root: %w", err)
+		}
 	}
 
-	if err != nil {
-		om.logger.Sugar().Errorw("Failed to get operator table data",
-			zap.String("avsAddress", om.config.AvsAddress),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.Uint64("taskBlockNumber", taskBlockNumber),
-			zap.String("curveType", curveType.String()),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	om.logger.Sugar().Infow("Fetched operator table data",
+	om.logger.Sugar().Debugw("Fetched operator table data",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Uint64("taskBlockNumber", taskBlockNumber),
@@ -288,7 +284,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	if err != nil {
 		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
 	}
-	om.logger.Sugar().Infow("Fetched executor operators",
+	om.logger.Sugar().Debugw("Fetched executor operators",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Any("executorOperators", operators),

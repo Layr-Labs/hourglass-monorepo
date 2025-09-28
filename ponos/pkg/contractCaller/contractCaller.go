@@ -127,6 +127,15 @@ type IContractCaller interface {
 		thresholdPercentage uint16,
 	) (bool, error)
 
+	VerifyECDSACertificate(
+		messageHash [32]byte,
+		signature []byte,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		globalTableRootReferenceTimestamp uint32,
+		threshold uint16,
+	) (bool, []common.Address, error)
+
 	GetAVSConfig(avsAddress string, blockNumber uint64) (*AVSConfig, error)
 
 	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error)

@@ -330,7 +330,7 @@ func transferOwnership(logger *zap.Logger, rpcURL string, proxy common.Address, 
 
 	// read current owner
 	currOwner := readOwner(ctx, logger, c, ownableABI, proxy)
-	logger.Info("Current owner: %s", zap.String("owner", currOwner.Hex()))
+	logger.Info("Current owner:", zap.String("owner", currOwner.Hex()))
 
 	// impersonate the current owner and fund it
 	impersonate(ctx, logger, c, currOwner)
@@ -356,11 +356,11 @@ func transferOwnership(logger *zap.Logger, rpcURL string, proxy common.Address, 
 
 	// await for tx receipt
 	mustWaitReceipt(ctx, logger, c, txHash)
-	logger.Info("TransferOwnership tx: %s", zap.String("owner", txHash.Hex()))
+	logger.Info("TransferOwnership tx:", zap.String("owner", txHash.Hex()))
 
 	// verify
 	newOwnerRead := readOwner(ctx, logger, c, ownableABI, proxy)
-	logger.Info("New owner: %s", zap.String("owner", newOwnerRead.Hex()))
+	logger.Info("New owner", zap.String("owner", newOwnerRead.Hex()))
 }
 
 // Impersonate the AVS and call KeyRegistrar.configureOperatorSet(opSet, curveType)
