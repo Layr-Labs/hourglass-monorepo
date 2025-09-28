@@ -378,7 +378,6 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
-	fmt.Printf("Operator peers and weights: %v\n", operatorPeersWeight)
 
 	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
 	if err != nil {
@@ -705,18 +704,16 @@ func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId)
 }
 
 func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chainId config.ChainId, blockNumber uint64) (uint64, error) {
-	// If this is L1, return the block number directly
+
 	if chainId == em.config.L1ChainId {
 		return blockNumber, nil
 	}
 
-	// Get the L1 contract caller
 	l1Cc, ok := em.chainContractCallers[em.config.L1ChainId]
 	if !ok {
 		return 0, fmt.Errorf("no L1 contract caller found")
 	}
 
-	// Get the target chain contract caller
 	targetChainCc, ok := em.chainContractCallers[chainId]
 	if !ok {
 		return 0, fmt.Errorf("no contract caller found for chain ID: %d", chainId)
@@ -728,7 +725,6 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 		return 0, fmt.Errorf("failed to get supported chains: %w", err)
 	}
 
-	// Find the table updater address for the target chain
 	var destTableUpdaterAddress common.Address
 	for i, destChainId := range destChainIds {
 		if destChainId.Uint64() == uint64(chainId) {
@@ -741,8 +737,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 		return 0, fmt.Errorf("no table updater address found for chain ID %d", chainId)
 	}
 
-	// Get the reference time and block from the target chain
-	latestReferenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(
+	referenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(
 		ctx,
 		destTableUpdaterAddress,
 		blockNumber,
@@ -751,7 +746,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 		return 0, fmt.Errorf("failed to get reference time and block: %w", err)
 	}
 
-	return uint64(latestReferenceTimeAndBlock.LatestReferenceBlockNumber), nil
+	return uint64(referenceTimeAndBlock.LatestReferenceBlockNumber), nil
 }
 
 func hasExpectedMailboxContractsForChains(supportedChains []config.ChainId, mailboxAddresses map[config.ChainId]string) error {

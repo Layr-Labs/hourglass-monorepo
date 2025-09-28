@@ -6,6 +6,7 @@ import (
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/IBN254TableCalculator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -140,7 +141,7 @@ type IContractCaller interface {
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64, number uint64) (*OperatorTableData, error)
+	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, chainId config.ChainId, atBlockNumber uint64) (*OperatorTableData, error)
 
 	GetTableUpdaterReferenceTimeAndBlock(
 		ctx context.Context,
@@ -167,14 +168,22 @@ type IContractCaller interface {
 		maxStalenessPeriod uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	SetOperatorTableCalculator(
+	GetTableCalculatorAddress(curveType config.CurveType) common.Address
+
+	GetOperatorInfos(
 		ctx context.Context,
 		avsAddress common.Address,
-		operatorSetId uint32,
-		operatorTableCalculatorAddress common.Address,
-	) (*ethereumTypes.Receipt, error)
+		opSetId uint32,
+		referenceBlockNumber uint64,
+	) ([]IBN254TableCalculator.IOperatorTableCalculatorTypesBN254OperatorInfo, error)
 
-	GetTableCalculatorAddress(curveType config.CurveType) common.Address
+	GetOperatorInfoTreeRoot(
+		ctx context.Context,
+		avsAddress common.Address,
+		opSetId uint32,
+		taskBlockNumber uint64,
+		referenceTimestamp uint32,
+	) ([32]byte, error)
 
 	// ------------------------------------------------------------------------
 	// Helper functions for test setup

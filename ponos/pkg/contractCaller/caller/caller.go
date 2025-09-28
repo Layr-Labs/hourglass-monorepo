@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/BN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -978,18 +979,92 @@ func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, r
 	return cc.crossChainRegistry.GetSupportedChains(opts)
 }
 
-func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, curveType config.CurveType, chainId config.ChainId, atBlockNumber uint64, l2blocknumber uint64) (*contractCaller.OperatorTableData, error) {
+func (cc *ContractCaller) GetOperatorInfos(
+	ctx context.Context,
+	avsAddress common.Address,
+	opSetId uint32,
+	referenceBlockNumber uint64,
+) ([]IBN254TableCalculator.IOperatorTableCalculatorTypesBN254OperatorInfo, error) {
+
+	opSet := ICrossChainRegistry.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	}
+
+	otc, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+	}, opSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator table calculator: %w", err)
+	}
+
+	calculator, err := IBN254TableCalculator.NewIBN254TableCalculator(otc, cc.ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IBN254TableCalculator: %w", err)
+	}
+
+	operatorInfos, err := calculator.GetOperatorInfos(&bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+	}, IBN254TableCalculator.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	})
+
+	if err != nil {
+		return operatorInfos, fmt.Errorf("failed to get operator infos from BN254TableCalculator: %w", err)
+	}
+
+	return operatorInfos, nil
+}
+
+func (cc *ContractCaller) GetOperatorInfoTreeRoot(
+	ctx context.Context,
+	avsAddress common.Address,
+	opSetId uint32,
+	taskBlockNumber uint64,
+	referenceTimestamp uint32,
+) ([32]byte, error) {
+
+	certVerifier, err := BN254CertificateVerifier.NewBN254CertificateVerifier(
+		common.HexToAddress(cc.coreContracts.BN254CertificateVerifier),
+		cc.ethclient,
+	)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to create certificate verifier: %w", err)
+	}
+
+	opSet := BN254CertificateVerifier.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	}
+
+	callOpts := &bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
+	}
+
+	opSetInfo, err := certVerifier.GetOperatorSetInfo(callOpts, opSet, referenceTimestamp)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to get operator info: %w", err)
+	}
+
+	return opSetInfo.OperatorInfoTreeRoot, nil
+}
+
+func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	chainId config.ChainId,
+	atBlockNumber uint64,
+) (*contractCaller.OperatorTableData, error) {
 
 	operatorSet := ICrossChainRegistry.OperatorSet{
 		Avs: avsAddress,
 		Id:  operatorSetId,
 	}
-
-	cc.logger.Sugar().Infow("Fetching operator table data",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-		zap.Uint64("atBlockNumber", atBlockNumber),
-	)
 
 	otcAddr, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
 		Context:     ctx,
@@ -1009,10 +1084,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(ctx context.Context
 		return nil, fmt.Errorf("failed to create operator table calculator caller: %w", err)
 	}
 
-	cc.logger.Sugar().Infow("Fetching operator weights for operator set",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-	)
+	cc.logger.Sugar().Infow("Fetching operator weights for operator set", zap.Any("operatorSet", operatorSet))
 
 	operatorWeights, err := opTableCalculator.GetOperatorSetWeights(&bind.CallOpts{
 		Context:     ctx,
@@ -1062,109 +1134,13 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(ctx context.Context
 		TableUpdaterAddresses:      tableUpdaterAddressMap,
 	}
 
-	if curveType == config.CurveTypeBN254 {
-		// Create L2 client
-		ec := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{BaseUrl: "http://127.0.0.1:9545"}, cc.logger)
-		calcClient, err := ec.GetEthereumContractCaller()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get ethereum contract caller: %w", err)
-		}
-
-		// Get the L2 OperatorTableUpdater to find L2's reference timestamp
-		l2TableUpdater, err := IOperatorTableUpdater.NewIOperatorTableUpdater(
-			tableUpdaterAddr, // This is the L2 table updater address from the map
-			calcClient,       // Use L2 client
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create L2 operator table updater: %w", err)
-		}
-
-		// Get L2's latest reference timestamp (not L1's!)
-		l2LatestTimestamp, err := l2TableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
-			Context: ctx,
-			// Don't specify block number - get the latest
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get L2 latest reference timestamp: %w", err)
-		}
-
-		// Get L2's reference block number for that timestamp
-		l2RefBlockNumber, err := l2TableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{
-			Context: ctx,
-		}, l2LatestTimestamp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get L2 reference block number: %w", err)
-		}
-
-		cc.logger.Sugar().Infow("L2 reference data",
-			zap.Uint32("l2LatestTimestamp", l2LatestTimestamp),
-			zap.Uint32("l2RefBlockNumber", l2RefBlockNumber),
-			zap.Uint32("l1LatestTimestamp", latestReferenceTimeAndBlock.LatestReferenceTimestamp),
-		)
-
-		// Get operator infos from BN254TableCalculator (still using L1 client)
-		bn254TableCalculator, err := IBN254TableCalculator.NewIBN254TableCalculatorCaller(otcAddr, cc.ethclient)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create BN254 table calculator caller: %w", err)
-		}
-
-		operatorInfos, err := bn254TableCalculator.GetOperatorInfos(&bind.CallOpts{
-			Context:     ctx,
-			BlockNumber: new(big.Int).SetUint64(atBlockNumber),
-		}, IBN254TableCalculator.OperatorSet{
-			Avs: avsAddress,
-			Id:  operatorSetId,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get operator infos from BN254TableCalculator: %w", err)
-		}
-
-		// Query L2 BN254CertificateVerifier with L2's reference data
-		verifier, err := IBN254CertificateVerifier.NewIBN254CertificateVerifier(
-			common.HexToAddress("0xff58A373c18268F483C1F5cA03Cf885c0C43373a"),
-			calcClient, // L2 client
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Use L2's timestamp and query at L2's reference block
-		operatorSetInfo, err := verifier.GetOperatorSetInfo(&bind.CallOpts{
-			Context:     ctx,
-			BlockNumber: new(big.Int).SetUint64(l2blocknumber),
-		}, IBN254CertificateVerifier.OperatorSet{
-			Avs: avsAddress,
-			Id:  operatorSetId,
-		}, l2LatestTimestamp) // Use L2 timestamp, not L1!
-		if err != nil {
-			return nil, fmt.Errorf("failed to get operator set info from BN254 verifier: %w", err)
-		}
-
-		// Populate operator infos
-		operatorTableData.OperatorInfos = make([]contractCaller.BN254OperatorInfo, len(operatorInfos))
-		for i, info := range operatorInfos {
-			operatorTableData.OperatorInfos[i] = contractCaller.BN254OperatorInfo{
-				PubkeyX: info.Pubkey.X,
-				PubkeyY: info.Pubkey.Y,
-				Weights: info.Weights,
-			}
-		}
-
-		// This should now have the correct L2 operator info tree root
-		operatorTableData.OperatorInfoTreeRoot = operatorSetInfo.OperatorInfoTreeRoot
-
-		// Also update the timestamp to reflect L2's timestamp
-		// This ensures consistency when used for verification
-		operatorTableData.LatestReferenceTimestamp = l2LatestTimestamp
-	}
-
 	return operatorTableData, nil
 }
 
 func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 	ctx context.Context,
 	tableUpdaterAddr common.Address,
-	atBlockNumber uint64,
+	taskBlockNumber uint64,
 ) (*contractCaller.LatestReferenceTimeAndBlock, error) {
 	tableUpdater, err := IOperatorTableUpdater.NewIOperatorTableUpdater(tableUpdaterAddr, cc.ethclient)
 	if err != nil {
@@ -1173,7 +1149,7 @@ func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 
 	latestReferenceTimestamp, err := tableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference timestamp: %w", err)
@@ -1181,7 +1157,7 @@ func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 
 	latestReferenceBlockNumber, err := tableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
 	}, latestReferenceTimestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference block number: %w", err)
@@ -1413,41 +1389,6 @@ func (cc *ContractCaller) CreateGenerationReservation(
 	}
 
 	return cc.signAndSendTransaction(ctx, tx, "CreateGenerationReservation")
-}
-
-// SetOperatorTableCalculator sets the operator table calculator for an operator set (requires existing reservation)
-func (cc *ContractCaller) SetOperatorTableCalculator(
-	ctx context.Context,
-	avsAddress common.Address,
-	operatorSetId uint32,
-	operatorTableCalculatorAddress common.Address,
-) (*types.Receipt, error) {
-	txOpts, err := cc.buildTransactionOpts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build transaction options: %w", err)
-	}
-
-	operatorSet := ICrossChainRegistry.OperatorSet{
-		Avs: avsAddress,
-		Id:  operatorSetId,
-	}
-
-	cc.logger.Sugar().Infow("Setting operator table calculator",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-		zap.String("calculatorAddress", operatorTableCalculatorAddress.String()),
-	)
-
-	tx, err := cc.crossChainRegistry.SetOperatorTableCalculator(
-		txOpts,
-		operatorSet,
-		operatorTableCalculatorAddress,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transaction: %w", err)
-	}
-
-	return cc.signAndSendTransaction(ctx, tx, "SetOperatorTableCalculator")
 }
 
 // GetTableCalculatorAddress returns the appropriate table calculator address for a given curve type
