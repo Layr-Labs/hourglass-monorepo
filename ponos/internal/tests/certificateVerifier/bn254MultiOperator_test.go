@@ -605,7 +605,7 @@ func testBN254WithThresholds(
 		operatorPeersWeight.OperatorInfos,
 		operatorPeersWeight.RootReferenceTimestamp,
 		operatorPeersWeight.OperatorInfoTreeRoot,
-		tc.verificationThreshold, // Use test case verification threshold
+		tc.verificationThreshold,
 	)
 
 	if err != nil {
