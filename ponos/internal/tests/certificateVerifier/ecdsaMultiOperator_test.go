@@ -1,11 +1,9 @@
 package certificateVerifier
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/big"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -602,31 +600,12 @@ func testECDSAWithThresholds(
 	// Get the combined signature from the certificate
 	submitParams := finalCert.ToSubmitParams()
 
-	// Collect addresses and sort them
-	addresses := make([]common.Address, 0, len(submitParams.SignersSignatures))
-	for addr := range submitParams.SignersSignatures {
-		addresses = append(addresses, addr)
+	combinedSig, err := caller.GetFinalECDSASignature(submitParams.SignersSignatures)
+	if err != nil {
+		t.Fatalf("Failed to combine signatures: %v", err)
 	}
 
-	// Sort addresses in ascending order
-	sort.Slice(addresses, func(i, j int) bool {
-		return bytes.Compare(addresses[i][:], addresses[j][:]) < 0
-	})
-
-	// Combine all signatures into a single byte array for verification
-	// The ECDSA verifier expects signatures in sorted order by address
-	var combinedSig []byte
-	for _, addr := range addresses {
-		sig := submitParams.SignersSignatures[addr]
-		t.Logf("Adding signature from operator %s", addr.Hex())
-
-		// Validate signature length
-		if len(sig) != 65 {
-			t.Fatalf("Invalid signature length for %s: expected 65, got %d", addr.Hex(), len(sig))
-		}
-
-		combinedSig = append(combinedSig, sig...)
-	}
+	t.Logf("Combined %d signatures into final signature", len(submitParams.SignersSignatures))
 
 	// Verify the ECDSA certificate using the verification threshold
 	valid, signers, err := l1CC.VerifyECDSACertificate(

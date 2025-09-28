@@ -368,7 +368,7 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	copy(taskId[:], params.TaskId)
 
 	// Get final signature from params - concatenate signatures in sorted order
-	finalSig, err := cc.getFinalECDSASignature(params.SignersSignatures)
+	finalSig, err := GetFinalECDSASignature(params.SignersSignatures)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get final signature: %w", err)
 	}
@@ -403,8 +403,8 @@ func (cc *ContractCaller) SubmitECDSATaskResult(
 	return cc.signAndSendTransaction(ctx, tx, "SubmitTaskSession")
 }
 
-// getFinalECDSASignature concatenates ECDSA signatures in sorted order by address
-func (cc *ContractCaller) getFinalECDSASignature(signatures map[common.Address][]byte) ([]byte, error) {
+// GetFinalECDSASignature concatenates ECDSA signatures in sorted order by address
+func GetFinalECDSASignature(signatures map[common.Address][]byte) ([]byte, error) {
 	if len(signatures) == 0 {
 		return nil, fmt.Errorf("no signatures found")
 	}
