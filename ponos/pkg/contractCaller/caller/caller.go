@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/BN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -21,17 +22,20 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/IBN254TableCalculator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/TaskAVSRegistrarBase"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	geth "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	merkletree "github.com/wealdtech/go-merkletree/v2"
+	"github.com/wealdtech/go-merkletree/v2/keccak256"
 	"go.uber.org/zap"
 )
 
@@ -40,6 +44,12 @@ const (
 	BN254TableCalculatorAddress = "0x797d076aB96a5d4104062C15c727447fD8b71eB0"
 	ECDSATableCalculatorAddress = "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38"
 )
+
+type OperatorInfo struct {
+	PubkeyX *big.Int
+	PubkeyY *big.Int
+	Weights []*big.Int
+}
 
 type ContractCaller struct {
 	taskMailbox        *ITaskMailbox.ITaskMailbox
@@ -139,10 +149,11 @@ func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp)
+		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp, operatorInfoTreeRoot)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
@@ -168,7 +179,9 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
 	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
+
 	noSendTxOpts, err := cc.buildTransactionOpts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
@@ -177,6 +190,7 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	if len(params.TaskId) != 32 {
 		return nil, fmt.Errorf("taskId must be 32 bytes, got %d", len(params.TaskId))
 	}
+
 	var taskId [32]byte
 	copy(taskId[:], params.TaskId)
 	cc.logger.Sugar().Infow("submitting task result",
@@ -185,16 +199,15 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 		zap.Uint32("globalTableRootReferenceTimestamp", globalTableRootReferenceTimestamp),
 	)
 
-	// Convert signature to G1 point in precompile format
 	g1Point := &bn254.G1Point{
 		G1Affine: params.SignersSignature.GetG1Point(),
 	}
+
 	g1Bytes, err := g1Point.ToPrecompileFormat()
 	if err != nil {
 		return nil, fmt.Errorf("signature not in correct subgroup: %w", err)
 	}
 
-	// Convert public key to G2 point in precompile format
 	g2Bytes, err := params.SignersPublicKey.ToPrecompileFormat()
 	if err != nil {
 		return nil, fmt.Errorf("public key not in correct subgroup: %w", err)
@@ -202,22 +215,69 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 
 	digest := params.TaskResponseDigest
 
-	// Populate NonSignerWitnesses from the sorted non-signer operators
+	var allOperators []OperatorInfo
+	if len(params.OperatorInfos) <= 0 {
+		return nil, fmt.Errorf("OperatorInfos must be provided for BN254 task submission")
+	}
+
+	allOperators = make([]OperatorInfo, len(params.OperatorInfos))
+	for i, info := range params.OperatorInfos {
+		allOperators[i] = OperatorInfo{
+			PubkeyX: info.PubkeyX,
+			PubkeyY: info.PubkeyY,
+			Weights: info.Weights,
+		}
+	}
+
+	if operatorInfoTreeRoot == [32]byte{} {
+		return nil, fmt.Errorf("failed to submit task result: operatorInfoTreeRoot is empty")
+	}
+
+	if len(allOperators) < 1 {
+		return nil, fmt.Errorf("failed to submit task result: allOperators is empty (SortedOperatorsByIndex has %d operators)", len(params.SortedOperatorsByIndex))
+	}
+
+	cc.logger.Sugar().Infow("Generating merkle proofs for non-signers",
+		zap.String("operatorInfoTreeRoot", hexutil.Encode(operatorInfoTreeRoot[:])),
+		zap.Int("numNonSigners", len(params.NonSignerOperators)),
+		zap.Int("numOperators", len(allOperators)),
+	)
+
+	proofs, err := cc.generateOperatorMerkleProofs(params.NonSignerOperators, operatorInfoTreeRoot, allOperators)
+	if err != nil {
+		cc.logger.Sugar().Warnw("Failed to generate merkle proofs", zap.Error(err))
+		return nil, fmt.Errorf("failed to generate merkle proofs for non-signers: %w", err)
+	}
+
 	nonSignerWitnesses := make([]ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(params.NonSignerOperators))
 	for _, nonSigner := range params.NonSignerOperators {
-		// For now, we only provide the operator index
+
+		// Check bounds before accessing SortedOperatorsByIndex
+		var operatorWeights []*big.Int
+		if int(nonSigner.OperatorIndex) >= len(params.SortedOperatorsByIndex) {
+			return nil, fmt.Errorf("non-signer operator index %d out of range for SortedOperatorsByIndex (length %d)",
+				nonSigner.OperatorIndex, len(params.SortedOperatorsByIndex))
+		}
+		operatorWeights = params.SortedOperatorsByIndex[nonSigner.OperatorIndex].Weights
+
 		witness := ITaskMailbox.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
-			OperatorIndex: nonSigner.OperatorIndex,
-			// AVSs are expected to perform their own stake table transportation from the L1 to their execution chain
+			OperatorIndex:     nonSigner.OperatorIndex,
 			OperatorInfoProof: []byte{},
-			// The contract needs these values to properly calculate non-signer operations
 			OperatorInfo: ITaskMailbox.IOperatorTableCalculatorTypesBN254OperatorInfo{
 				Pubkey: ITaskMailbox.BN254G1Point{
 					X: new(big.Int).SetBytes(nonSigner.PublicKey[0:32]),
 					Y: new(big.Int).SetBytes(nonSigner.PublicKey[32:64]),
 				},
+				Weights: operatorWeights,
 			},
 		}
+
+		proof, ok := proofs[nonSigner.OperatorIndex]
+		if !ok {
+			return nil, fmt.Errorf("missing merkle proof for non-signer operator at index %d", nonSigner.OperatorIndex)
+		}
+		witness.OperatorInfoProof = proof
+
 		nonSignerWitnesses = append(nonSignerWitnesses, witness)
 	}
 
@@ -245,11 +305,13 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get BN254 certificate bytes: %w", err)
 	}
+
 	cc.logger.Sugar().Infow("Creating BN254 Submit Result Transaction",
 		zap.String("taskId", hexutil.Encode(taskId[:])),
 		zap.String("Cert", hexutil.Encode(certBytes)),
 		zap.String("TaskResponse", hexutil.Encode(params.TaskResponse)),
 	)
+
 	tx, err := cc.taskMailbox.SubmitResult(noSendTxOpts, taskId, certBytes, params.TaskResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
@@ -437,26 +499,37 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, op
 		return common.HexToAddress(address)
 	})
 
-	allMembers := make([]*peering.OperatorPeerInfo, 0)
-	for i, member := range operatorSetMemberAddrs {
-		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, 0)
+	allMembers := make([]*peering.OperatorPeerInfo, len(operatorSetMemberAddrs))
+	for index, member := range operatorSetMemberAddrs {
+		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, blockNumber)
+
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
-			return nil, err
+			continue
 		}
-		// Set the operator's index in this operator set based on their position in the members array
-		operatorSetInfo.OperatorIndex = uint32(i)
+		operatorSetInfo.OperatorIndex = uint32(index)
 
-		allMembers = append(allMembers, &peering.OperatorPeerInfo{
-			OperatorAddress: operatorSetStringAddrs[i],
+		allMembers[index] = &peering.OperatorPeerInfo{
+			OperatorAddress: operatorSetStringAddrs[index],
 			OperatorSets:    []*peering.OperatorSet{operatorSetInfo},
-		})
+		}
 	}
+
+	if len(allMembers) == 0 {
+		return nil, fmt.Errorf("no valid operators found")
+	}
+
 	return allMembers, nil
 }
 
-func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress common.Address, avsAddress string, operatorSetId uint32, blockNumber uint64) (*peering.OperatorSet, error) {
-	opset := IKeyRegistrar.OperatorSet{
+func (cc *ContractCaller) GetOperatorSetDetailsForOperator(
+	operatorAddress common.Address,
+	avsAddress string,
+	operatorSetId uint32,
+	blockNumber uint64,
+) (*peering.OperatorSet, error) {
+
+	opSet := IKeyRegistrar.OperatorSet{
 		Avs: common.HexToAddress(avsAddress),
 		Id:  operatorSetId,
 	}
@@ -483,7 +556,7 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		return nil, fmt.Errorf("failed to get operator socket: %w", err)
 	}
 
-	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, opset)
+	curveTypeSolidity, err := cc.keyRegistrar.GetOperatorSetCurveType(blockHeightOpts, opSet)
 	if err != nil {
 		cc.logger.Sugar().Errorf("failed to get operator set curve type: %v", err)
 		return nil, err
@@ -495,14 +568,14 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 		return nil, fmt.Errorf("failed to convert curve type: %w", err)
 	}
 
-	peeringOpset := &peering.OperatorSet{
+	peeringOpSet := &peering.OperatorSet{
 		OperatorSetID:  operatorSetId,
 		NetworkAddress: socket,
 		CurveType:      curveType,
 	}
 
 	if curveType == config.CurveTypeBN254 {
-		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(blockHeightOpts, opset, operatorAddress)
+		solidityPubKey, err := cc.keyRegistrar.GetBN254Key(blockHeightOpts, opSet, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
@@ -524,28 +597,31 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(operatorAddress commo
 				},
 			},
 		)
+
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to convert public key: %v", err)
 			return nil, err
 		}
-		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+
+		peeringOpSet.WrappedPublicKey = peering.WrappedPublicKey{
 			PublicKey: pubKey,
 		}
-		return peeringOpset, nil
+
+		return peeringOpSet, nil
 	}
 
 	if curveType == config.CurveTypeECDSA {
-		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(blockHeightOpts, opset, operatorAddress)
+		ecdsaAddr, err := cc.keyRegistrar.GetECDSAAddress(blockHeightOpts, opSet, operatorAddress)
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
 		}
-		peeringOpset.WrappedPublicKey = peering.WrappedPublicKey{
+		peeringOpSet.WrappedPublicKey = peering.WrappedPublicKey{
 			ECDSAAddress: ecdsaAddr,
 		}
-		return peeringOpset, nil
+		return peeringOpSet, nil
 	}
-	cc.logger.Sugar().Errorf("unsupported curve type: %s", curveType)
+
 	return nil, fmt.Errorf("unsupported curve type: %s", curveType)
 }
 
@@ -697,14 +773,6 @@ func (cc *ContractCaller) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, e
 	)
 }
 
-func (cc *ContractCaller) CreateOperatorRegistrationPayload(
-	publicKey *bn254.PublicKey,
-	signature *bn254.Signature,
-	socket string,
-) ([]byte, error) {
-	return nil, nil
-}
-
 // ConfigureAVSOperatorSet is called on the KeyRegistry to configure an operator set for a given AVS,
 // including specifying which curve type to use for the certificate verifier.
 // NOTE: this needs to be called by the AVS
@@ -803,7 +871,6 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 		zap.Any("receipt", createdOperator),
 	)
 
-	// Register socket with AVS
 	cc.logger.Sugar().Infow("Registering operator socket with AVS")
 	socketReceipt, err := cc.registerOperatorWithAvs(ctx, operatorAddress, avsAddress, operatorSetIds, socket)
 	if err != nil {
@@ -813,7 +880,6 @@ func (cc *ContractCaller) CreateOperatorAndRegisterWithAvs(
 		zap.Any("receipt", socketReceipt),
 	)
 
-	// Return the socket registration receipt as the primary receipt
 	return socketReceipt, nil
 }
 
@@ -823,6 +889,7 @@ func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId
 	if blockNumber > 0 {
 		blockHeightOpts.BlockNumber = big.NewInt(int64(blockNumber))
 	}
+
 	operatorSet, err := cc.allocationManager.GetMembers(blockHeightOpts, IAllocationManager.OperatorSet{
 		Avs: avsAddr,
 		Id:  operatorSetId,
@@ -830,9 +897,10 @@ func (cc *ContractCaller) getOperatorSetMembers(avsAddress string, operatorSetId
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set members: %w", err)
 	}
+
 	members := make([]string, len(operatorSet))
-	for i, member := range operatorSet {
-		members[i] = member.String()
+	for index, member := range operatorSet {
+		members[index] = member.String()
 	}
 	return members, nil
 }
@@ -867,20 +935,6 @@ func (cc *ContractCaller) createOperator(ctx context.Context, operatorAddress co
 	return cc.signAndSendTransaction(ctx, tx, "RegisterAsOperator")
 }
 
-func encodeString(str string) ([]byte, error) {
-	// Define the ABI for a single string parameter
-	stringType, _ := abi.NewType("string", "", nil)
-	arguments := abi.Arguments{{Type: stringType}}
-
-	// Encode the string
-	encoded, err := arguments.Pack(str)
-	if err != nil {
-		return nil, err
-	}
-
-	return encoded, nil
-}
-
 func (cc *ContractCaller) registerOperatorWithAvs(
 	ctx context.Context,
 	operatorAddress common.Address,
@@ -893,7 +947,7 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 		return nil, fmt.Errorf("failed to build transaction options: %w", err)
 	}
 
-	encodedSocket, err := encodeString(socket)
+	encodedSocket, err := util.EncodeString(socket)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode socket string: %w", err)
 	}
@@ -911,11 +965,6 @@ func (cc *ContractCaller) registerOperatorWithAvs(
 	return cc.signAndSendTransaction(ctx, tx, "registerOperatorWithAvs")
 }
 
-//nolint:unused
-func (cc *ContractCaller) getTransactOpts(ctx context.Context) (*bind.TransactOpts, error) {
-	return cc.signer.GetTransactOpts(ctx)
-}
-
 func (cc *ContractCaller) buildTransactionOpts(ctx context.Context) (*bind.TransactOpts, error) {
 	return cc.signer.GetTransactOpts(ctx)
 }
@@ -930,6 +979,80 @@ func (cc *ContractCaller) GetSupportedChainsForMultichain(ctx context.Context, r
 	return cc.crossChainRegistry.GetSupportedChains(opts)
 }
 
+func (cc *ContractCaller) GetOperatorInfos(
+	ctx context.Context,
+	avsAddress common.Address,
+	opSetId uint32,
+	referenceBlockNumber uint64,
+) ([]IBN254TableCalculator.IOperatorTableCalculatorTypesBN254OperatorInfo, error) {
+
+	opSet := ICrossChainRegistry.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	}
+
+	otc, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+	}, opSet)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator table calculator: %w", err)
+	}
+
+	calculator, err := IBN254TableCalculator.NewIBN254TableCalculator(otc, cc.ethclient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create IBN254TableCalculator: %w", err)
+	}
+
+	operatorInfos, err := calculator.GetOperatorInfos(&bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(referenceBlockNumber),
+	}, IBN254TableCalculator.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	})
+
+	if err != nil {
+		return operatorInfos, fmt.Errorf("failed to get operator infos from BN254TableCalculator: %w", err)
+	}
+
+	return operatorInfos, nil
+}
+
+func (cc *ContractCaller) GetOperatorInfoTreeRoot(
+	ctx context.Context,
+	avsAddress common.Address,
+	opSetId uint32,
+	taskBlockNumber uint64,
+	referenceTimestamp uint32,
+) ([32]byte, error) {
+
+	certVerifier, err := BN254CertificateVerifier.NewBN254CertificateVerifier(
+		common.HexToAddress(cc.coreContracts.BN254CertificateVerifier),
+		cc.ethclient,
+	)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to create certificate verifier: %w", err)
+	}
+
+	opSet := BN254CertificateVerifier.OperatorSet{
+		Avs: avsAddress,
+		Id:  opSetId,
+	}
+
+	callOpts := &bind.CallOpts{
+		Context:     ctx,
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
+	}
+
+	opSetInfo, err := certVerifier.GetOperatorSetInfo(callOpts, opSet, referenceTimestamp)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to get operator info: %w", err)
+	}
+
+	return opSetInfo.OperatorInfoTreeRoot, nil
+}
+
 func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	ctx context.Context,
 	avsAddress common.Address,
@@ -937,19 +1060,17 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	chainId config.ChainId,
 	atBlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
+
 	operatorSet := ICrossChainRegistry.OperatorSet{
 		Avs: avsAddress,
 		Id:  operatorSetId,
 	}
-	cc.logger.Sugar().Infow("Fetching operator table data",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-		zap.Uint64("atBlockNumber", atBlockNumber),
-	)
+
 	otcAddr, err := cc.crossChainRegistry.GetOperatorTableCalculator(&bind.CallOpts{
 		Context:     ctx,
 		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	}, operatorSet)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator table calculator address: %w", err)
 	}
@@ -957,25 +1078,26 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 	cc.logger.Sugar().Infow("Operator table calculator address",
 		zap.String("operatorTableCalculatorAddress", otcAddr.String()),
 	)
+
 	opTableCalculator, err := IOperatorTableCalculator.NewIOperatorTableCalculatorCaller(otcAddr, cc.ethclient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create operator table calculator caller: %w", err)
 	}
 
-	cc.logger.Sugar().Infow("Fetching operator weights for operator set",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-	)
+	cc.logger.Sugar().Infow("Fetching operator weights for operator set", zap.Any("operatorSet", operatorSet))
+
 	operatorWeights, err := opTableCalculator.GetOperatorSetWeights(&bind.CallOpts{
 		Context:     ctx,
 		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
 	}, IOperatorTableCalculator.OperatorSet(operatorSet))
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator weights: %w", err)
 	}
 
 	cc.logger.Sugar().Infow("Fetching supported chains for multichain")
 	chainIds, tableUpdaterAddresses, err := cc.GetSupportedChainsForMultichain(ctx, atBlockNumber)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get supported chains for multichain: %w", err)
 	}
@@ -986,6 +1108,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 
 	var tableUpdaterAddr common.Address
 	tableUpdaterAddressMap := make(map[uint64]common.Address)
+
 	for i, id := range chainIds {
 		tableUpdaterAddressMap[id.Uint64()] = tableUpdaterAddresses[i]
 
@@ -993,6 +1116,7 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 			tableUpdaterAddr = tableUpdaterAddresses[i]
 		}
 	}
+
 	if tableUpdaterAddr == (common.Address{}) {
 		return nil, fmt.Errorf("no table updater address found for chain ID %d", chainId)
 	}
@@ -1002,19 +1126,21 @@ func (cc *ContractCaller) GetOperatorTableDataForOperatorSet(
 		return nil, fmt.Errorf("failed to get latest reference time and block: %w", err)
 	}
 
-	return &contractCaller.OperatorTableData{
+	operatorTableData := &contractCaller.OperatorTableData{
 		OperatorWeights:            operatorWeights.Weights,
 		Operators:                  operatorWeights.Operators,
 		LatestReferenceTimestamp:   latestReferenceTimeAndBlock.LatestReferenceTimestamp,
 		LatestReferenceBlockNumber: latestReferenceTimeAndBlock.LatestReferenceBlockNumber,
 		TableUpdaterAddresses:      tableUpdaterAddressMap,
-	}, nil
+	}
+
+	return operatorTableData, nil
 }
 
 func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 	ctx context.Context,
 	tableUpdaterAddr common.Address,
-	atBlockNumber uint64,
+	taskBlockNumber uint64,
 ) (*contractCaller.LatestReferenceTimeAndBlock, error) {
 	tableUpdater, err := IOperatorTableUpdater.NewIOperatorTableUpdater(tableUpdaterAddr, cc.ethclient)
 	if err != nil {
@@ -1023,7 +1149,7 @@ func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 
 	latestReferenceTimestamp, err := tableUpdater.GetLatestReferenceTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference timestamp: %w", err)
@@ -1031,7 +1157,7 @@ func (cc *ContractCaller) GetTableUpdaterReferenceTimeAndBlock(
 
 	latestReferenceBlockNumber, err := tableUpdater.GetReferenceBlockNumberByTimestamp(&bind.CallOpts{
 		Context:     ctx,
-		BlockNumber: new(big.Int).SetUint64(atBlockNumber),
+		BlockNumber: new(big.Int).SetUint64(taskBlockNumber),
 	}, latestReferenceTimestamp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest reference block number: %w", err)
@@ -1059,9 +1185,7 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 
 		mailboxCfg := ITaskMailbox.ITaskMailboxTypesExecutorOperatorSetTaskConfig{
 			TaskHook: taskHookAddress,
-			//FeeToken:                 common.HexToAddress("0x"),
-			//FeeCollector:             common.HexToAddress("0x"),
-			TaskSLA: big.NewInt(60),
+			TaskSLA:  big.NewInt(60),
 			Consensus: ITaskMailbox.ITaskMailboxTypesConsensus{
 				ConsensusType: 1,
 				Value:         util.AbiEncodeUint16(6667), // 66.67% consensus threshold
@@ -1106,7 +1230,6 @@ func (cc *ContractCaller) SetupTaskMailboxForAvs(
 
 func (cc *ContractCaller) DelegateToOperator(
 	ctx context.Context,
-	stakerAddress common.Address,
 	operatorAddress common.Address,
 ) (*types.Receipt, error) {
 
@@ -1186,7 +1309,6 @@ func (cc *ContractCaller) ModifyAllocations(
 }
 
 func (cc *ContractCaller) VerifyECDSACertificate(
-	ctx context.Context,
 	messageHash [32]byte,
 	signature []byte,
 	avsAddress common.Address,
@@ -1269,41 +1391,6 @@ func (cc *ContractCaller) CreateGenerationReservation(
 	return cc.signAndSendTransaction(ctx, tx, "CreateGenerationReservation")
 }
 
-// SetOperatorTableCalculator sets the operator table calculator for an operator set (requires existing reservation)
-func (cc *ContractCaller) SetOperatorTableCalculator(
-	ctx context.Context,
-	avsAddress common.Address,
-	operatorSetId uint32,
-	operatorTableCalculatorAddress common.Address,
-) (*types.Receipt, error) {
-	txOpts, err := cc.buildTransactionOpts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build transaction options: %w", err)
-	}
-
-	operatorSet := ICrossChainRegistry.OperatorSet{
-		Avs: avsAddress,
-		Id:  operatorSetId,
-	}
-
-	cc.logger.Sugar().Infow("Setting operator table calculator",
-		zap.String("avsAddress", avsAddress.String()),
-		zap.Uint32("operatorSetId", operatorSetId),
-		zap.String("calculatorAddress", operatorTableCalculatorAddress.String()),
-	)
-
-	tx, err := cc.crossChainRegistry.SetOperatorTableCalculator(
-		txOpts,
-		operatorSet,
-		operatorTableCalculatorAddress,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create transaction: %w", err)
-	}
-
-	return cc.signAndSendTransaction(ctx, tx, "SetOperatorTableCalculator")
-}
-
 // GetTableCalculatorAddress returns the appropriate table calculator address for a given curve type
 func (cc *ContractCaller) GetTableCalculatorAddress(curveType config.CurveType) common.Address {
 	switch curveType {
@@ -1317,4 +1404,259 @@ func (cc *ContractCaller) GetTableCalculatorAddress(curveType config.CurveType) 
 		)
 		return common.Address{}
 	}
+}
+
+// VerifyBN254Certificate verifies a BN254 certificate directly with the BN254CertificateVerifier contract
+// This replicates the certificate construction from SubmitBN254TaskResult and calls verifyCertificateProportion directly
+// Returns true if the certificate meets the threshold percentage (e.g., 2500 for 25%)
+//
+// Testing use only
+func (cc *ContractCaller) VerifyBN254Certificate(
+	ctx context.Context,
+	avsAddress common.Address,
+	operatorSetId uint32,
+	params *contractCaller.BN254TaskResultParams,
+	globalTableRootReferenceTimestamp uint32,
+	operatorInfoTreeRoot [32]byte,
+	thresholdPercentage uint16,
+) (bool, error) {
+	g1Point := &bn254.G1Point{
+		G1Affine: params.SignersSignature.GetG1Point(),
+	}
+
+	g1Bytes, err := g1Point.ToPrecompileFormat()
+	if err != nil {
+		return false, fmt.Errorf("signature not in correct subgroup: %w", err)
+	}
+
+	g2Bytes, err := params.SignersPublicKey.ToPrecompileFormat()
+	if err != nil {
+		return false, fmt.Errorf("public key not in correct subgroup: %w", err)
+	}
+
+	digest := params.TaskResponseDigest
+
+	var allOperators []OperatorInfo
+	if len(params.OperatorInfos) > 0 {
+		allOperators = make([]OperatorInfo, len(params.OperatorInfos))
+		for i, info := range params.OperatorInfos {
+			allOperators[i] = OperatorInfo{
+				PubkeyX: info.PubkeyX,
+				PubkeyY: info.PubkeyY,
+				Weights: info.Weights,
+			}
+		}
+	} else {
+		return false, fmt.Errorf("OperatorInfos must be provided for BN254 merkle proof generation")
+	}
+
+	proofs, err := cc.generateOperatorMerkleProofs(params.NonSignerOperators, operatorInfoTreeRoot, allOperators)
+	if err != nil {
+		return false, fmt.Errorf("failed to generate merkle proofs for non-signers: %w", err)
+	}
+
+	nonSignerWitnesses := make([]IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254OperatorInfoWitness, 0, len(params.NonSignerOperators))
+	for _, nonSigner := range params.NonSignerOperators {
+		if int(nonSigner.OperatorIndex) >= len(allOperators) {
+			return false, fmt.Errorf("non-signer operator index %d out of range (have %d operators)",
+				nonSigner.OperatorIndex, len(allOperators))
+		}
+
+		proof, ok := proofs[nonSigner.OperatorIndex]
+		if !ok {
+			return false, fmt.Errorf("missing merkle proof for non-signer operator at index %d", nonSigner.OperatorIndex)
+		}
+
+		operatorInfo := allOperators[nonSigner.OperatorIndex]
+
+		witness := IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254OperatorInfoWitness{
+			OperatorIndex:     nonSigner.OperatorIndex,
+			OperatorInfoProof: proof,
+			OperatorInfo: IBN254CertificateVerifier.IOperatorTableCalculatorTypesBN254OperatorInfo{
+				Pubkey: IBN254CertificateVerifier.BN254G1Point{
+					X: operatorInfo.PubkeyX,
+					Y: operatorInfo.PubkeyY,
+				},
+				Weights: operatorInfo.Weights,
+			},
+		}
+		nonSignerWitnesses = append(nonSignerWitnesses, witness)
+	}
+
+	cert := IBN254CertificateVerifier.IBN254CertificateVerifierTypesBN254Certificate{
+		ReferenceTimestamp: globalTableRootReferenceTimestamp,
+		MessageHash:        digest,
+		Signature: IBN254CertificateVerifier.BN254G1Point{
+			X: new(big.Int).SetBytes(g1Bytes[0:32]),
+			Y: new(big.Int).SetBytes(g1Bytes[32:64]),
+		},
+		Apk: IBN254CertificateVerifier.BN254G2Point{
+			X: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[0:32]),
+				new(big.Int).SetBytes(g2Bytes[32:64]),
+			},
+			Y: [2]*big.Int{
+				new(big.Int).SetBytes(g2Bytes[64:96]),
+				new(big.Int).SetBytes(g2Bytes[96:128]),
+			},
+		},
+		NonSignerWitnesses: nonSignerWitnesses,
+	}
+
+	// Call verifyCertificateProportion directly to get a bool result
+	operatorSet := IBN254CertificateVerifier.OperatorSet{
+		Avs: avsAddress,
+		Id:  operatorSetId,
+	}
+
+	// Log what we're about to send to the verifier
+	cc.logger.Sugar().Infow("Calling verifyCertificateProportion",
+		"contractAddress", cc.coreContracts.BN254CertificateVerifier,
+		"threshold", fmt.Sprintf("%d/10000 (%.1f%%)", thresholdPercentage, float64(thresholdPercentage)/100),
+	)
+
+	opts, err := cc.signer.GetTransactOpts(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get transaction options: %w", err)
+	}
+
+	// Get the parsed ABI from the metadata
+	parsedABI, err := IBN254CertificateVerifier.IBN254CertificateVerifierMetaData.GetAbi()
+	if err != nil {
+		return false, fmt.Errorf("failed to get ABI: %w", err)
+	}
+
+	// Pack the method call data
+	data, err := parsedABI.Pack(
+		"verifyCertificateProportion",
+		operatorSet,
+		cert,
+		[]uint16{thresholdPercentage},
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to pack method data: %w", err)
+	}
+
+	contractAddr := common.HexToAddress(cc.coreContracts.BN254CertificateVerifier)
+	callMsg := geth.CallMsg{
+		From: opts.From,
+		To:   &contractAddr,
+		Data: data,
+	}
+
+	// TODO: set block number
+	result, err := cc.ethclient.CallContract(ctx, callMsg, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to call contract: %w", err)
+	}
+
+	// Unpack the boolean result from the bytes
+	var verified bool
+	err = parsedABI.UnpackIntoInterface(&verified, "verifyCertificateProportion", result)
+	if err != nil {
+		return false, fmt.Errorf("failed to unpack result: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("Certificate verification simulation result",
+		"verified", verified,
+		"avsAddress", avsAddress.Hex(),
+		"operatorSetId", operatorSetId,
+		"threshold", thresholdPercentage,
+	)
+
+	// Only proceed with transaction if verification would succeed
+	if !verified {
+		return false, nil
+	}
+
+	tx, err := cc.bn254CertVerifier.VerifyCertificateProportion(
+		opts,
+		operatorSet,
+		cert,
+		[]uint16{thresholdPercentage},
+	)
+	if err != nil {
+		return false, fmt.Errorf("certificate verification failed: %w", err)
+	}
+
+	// Send the transaction and wait for receipt
+	receipt, err := cc.signAndSendTransaction(ctx, tx, "VerifyBN254Certificate")
+	if err != nil {
+		return false, fmt.Errorf("failed to send verification transaction: %w", err)
+	}
+
+	cc.logger.Sugar().Infow("BN254 certificate verification result",
+		"verified", verified,
+		"avsAddress", avsAddress.Hex(),
+		"operatorSetId", operatorSetId,
+		"threshold", thresholdPercentage,
+		"txHash", receipt.TxHash.Hex(),
+		"gasUsed", receipt.GasUsed,
+	)
+
+	return verified, nil
+}
+
+func (cc *ContractCaller) generateOperatorMerkleProofs(
+	nonSignerOperators []contractCaller.BN254NonSignerOperator,
+	operatorInfoTreeRoot [32]byte,
+	allOperators []OperatorInfo,
+) (map[uint32][]byte, error) {
+
+	leaves := make([][]byte, len(allOperators))
+	for i, op := range allOperators {
+		encodedLeaf, err := util.EncodeOperatorInfoLeaf(op.PubkeyX, op.PubkeyY, op.Weights)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode leaf for operator %d: %w", i, err)
+		}
+
+		leaves[i] = encodedLeaf
+	}
+
+	tree, err := merkletree.NewTree(
+		merkletree.WithData(leaves),
+		merkletree.WithHashType(keccak256.New()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create merkle tree: %w", err)
+	}
+
+	calculatedRoot := tree.Root()
+
+	if !bytes.Equal(calculatedRoot, operatorInfoTreeRoot[:]) {
+		cc.logger.Sugar().Errorw("Merkle root mismatch",
+			"calculatedRoot", fmt.Sprintf("0x%x", calculatedRoot),
+			"expectedRoot", fmt.Sprintf("0x%x", operatorInfoTreeRoot),
+			"numLeaves", len(leaves),
+		)
+
+		return nil, fmt.Errorf("merkle root mismatch: calculated %x, expected %x",
+			calculatedRoot, operatorInfoTreeRoot)
+	}
+
+	proofs := make(map[uint32][]byte)
+	for _, nonSigner := range nonSignerOperators {
+		proof, err := tree.GenerateProofWithIndex(uint64(nonSigner.OperatorIndex), 0)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate proof for operator %d: %w",
+				nonSigner.OperatorIndex, err)
+		}
+
+		proofBytes := flattenProofHashes(proof.Hashes)
+		proofs[nonSigner.OperatorIndex] = proofBytes
+	}
+
+	return proofs, nil
+}
+
+func flattenProofHashes(hashes [][]byte) []byte {
+	if len(hashes) == 0 {
+		return []byte{}
+	}
+
+	proofBytes := make([]byte, 0, len(hashes)*32)
+	for _, hash := range hashes {
+		proofBytes = append(proofBytes, hash...)
+	}
+	return proofBytes
 }

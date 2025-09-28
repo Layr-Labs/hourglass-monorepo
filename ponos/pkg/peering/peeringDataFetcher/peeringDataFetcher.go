@@ -26,6 +26,7 @@ func NewPeeringDataFetcher(
 
 func (pdf *PeeringDataFetcher) ListExecutorOperators(_ context.Context, avsAddress string, blockNumber uint64) ([]*peering.OperatorPeerInfo, error) {
 	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress, blockNumber)
+
 	if err != nil {
 		pdf.logger.Sugar().Errorw("Failed to get AVS config",
 			zap.String("avsAddress", avsAddress),
@@ -33,15 +34,14 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(_ context.Context, avsAddre
 		)
 		return nil, err
 	}
-	// map[operatorAddress]*peering.OperatorPeerInfo
 	operatorPeeringInfos := map[string]*peering.OperatorPeerInfo{}
 
-	// iterate over all operator sets and get their members with peering info
 	for _, operatorSetId := range avsConfig.ExecutorOperatorSetIds {
 		peeringInfos, err := pdf.contractCaller.GetOperatorSetMembersWithPeering(avsAddress, operatorSetId, blockNumber)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operator set members with peering %w", err)
 		}
+
 		for _, peeringInfo := range peeringInfos {
 			infos, ok := operatorPeeringInfos[peeringInfo.OperatorAddress]
 			if !ok {
@@ -51,6 +51,7 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(_ context.Context, avsAddre
 			infos.OperatorSets = append(infos.OperatorSets, peeringInfo.OperatorSets...)
 		}
 	}
+
 	result := make([]*peering.OperatorPeerInfo, 0, len(operatorPeeringInfos))
 	for _, info := range operatorPeeringInfos {
 		result = append(result, info)
@@ -60,7 +61,6 @@ func (pdf *PeeringDataFetcher) ListExecutorOperators(_ context.Context, avsAddre
 }
 
 func (pdf *PeeringDataFetcher) ListAggregatorOperators(_ context.Context, avsAddress string, blockNumber uint64) ([]*peering.OperatorPeerInfo, error) {
-	// Use blockNumber 0 to get the latest state
 	avsConfig, err := pdf.contractCaller.GetAVSConfig(avsAddress, blockNumber)
 	if err != nil {
 		pdf.logger.Sugar().Errorw("Failed to get AVS config", zap.Error(err))

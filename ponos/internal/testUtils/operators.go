@@ -14,6 +14,103 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	Strategy_WETH  = "0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc"
+	Strategy_STETH = "0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
+)
+
+type StakerDelegationConfig struct {
+	StakerPrivateKey   string
+	StakerAddress      string
+	OperatorPrivateKey string
+	OperatorAddress    string
+	OperatorSetId      uint32
+	StrategyAddress    string
+}
+
+// OperatorConfig holds all configuration for an operator including
+// registration details and runtime configuration
+type OperatorConfig struct {
+	Operator        *operator.Operator
+	Socket          string         // Socket endpoint for this operator (e.g., "localhost:9000")
+	MetadataUri     string         // Metadata URI for the operator
+	AllocationDelay uint32         // Allocation delay for the operator
+	Address         common.Address // Derived operator address
+}
+
+// RegisterMultipleOperators registers multiple operators with their own transaction keys
+// This is a generic function that works for any curve type (BN254, ECDSA, etc.)
+func RegisterMultipleOperators(
+	ctx context.Context,
+	ethClient *ethclient.Client,
+	avsAddress string,
+	avsPrivateKey string,
+	operatorConfigs []*OperatorConfig,
+	l *zap.Logger,
+) error {
+	// Create AVS signer for registering all operators
+	avsSigner, err := transactionSigner.NewPrivateKeySigner(avsPrivateKey, ethClient, l)
+	if err != nil {
+		return fmt.Errorf("failed to create AVS signer: %v", err)
+	}
+
+	avsCaller, err := caller.NewContractCaller(ethClient, avsSigner, l)
+	if err != nil {
+		return fmt.Errorf("failed to create AVS caller: %v", err)
+	}
+
+	for i, opConfig := range operatorConfigs {
+		op := opConfig.Operator
+
+		// Create transaction signer for this specific operator using its own private key
+		operatorSigner, err := transactionSigner.NewPrivateKeySigner(op.TransactionPrivateKey, ethClient, l)
+		if err != nil {
+			return fmt.Errorf("failed to create operator %d private key signer: %v", i+1, err)
+		}
+
+		operatorCaller, err := caller.NewContractCaller(ethClient, operatorSigner, l)
+		if err != nil {
+			return fmt.Errorf("failed to create operator %d contract caller: %v", i+1, err)
+		}
+
+		// Derive the operator address and store it in the config
+		operatorAddress, err := op.DeriveAddress()
+		if err != nil {
+			return fmt.Errorf("failed to derive address for operator %d: %v", i+1, err)
+		}
+		opConfig.Address = operatorAddress
+
+		l.Sugar().Infow("Registering operator",
+			zap.Int("operatorNumber", i+1),
+			zap.String("operatorAddress", operatorAddress.Hex()),
+			zap.Uint32s("operatorSetIds", op.OperatorSetIds),
+			zap.String("socket", opConfig.Socket),
+			zap.String("curveType", string(op.Curve)),
+		)
+
+		// Register the operator to operator sets
+		_, err = operator.RegisterOperatorToOperatorSets(
+			ctx,
+			avsCaller,
+			operatorCaller,
+			common.HexToAddress(avsAddress),
+			op.OperatorSetIds,
+			op,
+			&operator.RegistrationConfig{
+				Socket:          opConfig.Socket,
+				MetadataUri:     opConfig.MetadataUri,
+				AllocationDelay: opConfig.AllocationDelay,
+			},
+			l,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to register operator %d: %v", i+1, err)
+		}
+	}
+
+	return nil
+}
+
 func SetupOperatorPeering(
 	ctx context.Context,
 	chainConfig *ChainConfig,
@@ -122,20 +219,6 @@ func SetupOperatorPeering(
 	return nil
 }
 
-const (
-	Strategy_WETH  = "0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc"
-	Strategy_STETH = "0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
-)
-
-type StakerDelegationConfig struct {
-	StakerPrivateKey   string
-	StakerAddress      string
-	OperatorPrivateKey string
-	OperatorAddress    string
-	OperatorSetId      uint32
-	StrategyAddress    string
-}
-
 func DelegateStakeToOperators(
 	t *testing.T,
 	ctx context.Context,
@@ -181,6 +264,36 @@ func DelegateStakeToOperators(
 	return nil
 }
 
+// DelegateStakeToMultipleOperators delegates stake to multiple operators in a single call
+func DelegateStakeToMultipleOperators(
+	t *testing.T,
+	ctx context.Context,
+	configs []*StakerDelegationConfig,
+	avsAddress string,
+	ethClient *ethclient.Client,
+	l *zap.Logger,
+) error {
+	for i, config := range configs {
+		t.Logf("------------------------ Delegating Operator %d ------------------------", i+1)
+		err := DelegateStakeToOperator(
+			ctx,
+			config.StakerPrivateKey,
+			config.StakerAddress,
+			config.OperatorPrivateKey,
+			config.OperatorAddress,
+			avsAddress,
+			config.OperatorSetId,
+			config.StrategyAddress,
+			ethClient,
+			l,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to delegate stake to operator %d (%s): %v", i+1, config.OperatorAddress, err)
+		}
+	}
+	return nil
+}
+
 func DelegateStakeToOperator(
 	ctx context.Context,
 	stakerPrivateKey string,
@@ -213,7 +326,6 @@ func DelegateStakeToOperator(
 
 	if _, err := stakerCc.DelegateToOperator(
 		ctx,
-		common.HexToAddress(stakerAddress),
 		common.HexToAddress(operatorAddress),
 	); err != nil {
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)

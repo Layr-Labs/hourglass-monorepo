@@ -6,6 +6,7 @@ import (
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/IBN254TableCalculator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/peering"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,6 +24,15 @@ type OperatorTableData struct {
 	LatestReferenceTimestamp   uint32
 	LatestReferenceBlockNumber uint32
 	TableUpdaterAddresses      map[uint64]common.Address
+	OperatorInfoTreeRoot       [32]byte
+	OperatorInfos              []BN254OperatorInfo
+}
+
+// BN254OperatorInfo contains BN254 operator public key and weights for merkle proof generation
+type BN254OperatorInfo struct {
+	PubkeyX *big.Int
+	PubkeyY *big.Int
+	Weights []*big.Int
 }
 
 type LatestReferenceTimeAndBlock struct {
@@ -53,12 +63,21 @@ func (tm *TaskMailboxExecutorOperatorSetConfig) GetCurveType() (config.CurveType
 
 // BN254TaskResultParams contains all fields needed to submit a BN254 task result
 type BN254TaskResultParams struct {
-	TaskId             []byte
-	TaskResponse       []byte
-	TaskResponseDigest [32]byte
-	SignersSignature   *bn254.Signature
-	SignersPublicKey   *bn254.G2Point
-	NonSignerOperators []BN254NonSignerOperator
+	TaskId                 []byte
+	TaskResponse           []byte
+	TaskResponseDigest     [32]byte
+	SignersSignature       *bn254.Signature
+	SignersPublicKey       *bn254.G2Point
+	NonSignerOperators     []BN254NonSignerOperator
+	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
+	OperatorInfos          []BN254OperatorInfo
+}
+
+// BN254OperatorWithWeights contains operator info including weights for merkle proof generation
+type BN254OperatorWithWeights struct {
+	OperatorIndex uint32
+	PublicKey     []byte     // BN254 public key bytes
+	Weights       []*big.Int // Operator stake weights
 }
 
 // BN254NonSignerOperator contains operator info for non-signers
@@ -80,12 +99,14 @@ type IContractCaller interface {
 		ctx context.Context,
 		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
 		params *BN254TaskResultParams,
 		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
 
 	SubmitECDSATaskResult(
@@ -100,6 +121,16 @@ type IContractCaller interface {
 		globalTableRootReferenceTimestamp uint32,
 	) (*ethereumTypes.Receipt, error)
 
+	VerifyBN254Certificate(
+		ctx context.Context,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		params *BN254TaskResultParams,
+		globalTableRootReferenceTimestamp uint32,
+		operatorInfoTreeRoot [32]byte,
+		thresholdPercentage uint16,
+	) (bool, error)
+
 	GetAVSConfig(avsAddress string, blockNumber uint64) (*AVSConfig, error)
 
 	GetOperatorSetCurveType(avsAddress string, operatorSetId uint32, blockNumber uint64) (config.CurveType, error)
@@ -110,13 +141,7 @@ type IContractCaller interface {
 
 	PublishMessageToInbox(ctx context.Context, avsAddress string, operatorSetId uint32, payload []byte) (*ethereumTypes.Receipt, error)
 
-	GetOperatorTableDataForOperatorSet(
-		ctx context.Context,
-		avsAddress common.Address,
-		operatorSetId uint32,
-		chainId config.ChainId,
-		referenceBlocknumber uint64,
-	) (*OperatorTableData, error)
+	GetOperatorTableDataForOperatorSet(ctx context.Context, avsAddress common.Address, operatorSetId uint32, chainId config.ChainId, atBlockNumber uint64) (*OperatorTableData, error)
 
 	GetTableUpdaterReferenceTimeAndBlock(
 		ctx context.Context,
@@ -143,14 +168,22 @@ type IContractCaller interface {
 		maxStalenessPeriod uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	SetOperatorTableCalculator(
+	GetTableCalculatorAddress(curveType config.CurveType) common.Address
+
+	GetOperatorInfos(
 		ctx context.Context,
 		avsAddress common.Address,
-		operatorSetId uint32,
-		operatorTableCalculatorAddress common.Address,
-	) (*ethereumTypes.Receipt, error)
+		opSetId uint32,
+		referenceBlockNumber uint64,
+	) ([]IBN254TableCalculator.IOperatorTableCalculatorTypesBN254OperatorInfo, error)
 
-	GetTableCalculatorAddress(curveType config.CurveType) common.Address
+	GetOperatorInfoTreeRoot(
+		ctx context.Context,
+		avsAddress common.Address,
+		opSetId uint32,
+		taskBlockNumber uint64,
+		referenceTimestamp uint32,
+	) ([32]byte, error)
 
 	// ------------------------------------------------------------------------
 	// Helper functions for test setup

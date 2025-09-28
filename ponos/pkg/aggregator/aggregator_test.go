@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
@@ -44,10 +45,11 @@ import (
 )
 
 const (
-	L1RPCUrl = "http://127.0.0.1:8545"
-	L2RPCUrl = "http://127.0.0.1:9545"
-	L2WSUrl  = "ws://127.0.0.1:9545"
-	L1WsUrl  = "ws://127.0.0.1:8545"
+	L1RPCUrl        = "http://127.0.0.1:8545"
+	L2RPCUrl        = "http://127.0.0.1:9545"
+	L2WSUrl         = "ws://127.0.0.1:9545"
+	L1WsUrl         = "ws://127.0.0.1:8545"
+	transportBlsKey = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 )
 
 // SignatureModeConfig defines the signature curve configuration for testing
@@ -516,9 +518,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	}
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
-	maxStalenessPeriod := uint32(604800) // 1 week in seconds
+	maxStalenessPeriod := uint32(604800)
 
-	// Create generation reservation for aggregator operator set based on its curve type
 	aggCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.AggregatorCurve)
 	t.Logf("Creating generation reservation with %s table calculator %s for aggregator operator set %d",
 		sigConfig.AggregatorCurve, aggCalculatorAddr.Hex(), sigConfig.AggregatorOpsetId)
@@ -527,7 +528,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		avsAddr,
 		sigConfig.AggregatorOpsetId,
 		aggCalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
@@ -543,7 +544,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		avsAddr,
 		sigConfig.ExecutorOpsetId,
 		execCalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
@@ -563,8 +564,52 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	time.Sleep(time.Second * 6)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
-	// transport the tables for good measure
-	testUtils.TransportStakeTables(l, true)
+	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
+		l.Sugar().Infow("Transporting tables for BN254 executor operator set (including L2)",
+			zap.Uint32("executorOperatorSetId", sigConfig.ExecutorOpsetId))
+
+		// For aggregator test, we need L2 transport - don't ignore L2 chain
+		chainIdsToIgnore := []*big.Int{
+			new(big.Int).SetUint64(11155111), // eth sepolia
+			new(big.Int).SetUint64(17000),    // holesky
+			new(big.Int).SetUint64(84532),    // base sepolia
+		}
+
+		// Pass the executor's BLS info for proper operator info tree root calculation
+		// The operator is already registered via SetupOperatorPeering, so KeyRegistrar registration will be skipped
+		operatorBLSInfos := []tableTransporter.OperatorBLSInfo{
+			{
+				OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
+				PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),
+				Weights:         []*big.Int{big.NewInt(2000000000000000000)},
+			},
+		}
+		contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+
+		err = tableTransporter.TransportTableWithSimpleMultiOperators(
+			&tableTransporter.MultipleOperatorConfig{
+				TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
+				L1RpcUrl:                  "http://localhost:8545",
+				L1ChainId:                 31337,
+				L2RpcUrl:                  l2RpcUrl,
+				L2ChainId:                 31338,
+				CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
+				ChainIdsToIgnore:          chainIdsToIgnore,
+				Logger:                    l,
+				Operators:                 operatorBLSInfos,
+				AVSAddress:                avsAddr,
+				OperatorSetId:             sigConfig.ExecutorOpsetId,
+				TransportBLSPrivateKey:    transportBlsKey,
+			},
+		)
+		if err != nil {
+			t.Fatalf("Failed to transport operator tables: %v", err)
+		}
+	} else {
+		// For ECDSA-only setups, use the simple transport
+		l.Sugar().Infow("Using simple table transport for ECDSA-only setup")
+		testUtils.TransportStakeTables(l, true)
+	}
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
 
@@ -922,7 +967,7 @@ operator:
     privateKey: "0xebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"
 %s
 avss:
-  - address: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
+  - address: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
     responseTimeout: 3000
     chainIds: [31338]
     avsRegistrarAddress: "0x005ba0ba463b0709380afdf8ff5045c461878c90"
@@ -1003,7 +1048,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
+  avsAddress: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "kubernetes"
   kubernetes:
@@ -1027,7 +1072,7 @@ avsPerformers:
     repository: "hello-performer"
     tag: "latest"
   processType: "server"
-  avsAddress: "0x94dc1051894dcF256AFCaa8eBE8405dECB2B297B"
+  avsAddress: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
   avsRegistrarAddress: "0x7675776c164b786084474f5cc0c9c3d27118e4d1"
   deploymentMode: "docker"
 `, signingKeysSection)

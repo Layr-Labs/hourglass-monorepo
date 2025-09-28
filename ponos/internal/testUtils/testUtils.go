@@ -17,6 +17,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -52,25 +53,40 @@ func GetProjectRootPath() string {
 }
 
 type ChainConfig struct {
-	AVSAccountAddress            string `json:"avsAccountAddress"`
-	AVSAccountPrivateKey         string `json:"avsAccountPk"`
-	AVSAccountPublicKey          string `json:"avsAccountPublicKey"`
-	AppAccountAddress            string `json:"appAccountAddress"`
-	AppAccountPrivateKey         string `json:"appAccountPk"`
-	AppAccountPublicKey          string `json:"appAccountPublicKey"`
-	OperatorAccountPrivateKey    string `json:"operatorAccountPk"`
-	OperatorAccountAddress       string `json:"operatorAccountAddress"`
-	OperatorAccountPublicKey     string `json:"operatorAccountPublicKey"`
-	ExecOperatorAccountPk        string `json:"execOperatorAccountPk"`
-	ExecOperatorAccountAddress   string `json:"execOperatorAccountAddress"`
-	ExecOperatorAccountPublicKey string `json:"execOperatorAccountPublicKey"`
-	AVSTaskRegistrarAddress      string `json:"avsTaskRegistrarAddress"`
-	AVSTaskHookAddressL1         string `json:"avsTaskHookAddressL1"`
-	AVSTaskHookAddressL2         string `json:"avsTaskHookAddressL2"`
-	AggStakerAccountPrivateKey   string `json:"aggStakerAccountPk"`
-	AggStakerAccountAddress      string `json:"aggStakerAccountAddress"`
-	ExecStakerAccountPrivateKey  string `json:"execStakerAccountPk"`
-	ExecStakerAccountAddress     string `json:"execStakerAccountAddress"`
+	AVSAccountAddress             string `json:"avsAccountAddress"`
+	AVSAccountPrivateKey          string `json:"avsAccountPk"`
+	AVSAccountPublicKey           string `json:"avsAccountPublicKey"`
+	AppAccountAddress             string `json:"appAccountAddress"`
+	AppAccountPrivateKey          string `json:"appAccountPk"`
+	AppAccountPublicKey           string `json:"appAccountPublicKey"`
+	OperatorAccountPrivateKey     string `json:"operatorAccountPk"`
+	OperatorAccountAddress        string `json:"operatorAccountAddress"`
+	OperatorAccountPublicKey      string `json:"operatorAccountPublicKey"`
+	ExecOperatorAccountPk         string `json:"execOperatorAccountPk"`
+	ExecOperatorAccountAddress    string `json:"execOperatorAccountAddress"`
+	ExecOperatorAccountPublicKey  string `json:"execOperatorAccountPublicKey"`
+	ExecOperator2AccountPk        string `json:"execOperator2AccountPk"`
+	ExecOperator2AccountAddress   string `json:"execOperator2AccountAddress"`
+	ExecOperator2AccountPublicKey string `json:"execOperator2AccountPublicKey"`
+	ExecOperator3AccountPk        string `json:"execOperator3AccountPk"`
+	ExecOperator3AccountAddress   string `json:"execOperator3AccountAddress"`
+	ExecOperator3AccountPublicKey string `json:"execOperator3AccountPublicKey"`
+	ExecOperator4AccountPk        string `json:"execOperator4AccountPk"`
+	ExecOperator4AccountAddress   string `json:"execOperator4AccountAddress"`
+	ExecOperator4AccountPublicKey string `json:"execOperator4AccountPublicKey"`
+	AVSTaskRegistrarAddress       string `json:"avsTaskRegistrarAddress"`
+	AVSTaskHookAddressL1          string `json:"avsTaskHookAddressL1"`
+	AVSTaskHookAddressL2          string `json:"avsTaskHookAddressL2"`
+	AggStakerAccountPrivateKey    string `json:"aggStakerAccountPk"`
+	AggStakerAccountAddress       string `json:"aggStakerAccountAddress"`
+	ExecStakerAccountPrivateKey   string `json:"execStakerAccountPk"`
+	ExecStakerAccountAddress      string `json:"execStakerAccountAddress"`
+	ExecStaker2AccountPrivateKey  string `json:"execStaker2AccountPk"`
+	ExecStaker2AccountAddress     string `json:"execStaker2AccountAddress"`
+	ExecStaker3AccountPrivateKey  string `json:"execStaker3AccountPk"`
+	ExecStaker3AccountAddress     string `json:"execStaker3AccountAddress"`
+	ExecStaker4AccountPrivateKey  string `json:"execStaker4AccountPk"`
+	ExecStaker4AccountAddress     string `json:"execStaker4AccountAddress"`
 }
 
 func ReadChainConfig(projectRoot string) (*ChainConfig, error) {
@@ -270,7 +286,7 @@ func KillAnvil(cmd *exec.Cmd) error {
 func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 	transportBlsPrivateKey := os.Getenv("HOURGLASS_TRANSPORT_BLS_KEY")
 	if transportBlsPrivateKey == "" {
-		panic("HOURGLASS_TRANSPORT_BLS_KEY environment variable is not set")
+		transportBlsPrivateKey = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 	}
 	transportEcdsaPrivateKey := transportBlsPrivateKey
 	chainIdsToIgnore := []*big.Int{
@@ -301,4 +317,37 @@ func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 		chainIdsToIgnore,
 		l,
 	)
+}
+
+// TransportStakeTablesWithMultipleOperatorsConfig transports stake tables with configurable L2 support
+func TransportStakeTablesWithMultipleOperatorsConfig(
+	l *zap.Logger,
+	operators []tableTransporter.OperatorBLSInfo,
+	transporterPrivateKey string,
+	operatorSetId uint32,
+	avsAddress string,
+	l2RpcUrl string,
+	l2ChainId uint64,
+	chainIdsToIgnore []*big.Int,
+) error {
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+
+	transportBLSKey := "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
+
+	cfg := &tableTransporter.MultipleOperatorConfig{
+		TransporterPrivateKey:     transporterPrivateKey,
+		L1RpcUrl:                  "http://localhost:8545",
+		L1ChainId:                 31337,
+		L2RpcUrl:                  l2RpcUrl,
+		L2ChainId:                 l2ChainId,
+		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
+		ChainIdsToIgnore:          chainIdsToIgnore,
+		Logger:                    l,
+		Operators:                 operators,
+		AVSAddress:                common.HexToAddress(avsAddress),
+		OperatorSetId:             operatorSetId,
+		TransportBLSPrivateKey:    transportBLSKey,
+	}
+
+	return tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
 }

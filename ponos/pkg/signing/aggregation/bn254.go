@@ -44,6 +44,9 @@ type AggregatedBN254Certificate struct {
 
 	// Non-signer operators sorted by OperatorIndex (for contract submission)
 	NonSignerOperators []*Operator[signing.PublicKey]
+
+	// All operators sorted by OperatorIndex (for merkle proof generation)
+	SortedOperatorsByIndex []*Operator[signing.PublicKey]
 }
 
 // ToSubmitParams converts the certificate to contract submission parameters
@@ -62,6 +65,16 @@ func (cert *AggregatedBN254Certificate) ToSubmitParams() *contractCaller.BN254Ta
 		params.NonSignerOperators[i] = contractCaller.BN254NonSignerOperator{
 			OperatorIndex: op.OperatorIndex,
 			PublicKey:     op.PublicKey.Bytes(),
+		}
+	}
+
+	// Convert SortedOperatorsByIndex with weights
+	params.SortedOperatorsByIndex = make([]contractCaller.BN254OperatorWithWeights, len(cert.SortedOperatorsByIndex))
+	for i, op := range cert.SortedOperatorsByIndex {
+		params.SortedOperatorsByIndex[i] = contractCaller.BN254OperatorWithWeights{
+			OperatorIndex: op.OperatorIndex,
+			PublicKey:     op.PublicKey.Bytes(),
+			Weights:       op.Weights,
 		}
 	}
 
@@ -349,7 +362,6 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
 	}
 
-	// TODO: populate and use tra avs address and operator address to properly verify the expected result
 	authData := &types.AuthSignatureData{
 		TaskId:          tra.TaskId,
 		AvsAddress:      taskResponse.AvsAddress,
@@ -418,7 +430,15 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		nonSignerPublicKeys = append(nonSignerPublicKeys, operator.PublicKey)
 	}
 
-	allPublicKeys := util.Map(tra.Operators, func(o *Operator[signing.PublicKey], i uint64) signing.PublicKey {
+	// Sort all operators by their operator index
+	sortedOperators := make([]*Operator[signing.PublicKey], len(tra.Operators))
+	copy(sortedOperators, tra.Operators)
+	sort.SliceStable(sortedOperators, func(i, j int) bool {
+		return sortedOperators[i].OperatorIndex < sortedOperators[j].OperatorIndex
+	})
+
+	// Then map to public keys (now in operator index order)
+	allPublicKeys := util.Map(sortedOperators, func(o *Operator[signing.PublicKey], i uint64) signing.PublicKey {
 		return o.PublicKey
 	})
 
@@ -428,15 +448,16 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 	}
 
 	return &AggregatedBN254Certificate{
-		TaskId:              taskIdBytes,
-		TaskResponse:        winningGroup.response.TaskResult.Output,
-		TaskResponseDigest:  winningGroup.response.OutputDigest,
-		NonSignersPubKeys:   nonSignerPublicKeys,
-		AllOperatorsPubKeys: allPublicKeys,
-		SignersPublicKey:    aggregatedPubKey,
-		SignersSignature:    aggregatedSig,
-		SignedAt:            new(time.Time),
-		NonSignerOperators:  nonSignerOperators,
+		TaskId:                 taskIdBytes,
+		TaskResponse:           winningGroup.response.TaskResult.Output,
+		TaskResponseDigest:     winningGroup.response.OutputDigest,
+		NonSignersPubKeys:      nonSignerPublicKeys,
+		AllOperatorsPubKeys:    allPublicKeys,
+		SignersPublicKey:       aggregatedPubKey,
+		SignersSignature:       aggregatedSig,
+		SignedAt:               new(time.Time),
+		NonSignerOperators:     nonSignerOperators,
+		SortedOperatorsByIndex: sortedOperators,
 	}, nil
 }
 

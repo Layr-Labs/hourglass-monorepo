@@ -4,6 +4,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
+	"reflect"
+	"strings"
+	"time"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
@@ -23,10 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"go.uber.org/zap"
-	"math/big"
-	"reflect"
-	"strings"
-	"time"
 )
 
 type G1Point struct{ X, Y *big.Int }
@@ -62,7 +63,7 @@ func TransportTable(
 	if err := cm.AddChain(l1AnvilConfig); err != nil {
 		l.Sugar().Fatalf("Failed to add chain: %v", err)
 	}
-	holeskyClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
+	chainClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to get chain for ID %d: %v", l1AnvilConfig.ChainID, err)
 	}
@@ -75,9 +76,7 @@ func TransportTable(
 		if err := cm.AddChain(l2ChainConfig); err != nil {
 			l.Sugar().Fatalf("Failed to add L2 chain: %v", err)
 		}
-		l.Sugar().Infow("Added L2 chain",
-			zap.Any("chainConfig", l2ChainConfig),
-		)
+		l.Sugar().Infow("Added L2 chain", zap.Any("chainConfig", l2ChainConfig))
 	}
 
 	txSign, err := txSigner.NewPrivateKeySigner(transporterPrivateKey)
@@ -91,17 +90,17 @@ func TransportTable(
 
 	tableCalc, err := operatorTableCalculator.NewStakeTableRootCalculator(&operatorTableCalculator.Config{
 		CrossChainRegistryAddress: common.HexToAddress(crossChainRegistryAddress),
-	}, holeskyClient.RPCClient, l)
+	}, chainClient.RPCClient, l)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to create StakeTableRootCalculator: %v", err)
 	}
 
-	blockNumber, err := holeskyClient.RPCClient.BlockNumber(ctx)
+	blockNumber, err := chainClient.RPCClient.BlockNumber(ctx)
 	if err != nil {
 		l.Sugar().Fatalf("Failed to get block number: %v", err)
 	}
-	// blockNumber = blockNumber - 2
-	block, err := holeskyClient.RPCClient.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
+
+	block, err := chainClient.RPCClient.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	if err != nil {
 		l.Sugar().Fatalf("Failed to get block by number: %v", err)
 	}
@@ -125,7 +124,7 @@ func TransportTable(
 		&transport.TransportConfig{
 			L1CrossChainRegistryAddress: common.HexToAddress(crossChainRegistryAddress),
 		},
-		holeskyClient.RPCClient,
+		chainClient.RPCClient,
 		inMemSigner,
 		txSign,
 		cm,
@@ -145,7 +144,7 @@ func TransportTable(
 	// 2. Get supported chains and configure each one
 	ccRegistryCaller, _ := ICrossChainRegistry.NewICrossChainRegistryCaller(
 		common.HexToAddress(crossChainRegistryAddress),
-		holeskyClient.RPCClient)
+		chainClient.RPCClient)
 
 	chainIds, addresses, _ := ccRegistryCaller.GetSupportedChains(&bind.CallOpts{})
 
@@ -177,94 +176,96 @@ func TransportTable(
 			gen.Id = 1
 		}
 
-		// Connect to an ethClient to construct contractCaller
-		client, err := ethclient.Dial(l1RpcUrl)
-		if err != nil {
-			l.Error("failed to connect to L1 RPC: %w", zap.Error(err))
-		}
+		// Only perform key registration on L1 since KeyRegistrar only exists on L1
+		if chainId.Uint64() == l1ChainId {
+			// Connect to an ethClient to construct contractCaller
+			client, err := ethclient.Dial(l1RpcUrl)
+			if err != nil {
+				l.Error("failed to connect to L1 RPC: %w", zap.Error(err))
+			}
 
-		signer, err := transactionSigner.NewPrivateKeySigner(transporterPrivateKey, client, l)
-		if err != nil {
-			log.Error("Failed to create private key signer")
-		}
+			signer, err := transactionSigner.NewPrivateKeySigner(transporterPrivateKey, client, l)
+			if err != nil {
+				log.Error("Failed to create private key signer")
+			}
 
-		// Construct contractCaller with KeyRegistrar
-		contractCaller, err := caller.NewContractCaller(client, signer, l)
-		if err != nil {
-			l.Error("Failed to create contract caller")
-		}
+			// Construct contractCaller with KeyRegistrar
+			contractCaller, err := caller.NewContractCaller(client, signer, l)
+			if err != nil {
+				l.Error("Failed to create contract caller")
+			}
 
-		// Derive BN254 keys from the hex string (no keystore files needed) ---
-		blsHex := strings.TrimPrefix(blsPrivateKey, "0x")
+			// Derive BN254 keys from the hex string (no keystore files needed) ---
+			blsHex := strings.TrimPrefix(blsPrivateKey, "0x")
 
-		// Extract key details
-		scheme := bn254.NewScheme()
-		skGeneric, err := scheme.NewPrivateKeyFromHexString(blsHex)
-		if err != nil {
-			l.Error("parse BLS hex: %w", zap.Error(err))
-		}
-		blsPriv, err := bn254.NewPrivateKeyFromBytes(skGeneric.Bytes())
-		if err != nil {
-			l.Error("convert BLS key: %w", zap.Error(err))
-		}
-		blsPub := blsPriv.Public() // <- this is what EncodeBN254KeyData expects
+			// Extract key details
+			scheme := bn254.NewScheme()
+			skGeneric, err := scheme.NewPrivateKeyFromHexString(blsHex)
+			if err != nil {
+				l.Error("parse BLS hex: %w", zap.Error(err))
+			}
+			blsPriv, err := bn254.NewPrivateKeyFromBytes(skGeneric.Bytes())
+			if err != nil {
+				l.Error("convert BLS key: %w", zap.Error(err))
+			}
+			blsPub := blsPriv.Public() // <- this is what EncodeBN254KeyData expects
 
-		// Encode keyData for KeyRegistrar from the PUBLIC key ---
-		keyData, err := contractCaller.EncodeBN254KeyData(blsPub)
-		if err != nil {
-			l.Error("encode key data: %w", zap.Error(err))
-		}
+			// Encode keyData for KeyRegistrar from the PUBLIC key ---
+			keyData, err := contractCaller.EncodeBN254KeyData(blsPub)
+			if err != nil {
+				l.Error("encode key data: %w", zap.Error(err))
+			}
 
-		// Configure curve type (you need to add CURVE_TYPE_KEY_REGISTRAR_BN254 constant)
-		const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2 // or whatever the correct value is
+			// Configure curve type (you need to add CURVE_TYPE_KEY_REGISTRAR_BN254 constant)
+			const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2 // or whatever the correct value is
 
-		// You need the KeyRegistrar address - this should come from your config
-		keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+			// You need the KeyRegistrar address - this should come from your config
+			keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
 
-		if err := configureCurveTypeAsAVS(
-			ctx,
-			l,
-			l1RpcUrl, // KeyRegistrar is on L1
-			keyRegistrarAddress,
-			gen.Avs,
-			gen.Id,
-			CURVE_TYPE_KEY_REGISTRAR_BN254,
-		); err != nil {
-			l.Sugar().Fatalf("Failed to configure curve type: %v", err)
-		}
+			if err := configureCurveTypeAsAVS(
+				ctx,
+				l,
+				l1RpcUrl, // KeyRegistrar is on L1
+				keyRegistrarAddress,
+				gen.Avs,
+				gen.Id,
+				CURVE_TYPE_KEY_REGISTRAR_BN254,
+			); err != nil {
+				l.Sugar().Fatalf("Failed to configure curve type: %v", err)
+			}
 
-		// Now you need to register the BLS key in the KeyRegistrar
-		// This requires creating a contractCaller and registering the key
-		// (This is the part you're completely missing)
-		opEOA := mustKey(l, transporterPrivateKey)
-		operatorAddress := crypto.PubkeyToAddress(opEOA.PublicKey)
+			// Now you need to register the BLS key in the KeyRegistrar
+			// This requires creating a contractCaller and registering the key
+			opEOA := mustKey(l, transporterPrivateKey)
+			operatorAddress := crypto.PubkeyToAddress(opEOA.PublicKey)
 
-		// Build the message hash per registrar rules and sign with BLS private key
-		msgHash, err := contractCaller.GetOperatorRegistrationMessageHash(
-			ctx,
-			operatorAddress,
-			gen.Avs,
-			gen.Id,
-			keyData,
-		)
-		if err != nil {
-			l.Error("failed to get operator registration message", zap.Error(err))
-		}
-		sig, err := blsPriv.SignSolidityCompatible(msgHash)
-		if err != nil {
-			log.Error("BLS sign: %w", err)
-		}
+			// Build the message hash per registrar rules and sign with BLS private key
+			msgHash, err := contractCaller.GetOperatorRegistrationMessageHash(
+				ctx,
+				operatorAddress,
+				gen.Avs,
+				gen.Id,
+				keyData,
+			)
+			if err != nil {
+				l.Error("failed to get operator registration message", zap.Error(err))
+			}
+			sig, err := blsPriv.SignSolidityCompatible(msgHash)
+			if err != nil {
+				log.Error("BLS sign: %w", err)
+			}
 
-		// Register in KeyRegistrar
-		if _, err := contractCaller.RegisterKeyWithKeyRegistrar(
-			ctx,
-			operatorAddress,
-			gen.Avs,
-			gen.Id,
-			keyData,
-			sig.Bytes(),
-		); err != nil {
-			log.Error("register key in key registrar: %w", err)
+			// Register in KeyRegistrar
+			if _, err := contractCaller.RegisterKeyWithKeyRegistrar(
+				ctx,
+				operatorAddress,
+				gen.Avs,
+				gen.Id,
+				keyData,
+				sig.Bytes(),
+			); err != nil {
+				log.Error("register key in key registrar: %w", err)
+			}
 		}
 
 		// Finally, update the generator with your BLS key

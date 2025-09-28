@@ -47,4 +47,4 @@ avsPerformers:
 - image:
     repository: "hello-performer"
     tag: "latest"
-  avsAddress: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+  avsAddress: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
