@@ -13,15 +13,14 @@ contract CheckL1State is Script {
         address crossChainRegistry = 0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a;
         console.log("CrossChainRegistry:", crossChainRegistry);
 
-        (bool success, bytes memory data) = crossChainRegistry.staticcall(
-            abi.encodeWithSignature("getSupportedChains()")
-        );
+        (bool success, bytes memory data) =
+            crossChainRegistry.staticcall(abi.encodeWithSignature("getSupportedChains()"));
 
         if (success && data.length > 0) {
             (uint256[] memory chainIds, address[] memory updaters) = abi.decode(data, (uint256[], address[]));
 
             console.log("Supported chains count:", chainIds.length);
-            for (uint i = 0; i < chainIds.length; i++) {
+            for (uint256 i = 0; i < chainIds.length; i++) {
                 console.log("  Chain ID:", chainIds[i]);
                 console.log("  Table Updater:", updaters[i]);
             }
@@ -33,9 +32,7 @@ contract CheckL1State is Script {
         address operatorTableUpdater = 0xB02A15c6Bd0882b35e9936A9579f35FB26E11476;
         console.log("\nOperatorTableUpdater:", operatorTableUpdater);
 
-        (success, data) = operatorTableUpdater.staticcall(
-            abi.encodeWithSignature("getLatestReferenceTimestamp()")
-        );
+        (success, data) = operatorTableUpdater.staticcall(abi.encodeWithSignature("getLatestReferenceTimestamp()"));
 
         if (success) {
             uint32 timestamp = abi.decode(data, (uint32));

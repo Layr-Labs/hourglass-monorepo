@@ -15,15 +15,14 @@ contract CheckL2State is Script {
         address crossChainRegistry = 0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a;
         console.log("CrossChainRegistry:", crossChainRegistry);
 
-        (bool success, bytes memory data) = crossChainRegistry.staticcall(
-            abi.encodeWithSignature("getSupportedChains()")
-        );
+        (bool success, bytes memory data) =
+            crossChainRegistry.staticcall(abi.encodeWithSignature("getSupportedChains()"));
 
         if (success && data.length > 0) {
             (uint256[] memory chainIds, address[] memory updaters) = abi.decode(data, (uint256[], address[]));
 
             console.log("Supported chains count:", chainIds.length);
-            for (uint i = 0; i < chainIds.length; i++) {
+            for (uint256 i = 0; i < chainIds.length; i++) {
                 console.log("  Chain ID:", chainIds[i]);
                 console.log("  Table Updater:", updaters[i]);
             }
@@ -35,9 +34,7 @@ contract CheckL2State is Script {
         address operatorTableUpdater = 0xB02A15c6Bd0882b35e9936A9579f35FB26E11476;
         console.log("\nOperatorTableUpdater:", operatorTableUpdater);
 
-        (success, data) = operatorTableUpdater.staticcall(
-            abi.encodeWithSignature("getLatestReferenceTimestamp()")
-        );
+        (success, data) = operatorTableUpdater.staticcall(abi.encodeWithSignature("getLatestReferenceTimestamp()"));
 
         uint32 timestamp = 0;
         if (success) {
@@ -67,10 +64,7 @@ contract CheckL2State is Script {
         console.log("BN254CertificateVerifier:", bn254Verifier);
 
         // Check operator set info for BN254 operator set
-        OperatorSet memory bn254OpSet = OperatorSet({
-            avs: 0x8e14dB002737F89745bc98F987caeB18D0d47635,
-            id: 1
-        });
+        OperatorSet memory bn254OpSet = OperatorSet({avs: 0x8e14dB002737F89745bc98F987caeB18D0d47635, id: 1});
 
         console.log("Checking BN254 Operator Set:");
         console.log("  AVS:", bn254OpSet.avs);
@@ -78,7 +72,7 @@ contract CheckL2State is Script {
 
         // Use a reasonable timestamp if we don't have one
         if (timestamp == 0) {
-            timestamp = 1735272624; // You may need to adjust this
+            timestamp = 1_735_272_624; // You may need to adjust this
             console.log("  Using hardcoded timestamp:", timestamp);
         } else {
             console.log("  Reference Timestamp:", timestamp);
