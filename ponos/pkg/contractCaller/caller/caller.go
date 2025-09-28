@@ -148,12 +148,13 @@ func NewContractCaller(
 func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
+	operatorInfos []contractCaller.BN254OperatorInfo,
 	globalTableRootReferenceTimestamp uint32,
 	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
 	backoffs := []int{1, 3, 5, 10, 20}
 	for i, backoff := range backoffs {
-		res, err := cc.SubmitBN254TaskResult(ctx, params, globalTableRootReferenceTimestamp, operatorInfoTreeRoot)
+		res, err := cc.SubmitBN254TaskResult(ctx, params, operatorInfos, globalTableRootReferenceTimestamp, operatorInfoTreeRoot)
 		if err != nil {
 			if i == len(backoffs)-1 {
 				cc.logger.Sugar().Errorw("failed to submit task result after retries",
@@ -178,6 +179,7 @@ func (cc *ContractCaller) SubmitBN254TaskResultRetryable(
 func (cc *ContractCaller) SubmitBN254TaskResult(
 	ctx context.Context,
 	params *contractCaller.BN254TaskResultParams,
+	operatorInfos []contractCaller.BN254OperatorInfo,
 	globalTableRootReferenceTimestamp uint32,
 	operatorInfoTreeRoot [32]byte,
 ) (*types.Receipt, error) {
@@ -216,12 +218,12 @@ func (cc *ContractCaller) SubmitBN254TaskResult(
 	digest := params.TaskResponseDigest
 
 	var allOperators []OperatorInfo
-	if len(params.OperatorInfos) <= 0 {
+	if len(operatorInfos) <= 0 {
 		return nil, fmt.Errorf("OperatorInfos must be provided for BN254 task submission")
 	}
 
-	allOperators = make([]OperatorInfo, len(params.OperatorInfos))
-	for i, info := range params.OperatorInfos {
+	allOperators = make([]OperatorInfo, len(operatorInfos))
+	for i, info := range operatorInfos {
 		allOperators[i] = OperatorInfo{
 			PubkeyX: info.PubkeyX,
 			PubkeyY: info.PubkeyY,
@@ -1416,6 +1418,7 @@ func (cc *ContractCaller) VerifyBN254Certificate(
 	avsAddress common.Address,
 	operatorSetId uint32,
 	params *contractCaller.BN254TaskResultParams,
+	operatorInfos []contractCaller.BN254OperatorInfo,
 	globalTableRootReferenceTimestamp uint32,
 	operatorInfoTreeRoot [32]byte,
 	thresholdPercentage uint16,
@@ -1437,9 +1440,9 @@ func (cc *ContractCaller) VerifyBN254Certificate(
 	digest := params.TaskResponseDigest
 
 	var allOperators []OperatorInfo
-	if len(params.OperatorInfos) > 0 {
-		allOperators = make([]OperatorInfo, len(params.OperatorInfos))
-		for i, info := range params.OperatorInfos {
+	if len(operatorInfos) > 0 {
+		allOperators = make([]OperatorInfo, len(operatorInfos))
+		for i, info := range operatorInfos {
 			allOperators[i] = OperatorInfo{
 				PubkeyX: info.PubkeyX,
 				PubkeyY: info.PubkeyY,

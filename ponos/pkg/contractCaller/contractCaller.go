@@ -70,7 +70,6 @@ type BN254TaskResultParams struct {
 	SignersPublicKey       *bn254.G2Point
 	NonSignerOperators     []BN254NonSignerOperator
 	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
-	OperatorInfos          []BN254OperatorInfo
 }
 
 // BN254OperatorWithWeights contains operator info including weights for merkle proof generation
@@ -95,16 +94,12 @@ type ECDSATaskResultParams struct {
 }
 
 type IContractCaller interface {
-	SubmitBN254TaskResult(
-		ctx context.Context,
-		params *BN254TaskResultParams,
-		globalTableRootReferenceTimestamp uint32,
-		operatorInfoTreeRoot [32]byte,
-	) (*ethereumTypes.Receipt, error)
+	SubmitBN254TaskResult(ctx context.Context, params *BN254TaskResultParams, infos []BN254OperatorInfo, globalTableRootReferenceTimestamp uint32, operatorInfoTreeRoot [32]byte) (*ethereumTypes.Receipt, error)
 
 	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
 		params *BN254TaskResultParams,
+		infos []BN254OperatorInfo,
 		globalTableRootReferenceTimestamp uint32,
 		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
@@ -126,6 +121,7 @@ type IContractCaller interface {
 		avsAddress common.Address,
 		operatorSetId uint32,
 		params *BN254TaskResultParams,
+		operatorInfos []BN254OperatorInfo,
 		globalTableRootReferenceTimestamp uint32,
 		operatorInfoTreeRoot [32]byte,
 		thresholdPercentage uint16,

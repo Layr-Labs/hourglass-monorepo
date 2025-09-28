@@ -33,17 +33,22 @@ import (
 )
 
 const (
+	l1RpcUrl              = "http://127.0.0.1:8545"
 	numExecutorOperators  = 4
 	executorOperatorSetId = 1
 	maxStalenessPeriod    = 604800
 	transportBlsKey       = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 )
 
-func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
-	const (
-		L1RpcUrl = "http://127.0.0.1:8545"
-	)
+type thresholdTestCase struct {
+	name                  string
+	aggregationThreshold  uint16
+	verificationThreshold uint16
+	respondingOperatorIdx int
+	shouldVerifySucceed   bool
+}
 
+func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: true})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -69,7 +74,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	}
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L1RpcUrl,
+		BaseUrl:   l1RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
@@ -294,6 +299,8 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		chainConfig.ExecOperator4AccountAddress,
 	}
 
+	// Stake weights: 2, 1.5, 1, 0.5 = 5 total
+	// Operator 0: 40%, Operator 1: 30%, Operator 2: 20%, Operator 3: 10%
 	stakeWeights := []*big.Int{
 		big.NewInt(2000000000000000000),
 		big.NewInt(1500000000000000000),
@@ -335,10 +342,62 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
 
-	testBN254WithSingleResponder(t, ctx, l, chainConfig, l1CC, operatorKeyMap, executorOperatorSetId, currentBlock)
+	testCases := []thresholdTestCase{
+		{
+			name:                  "Success_LowThreshold_SingleHighStakeOperator",
+			aggregationThreshold:  1000, // 10%
+			verificationThreshold: 1000, // 10%
+			respondingOperatorIdx: 0,    // Operator with 40% stake
+			shouldVerifySucceed:   true,
+		},
+		{
+			name:                  "Success_MediumThreshold_SingleHighStakeOperator",
+			aggregationThreshold:  2500, // 25%
+			verificationThreshold: 2500, // 25%
+			respondingOperatorIdx: 0,    // Operator with 40% stake
+			shouldVerifySucceed:   true,
+		},
+		{
+			name:                  "Failure_HighVerificationThreshold_SingleHighStakeOperator",
+			aggregationThreshold:  1000, // 10% - aggregation succeeds
+			verificationThreshold: 5000, // 50% - verification should fail
+			respondingOperatorIdx: 0,    // Operator with 40% stake
+			shouldVerifySucceed:   false,
+		},
+		{
+			name:                  "Failure_HighThreshold_SingleLowStakeOperator",
+			aggregationThreshold:  1000, // 10% - aggregation succeeds
+			verificationThreshold: 2000, // 20% - verification should fail
+			respondingOperatorIdx: 3,    // Operator with 10% stake
+			shouldVerifySucceed:   false,
+		},
+		{
+			name:                  "Success_ExactThreshold_SingleOperator",
+			aggregationThreshold:  2000, // 20%
+			verificationThreshold: 2000, // 20%
+			respondingOperatorIdx: 2,    // Operator with exactly 20% stake
+			shouldVerifySucceed:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testBN254WithThresholds(
+				t,
+				ctx,
+				l,
+				chainConfig,
+				l1CC,
+				operatorKeyMap,
+				executorOperatorSetId,
+				currentBlock,
+				tc,
+			)
+		})
+	}
 }
 
-func testBN254WithSingleResponder(
+func testBN254WithThresholds(
 	t *testing.T,
 	ctx context.Context,
 	l *zap.Logger,
@@ -347,8 +406,15 @@ func testBN254WithSingleResponder(
 	operatorKeyMap map[string]*testUtils.WrappedKeyPair,
 	executorOperatorSetId uint32,
 	currentBlock uint64,
+	tc thresholdTestCase,
 ) {
-	taskId := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	t.Logf("=== Testing: %s ===", tc.name)
+	t.Logf("Aggregation threshold: %d/10000 (%.1f%%)", tc.aggregationThreshold, float64(tc.aggregationThreshold)/100)
+	t.Logf("Verification threshold: %d/10000 (%.1f%%)", tc.verificationThreshold, float64(tc.verificationThreshold)/100)
+	t.Logf("Responding operator index: %d", tc.respondingOperatorIdx)
+	t.Logf("Expected verification result: %v", tc.shouldVerifySucceed)
+
+	taskId := fmt.Sprintf("0x%064x", time.Now().UnixNano()) // Unique task ID for each test
 	taskInputData := []byte("test-task-input-data")
 	deadline := time.Now().Add(1 * time.Minute)
 
@@ -375,6 +441,13 @@ func testBN254WithSingleResponder(
 
 	// Create BN254 aggregator
 	var operators []*aggregation.Operator[signing.PublicKey]
+	operatorAddressList := []string{
+		chainConfig.ExecOperatorAccountAddress,
+		chainConfig.ExecOperator2AccountAddress,
+		chainConfig.ExecOperator3AccountAddress,
+		chainConfig.ExecOperator4AccountAddress,
+	}
+
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(executorOperatorSetId)
 		if err != nil {
@@ -393,17 +466,21 @@ func testBN254WithSingleResponder(
 	}
 
 	t.Logf("======= BN254 Operators =======")
+	totalWeight := big.NewInt(0)
 	for i, op := range operators {
-		t.Logf("Operator %d: Address=%s, Index=%d, Weights=%v",
-			i, op.Address, op.OperatorIndex, op.Weights)
+		weight := op.Weights[0]
+		totalWeight.Add(totalWeight, weight)
+		t.Logf("Operator %d: Address=%s, Index=%d, Weight=%s",
+			i, op.Address, op.OperatorIndex, weight.String())
 	}
+	t.Logf("Total weight: %s", totalWeight.String())
 
 	agg, err := aggregation.NewBN254TaskResultAggregator(
 		context.Background(),
 		taskId,
 		operatorPeersWeight.RootReferenceTimestamp,
 		executorOperatorSetId,
-		1000, // Threshold: 25% (with 4 operators having weights 2, 1.5, 1, 0.5 = 5 total, 25% = 1.25)
+		tc.aggregationThreshold, // Use test case aggregation threshold
 		l1CC,
 		taskInputData,
 		&deadline,
@@ -413,9 +490,29 @@ func testBN254WithSingleResponder(
 		t.Fatalf("Failed to create BN254 task result aggregator: %v", err)
 	}
 
-	// WHEN: only the 0th indexed operator responds
-	respondingOperator := operators[0]
-	t.Logf("Testing scenario: Operator %s (index %d) responds", respondingOperator.Address, respondingOperator.OperatorIndex)
+	// Select the responding operator based on test case
+	respondingOperatorAddress := operatorAddressList[tc.respondingOperatorIdx]
+	var respondingOperator *aggregation.Operator[signing.PublicKey]
+	for _, op := range operators {
+		if strings.EqualFold(op.Address, respondingOperatorAddress) {
+			respondingOperator = op
+			break
+		}
+	}
+	if respondingOperator == nil {
+		t.Fatalf("Could not find operator at index %d", tc.respondingOperatorIdx)
+	}
+
+	operatorWeight := respondingOperator.Weights[0]
+	operatorPercentage := new(big.Float).Quo(
+		new(big.Float).SetInt(operatorWeight),
+		new(big.Float).SetInt(totalWeight),
+	)
+	operatorPercentage.Mul(operatorPercentage, big.NewFloat(100))
+	percentFloat, _ := operatorPercentage.Float64()
+
+	t.Logf("Responding operator: %s (index %d) with weight %s (%.1f%% of total)",
+		respondingOperator.Address, respondingOperator.OperatorIndex, operatorWeight.String(), percentFloat)
 
 	operatorKeys, ok := operatorKeyMap[strings.ToLower(respondingOperator.Address)]
 	if !ok {
@@ -477,11 +574,16 @@ func testBN254WithSingleResponder(
 		t.Fatalf("Failed to process new signature: %v", err)
 	}
 
-	// Check if threshold is met
-	// The threshold calculation depends on the actual stake weights that were delegated
+	// Check if threshold is met for aggregation
 	if !agg.SigningThresholdMet() {
-		t.Logf("Threshold not met with single operator - adjusting test expectations")
+		t.Logf("Aggregation threshold not met with operator weight %.1f%% < %.1f%% threshold",
+			percentFloat, float64(tc.aggregationThreshold)/100)
+		// If aggregation threshold is not met, we can't generate a certificate to verify
+		return
 	}
+
+	t.Logf("Aggregation threshold met: operator weight %.1f%% >= %.1f%% threshold",
+		percentFloat, float64(tc.aggregationThreshold)/100)
 
 	finalCert, err := agg.GenerateFinalCertificate()
 	if err != nil {
@@ -490,39 +592,40 @@ func testBN254WithSingleResponder(
 
 	t.Logf("Final certificate generated with %d non-signers", len(operators)-1)
 
-	// The certificate should include merkle proofs for the 3 non-signing operators
+	// The certificate should include merkle proofs for the non-signing operators
 	submitParams := finalCert.ToSubmitParams()
 	t.Logf("Non-signer count: %d", len(submitParams.NonSignerOperators))
-	for i, nonSigner := range submitParams.NonSignerOperators {
-		t.Logf("Non-signer %d: OperatorIndex=%d", i, nonSigner.OperatorIndex)
-	}
 
-	require.NoError(t, err, "Failed to get executor peers and weights after transport")
-
-	submitParams.OperatorInfos = operatorPeersWeight.OperatorInfos
-
-	thresholdPercentage := uint16(1000)
-
+	// Now verify with the test case's verification threshold
 	verified, err := l1CC.VerifyBN254Certificate(
 		ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		executorOperatorSetId,
 		submitParams,
+		operatorPeersWeight.OperatorInfos,
 		operatorPeersWeight.RootReferenceTimestamp,
 		operatorPeersWeight.OperatorInfoTreeRoot,
-		thresholdPercentage,
+		tc.verificationThreshold, // Use test case verification threshold
 	)
+
 	if err != nil {
-		t.Logf("Failed to verify BN254 certificate: %v", err)
-		t.Fail()
+		if tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to succeed but got error: %v", err)
+		} else {
+			t.Logf("Verification failed as expected with error: %v", err)
+		}
 	} else {
 		t.Logf("BN254 certificate verification result: %v (threshold: %d/10000 = %.1f%%)",
-			verified, thresholdPercentage, float64(thresholdPercentage)/100)
-		if verified {
-			t.Log("✓ Certificate successfully verified - single operator with weight 2 exceeds 50% threshold")
+			verified, tc.verificationThreshold, float64(tc.verificationThreshold)/100)
+
+		if verified && !tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to fail but it succeeded")
+		} else if !verified && tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to succeed but it failed")
+		} else if verified && tc.shouldVerifySucceed {
+			t.Logf("✓ Test passed: Verification succeeded as expected")
 		} else {
-			t.Log("✗ Certificate did not meet threshold - this should not happen!")
-			t.Fail()
+			t.Logf("✓ Test passed: Verification failed as expected")
 		}
 	}
 }

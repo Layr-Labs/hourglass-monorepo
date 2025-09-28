@@ -488,8 +488,13 @@ func (em *AvsExecutionManager) processBN254Task(
 
 		// Convert certificate to submission parameters
 		params := cert.ToSubmitParams()
-		params.OperatorInfos = operatorPeersWeight.OperatorInfos
-		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, params, operatorPeersWeight.RootReferenceTimestamp, operatorPeersWeight.OperatorInfoTreeRoot)
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(
+			ctx,
+			params,
+			operatorPeersWeight.OperatorInfos,
+			operatorPeersWeight.RootReferenceTimestamp,
+			operatorPeersWeight.OperatorInfoTreeRoot,
+		)
 		if err != nil {
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)
