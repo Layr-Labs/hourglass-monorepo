@@ -3,9 +3,9 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
@@ -17,90 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-type AggregatedBN254Certificate struct {
-	// the unique identifier for the task
-	TaskId []byte
-
-	// the output of the task
-	TaskResponse []byte
-
-	// keccak256 hash of the task response
-	TaskResponseDigest [32]byte
-
-	// public keys for all operators that did not sign the task
-	NonSignersPubKeys []signing.PublicKey
-
-	// public keys for all operators that were selected to participate in the task
-	AllOperatorsPubKeys []signing.PublicKey
-
-	// aggregated signature of the signers
-	SignersSignature *bn254.Signature
-
-	// aggregated public key of the signers
-	SignersPublicKey *bn254.G2Point
-
-	// the time the certificate was signed
-	SignedAt *time.Time
-
-	// Non-signer operators sorted by OperatorIndex (for contract submission)
-	NonSignerOperators []*Operator[signing.PublicKey]
-
-	// All operators sorted by OperatorIndex (for merkle proof generation)
-	SortedOperatorsByIndex []*Operator[signing.PublicKey]
-}
-
-// ToSubmitParams converts the certificate to contract submission parameters
-func (cert *AggregatedBN254Certificate) ToSubmitParams() *contractCaller.BN254TaskResultParams {
-	params := &contractCaller.BN254TaskResultParams{
-		TaskId:             cert.TaskId,
-		TaskResponse:       cert.TaskResponse,
-		TaskResponseDigest: cert.TaskResponseDigest,
-		SignersSignature:   cert.SignersSignature,
-		SignersPublicKey:   cert.SignersPublicKey,
-	}
-
-	// Convert NonSignerOperators
-	params.NonSignerOperators = make([]contractCaller.BN254NonSignerOperator, len(cert.NonSignerOperators))
-	for i, op := range cert.NonSignerOperators {
-		params.NonSignerOperators[i] = contractCaller.BN254NonSignerOperator{
-			OperatorIndex: op.OperatorIndex,
-			PublicKey:     op.PublicKey.Bytes(),
-		}
-	}
-
-	// Convert SortedOperatorsByIndex with weights
-	params.SortedOperatorsByIndex = make([]contractCaller.BN254OperatorWithWeights, len(cert.SortedOperatorsByIndex))
-	for i, op := range cert.SortedOperatorsByIndex {
-		params.SortedOperatorsByIndex[i] = contractCaller.BN254OperatorWithWeights{
-			OperatorIndex: op.OperatorIndex,
-			PublicKey:     op.PublicKey.Bytes(),
-			Weights:       op.Weights,
-		}
-	}
-
-	return params
-}
-
-// BN254TaskResultAggregator represents the data needed to initialize a new aggregation task window.
-type BN254TaskResultAggregator struct {
-	ctx                context.Context
-	mu                 sync.Mutex
-	TaskId             string
-	ReferenceTimestamp uint32
-	OperatorSetId      uint32
-	ThresholdBips      uint16
-	l1ContractCaller   contractCaller.IContractCaller
-	TaskData           []byte
-	TaskExpirationTime *time.Time
-	Operators          []*Operator[signing.PublicKey]
-	ReceivedSignatures map[string]*ReceivedBN254ResponseWithDigest // operator address -> signature
-	AggregatePublicKey signing.PublicKey
-
-	aggregatedOperators *aggregatedBN254Operators
-}
-
-// NewBN254TaskResultAggregator initializes a new aggregation certificate for a task window.
-// All required data must be provided as arguments; no network or chain calls are performed.
 func NewBN254TaskResultAggregator(
 	ctx context.Context,
 	taskId string,
@@ -147,67 +63,43 @@ func NewBN254TaskResultAggregator(
 	return cert, nil
 }
 
-type ReceivedBN254ResponseWithDigest struct {
-	// TaskId is the unique identifier for the task
-	TaskId string
-
-	// The full task result from the operator
-	TaskResult *types.TaskResult
-
-	// signature is the signature of the task result from the operator signed with their bls key
-	Signature *bn254.Signature
-
-	// OutputDigest is a keccak256 hash of the output bytes (for consensus tracking)
-	OutputDigest [32]byte
-}
-
-// signerInfo holds information about an individual signer
-type signerInfo struct {
-	publicKey *bn254.PublicKey
-	signature *bn254.Signature
-	operator  *Operator[signing.PublicKey]
-}
-
-// digestGroup tracks all signers for a specific output digest
-type digestGroup struct {
-	// Operators who signed this specific digest
-	signers map[string]*signerInfo // operator address -> info
-
-	// Representative response for this digest
-	response *ReceivedBN254ResponseWithDigest
-
-	// Count of signatures for this digest
-	count int
-}
-
-type aggregatedBN254Operators struct {
-	// Group signatures by the digest they signed
-	digestGroups map[[32]byte]*digestGroup
-
-	// Track the most common digest
-	mostCommonDigest [32]byte
-	mostCommonCount  int
-
-	// Track total count of all signers across all digests
-	totalSignerCount int
-}
-
 func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
-	// Check if threshold is met based on total signers (not just most common)
-	required := int((float64(tra.ThresholdBips) / 10_000.0) * float64(len(tra.Operators)))
-	if required == 0 {
-		required = 1 // Always require at least one
-	}
-	if tra.aggregatedOperators == nil {
+	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
 		return false
 	}
-	// Check if we have enough total signatures across all digests
-	// The most common among them will be selected as the winner
-	return tra.aggregatedOperators.totalSignerCount >= required
+
+	mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
+	if mostCommonGroup == nil {
+		return false
+	}
+
+	totalStake := big.NewInt(0)
+	for _, op := range tra.Operators {
+		if len(op.Weights) > 0 {
+			totalStake.Add(totalStake, op.Weights[0])
+		}
+	}
+
+	if totalStake.Sign() == 0 {
+		return false
+	}
+
+	signersStake := big.NewInt(0)
+	for signerAddr := range mostCommonGroup.signers {
+		for _, op := range tra.Operators {
+			if strings.EqualFold(op.Address, signerAddr) && len(op.Weights) > 0 {
+				signersStake.Add(signersStake, op.Weights[0])
+				break
+			}
+		}
+	}
+
+	signersStakeScaled := new(big.Int).Mul(signersStake, big.NewInt(10000))
+	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
+
+	return signersStakeScaled.Cmp(thresholdStake) >= 0
 }
 
-// ProcessNewSignature processes a new signature submission from an operator.
-// Returns true if the threshold is met after this submission, false otherwise.
 func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	ctx context.Context,
 	taskResponse *types.TaskResult,
@@ -215,18 +107,11 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	tra.mu.Lock()
 	defer tra.mu.Unlock()
 
-	// Validate task ID matches the expected task ID for this aggregator
-	if tra.TaskId != taskResponse.TaskId {
-		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
+	err := tra.validateTaskResponse(taskResponse)
+	if err != nil {
+		return fmt.Errorf("failed to validate task response: %w", err)
 	}
 
-	// Validate OperatorSetId matches
-	if taskResponse.OperatorSetId != tra.OperatorSetId {
-		return fmt.Errorf("operator set ID mismatch: expected %d, got %d",
-			tra.OperatorSetId, taskResponse.OperatorSetId)
-	}
-
-	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator[signing.PublicKey]) bool {
 		return strings.EqualFold(op.Address, taskResponse.OperatorAddress)
 	})
@@ -234,21 +119,8 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("operator %s is not in the allowed set", taskResponse.OperatorAddress)
 	}
 
-	if len(taskResponse.ResultSignature) == 0 {
-		return fmt.Errorf("result signature is empty")
-	}
-	if len(taskResponse.AuthSignature) == 0 {
-		return fmt.Errorf("auth signature is empty")
-	}
-
-	// Initialize map if nil
 	if tra.ReceivedSignatures == nil {
 		tra.ReceivedSignatures = make(map[string]*ReceivedBN254ResponseWithDigest)
-	}
-
-	// check to see if the operator has already submitted a signature
-	if _, ok := tra.ReceivedSignatures[taskResponse.OperatorAddress]; ok {
-		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
 	var taskMessageHash [32]byte
@@ -258,7 +130,7 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	if err != nil {
 		return fmt.Errorf("failed to calculate task hash: %w", err)
 	}
-	// Verify both signatures
+
 	sig, err := tra.VerifyResponseSignature(taskResponse, operator, outputTaskMessage)
 	if err != nil {
 		return fmt.Errorf("failed to verify signatures: %w", err)
@@ -278,14 +150,12 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		return fmt.Errorf("failed to create public key from bytes: %w", err)
 	}
 
-	// Aggregate when generating the final certificate
 	if tra.aggregatedOperators == nil {
 		tra.aggregatedOperators = &aggregatedBN254Operators{
 			digestGroups: make(map[[32]byte]*digestGroup),
 		}
 	}
 
-	// Get or create the digest group for this output
 	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &digestGroup{
@@ -296,7 +166,6 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
 
-	// Store signer info for later aggregation
 	group.signers[taskResponse.OperatorAddress] = &signerInfo{
 		publicKey: bn254PubKey,
 		signature: sig,
@@ -304,19 +173,44 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 	group.count++
 
-	// Update most common tracking
-	if group.count > tra.aggregatedOperators.mostCommonCount {
-		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-	}
+	tra.updateMostCommonResponse(group, outputTaskMessage)
 
-	// Increment total signer count
 	tra.aggregatedOperators.totalSignerCount++
 
 	return nil
 }
 
-// VerifyResponseSignature verifies both result and auth signatures
+func (tra *BN254TaskResultAggregator) updateMostCommonResponse(group *digestGroup, outputTaskMessage [32]byte) {
+
+	if group.count > tra.aggregatedOperators.mostCommonCount {
+		tra.aggregatedOperators.mostCommonCount = group.count
+		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
+	} else if group.count == tra.aggregatedOperators.mostCommonCount && group.count > 0 {
+
+		currentGroupStake := tra.calculateGroupStake(group)
+
+		mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
+		mostCommonGroupStake := tra.calculateGroupStake(mostCommonGroup)
+
+		if currentGroupStake.Cmp(mostCommonGroupStake) > 0 {
+			tra.aggregatedOperators.mostCommonCount = group.count
+			tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
+		}
+	}
+}
+
+func (tra *BN254TaskResultAggregator) calculateGroupStake(group *digestGroup) *big.Int {
+	totalStake := big.NewInt(0)
+	if group != nil {
+		for _, signer := range group.signers {
+			if signer.operator != nil && len(signer.operator.Weights) > 0 {
+				totalStake.Add(totalStake, signer.operator.Weights[0])
+			}
+		}
+	}
+	return totalStake
+}
+
 func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 	taskResponse *types.TaskResult,
 	operator *Operator[signing.PublicKey],
@@ -327,13 +221,11 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 			operator.Address, taskResponse.OperatorAddress)
 	}
 
-	// Step 1: Verify the result signature
 	resultSig, err := bn254.NewSignatureFromBytes(taskResponse.ResultSignature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse result signature: %w", err)
 	}
 
-	// Verify result signature matches output digest
 	bn254PubKey, ok := operator.PublicKey.(*bn254.PublicKey)
 	if !ok {
 		return nil, fmt.Errorf("failed to cast public key to bn254.PublicKey")
@@ -356,7 +248,6 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 		return nil, fmt.Errorf("result signature verification failed: signature does not match operator public key")
 	}
 
-	// Step 2: Verify the auth signature (for identity)
 	authSig, err := bn254.NewSignatureFromBytes(taskResponse.AuthSignature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
@@ -384,19 +275,16 @@ func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
 	return resultSig, nil
 }
 
-// GenerateFinalCertificate generates the final aggregated certificate for the task.
 func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN254Certificate, error) {
 	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
 		return nil, fmt.Errorf("no signatures collected")
 	}
 
-	// Find the winning digest group
 	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
 	if winningGroup == nil || winningGroup.count == 0 {
 		return nil, fmt.Errorf("no signatures for winning digest")
 	}
 
-	// Aggregate only the signatures that signed the winning message
 	var aggregatedSig *bn254.Signature
 	aggregatedPubKey := bn254.NewZeroG2Point()
 
@@ -437,7 +325,6 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		return sortedOperators[i].OperatorIndex < sortedOperators[j].OperatorIndex
 	})
 
-	// Then map to public keys (now in operator index order)
 	allPublicKeys := util.Map(sortedOperators, func(o *Operator[signing.PublicKey], i uint64) signing.PublicKey {
 		return o.PublicKey
 	})
@@ -461,7 +348,6 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 	}, nil
 }
 
-// AggregatePublicKeys aggregates a list of public keys into a single public key.
 func AggregatePublicKeys(pubKeys []signing.PublicKey) (signing.PublicKey, error) {
 	bn254Keys := make([]*bn254.PublicKey, len(pubKeys))
 	for i, pk := range pubKeys {
@@ -480,4 +366,28 @@ func AggregatePublicKeys(pubKeys []signing.PublicKey) (signing.PublicKey, error)
 	}
 
 	return aggregatedKey, err
+}
+
+func (tra *BN254TaskResultAggregator) validateTaskResponse(taskResponse *types.TaskResult) interface{} {
+	if tra.TaskId != taskResponse.TaskId {
+		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
+	}
+
+	if len(taskResponse.ResultSignature) == 0 {
+		return fmt.Errorf("result signature is empty")
+	}
+	if len(taskResponse.AuthSignature) == 0 {
+		return fmt.Errorf("auth signature is empty")
+	}
+
+	if _, ok := tra.ReceivedSignatures[taskResponse.OperatorAddress]; ok {
+		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
+	}
+
+	if taskResponse.OperatorSetId != tra.OperatorSetId {
+		return fmt.Errorf("operator set ID mismatch: expected %d, got %d",
+			tra.OperatorSetId, taskResponse.OperatorSetId)
+	}
+
+	return nil
 }

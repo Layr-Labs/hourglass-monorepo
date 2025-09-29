@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -31,11 +32,13 @@ import (
 )
 
 type ecdsaThresholdTestCase struct {
-	name                   string
-	aggregationThreshold   uint16
-	verificationThreshold  uint16
-	respondingOperatorIdxs []int
-	shouldVerifySucceed    bool
+	name                       string
+	aggregationThreshold       uint16
+	verificationThreshold      uint16
+	respondingOperatorIdxs     []int
+	shouldVerifySucceed        bool
+	shouldMeetSigningThreshold bool
+	operatorResponses          map[int][]byte
 }
 
 func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
@@ -81,6 +84,8 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 			PrivateKey: ecdsaPrivKey,
 			Address:    derivedAddress,
 		}
+
+		t.Logf("Operator %d signing address: %s", index+1, derivedAddress.Hex())
 	}
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -323,58 +328,125 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
 
-	// Stake weights: 2, 1.5, 1, 0.5 = 5 total
-	// Operator 0: 40%, Operator 1: 30%, Operator 2: 20%, Operator 3: 10%
-	stakeWeights := []*big.Int{
-		big.NewInt(2000000000000000000),
-		big.NewInt(1500000000000000000),
-		big.NewInt(1000000000000000000),
-		big.NewInt(500000000000000000),
-	}
-
-	// Define ECDSA test cases with different threshold combinations
+	// After sorting by OperatorIndex, operators array is:
+	// Operator 0 (OperatorIndex=0): 40% stake
+	// Operator 1 (OperatorIndex=1): 30% stake
+	// Operator 2 (OperatorIndex=2): 20% stake
+	// Operator 3 (OperatorIndex=3): 10% stake
 	testCases := []ecdsaThresholdTestCase{
 		{
-			name:                   "Success_SingleOperator_HighStake",
-			aggregationThreshold:   1000,     // 10%
-			verificationThreshold:  1000,     // 10%
-			respondingOperatorIdxs: []int{0}, // Operator with 40% stake
-			shouldVerifySucceed:    true,
+			name:                       "Success_SingleOperator_HighStake",
+			aggregationThreshold:       1000,     // 10%
+			verificationThreshold:      1000,     // 10%
+			respondingOperatorIdxs:     []int{0}, // Operator 0 with 40% stake
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true,
 		},
 		{
-			name:                   "Success_TwoOperators_CombinedStake",
-			aggregationThreshold:   4000,        // 40%
-			verificationThreshold:  4000,        // 40%
-			respondingOperatorIdxs: []int{1, 2}, // 30% + 20% = 50% combined
-			shouldVerifySucceed:    true,
+			name:                       "Success_TwoOperators_CombinedStake",
+			aggregationThreshold:       4000,        // 40%
+			verificationThreshold:      4000,        // 40%
+			respondingOperatorIdxs:     []int{1, 2}, // 30% + 20% = 50% combined
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 50% > 40%
 		},
 		{
-			name:                   "Failure_InsufficientCombinedStake",
-			aggregationThreshold:   2000,        // 20% - aggregation succeeds
-			verificationThreshold:  4000,        // 40% - verification should fail
-			respondingOperatorIdxs: []int{2, 3}, // 20% + 10% = 30% combined
-			shouldVerifySucceed:    false,
+			name:                       "Failure_InsufficientCombinedStake",
+			aggregationThreshold:       2000,        // 20% - aggregation succeeds
+			verificationThreshold:      4000,        // 40% - verification should fail
+			respondingOperatorIdxs:     []int{2, 3}, // 20% + 10% = 30% combined
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 30% > 20%
 		},
 		{
-			name:                   "Success_AllOperators",
-			aggregationThreshold:   9000,              // 90%
-			verificationThreshold:  9000,              // 90%
-			respondingOperatorIdxs: []int{0, 1, 2, 3}, // 100% combined
-			shouldVerifySucceed:    true,
+			name:                       "Success_AllOperators",
+			aggregationThreshold:       9000,              // 90%
+			verificationThreshold:      9000,              // 90%
+			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // 100% combined
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 100% > 90%
 		},
 		{
-			name:                   "Failure_SingleLowStakeOperator",
-			aggregationThreshold:   500,      // 5% - aggregation succeeds
-			verificationThreshold:  2000,     // 20% - verification should fail
-			respondingOperatorIdxs: []int{3}, // Only 10% stake
-			shouldVerifySucceed:    false,
+			name:                       "Failure_SingleLowStakeOperator",
+			aggregationThreshold:       500,      // 5% - aggregation succeeds
+			verificationThreshold:      2000,     // 20% - verification should fail
+			respondingOperatorIdxs:     []int{3}, // Operator 3 with 10% stake
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 10% > 5%
 		},
 		{
-			name:                   "Success_ExactThreshold_MultipleOperators",
-			aggregationThreshold:   5000,        // 50%
-			verificationThreshold:  5000,        // 50%
-			respondingOperatorIdxs: []int{0, 3}, // 40% + 10% = exactly 50%
-			shouldVerifySucceed:    true,
+			name:                       "Success_ExactThreshold_MultipleOperators",
+			aggregationThreshold:       5000,        // 50%
+			verificationThreshold:      5000,        // 50%
+			respondingOperatorIdxs:     []int{0, 3}, // 40% + 10% = exactly 50%
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 50% >= 50%
+		},
+		{
+			name:                       "ConflictingResponses_MajorityWins",
+			aggregationThreshold:       6000,              // 60%
+			verificationThreshold:      6000,              // 60%
+			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // All operators respond
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 70% (majority) > 60%
+			operatorResponses: map[int][]byte{
+				0: []byte("majority-response"), // 40% stake
+				1: []byte("majority-response"), // 30% stake - total 70% for majority
+				2: []byte("minority-response"), // 20% stake
+				3: []byte("minority-response"), // 10% stake - total 30% for minority
+			},
+		},
+		{
+			name:                       "ConflictingResponses_InsufficientConsensus",
+			aggregationThreshold:       3000,           // 30% - aggregation threshold is low
+			verificationThreshold:      7000,           // 70% - but verification requires high consensus
+			respondingOperatorIdxs:     []int{0, 1, 2}, // 90% total stake responds
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 40% (largest) > 30%
+			operatorResponses: map[int][]byte{
+				0: []byte("response-a"), // 40% stake
+				1: []byte("response-b"), // 30% stake
+				2: []byte("response-c"), // 20% stake - all different responses
+			},
+		},
+		{
+			name:                       "StakeWeighted_MinorityOperatorsMajorityStake",
+			aggregationThreshold:       7000,        // 70% threshold
+			verificationThreshold:      7000,        // 70% threshold
+			respondingOperatorIdxs:     []int{0, 1}, // 2 out of 4 operators respond
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 70% stake (40% + 30%) >= 70%
+			operatorResponses: map[int][]byte{
+				0: []byte("consensus-response"), // 40% stake
+				1: []byte("consensus-response"), // 30% stake - total 70% stake
+			},
+		},
+		{
+			name:                       "StakeWeighted_MajorityOperatorsMinorityStake",
+			aggregationThreshold:       4000,           // 40% threshold
+			verificationThreshold:      4000,           // 40% threshold
+			respondingOperatorIdxs:     []int{1, 2, 3}, // 3 out of 4 operators respond
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: false, // No single response has 40% stake
+			operatorResponses: map[int][]byte{
+				1: []byte("response-a"), // 30% stake - most common response below 40%
+				2: []byte("response-b"), // 20% stake
+				3: []byte("response-c"), // 10% stake
+			},
+		},
+		{
+			name:                       "TieBreaking_HigherStakeWins",
+			aggregationThreshold:       3500,              // 35% threshold
+			verificationThreshold:      3500,              // 35% threshold
+			respondingOperatorIdxs:     []int{3, 2, 1, 0}, // All operators
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 40% (single op) > 35%
+			operatorResponses: map[int][]byte{
+				0: []byte("high-stake-response"), // 40% stake - 1 operator wins
+				1: []byte("low-stake-response"),  // 30% stake
+				2: []byte("low-stake-response"),  // 20% stake - 2 operators total 50%
+				3: []byte("third-response"),      // 10% stake
+			},
 		},
 	}
 
@@ -390,7 +462,6 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 				executorOperatorSetId,
 				currentBlock,
 				tc,
-				stakeWeights,
 			)
 		})
 	}
@@ -406,7 +477,6 @@ func testECDSAWithThresholds(
 	executorOperatorSetId uint32,
 	currentBlock uint64,
 	tc ecdsaThresholdTestCase,
-	stakeWeights []*big.Int,
 ) {
 	t.Logf("=== Testing: %s ===", tc.name)
 	t.Logf("Aggregation threshold: %d/10000 (%.1f%%)", tc.aggregationThreshold, float64(tc.aggregationThreshold)/100)
@@ -454,18 +524,24 @@ func testECDSAWithThresholds(
 			t.Fatalf("Failed to get operator set %d for peer %s: %v", executorOperatorSetId, peer.OperatorAddress, err)
 		}
 
-		// For ECDSA, the "PublicKey" is actually the address
+		// For ECDSA, the "PublicKey" is the signing address derived from the ECDSA key
 		weights := operatorPeersWeight.Weights[peer.OperatorAddress]
 
 		operators = append(operators, &aggregation.Operator[common.Address]{
 			Address:       peer.OperatorAddress,
-			PublicKey:     common.HexToAddress(peer.OperatorAddress), // ECDSA uses address as public key
+			PublicKey:     opset.WrappedPublicKey.ECDSAAddress,
 			OperatorIndex: opset.OperatorIndex,
 			Weights:       weights,
 		})
 	}
 
-	t.Logf("======= ECDSA Operators =======")
+	// Sort operators by OperatorIndex to ensure deterministic ordering
+	// This makes the operators array match the on-chain operator table ordering
+	sort.Slice(operators, func(i, j int) bool {
+		return operators[i].OperatorIndex < operators[j].OperatorIndex
+	})
+
+	t.Logf("======= ECDSA Operators (sorted by OperatorIndex) =======")
 	totalWeight := big.NewInt(0)
 	for i, op := range operators {
 		weight := op.Weights[0]
@@ -491,20 +567,12 @@ func testECDSAWithThresholds(
 	}
 
 	// Calculate task message hash
-	var taskIdBytes [32]byte
-	copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
-	messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, taskInputData)
-	if err != nil {
-		t.Fatalf("Failed to calculate task message hash: %v", err)
-	}
-	ecdsaDigestBytes, err := l1CC.CalculateECDSACertificateDigestBytes(
-		ctx,
-		operatorPeersWeight.RootReferenceTimestamp,
-		messageHash,
-	)
-	if err != nil {
-		t.Fatalf("Failed to calculate ECDSA certificate digest: %v", err)
-	}
+	//var taskIdBytes [32]byte
+	//copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
+	//messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, taskInputData)
+	//if err != nil {
+	//	t.Fatalf("Failed to calculate task message hash: %v", err)
+	//}
 
 	totalSigningWeight := big.NewInt(0)
 	for _, operatorIdx := range tc.respondingOperatorIdxs {
@@ -526,10 +594,40 @@ func testECDSAWithThresholds(
 			t.Fatalf("Could not find ECDSA keys for operator %s", respondingOperator.Address)
 		}
 
+		// Determine what response this operator should provide
+		operatorResponse := taskInputData // Default response
+		if tc.operatorResponses != nil {
+			if customResponse, ok := tc.operatorResponses[operatorIdx]; ok {
+				operatorResponse = customResponse
+				t.Logf("  Using custom response for operator %d: %s", operatorIdx, string(customResponse))
+			}
+		}
+
+		// Calculate the message hash for this operator's response
+		var taskIdBytes [32]byte
+		copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
+		operatorMessageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, operatorResponse)
+		if err != nil {
+			t.Fatalf("Failed to calculate task message hash for operator %s: %v", respondingOperator.Address, err)
+		}
+		operatorECDSADigest, err := l1CC.CalculateECDSACertificateDigestBytes(
+			ctx,
+			operatorPeersWeight.RootReferenceTimestamp,
+			operatorMessageHash,
+		)
+		if err != nil {
+			t.Fatalf("Failed to calculate ECDSA certificate digest for operator %s: %v", respondingOperator.Address, err)
+		}
+
 		// Create signature from this operator
 		responderSigner := inMemorySigner.NewInMemorySigner(operatorKeys.PrivateKey, config.CurveTypeECDSA)
 
-		resultSig, err := responderSigner.SignMessageForSolidity(ecdsaDigestBytes)
+		t.Logf("  Operator %s: signing with key that derives to address %s",
+			respondingOperator.Address, operatorKeys.Address.Hex())
+		t.Logf("  Operator %s: publicKey field in aggregator = %s",
+			respondingOperator.Address, respondingOperator.PublicKey.Hex())
+
+		resultSig, err := responderSigner.SignMessageForSolidity(operatorECDSADigest)
 		if err != nil {
 			t.Fatalf("Failed to sign ECDSA certificate for operator %s: %v", respondingOperator.Address, err)
 		}
@@ -553,7 +651,7 @@ func testECDSAWithThresholds(
 			TaskId:          taskId,
 			AvsAddress:      chainConfig.AVSAccountAddress,
 			OperatorSetId:   executorOperatorSetId,
-			Output:          taskInputData,
+			Output:          operatorResponse,
 			OperatorAddress: respondingOperator.Address,
 			ResultSignature: resultSig,
 			AuthSignature:   authSig,
@@ -563,9 +661,11 @@ func testECDSAWithThresholds(
 			t.Fatalf("Failed to process signature from operator %s: %v", respondingOperator.Address, err)
 		}
 
-		totalSigningWeight.Add(totalSigningWeight, stakeWeights[operatorIdx])
+		// Use the actual weight from the operator, not the assumed position
+		operatorWeight := respondingOperator.Weights[0]
+		totalSigningWeight.Add(totalSigningWeight, operatorWeight)
 		t.Logf("Processed signature from operator %d (%s) with weight %s",
-			operatorIdx, respondingOperator.Address, stakeWeights[operatorIdx].String())
+			operatorIdx, respondingOperator.Address, operatorWeight.String())
 	}
 
 	// Calculate total signing percentage
@@ -579,23 +679,46 @@ func testECDSAWithThresholds(
 	t.Logf("Total signing weight: %s (%.1f%% of total)", totalSigningWeight.String(), percentFloat)
 
 	// Check if threshold is met for aggregation
-	if !agg.SigningThresholdMet() {
-		t.Logf("Aggregation threshold not met: signing weight %.1f%% < %.1f%% threshold",
-			percentFloat, float64(tc.aggregationThreshold)/100)
+	signingThresholdMet := agg.SigningThresholdMet()
+
+	// Check if the signing threshold expectation matches reality
+	if tc.shouldMeetSigningThreshold && !signingThresholdMet {
+		t.Errorf("Expected signing threshold to be met but it was not. Most common response stake may be below %.1f%% threshold",
+			float64(tc.aggregationThreshold)/100)
+		return
+	} else if !tc.shouldMeetSigningThreshold && signingThresholdMet {
+		t.Errorf("Expected signing threshold to NOT be met but it was. Most common response stake exceeds %.1f%% threshold",
+			float64(tc.aggregationThreshold)/100)
 		return
 	}
 
-	t.Logf("Aggregation threshold met: signing weight %.1f%% >= %.1f%% threshold",
-		percentFloat, float64(tc.aggregationThreshold)/100)
+	if !signingThresholdMet {
+		t.Logf("✓ Signing threshold correctly not met (most common response stake < %.1f%% threshold)",
+			float64(tc.aggregationThreshold)/100)
+		return
+	}
+
+	t.Logf("✓ Signing threshold correctly met (most common response stake >= %.1f%% threshold)",
+		float64(tc.aggregationThreshold)/100)
 
 	finalCert, err := agg.GenerateFinalCertificate()
 	if err != nil {
 		t.Fatalf("Failed to generate final certificate: %v", err)
 	}
 
-	numSigners := len(tc.respondingOperatorIdxs)
+	// Get the actual number of signers from the certificate (those who signed the winning response)
+	numSigners := len(finalCert.SignersSignatures)
 	numNonSigners := len(operators) - numSigners
-	t.Logf("Final certificate generated with %d signers and %d non-signers", numSigners, numNonSigners)
+	t.Logf("Final certificate generated with %d signers (winning response) and %d non-signers", numSigners, numNonSigners)
+
+	// Recalculate message hash based on the actual winning response
+	// This is necessary when operators sign different responses - we need to verify against the winning one
+	var winningTaskIdBytes [32]byte
+	copy(winningTaskIdBytes[:], common.HexToHash(taskId).Bytes())
+	winningMessageHash, err := l1CC.CalculateTaskMessageHash(ctx, winningTaskIdBytes, finalCert.TaskResponse)
+	if err != nil {
+		t.Fatalf("Failed to calculate message hash for winning response: %v", err)
+	}
 
 	// Get the combined signature from the certificate
 	submitParams := finalCert.ToSubmitParams()
@@ -609,7 +732,7 @@ func testECDSAWithThresholds(
 
 	// Verify the ECDSA certificate using the verification threshold
 	valid, signers, err := l1CC.VerifyECDSACertificate(
-		messageHash,
+		winningMessageHash,
 		combinedSig,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		executorOperatorSetId,
