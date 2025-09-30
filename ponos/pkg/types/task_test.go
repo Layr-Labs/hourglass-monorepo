@@ -2,10 +2,17 @@ package types
 
 import (
 	"bytes"
-	"github.com/iden3/go-iden3-crypto/keccak256"
+	"math/big"
 	"testing"
+	"time"
 
+	"github.com/iden3/go-iden3-crypto/keccak256"
+
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionLogParser/log"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/util"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -262,4 +269,123 @@ func TestTaskSignatureData_PreventReplayAttacks(t *testing.T) {
 		recoveredAddr := crypto.PubkeyToAddress(*sigPublicKey)
 		assert.NotEqual(t, operatorAddr2, recoveredAddr, "Signature should not validate for different operator")
 	}
+}
+
+func TestNewTaskFromLog_DeadlineConversion(t *testing.T) {
+	tests := []struct {
+		name                string
+		taskDeadlineSeconds int64
+		wantDeadlineTime    time.Time
+	}{
+		{
+			name:                "unix epoch",
+			taskDeadlineSeconds: 0,
+			wantDeadlineTime:    time.Unix(0, 0),
+		},
+		{
+			name:                "recent timestamp",
+			taskDeadlineSeconds: 1704067200, // 2024-01-01 00:00:00 UTC
+			wantDeadlineTime:    time.Unix(1704067200, 0),
+		},
+		{
+			name:                "future timestamp",
+			taskDeadlineSeconds: 2000000000, // 2033-05-18 03:33:20 UTC
+			wantDeadlineTime:    time.Unix(2000000000, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock decoded log
+			avsAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")
+			taskId := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+			inboxAddress := "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+
+			decodedLog := &log.DecodedLog{
+				LogIndex:  1,
+				Address:   inboxAddress,
+				EventName: "TaskCreated",
+				Arguments: []log.Argument{
+					{Name: "creatorAddress", Value: "0x123", Indexed: true},
+					{Name: "taskId", Value: taskId, Indexed: true},
+					{Name: "avsAddress", Value: avsAddr, Indexed: true},
+				},
+				OutputData: map[string]interface{}{
+					"ExecutorOperatorSetId":           uint32(1),
+					"OperatorTableReferenceTimestamp": uint32(1704067200),
+					"TaskDeadline":                    big.NewInt(tt.taskDeadlineSeconds),
+					"Payload":                         []byte("test payload"),
+				},
+			}
+
+			// Create mock block
+			block := &ethereum.EthereumBlock{
+				Hash:      ethereum.EthereumHexString("0xblockhash"),
+				Number:    ethereum.EthereumQuantity(12345),
+				ChainId:   config.ChainId(1),
+				Timestamp: ethereum.EthereumQuantity(1704067200),
+			}
+
+			// Call NewTaskFromLog
+			task, err := NewTaskFromLog(decodedLog, block, inboxAddress)
+			require.NoError(t, err)
+			require.NotNil(t, task)
+
+			// Verify deadline is set correctly
+			require.NotNil(t, task.DeadlineUnixSeconds, "DeadlineUnixSeconds should not be nil")
+			assert.Equal(t, tt.wantDeadlineTime.Unix(), task.DeadlineUnixSeconds.Unix(),
+				"DeadlineUnixSeconds should match expected timestamp")
+
+			// Verify other fields are set correctly
+			assert.Equal(t, taskId, task.TaskId)
+			assert.Equal(t, "0x742d35cc6634c0532925a3b844bc9e7595f0beb1", task.AVSAddress) // lowercased
+			assert.Equal(t, uint32(1), task.OperatorSetId)
+			assert.Equal(t, inboxAddress, task.CallbackAddr)
+			assert.Equal(t, []byte("test payload"), task.Payload)
+			assert.Equal(t, config.ChainId(1), task.ChainId)
+			assert.Equal(t, uint64(12345), task.SourceBlockNumber)
+			assert.Equal(t, uint32(1704067200), task.ReferenceTimestamp)
+		})
+	}
+}
+
+func TestNewTaskFromLog_InvalidDeadline(t *testing.T) {
+	// Test that a deadline larger than MaxInt64 returns an error
+	avsAddr := common.HexToAddress("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")
+	taskId := "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	inboxAddress := "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4"
+
+	// Create a TaskDeadline that's too large (> MaxInt64)
+	veryLargeDeadline := new(big.Int)
+	veryLargeDeadline.SetString("9999999999999999999", 10) // Much larger than MaxInt64
+
+	decodedLog := &log.DecodedLog{
+		LogIndex:  1,
+		Address:   inboxAddress,
+		EventName: "TaskCreated",
+		Arguments: []log.Argument{
+			{Name: "creatorAddress", Value: "0x123", Indexed: true},
+			{Name: "taskId", Value: taskId, Indexed: true},
+			{Name: "avsAddress", Value: avsAddr, Indexed: true},
+		},
+		OutputData: map[string]interface{}{
+			"ExecutorOperatorSetId":           uint32(1),
+			"OperatorTableReferenceTimestamp": uint32(1704067200),
+			"TaskDeadline":                    veryLargeDeadline,
+			"Payload":                         []byte("test payload"),
+		},
+	}
+
+	block := &ethereum.EthereumBlock{
+		Hash:      ethereum.EthereumHexString("0xblockhash"),
+		Number:    ethereum.EthereumQuantity(12345),
+		ChainId:   config.ChainId(1),
+		Timestamp: ethereum.EthereumQuantity(1704067200),
+	}
+
+	// Call NewTaskFromLog - should return error
+	task, err := NewTaskFromLog(decodedLog, block, inboxAddress)
+	require.Error(t, err)
+	assert.Nil(t, task)
+	assert.Contains(t, err.Error(), "task deadline too large")
 }

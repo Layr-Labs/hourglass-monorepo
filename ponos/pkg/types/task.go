@@ -148,7 +148,7 @@ func NewTaskFromLog(log *log.DecodedLog, block *ethereum.EthereumBlock, inboxAdd
 	if od.TaskDeadline.Cmp(big.NewInt(math.MaxInt64)) > 0 {
 		return nil, fmt.Errorf("task deadline too large for duration calculation: %s", od.TaskDeadline.String())
 	}
-	taskDeadlineTime := time.Now().Add(time.Duration(od.TaskDeadline.Uint64()) * time.Second)
+	taskDeadlineTime := time.Unix(int64(od.TaskDeadline.Uint64()), 0)
 
 	return &Task{
 		TaskId:              taskId,
