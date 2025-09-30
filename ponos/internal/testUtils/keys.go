@@ -67,6 +67,92 @@ func GetKeysForCurveType(t *testing.T, curve config.CurveType, chainConfig *Chai
 	return nil, nil, curve, fmt.Errorf("unsupported curve type: %s", curve)
 }
 
+func GetKeysForCurveTypeFromChainConfig(
+	t *testing.T,
+	aggCurveType config.CurveType,
+	execCurveType config.CurveType,
+	chainConfig *ChainConfig,
+) (*WrappedKeyPair, []*WrappedKeyPair, error) {
+	// Generate aggregator keys
+	var aggKeys *WrappedKeyPair
+	if aggCurveType == config.CurveTypeBN254 {
+		aggPrivateKey, aggPublicKey, err := bn254.GenerateKeyPair()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate aggregator BN254 key pair: %w", err)
+		}
+		aggKeys = &WrappedKeyPair{
+			PrivateKey: aggPrivateKey,
+			PublicKey:  aggPublicKey,
+		}
+	} else if aggCurveType == config.CurveTypeECDSA {
+		aggPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(chainConfig.OperatorAccountPrivateKey)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse aggregator ECDSA key: %w", err)
+		}
+		derivedAggAddress, err := aggPrivateKey.DeriveAddress()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to derive aggregator address: %w", err)
+		}
+		aggKeys = &WrappedKeyPair{
+			PrivateKey: aggPrivateKey,
+			Address:    derivedAggAddress,
+			PublicKey:  chainConfig.OperatorAccountPublicKey,
+		}
+	} else {
+		return nil, nil, fmt.Errorf("unsupported aggregator curve type: %s", aggCurveType)
+	}
+
+	// Generate executor keys for 4 operators
+	execKeys := make([]*WrappedKeyPair, 4)
+
+	if execCurveType == config.CurveTypeBN254 {
+		for i := 0; i < 4; i++ {
+			execPrivateKey, execPublicKey, err := bn254.GenerateKeyPair()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to generate executor %d BN254 key pair: %w", i+1, err)
+			}
+			execKeys[i] = &WrappedKeyPair{
+				PrivateKey: execPrivateKey,
+				PublicKey:  execPublicKey,
+			}
+		}
+	} else if execCurveType == config.CurveTypeECDSA {
+		// Load keys from chain config for 4 executors
+		execPrivateKeyHexes := []string{
+			chainConfig.ExecOperatorAccountPk,
+			chainConfig.ExecOperator2AccountPk,
+			chainConfig.ExecOperator3AccountPk,
+			chainConfig.ExecOperator4AccountPk,
+		}
+		execPublicKeys := []string{
+			chainConfig.ExecOperatorAccountPublicKey,
+			chainConfig.ExecOperator2AccountPublicKey,
+			chainConfig.ExecOperator3AccountPublicKey,
+			chainConfig.ExecOperator4AccountPublicKey,
+		}
+
+		for i := 0; i < 4; i++ {
+			execPrivateKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(execPrivateKeyHexes[i])
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to parse executor %d ECDSA key: %w", i+1, err)
+			}
+			derivedExecAddress, err := execPrivateKey.DeriveAddress()
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to derive executor %d address: %w", i+1, err)
+			}
+			execKeys[i] = &WrappedKeyPair{
+				PrivateKey: execPrivateKey,
+				Address:    derivedExecAddress,
+				PublicKey:  execPublicKeys[i],
+			}
+		}
+	} else {
+		return nil, nil, fmt.Errorf("unsupported executor curve type: %s", execCurveType)
+	}
+
+	return aggKeys, execKeys, nil
+}
+
 func ParseKeysFromConfig(
 	operatorConfig *config.OperatorConfig,
 	curveType config.CurveType,

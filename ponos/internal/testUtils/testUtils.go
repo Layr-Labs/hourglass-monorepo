@@ -17,7 +17,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
 
@@ -317,37 +316,4 @@ func TransportStakeTables(l *zap.Logger, includeL2 bool) {
 		chainIdsToIgnore,
 		l,
 	)
-}
-
-// TransportStakeTablesWithMultipleOperatorsConfig transports stake tables with configurable L2 support
-func TransportStakeTablesWithMultipleOperatorsConfig(
-	l *zap.Logger,
-	operators []tableTransporter.OperatorBLSInfo,
-	transporterPrivateKey string,
-	operatorSetId uint32,
-	avsAddress string,
-	l2RpcUrl string,
-	l2ChainId uint64,
-	chainIdsToIgnore []*big.Int,
-) error {
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
-
-	transportBLSKey := "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
-
-	cfg := &tableTransporter.MultipleOperatorConfig{
-		TransporterPrivateKey:     transporterPrivateKey,
-		L1RpcUrl:                  "http://localhost:8545",
-		L1ChainId:                 31337,
-		L2RpcUrl:                  l2RpcUrl,
-		L2ChainId:                 l2ChainId,
-		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
-		ChainIdsToIgnore:          chainIdsToIgnore,
-		Logger:                    l,
-		Operators:                 operators,
-		AVSAddress:                common.HexToAddress(avsAddress),
-		OperatorSetId:             operatorSetId,
-		TransportBLSPrivateKey:    transportBLSKey,
-	}
-
-	return tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
 }

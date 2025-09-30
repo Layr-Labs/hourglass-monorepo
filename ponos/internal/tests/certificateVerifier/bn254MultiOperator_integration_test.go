@@ -293,7 +293,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		big.NewInt(31338),    // L2 anvil
 	}
 
-	blsInfos := make([]tableTransporter.OperatorBLSInfo, len(execKeys))
+	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))
 	operatorAddressList := []string{
 		chainConfig.ExecOperatorAccountAddress,
 		chainConfig.ExecOperator2AccountAddress,
@@ -312,7 +312,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	for i, keyPair := range execKeys {
 		blsPrivKey := keyPair.PrivateKey.(*bn254.PrivateKey)
-		blsInfos[i] = tableTransporter.OperatorBLSInfo{
+		blsInfos[i] = tableTransporter.OperatorKeyInfo{
 			PrivateKeyHex:   fmt.Sprintf("0x%x", blsPrivKey.Bytes()),
 			Weights:         []*big.Int{stakeWeights[i]},
 			OperatorAddress: common.HexToAddress(operatorAddressList[i]),

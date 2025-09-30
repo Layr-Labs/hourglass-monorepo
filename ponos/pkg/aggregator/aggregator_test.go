@@ -577,7 +577,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 		// Pass the executor's BLS info for proper operator info tree root calculation
 		// The operator is already registered via SetupOperatorPeering, so KeyRegistrar registration will be skipped
-		operatorBLSInfos := []tableTransporter.OperatorBLSInfo{
+		operatorBLSInfos := []tableTransporter.OperatorKeyInfo{
 			{
 				OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
 				PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),

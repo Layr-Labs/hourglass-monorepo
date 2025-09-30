@@ -216,9 +216,6 @@ func TransportTable(
 				l.Error("encode key data: %w", zap.Error(err))
 			}
 
-			// Configure curve type (you need to add CURVE_TYPE_KEY_REGISTRAR_BN254 constant)
-			const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2 // or whatever the correct value is
-
 			// You need the KeyRegistrar address - this should come from your config
 			keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
 
@@ -229,7 +226,7 @@ func TransportTable(
 				keyRegistrarAddress,
 				gen.Avs,
 				gen.Id,
-				CURVE_TYPE_KEY_REGISTRAR_BN254,
+				bn254CurveType,
 			); err != nil {
 				l.Sugar().Fatalf("Failed to configure curve type: %v", err)
 			}
