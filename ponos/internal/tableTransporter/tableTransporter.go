@@ -217,7 +217,7 @@ func TransportTable(
 			}
 
 			// You need the KeyRegistrar address - this should come from your config
-			keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+			keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 
 			if err := configureCurveTypeAsAVS(
 				ctx,
@@ -669,7 +669,7 @@ func updateGeneratorFromContext(
 	info := BN254OperatorInfo{Pubkey: pkG1, Weights: []*big.Int{big.NewInt(1)}}
 
 	// Calculate the root leaf
-	root, err := calcOperatorInfoLeaf(ctx, logger, chain.RPCClient, common.HexToAddress("0xff58A373c18268F483C1F5cA03Cf885c0C43373a"), info)
+	root, err := calcOperatorInfoLeaf(ctx, logger, chain.RPCClient, common.HexToAddress("0x3F55654b2b2b86bB11bE2f72657f9C33bf88120A"), info)
 	if err != nil {
 		return fmt.Errorf("calc operatorInfo leaf: %w", err)
 	}

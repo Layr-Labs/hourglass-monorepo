@@ -166,7 +166,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		return fmt.Errorf("unsupported curve type: %s", cfg.CurveType)
 	}
 
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 
 	gen := IOperatorTableUpdater.OperatorSet{
 		Avs: cfg.AVSAddress,
@@ -599,7 +599,7 @@ func checkOperatorRegistered(
 	avsAddress common.Address,
 	operatorSetId uint32,
 ) (bool, error) {
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		return false, fmt.Errorf("failed to create KeyRegistrar: %w", err)
@@ -790,7 +790,7 @@ func registerKeyAsOperator(
 	}
 
 	// Get the KeyRegistrar contract
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		_ = client.Client().CallContext(ctx, &ok, "anvil_stopImpersonatingAccount", operatorAddress.Hex())
