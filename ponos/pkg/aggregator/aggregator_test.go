@@ -581,7 +581,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	if err != nil {
 		t.Fatalf("Failed to delegate stake to operators: %v", err)
 	}
-	
+
 	t.Logf("Creating generation reservation with %s table calculator %s for executor operator set %d",
 		sigConfig.ExecutorCurve, execCalculatorAddr.Hex(), sigConfig.ExecutorOpsetId)
 	_, err = avsCcL1Temp.CreateGenerationReservation(

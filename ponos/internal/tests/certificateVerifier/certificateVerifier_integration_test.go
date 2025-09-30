@@ -260,7 +260,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ECDSA config private key signer: %v", err)
 	}
-	
+
 	t.Logf("Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(), execOpsetId)
 	_, err = avsConfigCaller.CreateGenerationReservation(

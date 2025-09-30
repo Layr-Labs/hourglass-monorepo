@@ -281,7 +281,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create calculator address: %v", err)
 	}
-	
+
 	t.Logf(
 		"Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(),
