@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	merkletree "github.com/wealdtech/go-merkletree/v2"
+	"github.com/wealdtech/go-merkletree/v2"
 	"github.com/wealdtech/go-merkletree/v2/keccak256"
 	"go.uber.org/zap"
 )
@@ -504,7 +504,6 @@ func (cc *ContractCaller) GetOperatorSetMembersWithPeering(avsAddress string, op
 	allMembers := make([]*peering.OperatorPeerInfo, len(operatorSetMemberAddrs))
 	for index, member := range operatorSetMemberAddrs {
 		operatorSetInfo, err := cc.GetOperatorSetDetailsForOperator(member, avsAddress, operatorSetId, blockNumber)
-
 		if err != nil {
 			cc.logger.Sugar().Errorf("failed to get operator set details for operator %s: %v", member.Hex(), err)
 			continue
@@ -583,6 +582,16 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(
 			return nil, err
 		}
 
+		if solidityPubKey.G1Point.X.Sign() == 0 && solidityPubKey.G1Point.Y.Sign() == 0 {
+			cc.logger.Sugar().Warnw("Operator has not registered BN254 key for operator set",
+				"operatorAddress", operatorAddress.Hex(),
+				"avsAddress", avsAddress,
+				"operatorSetId", operatorSetId,
+			)
+			return nil, fmt.Errorf("%w: operator %s has not registered BN254 key for AVS %s operator set %d",
+				contractCaller.ErrOperatorKeyNotRegistered, operatorAddress.Hex(), avsAddress, operatorSetId)
+		}
+
 		pubKey, err := bn254.NewPublicKeyFromSolidity(
 			&bn254.SolidityBN254G1Point{
 				X: solidityPubKey.G1Point.X,
@@ -618,6 +627,17 @@ func (cc *ContractCaller) GetOperatorSetDetailsForOperator(
 			cc.logger.Sugar().Errorf("failed to get operator set public key: %v", err)
 			return nil, err
 		}
+
+		if ecdsaAddr == (common.Address{}) {
+			cc.logger.Sugar().Warnw("Operator has not registered ECDSA key for operator set",
+				"operatorAddress", operatorAddress.Hex(),
+				"avsAddress", avsAddress,
+				"operatorSetId", operatorSetId,
+			)
+			return nil, fmt.Errorf("%w: operator %s has not registered ECDSA key for AVS %s operator set %d",
+				contractCaller.ErrOperatorKeyNotRegistered, operatorAddress.Hex(), avsAddress, operatorSetId)
+		}
+
 		peeringOpSet.WrappedPublicKey = peering.WrappedPublicKey{
 			ECDSAAddress: ecdsaAddr,
 		}

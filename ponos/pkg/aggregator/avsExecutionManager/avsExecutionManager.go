@@ -369,7 +369,11 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get contract caller for chain: %w", err)
 	}
 
-	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForTask(ctx, task)
+	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForTask(
+		ctx,
+		task,
+		executorTaskConfig.CurveType,
+	)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get operator peers and weights",
 			zap.Uint("chainId", uint(task.ChainId)),

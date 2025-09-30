@@ -2,6 +2,7 @@ package contractCaller
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
@@ -92,6 +93,9 @@ type ECDSATaskResultParams struct {
 	TaskResponseDigest [32]byte
 	SignersSignatures  map[common.Address][]byte
 }
+
+// ErrOperatorKeyNotRegistered is returned when an operator has not registered a key for the specified operator set
+var ErrOperatorKeyNotRegistered = fmt.Errorf("operator key not registered for operator set")
 
 type IContractCaller interface {
 	SubmitBN254TaskResult(ctx context.Context, params *BN254TaskResultParams, infos []BN254OperatorInfo, globalTableRootReferenceTimestamp uint32, operatorInfoTreeRoot [32]byte) (*ethereumTypes.Receipt, error)

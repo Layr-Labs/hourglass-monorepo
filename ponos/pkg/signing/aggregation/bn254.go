@@ -368,7 +368,7 @@ func AggregatePublicKeys(pubKeys []signing.PublicKey) (signing.PublicKey, error)
 	return aggregatedKey, err
 }
 
-func (tra *BN254TaskResultAggregator) validateTaskResponse(taskResponse *types.TaskResult) interface{} {
+func (tra *BN254TaskResultAggregator) validateTaskResponse(taskResponse *types.TaskResult) error {
 	if tra.TaskId != taskResponse.TaskId {
 		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
 	}

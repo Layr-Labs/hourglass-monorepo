@@ -16,10 +16,9 @@ import (
 )
 
 type OperatorManagerConfig struct {
-	AvsAddress     string
-	OperatorSetIds []uint32 // TODO(seanmcgary): this should get hydrated from the AVSConfig object
-	ChainIds       []config.ChainId
-	L1ChainId      config.ChainId
+	AvsAddress string
+	ChainIds   []config.ChainId
+	L1ChainId  config.ChainId
 }
 
 type PeerWeight struct {
@@ -71,23 +70,12 @@ func (om *OperatorManager) GetCurveTypeForOperatorSet(avsAddress string, operato
 func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 	ctx context.Context,
 	task *types.Task,
+	curveType config.CurveType,
 ) (*PeerWeight, error) {
-
-	l1ChainCc, err := om.getContractCallerForChainId(om.config.L1ChainId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
-	}
-
 	l1BlockForTableData := task.L1ReferenceBlockNumber
-
-	curveType, err := l1ChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
-	}
 
 	tableData, err := om.fetchOperatorTableData(
 		ctx,
-		l1ChainCc,
 		common.HexToAddress(task.AVSAddress),
 		task.OperatorSetId,
 		task.ChainId,
@@ -329,7 +317,6 @@ func (om *OperatorManager) getContractCallerForChainId(chainId config.ChainId) (
 
 func (om *OperatorManager) fetchOperatorTableData(
 	ctx context.Context,
-	l1Cc contractCaller.IContractCaller,
 	avsAddress common.Address,
 	operatorSetId uint32,
 	taskChainId config.ChainId,
@@ -337,6 +324,12 @@ func (om *OperatorManager) fetchOperatorTableData(
 	l1BlockNumber uint64,
 	taskBlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
+
+	l1Cc, err := om.getContractCallerForChainId(om.config.L1ChainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
+	}
+
 	om.logger.Sugar().Debugw("Fetching operator table data with curve type",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
