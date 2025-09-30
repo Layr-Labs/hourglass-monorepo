@@ -1,6 +1,3 @@
-# ⚠️ Warning: This is Alpha, non audited code ⚠️
-Hourglass is in active development and is not yet audited. Use at your own risk.
-
 ## What is Hourglass?
 
 Hourglass is a framework for building a task-based EigenLayer AVS, providing AVS developers a batteries-included experience to get started quickly. It includes a set of tools and libraries that simplify the process of building, deploying, and managing AVS projects.
