@@ -332,6 +332,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		AVSAddress:                common.HexToAddress(chainConfig.AVSAccountAddress),
 		OperatorSetId:             executorOperatorSetId,
 		TransportBLSPrivateKey:    transportBlsKey,
+		CurveType:                 config.CurveTypeBN254,
 	}
 
 	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)

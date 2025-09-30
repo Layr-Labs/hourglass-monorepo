@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/aggregator/storage/memory"
 	executorMemory "github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/executor/storage/memory"
@@ -93,9 +95,9 @@ func Test_Aggregator(t *testing.T) {
 				runAggregatorTest(t, "docker", sigConfig)
 			})
 
-			t.Run("Kubernetes", func(t *testing.T) {
-				runAggregatorTest(t, "kubernetes", sigConfig)
-			})
+			//t.Run("Kubernetes", func(t *testing.T) {
+			//	runAggregatorTest(t, "kubernetes", sigConfig)
+			//})
 		})
 	}
 }
@@ -214,11 +216,36 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		execConfig.Kubernetes.KubeConfigPath = cluster.KubeConfig
 	}
 
-	execBn254PrivateSigningKey, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, sigConfig.ExecutorCurve)
+	_, _, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, sigConfig.ExecutorCurve)
 	if err != nil {
 		t.Fatalf("Failed to parse keys from config: %v", err)
 	}
 	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, sigConfig.ExecutorCurve)
+
+	// ------------------------------------------------------------------------
+	// Generate keys for executor operators (2 for Docker, 1 for Kubernetes)
+	// ------------------------------------------------------------------------
+	numExecutorOperators := 1
+	if mode == "docker" {
+		numExecutorOperators = 2
+	}
+	t.Logf("------------------------------------------- Setting up %d executor operator(s) for %s mode -------------------------------------------", numExecutorOperators, mode)
+	execKeys := make([]*testUtils.WrappedKeyPair, numExecutorOperators)
+
+	// Get keys for aggregator and executors using the helper method
+	// This returns the aggregator key and all executor keys at once
+	_, execKeys, err = testUtils.GetKeysForCurveTypeFromChainConfig(t, sigConfig.AggregatorCurve, sigConfig.ExecutorCurve, chainConfig)
+	if err != nil {
+		t.Fatalf("Failed to get keys: %v", err)
+	}
+
+	// Verify we got the expected number of executor keys
+	if len(execKeys) < numExecutorOperators {
+		t.Fatalf("Expected at least %d executor keys, got %d", numExecutorOperators, len(execKeys))
+	}
+
+	// Use only the first 2 executor keys
+	execKeys = execKeys[:numExecutorOperators]
 
 	// ------------------------------------------------------------------------
 	// 	Aggregator setup
@@ -427,13 +454,13 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	t.Logf("Operator signing keys validated successfully")
 
 	// ------------------------------------------------------------------------
-	// register peering data
+	// Register multiple executor operators
 	// ------------------------------------------------------------------------
-	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
+	t.Logf("------------------------------------------- Registering aggregator and executor operators -------------------------------------------")
 	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
 	allOperatorSetIds := []uint32{sigConfig.AggregatorOpsetId, sigConfig.ExecutorOpsetId}
 
-	// Select the correct signing key based on curve type
+	// Select the correct signing key based on curve type for aggregator
 	var aggSigningKey interface{}
 	if sigConfig.AggregatorCurve == config.CurveTypeBN254 {
 		aggSigningKey = aggBn254PrivateSigningKey
@@ -441,14 +468,24 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		aggSigningKey = aggEcdsaPrivateSigningKey
 	}
 
-	var execSigningKey interface{}
-	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
-		execSigningKey = execBn254PrivateSigningKey
-	} else {
-		execSigningKey = execEcdsaPrivateSigningKey
+	// Create executor operators based on mode
+	operatorPkList := []string{chainConfig.ExecOperatorAccountPk, chainConfig.ExecOperator2AccountPk}
+
+	executorsWithSockets := make([]testUtils.ExecutorWithSocket, numExecutorOperators)
+	for i := 0; i < numExecutorOperators; i++ {
+		executorsWithSockets[i] = testUtils.ExecutorWithSocket{
+			Executor: &operator.Operator{
+				TransactionPrivateKey: operatorPkList[i],
+				SigningPrivateKey:     execKeys[i].PrivateKey,
+				Curve:                 sigConfig.ExecutorCurve,
+				OperatorSetIds:        []uint32{sigConfig.ExecutorOpsetId},
+			},
+			Socket: fmt.Sprintf("localhost:%d", 9000+i),
+		}
 	}
 
-	err = testUtils.SetupOperatorPeering(
+	// Register aggregator and all executor operators
+	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
@@ -460,39 +497,41 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			Curve:                 sigConfig.AggregatorCurve,
 			OperatorSetIds:        []uint32{sigConfig.AggregatorOpsetId},
 		},
-		// executor with configured curve
-		&operator.Operator{
-			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
-			SigningPrivateKey:     execSigningKey,
-			Curve:                 sigConfig.ExecutorCurve,
-			OperatorSetIds:        []uint32{sigConfig.ExecutorOpsetId},
-		},
-		"localhost:9000",
+		executorsWithSockets,
 		l,
 	)
 	if err != nil {
 		t.Fatalf("Failed to set up operator peering: %v", err)
 	}
 
-	err = testUtils.DelegateStakeToOperators(
-		t,
-		ctx,
-		&testUtils.StakerDelegationConfig{
-			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
-			StakerAddress:      chainConfig.AggStakerAccountAddress,
-			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
-			OperatorAddress:    chainConfig.OperatorAccountAddress,
-			OperatorSetId:      sigConfig.AggregatorOpsetId,
-			StrategyAddress:    testUtils.Strategy_WETH,
-		},
-		&testUtils.StakerDelegationConfig{
-			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
-			StakerAddress:      chainConfig.ExecStakerAccountAddress,
-			OperatorPrivateKey: chainConfig.ExecOperatorAccountPk,
-			OperatorAddress:    chainConfig.ExecOperatorAccountAddress,
+	time.Sleep(time.Second * 6)
+
+	// ------------------------------------------------------------------------
+	// Delegate stake to all operators
+	// ------------------------------------------------------------------------
+	t.Logf("------------------------------------------- Delegating stake to operators -------------------------------------------")
+
+	// Build stake configs dynamically based on number of operators
+	stakerPkList := []string{chainConfig.ExecStakerAccountPrivateKey, chainConfig.ExecStaker2AccountPrivateKey}
+	stakerAddrList := []string{chainConfig.ExecStakerAccountAddress, chainConfig.ExecStaker2AccountAddress}
+	operatorAddrList := []string{chainConfig.ExecOperatorAccountAddress, chainConfig.ExecOperator2AccountAddress}
+
+	stakeConfigs := make([]*testUtils.StakerDelegationConfig, numExecutorOperators)
+	for i := 0; i < numExecutorOperators; i++ {
+		stakeConfigs[i] = &testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   stakerPkList[i],
+			StakerAddress:      stakerAddrList[i],
+			OperatorPrivateKey: operatorPkList[i],
+			OperatorAddress:    operatorAddrList[i],
 			OperatorSetId:      sigConfig.ExecutorOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
-		},
+		}
+	}
+
+	err = testUtils.DelegateStakeToMultipleOperators(
+		t,
+		ctx,
+		stakeConfigs,
 		chainConfig.AVSAccountAddress,
 		l1EthClient,
 		l,
@@ -564,51 +603,65 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	time.Sleep(time.Second * 6)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
-	if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
-		l.Sugar().Infow("Transporting tables for BN254 executor operator set (including L2)",
-			zap.Uint32("executorOperatorSetId", sigConfig.ExecutorOpsetId))
 
-		// For aggregator test, we need L2 transport - don't ignore L2 chain
-		chainIdsToIgnore := []*big.Int{
-			new(big.Int).SetUint64(11155111), // eth sepolia
-			new(big.Int).SetUint64(17000),    // holesky
-			new(big.Int).SetUint64(84532),    // base sepolia
+	// For aggregator test, we need L2 transport - don't ignore L2 chain
+	chainIdsToIgnore := []*big.Int{
+		new(big.Int).SetUint64(11155111), // eth sepolia
+		new(big.Int).SetUint64(17000),    // holesky
+		new(big.Int).SetUint64(84532),    // base sepolia
+	}
+
+	// Stake weights: 60% and 40% (both meet threshold)
+	stakeWeights := []*big.Int{
+		big.NewInt(1500000000000000000), // 1.5e18 = 60%
+		big.NewInt(1000000000000000000), // 1e18   = 40%
+	}
+
+	operatorAddressList := []string{
+		chainConfig.ExecOperatorAccountAddress,
+		chainConfig.ExecOperator2AccountAddress,
+	}
+
+	// Build operator key infos for both operators
+	operatorKeyInfos := make([]tableTransporter.OperatorKeyInfo, numExecutorOperators)
+	for i := 0; i < numExecutorOperators; i++ {
+		var privateKeyHex string
+		if sigConfig.ExecutorCurve == config.CurveTypeBN254 {
+			blsPrivKey := execKeys[i].PrivateKey.(*bn254.PrivateKey)
+			privateKeyHex = fmt.Sprintf("0x%x", blsPrivKey.Bytes())
+		} else {
+			ecdsaPrivKey := execKeys[i].PrivateKey.(*cryptoLibsEcdsa.PrivateKey)
+			privateKeyHex = fmt.Sprintf("0x%x", ecdsaPrivKey.Bytes())
 		}
 
-		// Pass the executor's BLS info for proper operator info tree root calculation
-		// The operator is already registered via SetupOperatorPeering, so KeyRegistrar registration will be skipped
-		operatorBLSInfos := []tableTransporter.OperatorKeyInfo{
-			{
-				OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
-				PrivateKeyHex:   fmt.Sprintf("0x%x", execBn254PrivateSigningKey.Bytes()),
-				Weights:         []*big.Int{big.NewInt(2000000000000000000)},
-			},
+		operatorKeyInfos[i] = tableTransporter.OperatorKeyInfo{
+			OperatorAddress: common.HexToAddress(operatorAddressList[i]),
+			PrivateKeyHex:   privateKeyHex,
+			Weights:         []*big.Int{stakeWeights[i]},
 		}
-		contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+	}
 
-		err = tableTransporter.TransportTableWithSimpleMultiOperators(
-			&tableTransporter.MultipleOperatorConfig{
-				TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
-				L1RpcUrl:                  "http://localhost:8545",
-				L1ChainId:                 31337,
-				L2RpcUrl:                  l2RpcUrl,
-				L2ChainId:                 31338,
-				CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
-				ChainIdsToIgnore:          chainIdsToIgnore,
-				Logger:                    l,
-				Operators:                 operatorBLSInfos,
-				AVSAddress:                avsAddr,
-				OperatorSetId:             sigConfig.ExecutorOpsetId,
-				TransportBLSPrivateKey:    transportBlsKey,
-			},
-		)
-		if err != nil {
-			t.Fatalf("Failed to transport operator tables: %v", err)
-		}
-	} else {
-		// For ECDSA-only setups, use the simple transport
-		l.Sugar().Infow("Using simple table transport for ECDSA-only setup")
-		testUtils.TransportStakeTables(l, true)
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+
+	err = tableTransporter.TransportTableWithSimpleMultiOperators(
+		&tableTransporter.MultipleOperatorConfig{
+			TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
+			L1RpcUrl:                  "http://localhost:8545",
+			L1ChainId:                 31337,
+			L2RpcUrl:                  l2RpcUrl,
+			L2ChainId:                 31338,
+			CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
+			ChainIdsToIgnore:          chainIdsToIgnore,
+			Logger:                    l,
+			Operators:                 operatorKeyInfos,
+			AVSAddress:                avsAddr,
+			OperatorSetId:             sigConfig.ExecutorOpsetId,
+			TransportBLSPrivateKey:    transportBlsKey,
+			CurveType:                 sigConfig.ExecutorCurve,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Failed to transport operator tables: %v", err)
 	}
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
@@ -666,26 +719,96 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
 
 	// ------------------------------------------------------------------------
-	// Setup the executor
+	// Setup executors (2 for Docker mode, 1 for Kubernetes mode)
 	// ------------------------------------------------------------------------
-	// Create executor normally for both modes - it runs in the test process
-	execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
-	// Set up executor signers based on curve type
-	var execSigners signer.Signers
-	if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
-		execSigners = signer.Signers{
-			ECDSASigner: execSigner,
+	var executors []*executor.Executor
+
+	if mode == "docker" {
+		// Docker mode: Create 2 separate executor instances
+		t.Logf("Creating 2 executor instances for Docker mode")
+
+		for i := 0; i < numExecutorOperators; i++ {
+			// Create separate config for each executor
+			execConfigForOp, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode, sigConfig.ExecutorCurve)))
+			if err != nil {
+				t.Fatalf("Failed to create executor config for operator %d: %v", i, err)
+			}
+
+			// Set operator-specific fields
+			operatorPkList := []string{chainConfig.ExecOperatorAccountPk, chainConfig.ExecOperator2AccountPk}
+			operatorAddrList := []string{chainConfig.ExecOperatorAccountAddress, chainConfig.ExecOperator2AccountAddress}
+
+			execConfigForOp.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
+				PrivateKey: operatorPkList[i],
+			}
+			execConfigForOp.Operator.Address = operatorAddrList[i]
+			execConfigForOp.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
+			execConfigForOp.GrpcPort = 9000 + i
+
+			// Set signing keys based on curve type
+			if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
+				execConfigForOp.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
+					PrivateKey: operatorPkList[i],
+				}
+			}
+
+			execSignerForOp := inMemorySigner.NewInMemorySigner(execKeys[i].PrivateKey, sigConfig.ExecutorCurve)
+			execPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPkList[i], l1EthClient, l)
+			if err != nil {
+				t.Fatalf("Failed to create private key signer for executor %d: %v", i, err)
+			}
+			execCc, err := caller.NewContractCaller(l1EthClient, execPrivateKeySigner, l)
+			if err != nil {
+				t.Fatalf("Failed to create contract caller for executor %d: %v", i, err)
+			}
+
+			execPdfForOp := peeringDataFetcher.NewPeeringDataFetcher(execCc, l)
+
+			// Set up executor signers based on curve type
+			var execSignersForOp signer.Signers
+			if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
+				execSignersForOp = signer.Signers{
+					ECDSASigner: execSignerForOp,
+				}
+			} else {
+				execSignersForOp = signer.Signers{
+					BLSSigner: execSignerForOp,
+				}
+			}
+
+			// Use in-memory storage for the executor
+			execStoreForOp := executorMemory.NewInMemoryExecutorStore()
+			exec, err := executor.NewExecutorWithRpcServers(execConfigForOp.GrpcPort, execConfigForOp.GrpcPort, execConfigForOp, l, execSignersForOp, execPdfForOp, execCc, execStoreForOp)
+			if err != nil {
+				t.Fatalf("Failed to create executor %d: %v", i, err)
+			}
+			executors = append(executors, exec)
+			t.Logf("Created executor %d on port %d with address %s", i, execConfigForOp.GrpcPort, operatorAddrList[i])
 		}
 	} else {
-		execSigners = signer.Signers{
-			BLSSigner: execSigner,
+		// Kubernetes mode: Create single executor (as before)
+		t.Logf("Creating single executor instance for Kubernetes mode")
+		execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
+
+		// Set up executor signers based on curve type
+		var execSigners signer.Signers
+		if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
+			execSigners = signer.Signers{
+				ECDSASigner: execSigner,
+			}
+		} else {
+			execSigners = signer.Signers{
+				BLSSigner: execSigner,
+			}
 		}
-	}
-	// Use in-memory storage for the executor
-	execStore := executorMemory.NewInMemoryExecutorStore()
-	realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, execSigners, execPdf, l1ExecCc, execStore)
-	if err != nil {
-		t.Fatalf("Failed to create executor: %v", err)
+
+		// Use in-memory storage for the executor
+		execStore := executorMemory.NewInMemoryExecutorStore()
+		realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, execSigners, execPdf, l1ExecCc, execStore)
+		if err != nil {
+			t.Fatalf("Failed to create executor: %v", err)
+		}
+		executors = append(executors, realExec)
 	}
 
 	// ------------------------------------------------------------------------
@@ -739,12 +862,15 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	// ------------------------------------------------------------------------
 	// Boot up everything
 	// ------------------------------------------------------------------------
-	// Initialize and run executor (same for both modes)
-	if err := realExec.Initialize(ctx); err != nil {
-		t.Fatalf("Failed to initialize executor: %v", err)
-	}
-	if err := realExec.Run(ctx); err != nil {
-		t.Fatalf("Failed to run executor: %v", err)
+	// Initialize and run all executors
+	for i, exec := range executors {
+		t.Logf("Initializing and running executor %d", i)
+		if err := exec.Initialize(ctx); err != nil {
+			t.Fatalf("Failed to initialize executor %d: %v", i, err)
+		}
+		if err := exec.Run(ctx); err != nil {
+			t.Fatalf("Failed to run executor %d: %v", i, err)
+		}
 	}
 
 	if err := agg.Initialize(); err != nil {

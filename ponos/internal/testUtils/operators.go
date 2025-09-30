@@ -19,6 +19,11 @@ const (
 	Strategy_STETH = "0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
 )
 
+type ExecutorWithSocket struct {
+	Executor *operator.Operator
+	Socket   string
+}
+
 type StakerDelegationConfig struct {
 	StakerPrivateKey   string
 	StakerAddress      string
@@ -111,24 +116,18 @@ func RegisterMultipleOperators(
 	return nil
 }
 
-func SetupOperatorPeering(
+func SetupOperatorPeeringWithMultipleExecutors(
 	ctx context.Context,
 	chainConfig *ChainConfig,
 	chainId config.ChainId,
 	ethClient *ethclient.Client,
 	aggregator *operator.Operator,
-	executor *operator.Operator,
-	socket string,
+	executors []ExecutorWithSocket,
 	l *zap.Logger,
 ) error {
 	aggOperatorAddress, err := aggregator.DeriveAddress()
 	if err != nil {
 		return fmt.Errorf("failed to convert aggregator operator private key: %v", err)
-	}
-
-	execOperatorAddress, err := executor.DeriveAddress()
-	if err != nil {
-		return fmt.Errorf("failed to convert executor operator private key: %v", err)
 	}
 
 	avsPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, ethClient, l)
@@ -179,44 +178,87 @@ func SetupOperatorPeering(
 		zap.String("transactionHash", result.TxHash.String()),
 	)
 
-	executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.ExecOperatorAccountPk, ethClient, l)
-	if err != nil {
-		return fmt.Errorf("failed to create executor private key signer: %v", err)
+	executorPrivateKeys := []string{
+		chainConfig.ExecOperatorAccountPk,
+		chainConfig.ExecOperator2AccountPk,
+		chainConfig.ExecOperator3AccountPk,
+		chainConfig.ExecOperator4AccountPk,
 	}
 
-	executorCc, err := caller.NewContractCaller(ethClient, executorPrivateKeySigner, l)
-	if err != nil {
-		return fmt.Errorf("failed to create executor contract caller: %v", err)
+	for i, execWithSocket := range executors {
+		if i >= len(executorPrivateKeys) {
+			return fmt.Errorf("executor index %d exceeds available private keys (%d)", i, len(executorPrivateKeys))
+		}
+
+		exec := execWithSocket.Executor
+		execOperatorAddress, err := exec.DeriveAddress()
+		if err != nil {
+			return fmt.Errorf("failed to convert executor %d operator private key: %v", i, err)
+		}
+
+		executorPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(executorPrivateKeys[i], ethClient, l)
+		if err != nil {
+			return fmt.Errorf("failed to create executor %d private key signer: %v", i, err)
+		}
+
+		executorCc, err := caller.NewContractCaller(ethClient, executorPrivateKeySigner, l)
+		if err != nil {
+			return fmt.Errorf("failed to create executor %d contract caller: %v", i, err)
+		}
+
+		l.Sugar().Infow("------------------- Registering executor -------------------", zap.Int("executorIndex", i))
+		if len(exec.OperatorSetIds) == 0 {
+			l.Sugar().Infow("No operator sets defined for executor", zap.Int("executorIndex", i))
+			return fmt.Errorf("executor %d operator sets are empty, cannot register", i)
+		}
+
+		// register the executor
+		result, err = operator.RegisterOperatorToOperatorSets(
+			ctx,
+			avsCc,
+			executorCc,
+			common.HexToAddress(chainConfig.AVSAccountAddress),
+			exec.OperatorSetIds,
+			exec,
+			&operator.RegistrationConfig{
+				Socket:          execWithSocket.Socket,
+				MetadataUri:     "https://some-metadata-uri.com",
+				AllocationDelay: 1,
+			},
+			l,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to register executor %d operator: %v", i, err)
+		}
+		l.Sugar().Infow("Executor operator registered successfully",
+			zap.Int("executorIndex", i),
+			zap.String("operatorAddress", execOperatorAddress.String()),
+			zap.String("transactionHash", result.TxHash.String()),
+		)
 	}
 
-	l.Sugar().Infow("------------------- Registering executor -------------------")
-	if len(executor.OperatorSetIds) == 0 {
-		l.Sugar().Infow("No operator sets defined for executor")
-		return fmt.Errorf("executor operator sets are empty, cannot register")
-	}
-	// register the executor
-	result, err = operator.RegisterOperatorToOperatorSets(
+	return nil
+}
+
+func SetupOperatorPeering(
+	ctx context.Context,
+	chainConfig *ChainConfig,
+	chainId config.ChainId,
+	ethClient *ethclient.Client,
+	aggregator *operator.Operator,
+	executor *operator.Operator,
+	socket string,
+	l *zap.Logger,
+) error {
+	return SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
-		avsCc,
-		executorCc,
-		common.HexToAddress(chainConfig.AVSAccountAddress),
-		executor.OperatorSetIds,
-		executor,
-		&operator.RegistrationConfig{
-			Socket:          socket,
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
-		},
+		chainConfig,
+		chainId,
+		ethClient,
+		aggregator,
+		[]ExecutorWithSocket{{Executor: executor, Socket: socket}},
 		l,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to register executor operator: %v", err)
-	}
-	l.Sugar().Infow("Executor operator registered successfully",
-		zap.String("operatorAddress", execOperatorAddress.String()),
-		zap.String("transactionHash", result.TxHash.String()),
-	)
-	return nil
 }
 
 func DelegateStakeToOperators(

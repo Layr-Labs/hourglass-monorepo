@@ -560,7 +560,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		taskResult.OperatorSetId,
 		operatorPeersWeight.RootReferenceTimestamp,
-		10_000,
+		1_000,
 	)
 	assert.Nil(t, err)
 	assert.True(t, valid)
