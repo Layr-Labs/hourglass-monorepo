@@ -383,6 +383,20 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
 	}
 
+	if operatorPeersWeight == nil || len(operatorPeersWeight.Operators) == 0 {
+		em.logger.Sugar().Errorw("No valid operators available for task",
+			zap.String("taskId", task.TaskId),
+			zap.String("avsAddress", task.AVSAddress),
+			zap.Uint32("operatorSetId", task.OperatorSetId),
+			zap.Uint64("l1ReferenceBlockNumber", task.L1ReferenceBlockNumber),
+		)
+		return fmt.Errorf(
+			"no operators available for task %s operator set %d",
+			task.TaskId,
+			task.OperatorSetId,
+		)
+	}
+
 	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get curve type for operator set",
