@@ -382,9 +382,18 @@ func Test_CertificateVerifier(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get operator set %d for peer %s: %v", taskOpsetId, peer.OperatorAddress, err)
 		}
+
+		// Get weights for this operator from the weights map
+		weights, ok := operatorPeersWeight.Weights[peer.OperatorAddress]
+		if !ok {
+			t.Fatalf("No weights found for operator %s", peer.OperatorAddress)
+		}
+
 		operators = append(operators, &aggregation.Operator[common.Address]{
-			Address:   peer.OperatorAddress,
-			PublicKey: opset.WrappedPublicKey.ECDSAAddress,
+			Address:       peer.OperatorAddress,
+			PublicKey:     opset.WrappedPublicKey.ECDSAAddress,
+			OperatorIndex: opset.OperatorIndex,
+			Weights:       weights,
 		})
 	}
 	t.Logf("======= Operators =======")
@@ -397,7 +406,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		taskId,
 		operatorPeersWeight.RootReferenceTimestamp,
 		taskOpsetId,
-		10_000,
+		1_000,
 		l1CC,
 		taskInputData,
 		&deadline,
