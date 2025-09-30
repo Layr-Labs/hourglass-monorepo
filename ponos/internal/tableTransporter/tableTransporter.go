@@ -216,9 +216,6 @@ func TransportTable(
 				l.Error("encode key data: %w", zap.Error(err))
 			}
 
-			// Configure curve type (you need to add CURVE_TYPE_KEY_REGISTRAR_BN254 constant)
-			const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2 // or whatever the correct value is
-
 			// You need the KeyRegistrar address - this should come from your config
 			keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
 
@@ -229,7 +226,7 @@ func TransportTable(
 				keyRegistrarAddress,
 				gen.Avs,
 				gen.Id,
-				CURVE_TYPE_KEY_REGISTRAR_BN254,
+				bn254CurveType,
 			); err != nil {
 				l.Sugar().Fatalf("Failed to configure curve type: %v", err)
 			}
@@ -330,7 +327,7 @@ func transferOwnership(logger *zap.Logger, rpcURL string, proxy common.Address, 
 
 	// read current owner
 	currOwner := readOwner(ctx, logger, c, ownableABI, proxy)
-	logger.Info("Current owner: %s", zap.String("owner", currOwner.Hex()))
+	logger.Info("Current owner:", zap.String("owner", currOwner.Hex()))
 
 	// impersonate the current owner and fund it
 	impersonate(ctx, logger, c, currOwner)
@@ -356,11 +353,11 @@ func transferOwnership(logger *zap.Logger, rpcURL string, proxy common.Address, 
 
 	// await for tx receipt
 	mustWaitReceipt(ctx, logger, c, txHash)
-	logger.Info("TransferOwnership tx: %s", zap.String("owner", txHash.Hex()))
+	logger.Info("TransferOwnership tx:", zap.String("owner", txHash.Hex()))
 
 	// verify
 	newOwnerRead := readOwner(ctx, logger, c, ownableABI, proxy)
-	logger.Info("New owner: %s", zap.String("owner", newOwnerRead.Hex()))
+	logger.Info("New owner", zap.String("owner", newOwnerRead.Hex()))
 }
 
 // Impersonate the AVS and call KeyRegistrar.configureOperatorSet(opSet, curveType)

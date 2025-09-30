@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"testing"
 	"time"
@@ -216,7 +217,7 @@ func createSignedECDSATaskResult(
 	return taskResult, nil
 }
 
-func Test_Aggregation(t *testing.T) {
+func Test_Aggregation_Integration(t *testing.T) {
 	const (
 		L1RpcUrl = "http://127.0.0.1:8545"
 	)
@@ -300,6 +301,7 @@ func Test_Aggregation(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1), // Simple address format for testing
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)}, // Equal weight for all operators
 			}
 			privateKeys[i] = privKey
 		}
@@ -405,6 +407,7 @@ func Test_Aggregation(t *testing.T) {
 				Address:       derivedAddress.String(),
 				PublicKey:     derivedAddress,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -475,7 +478,7 @@ func Test_Aggregation(t *testing.T) {
 	})
 }
 
-func Test_MostCommonDigestTracking(t *testing.T) {
+func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 	l1CC, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
@@ -490,6 +493,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -504,7 +508,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 			taskId,
 			testReferenceTimestamp,
 			1,    // operatorSetId
-			6000, // thresholdBips (3/5 = 6000 bips),
+			3300, // thresholdBips (3/5 = 6000 bips),
 			l1CC,
 			taskData,
 			&deadline,
@@ -615,6 +619,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				Address:       "0x1",
 				PublicKey:     pubKey,
 				OperatorIndex: 0,
+				Weights:       []*big.Int{big.NewInt(1)},
 			},
 		}
 
@@ -781,6 +786,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -865,6 +871,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				Address:       derivedAddress.String(),
 				PublicKey:     derivedAddress,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -994,6 +1001,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 				Address:       derivedAddress.String(),
 				PublicKey:     derivedAddress,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1052,7 +1060,7 @@ func Test_MostCommonDigestTracking(t *testing.T) {
 	})
 }
 
-func Test_OutputDigestSecurityValidation(t *testing.T) {
+func Test_OutputDigestSecurityValidation_Weighted(t *testing.T) {
 	l1CC, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
@@ -1066,6 +1074,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 				Address:       "0x1",
 				PublicKey:     pubKey,
 				OperatorIndex: 0,
+				Weights:       []*big.Int{big.NewInt(1)},
 			},
 		}
 
@@ -1207,7 +1216,7 @@ func Test_OutputDigestSecurityValidation(t *testing.T) {
 	})
 }
 
-func Test_NonSignerOrdering(t *testing.T) {
+func Test_NonSignerOrdering_Weighted(t *testing.T) {
 	l1CC, cleanup := setupTestEnvironment(t)
 	defer cleanup()
 
@@ -1225,6 +1234,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: operatorIndices[i],
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1314,6 +1324,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: operatorIndices[i],
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1373,6 +1384,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: operatorIndices[i],
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 		}
 
@@ -1433,6 +1445,7 @@ func Test_NonSignerOrdering(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1499,6 +1512,7 @@ func Test_DigestBasedAggregation(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1514,7 +1528,7 @@ func Test_DigestBasedAggregation(t *testing.T) {
 			taskId,
 			testReferenceTimestamp,
 			1,    // operatorSetId
-			6667, // thresholdBips (2/3 = 66.67%),
+			6666, // thresholdBips (2/3 = 66.66%),
 			l1CC,
 			taskData,
 			&deadline,
@@ -1637,6 +1651,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 				Address:       fmt.Sprintf("0x%d", i+1),
 				PublicKey:     pubKey,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(100)},
 			}
 			privateKeys[i] = privKey
 		}
@@ -1707,6 +1722,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 				Address:       derivedAddress.String(),
 				PublicKey:     derivedAddress,
 				OperatorIndex: uint32(i),
+				Weights:       []*big.Int{big.NewInt(1)},
 			}
 			privateKeys[i] = privKey
 		}

@@ -15,6 +15,7 @@ all: deps/go build/cmd/executor build/cmd/aggregator
 deps: deps/go
 	./scripts/installDeps.sh
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
+	$(GO) install go.uber.org/mock/mockgen@latest
 	cd protos && buf dep update
 
 
@@ -147,6 +148,10 @@ gen-mocks:
 	mockgen -source=pkg/contextManager/blockContextManager.go -destination=mocks/mock_block_context_manager.go -package=mocks IBlockContextManager
 	@echo "Generating mock for IContractStore interface..."
 	mockgen -source=pkg/contractStore/contractStore.go -destination=mocks/mock_contract_store.go -package=mocks IContractStore
+	@echo "Generating mock for IContractCaller interface..."
+	mockgen -source=pkg/contractCaller/contractCaller.go -destination=mocks/mock_contract_caller.go -package=mocks IContractCaller
+	@echo "Generating mock for IPeeringDataFetcher interface..."
+	mockgen -source=pkg/peering/peering.go -destination=mocks/mock_peering_data_fetcher.go -package=mocks IPeeringDataFetcher
 
 .PHONY: ci-test
 ci-test: build/test-performer-container build/test-container build/sleepy-test-performer-container build/operator-container test

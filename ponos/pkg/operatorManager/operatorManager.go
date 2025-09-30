@@ -16,10 +16,9 @@ import (
 )
 
 type OperatorManagerConfig struct {
-	AvsAddress     string
-	OperatorSetIds []uint32 // TODO(seanmcgary): this should get hydrated from the AVSConfig object
-	ChainIds       []config.ChainId
-	L1ChainId      config.ChainId
+	AvsAddress string
+	ChainIds   []config.ChainId
+	L1ChainId  config.ChainId
 }
 
 type PeerWeight struct {
@@ -71,23 +70,12 @@ func (om *OperatorManager) GetCurveTypeForOperatorSet(avsAddress string, operato
 func (om *OperatorManager) GetExecutorPeersAndWeightsForTask(
 	ctx context.Context,
 	task *types.Task,
+	curveType config.CurveType,
 ) (*PeerWeight, error) {
-
-	l1ChainCc, err := om.getContractCallerForChainId(om.config.L1ChainId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
-	}
-
 	l1BlockForTableData := task.L1ReferenceBlockNumber
-
-	curveType, err := l1ChainCc.GetOperatorSetCurveType(om.config.AvsAddress, task.OperatorSetId, l1BlockForTableData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
-	}
 
 	tableData, err := om.fetchOperatorTableData(
 		ctx,
-		l1ChainCc,
 		common.HexToAddress(task.AVSAddress),
 		task.OperatorSetId,
 		task.ChainId,
@@ -209,7 +197,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		)
 		return nil, err
 	}
-	om.logger.Sugar().Infow("Latest reference time and block for table updater",
+	om.logger.Sugar().Debugw("Latest reference time and block for table updater",
 		zap.Uint32("chainId", convertedChainId),
 		zap.Uint64("taskBlockNumber", taskBlockNumber),
 		zap.Uint32("latestReferenceBlockNumber", latestReferenceTimeAndBlock.LatestReferenceBlockNumber),
@@ -230,7 +218,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get operator set curve type: %w", err)
 	}
-	om.logger.Sugar().Infow("Got operator set curve type",
+	om.logger.Sugar().Debugw("Got operator set curve type",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Uint64("blockForTableData", blockForTableData),
@@ -245,6 +233,10 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 		blockForTableData,
 	)
 
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator table: %w", err)
+	}
+
 	if curveType == config.CurveTypeBN254 {
 		err = om.decorateOperatorTableRoot(
 			ctx,
@@ -255,20 +247,12 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 			operatorSetId,
 			latestReferenceTimeAndBlock,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to populate operator table root: %w", err)
+		}
 	}
 
-	if err != nil {
-		om.logger.Sugar().Errorw("Failed to get operator table data",
-			zap.String("avsAddress", om.config.AvsAddress),
-			zap.Uint32("operatorSetId", operatorSetId),
-			zap.Uint64("taskBlockNumber", taskBlockNumber),
-			zap.String("curveType", curveType.String()),
-			zap.Error(err),
-		)
-		return nil, err
-	}
-
-	om.logger.Sugar().Infow("Fetched operator table data",
+	om.logger.Sugar().Debugw("Fetched operator table data",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Uint64("taskBlockNumber", taskBlockNumber),
@@ -288,7 +272,7 @@ func (om *OperatorManager) GetExecutorPeersAndWeightsForBlock(
 	if err != nil {
 		return nil, fmt.Errorf("failed to list executor Operators: %w", err)
 	}
-	om.logger.Sugar().Infow("Fetched executor operators",
+	om.logger.Sugar().Debugw("Fetched executor operators",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.Any("executorOperators", operators),
@@ -333,7 +317,6 @@ func (om *OperatorManager) getContractCallerForChainId(chainId config.ChainId) (
 
 func (om *OperatorManager) fetchOperatorTableData(
 	ctx context.Context,
-	l1Cc contractCaller.IContractCaller,
 	avsAddress common.Address,
 	operatorSetId uint32,
 	taskChainId config.ChainId,
@@ -341,6 +324,12 @@ func (om *OperatorManager) fetchOperatorTableData(
 	l1BlockNumber uint64,
 	taskBlockNumber uint64,
 ) (*contractCaller.OperatorTableData, error) {
+
+	l1Cc, err := om.getContractCallerForChainId(om.config.L1ChainId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get contract caller for L1 chain: %w", err)
+	}
+
 	om.logger.Sugar().Debugw("Fetching operator table data with curve type",
 		zap.String("avsAddress", om.config.AvsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),

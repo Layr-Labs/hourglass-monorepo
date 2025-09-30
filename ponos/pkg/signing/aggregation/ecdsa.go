@@ -3,6 +3,7 @@ package aggregation
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"slices"
 	"strings"
 	"sync"
@@ -15,106 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
-
-type AggregatedECDSACertificate struct {
-	// the unique identifier for the task
-	TaskId []byte
-
-	// the output of the task
-	TaskResponse []byte
-
-	// keccak256 hash of the task response
-	TaskResponseDigest [32]byte
-
-	// signatures of the signers
-	// operatorAddress --> signature
-	SignersSignatures map[common.Address][]byte
-
-	// the time the certificate was signed
-	SignedAt *time.Time
-}
-
-// ToSubmitParams converts the certificate to contract submission parameters
-func (cert *AggregatedECDSACertificate) ToSubmitParams() *contractCaller.ECDSATaskResultParams {
-	return &contractCaller.ECDSATaskResultParams{
-		TaskId:             cert.TaskId,
-		TaskResponse:       cert.TaskResponse,
-		TaskResponseDigest: cert.TaskResponseDigest,
-		SignersSignatures:  cert.SignersSignatures,
-	}
-}
-
-func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
-	if len(cert.SignersSignatures) == 0 {
-		return nil, fmt.Errorf("no signatures found in certificate")
-	}
-
-	// Collect addresses
-	addresses := make([]common.Address, 0, len(cert.SignersSignatures))
-	for addr := range cert.SignersSignatures {
-		addresses = append(addresses, addr)
-	}
-
-	// Sort by raw bytes using slices.Compare
-	slices.SortFunc(addresses, func(a, b common.Address) int {
-		return slices.Compare(a[:], b[:])
-	})
-
-	// Concatenate signatures in sorted order
-	var finalSignature []byte
-	for _, addr := range addresses {
-		sig := cert.SignersSignatures[addr]
-		if len(sig) != 65 {
-			return nil, fmt.Errorf("signature for address %s has invalid length: expected 65, got %d",
-				addr.Hex(), len(sig))
-		}
-		finalSignature = append(finalSignature, sig...)
-	}
-
-	return finalSignature, nil
-}
-
-type ReceivedECDSAResponseWithDigest struct {
-	// TaskId is the unique identifier for the task
-	TaskId string
-
-	// The full task result from the operator
-	TaskResult *types.TaskResult
-
-	// signature is the result signature from the operator
-	Signature *ecdsa.Signature
-
-	// OutputDigest is a keccak256 hash of the output bytes (for consensus tracking)
-	OutputDigest [32]byte
-}
-
-// signerInfo holds information about an individual signer
-type ecdsaSignerInfo struct {
-	publicKey common.Address
-	signature []byte
-	operator  *Operator[common.Address]
-}
-
-// digestGroup tracks all signers for a specific output digest
-type ecdsaDigestGroup struct {
-	// Operators who signed this specific digest
-	signers map[string]*ecdsaSignerInfo // operator address -> info
-
-	// Representative response for this digest
-	response *ReceivedECDSAResponseWithDigest
-
-	// Count of signatures for this digest
-	count int
-}
-
-type aggregatedECDSAOperators struct {
-	// Group signatures by the digest they signed
-	digestGroups map[[32]byte]*ecdsaDigestGroup
-
-	// Track the most common digest
-	mostCommonDigest [32]byte
-	mostCommonCount  int
-}
 
 type ECDSATaskResultAggregator struct {
 	mu                 sync.Mutex
@@ -263,7 +164,6 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
 
-	// Store signer info for later aggregation
 	group.signers[taskResponse.OperatorAddress] = &ecdsaSignerInfo{
 		publicKey: operator.PublicKey,
 		signature: taskResponse.ResultSignature,
@@ -271,26 +171,47 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	}
 	group.count++
 
-	// Update most common tracking
-	if group.count > tra.aggregatedOperators.mostCommonCount {
-		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-	}
+	tra.updateMostCommonResponse(group, outputTaskMessage)
 
 	return nil
 }
 
 func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
-	// Check if threshold is met (by count)
-	required := int((float64(tra.ThresholdBips) / 10_000.0) * float64(len(tra.Operators)))
-	if required == 0 {
-		required = 1 // Always require at least one
-	}
-	if tra.aggregatedOperators == nil {
+	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
 		return false
 	}
-	// Check if the most common digest has enough signatures
-	return tra.aggregatedOperators.mostCommonCount >= required
+
+	mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
+	if mostCommonGroup == nil {
+		return false
+	}
+
+	totalStake := big.NewInt(0)
+	for _, op := range tra.Operators {
+		if len(op.Weights) > 0 {
+			totalStake.Add(totalStake, op.Weights[0])
+		}
+	}
+
+	if totalStake.Sign() == 0 {
+		return false
+	}
+
+	signersStake := big.NewInt(0)
+	for signerAddr := range mostCommonGroup.signers {
+		for _, op := range tra.Operators {
+			if strings.EqualFold(op.Address, signerAddr) && len(op.Weights) > 0 {
+				signersStake.Add(signersStake, op.Weights[0])
+				break
+			}
+		}
+	}
+
+	signersStakeScaled := new(big.Int).Mul(signersStake, big.NewInt(10000))
+	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
+
+	result := signersStakeScaled.Cmp(thresholdStake) >= 0
+	return result
 }
 
 // VerifyResponseSignature verifies both result and auth signatures
@@ -304,7 +225,6 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 			operator.Address, taskResponse.OperatorAddress)
 	}
 
-	// Step 1: Verify the result signature (for storage)
 	resultSig, err := ecdsa.NewSignatureFromBytes(taskResponse.ResultSignature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse result signature: %w", err)
@@ -330,13 +250,11 @@ func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 		return nil, fmt.Errorf("result signature verification failed: signature does not match operator public key")
 	}
 
-	// Step 2: Verify the auth signature (for identity)
 	authSig, err := ecdsa.NewSignatureFromBytes(taskResponse.AuthSignature)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse auth signature: %w", err)
 	}
 
-	// Create the auth data that should have been signed
 	authData := &types.AuthSignatureData{
 		TaskId:          taskResponse.TaskId,
 		AvsAddress:      taskResponse.AvsAddress,
@@ -364,13 +282,11 @@ func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECD
 		return nil, fmt.Errorf("no signatures collected")
 	}
 
-	// Find the winning digest group
 	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
 	if winningGroup == nil || winningGroup.count == 0 {
 		return nil, fmt.Errorf("no signatures for winning digest")
 	}
 
-	// Collect only the signatures that signed the winning message
 	signersSignatures := make(map[common.Address][]byte)
 	for _, signer := range winningGroup.signers {
 		signersSignatures[signer.operator.GetAddress()] = signer.signature
@@ -388,4 +304,66 @@ func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECD
 		SignersSignatures:  signersSignatures,
 		SignedAt:           new(time.Time),
 	}, nil
+}
+
+func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
+	if len(cert.SignersSignatures) == 0 {
+		return nil, fmt.Errorf("no signatures found in certificate")
+	}
+
+	addresses := make([]common.Address, 0, len(cert.SignersSignatures))
+	for addr := range cert.SignersSignatures {
+		addresses = append(addresses, addr)
+	}
+
+	// Sort by address raw bytes
+	slices.SortFunc(addresses, func(a, b common.Address) int {
+		cmp := slices.Compare(a[:], b[:])
+		return cmp
+	})
+
+	// Concatenate signatures in sorted order
+	var finalSignature []byte
+	for _, addr := range addresses {
+		sig := cert.SignersSignatures[addr]
+		if len(sig) != 65 {
+			return nil, fmt.Errorf("signature for address %s has invalid length: expected 65, got %d",
+				addr.Hex(), len(sig))
+		}
+		finalSignature = append(finalSignature, sig...)
+	}
+
+	return finalSignature, nil
+}
+
+func (tra *ECDSATaskResultAggregator) updateMostCommonResponse(group *ecdsaDigestGroup, outputTaskMessage [32]byte) {
+
+	if group.count > tra.aggregatedOperators.mostCommonCount {
+		tra.aggregatedOperators.mostCommonCount = group.count
+		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
+
+	} else if group.count == tra.aggregatedOperators.mostCommonCount && group.count > 0 {
+		currentGroupStake := tra.calculateGroupStake(group)
+
+		mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
+		mostCommonGroupStake := tra.calculateGroupStake(mostCommonGroup)
+
+		cmp := currentGroupStake.Cmp(mostCommonGroupStake)
+		if cmp > 0 {
+			tra.aggregatedOperators.mostCommonCount = group.count
+			tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
+		}
+	}
+}
+
+func (tra *ECDSATaskResultAggregator) calculateGroupStake(group *ecdsaDigestGroup) *big.Int {
+	totalStake := big.NewInt(0)
+	if group != nil {
+		for _, signer := range group.signers {
+			if signer.operator != nil && len(signer.operator.Weights) > 0 {
+				totalStake.Add(totalStake, signer.operator.Weights[0])
+			}
+		}
+	}
+	return totalStake
 }

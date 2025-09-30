@@ -7,9 +7,11 @@ import (
 	"strings"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
+	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/Layr-Labs/multichain-go/pkg/blsSigner"
@@ -27,12 +29,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// OperatorBLSInfo contains the BLS key information for an operator
-type OperatorBLSInfo struct {
+// Map config.CurveType to KeyRegistrar curve type constants
+const (
+	ecdsaCurveType = 1
+	bn254CurveType = 2
+)
+
+// OperatorKeyInfo contains generic key information for an operator
+type OperatorKeyInfo struct {
 	PrivateKeyHex   string
-	PublicKey       *bn254.PublicKey
 	Weights         []*big.Int
-	OperatorAddress common.Address // ECDSA address of the operator
+	OperatorAddress common.Address
 }
 
 // MultipleOperatorConfig contains configuration for multi-operator transport
@@ -47,10 +54,11 @@ type MultipleOperatorConfig struct {
 	Logger                    *zap.Logger
 
 	// Multi-operator specific fields
-	Operators              []OperatorBLSInfo
+	Operators              []OperatorKeyInfo
 	AVSAddress             common.Address
 	OperatorSetId          uint32
-	TransportBLSPrivateKey string // BLS key for signing transport (can be one of the operators)
+	CurveType              config.CurveType
+	TransportBLSPrivateKey string
 }
 
 // TransportTableWithSimpleMultiOperators follows the same pattern as the original
@@ -149,7 +157,15 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		return fmt.Errorf("failed to create contract caller: %v", err)
 	}
 
-	const CURVE_TYPE_KEY_REGISTRAR_BN254 = 2
+	var curveTypeKeyRegistrar uint8
+	if cfg.CurveType == config.CurveTypeBN254 {
+		curveTypeKeyRegistrar = bn254CurveType
+	} else if cfg.CurveType == config.CurveTypeECDSA {
+		curveTypeKeyRegistrar = ecdsaCurveType
+	} else {
+		return fmt.Errorf("unsupported curve type: %s", cfg.CurveType)
+	}
+
 	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
 
 	gen := IOperatorTableUpdater.OperatorSet{
@@ -164,7 +180,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		keyRegistrarAddress,
 		gen.Avs,
 		gen.Id,
-		CURVE_TYPE_KEY_REGISTRAR_BN254,
+		curveTypeKeyRegistrar,
 	); err != nil {
 		return fmt.Errorf("failed to configure curve type: %v", err)
 	}
@@ -176,6 +192,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		client,
 		cfg.Operators,
 		gen,
+		cfg.CurveType,
 	); err != nil {
 		return fmt.Errorf("failed to register operators: %v", err)
 	}
@@ -550,18 +567,19 @@ func updateOperatorTableInVerifier(
 	return nil
 }
 
-// registerOperatorKeysInKeyRegistrar registers the BLS keys in KeyRegistrar
+// registerOperatorKeysInKeyRegistrar registers the keys in KeyRegistrar
 // by impersonating each operator to avoid permission issues
 func registerOperatorKeysInKeyRegistrar(
 	ctx context.Context,
 	logger *zap.Logger,
 	contractCaller *caller.ContractCaller,
 	client *ethclient.Client,
-	operators []OperatorBLSInfo,
+	operators []OperatorKeyInfo,
 	gen IOperatorTableUpdater.OperatorSet,
+	curveType config.CurveType,
 ) error {
 	for _, op := range operators {
-		if err := registerSingleOperatorKey(ctx, logger, contractCaller, client, op, gen); err != nil {
+		if err := registerSingleOperatorKey(ctx, logger, contractCaller, client, op, gen, curveType); err != nil {
 			logger.Sugar().Warnw("Failed to register operator key",
 				zap.String("operator", op.OperatorAddress.String()),
 				zap.Error(err),
@@ -608,8 +626,9 @@ func registerSingleOperatorKey(
 	logger *zap.Logger,
 	contractCaller *caller.ContractCaller,
 	client *ethclient.Client,
-	op OperatorBLSInfo,
+	op OperatorKeyInfo,
 	gen IOperatorTableUpdater.OperatorSet,
+	curveType config.CurveType,
 ) error {
 	// First check if the operator is already registered
 	if isRegistered, err := checkOperatorRegistered(ctx, client, op.OperatorAddress, gen.Avs, gen.Id); err != nil {
@@ -627,45 +646,90 @@ func registerSingleOperatorKey(
 		return nil
 	}
 
-	// Parse private key
-	var sk *bn254.PrivateKey
-	if op.PrivateKeyHex != "" {
-		var err error
-		sk, err = bn254.NewPrivateKeyFromHexString(strings.TrimPrefix(op.PrivateKeyHex, "0x"))
-		if err != nil {
-			return fmt.Errorf("parse BLS private key: %w", err)
-		}
-	} else {
+	if op.PrivateKeyHex == "" {
 		return fmt.Errorf("operator must have private key for registration")
 	}
 
-	pubKey := sk.Public()
+	var keyData []byte
+	var signature []byte
+	var err error
 
-	// Encode key data for registration
-	keyData, err := contractCaller.EncodeBN254KeyData(pubKey)
-	if err != nil {
-		return fmt.Errorf("encode key data: %w", err)
-	}
+	// Handle different curve types
+	if curveType == config.CurveTypeBN254 {
+		// Parse BN254 private key
+		sk, err := bn254.NewPrivateKeyFromHexString(strings.TrimPrefix(op.PrivateKeyHex, "0x"))
+		if err != nil {
+			return fmt.Errorf("parse BN254 private key: %w", err)
+		}
 
-	// Get message hash and sign with operator's BLS key
-	msgHash, err := contractCaller.GetOperatorRegistrationMessageHash(
-		ctx,
-		op.OperatorAddress,
-		gen.Avs,
-		gen.Id,
-		keyData,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get operator registration message: %w", err)
-	}
+		pubKey := sk.Public()
 
-	sig, err := sk.SignSolidityCompatible(msgHash)
-	if err != nil {
-		return fmt.Errorf("BLS sign: %w", err)
+		// Encode key data for registration
+		keyData, err = contractCaller.EncodeBN254KeyData(pubKey)
+		if err != nil {
+			return fmt.Errorf("encode BN254 key data: %w", err)
+		}
+
+		// Get message hash and sign with operator's BN254 key
+		msgHash, err := contractCaller.GetOperatorRegistrationMessageHash(
+			ctx,
+			op.OperatorAddress,
+			gen.Avs,
+			gen.Id,
+			keyData,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to get operator registration message: %w", err)
+		}
+
+		sig, err := sk.SignSolidityCompatible(msgHash)
+		if err != nil {
+			return fmt.Errorf("BN254 sign: %w", err)
+		}
+		signature = sig.Bytes()
+
+	} else if curveType == config.CurveTypeECDSA {
+		// Parse ECDSA private key
+		ecdsaPrivKey, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(op.PrivateKeyHex, "0x"))
+		if err != nil {
+			return fmt.Errorf("parse ECDSA private key: %w", err)
+		}
+
+		// Derive the address from the private key
+		derivedAddress, err := ecdsaPrivKey.DeriveAddress()
+		if err != nil {
+			return fmt.Errorf("derive ECDSA address: %w", err)
+		}
+
+		// For ECDSA, the key data is just the signing address (20 bytes)
+		keyData = derivedAddress.Bytes()
+
+		// Get message hash using the ECDSA-specific method
+		msgHash, err := contractCaller.GetOperatorECDSAKeyRegistrationMessageHash(
+			ctx,
+			op.OperatorAddress,
+			gen.Avs,
+			gen.Id,
+			derivedAddress,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to get ECDSA operator registration message: %w", err)
+		}
+
+		// Sign the message hash with ECDSA
+		sig, err := ecdsaPrivKey.Sign(msgHash[:])
+		if err != nil {
+			return fmt.Errorf("ECDSA sign: %w", err)
+		}
+		// Convert ECDSA signature to bytes
+		signature = sig.Bytes()
+
+	} else {
+		return fmt.Errorf("unsupported curve type: %s", curveType)
 	}
 
 	// Now use impersonation to register as the operator
-	if err := registerKeyAsOperator(
+	if err = registerKeyAsOperator(
 		ctx,
 		logger,
 		contractCaller,
@@ -674,13 +738,14 @@ func registerSingleOperatorKey(
 		gen.Avs,
 		gen.Id,
 		keyData,
-		sig.Bytes(),
+		signature,
 	); err != nil {
 		return fmt.Errorf("failed to register key as operator: %w", err)
 	}
 
 	logger.Sugar().Infow("Successfully registered operator key",
 		zap.String("operator", op.OperatorAddress.String()),
+		zap.String("curveType", string(curveType)),
 	)
 
 	return nil

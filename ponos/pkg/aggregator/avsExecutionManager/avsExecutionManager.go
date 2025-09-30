@@ -369,7 +369,11 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 		return fmt.Errorf("failed to get contract caller for chain: %w", err)
 	}
 
-	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForTask(ctx, task)
+	operatorPeersWeight, err := em.operatorManager.GetExecutorPeersAndWeightsForTask(
+		ctx,
+		task,
+		executorTaskConfig.CurveType,
+	)
 	if err != nil {
 		em.logger.Sugar().Errorw("Failed to get operator peers and weights",
 			zap.Uint("chainId", uint(task.ChainId)),
@@ -377,6 +381,20 @@ func (em *AvsExecutionManager) handleTask(ctx context.Context, task *types.Task)
 			zap.Error(err),
 		)
 		return fmt.Errorf("failed to get operator peers and weights: %w", err)
+	}
+
+	if operatorPeersWeight == nil || len(operatorPeersWeight.Operators) == 0 {
+		em.logger.Sugar().Errorw("No valid operators available for task",
+			zap.String("taskId", task.TaskId),
+			zap.String("avsAddress", task.AVSAddress),
+			zap.Uint32("operatorSetId", task.OperatorSetId),
+			zap.Uint64("l1ReferenceBlockNumber", task.L1ReferenceBlockNumber),
+		)
+		return fmt.Errorf(
+			"no operators available for task %s operator set %d",
+			task.TaskId,
+			task.OperatorSetId,
+		)
 	}
 
 	opsetCurveType, err := em.operatorManager.GetCurveTypeForOperatorSet(task.AVSAddress, task.OperatorSetId, task.L1ReferenceBlockNumber)
@@ -488,8 +506,13 @@ func (em *AvsExecutionManager) processBN254Task(
 
 		// Convert certificate to submission parameters
 		params := cert.ToSubmitParams()
-		params.OperatorInfos = operatorPeersWeight.OperatorInfos
-		receipt, err := chainCC.SubmitBN254TaskResultRetryable(ctx, params, operatorPeersWeight.RootReferenceTimestamp, operatorPeersWeight.OperatorInfoTreeRoot)
+		receipt, err := chainCC.SubmitBN254TaskResultRetryable(
+			ctx,
+			params,
+			operatorPeersWeight.OperatorInfos,
+			operatorPeersWeight.RootReferenceTimestamp,
+			operatorPeersWeight.OperatorInfoTreeRoot,
+		)
 		if err != nil {
 			em.logger.Sugar().Errorw("Failed to submit task result", "error", err)
 			errorsChan <- fmt.Errorf("failed to submit task result: %w", err)

@@ -33,17 +33,24 @@ import (
 )
 
 const (
+	l1RpcUrl              = "http://127.0.0.1:8545"
 	numExecutorOperators  = 4
 	executorOperatorSetId = 1
 	maxStalenessPeriod    = 604800
 	transportBlsKey       = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 )
 
-func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
-	const (
-		L1RpcUrl = "http://127.0.0.1:8545"
-	)
+type thresholdTestCase struct {
+	name                       string
+	aggregationThreshold       uint16
+	verificationThreshold      uint16
+	respondingOperatorIdxs     []int
+	shouldVerifySucceed        bool
+	shouldMeetSigningThreshold bool
+	operatorResponses          map[int][]byte
+}
 
+func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: true})
 	if err != nil {
 		t.Fatalf("Failed to create logger: %v", err)
@@ -69,7 +76,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	}
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
-		BaseUrl:   L1RpcUrl,
+		BaseUrl:   l1RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
 	}, l)
 
@@ -286,7 +293,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		big.NewInt(31338),    // L2 anvil
 	}
 
-	blsInfos := make([]tableTransporter.OperatorBLSInfo, len(execKeys))
+	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))
 	operatorAddressList := []string{
 		chainConfig.ExecOperatorAccountAddress,
 		chainConfig.ExecOperator2AccountAddress,
@@ -294,6 +301,8 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		chainConfig.ExecOperator4AccountAddress,
 	}
 
+	// Stake weights: 2, 1.5, 1, 0.5 = 5 total
+	// Operator 0: 40%, Operator 1: 30%, Operator 2: 20%, Operator 3: 10%
 	stakeWeights := []*big.Int{
 		big.NewInt(2000000000000000000),
 		big.NewInt(1500000000000000000),
@@ -303,7 +312,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	for i, keyPair := range execKeys {
 		blsPrivKey := keyPair.PrivateKey.(*bn254.PrivateKey)
-		blsInfos[i] = tableTransporter.OperatorBLSInfo{
+		blsInfos[i] = tableTransporter.OperatorKeyInfo{
 			PrivateKeyHex:   fmt.Sprintf("0x%x", blsPrivKey.Bytes()),
 			Weights:         []*big.Int{stakeWeights[i]},
 			OperatorAddress: common.HexToAddress(operatorAddressList[i]),
@@ -323,6 +332,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		AVSAddress:                common.HexToAddress(chainConfig.AVSAccountAddress),
 		OperatorSetId:             executorOperatorSetId,
 		TransportBLSPrivateKey:    transportBlsKey,
+		CurveType:                 config.CurveTypeBN254,
 	}
 
 	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
@@ -335,10 +345,139 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
 
-	testBN254WithSingleResponder(t, ctx, l, chainConfig, l1CC, operatorKeyMap, executorOperatorSetId, currentBlock)
+	testCases := []thresholdTestCase{
+		{
+			name:                       "Success_LowThreshold_SingleHighStakeOperator",
+			aggregationThreshold:       1000,     // 10%
+			verificationThreshold:      1000,     // 10%
+			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 40% > 10%
+		},
+		{
+			name:                       "Success_MediumThreshold_SingleHighStakeOperator",
+			aggregationThreshold:       2500,     // 25%
+			verificationThreshold:      2500,     // 25%
+			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 40% > 25%
+		},
+		{
+			name:                       "Failure_HighVerificationThreshold_SingleHighStakeOperator",
+			aggregationThreshold:       1000,     // 10% - aggregation succeeds
+			verificationThreshold:      5000,     // 50% - verification should fail
+			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 40% > 10%
+		},
+		{
+			name:                       "Failure_HighThreshold_SingleLowStakeOperator",
+			aggregationThreshold:       1000,     // 10% - aggregation succeeds
+			verificationThreshold:      2000,     // 20% - verification should fail
+			respondingOperatorIdxs:     []int{3}, // Operator with 10% stake
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 10% >= 10%
+		},
+		{
+			name:                       "Success_ExactThreshold_SingleOperator",
+			aggregationThreshold:       2000,     // 20%
+			verificationThreshold:      2000,     // 20%
+			respondingOperatorIdxs:     []int{2}, // Operator with exactly 20% stake
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 20% >= 20%
+		},
+		{
+			name:                       "Success_TwoOperators_CombinedStake",
+			aggregationThreshold:       4000,        // 40%
+			verificationThreshold:      4000,        // 40%
+			respondingOperatorIdxs:     []int{1, 2}, // 30% + 20% = 50% combined
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 50% > 40% (same response)
+		},
+		{
+			name:                       "Failure_InsufficientCombinedStake",
+			aggregationThreshold:       2000,        // 20% - aggregation succeeds
+			verificationThreshold:      4000,        // 40% - verification should fail
+			respondingOperatorIdxs:     []int{2, 3}, // 20% + 10% = 30% combined
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 30% > 20% (same response)
+		},
+		{
+			name:                       "Success_AllOperators",
+			aggregationThreshold:       9000,              // 90%
+			verificationThreshold:      9000,              // 90%
+			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // 100% combined
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 100% > 90% (same response)
+		},
+		{
+			name:                       "Success_ExactThreshold_MultipleOperators",
+			aggregationThreshold:       5000,        // 50%
+			verificationThreshold:      5000,        // 50%
+			respondingOperatorIdxs:     []int{0, 3}, // 40% + 10% = exactly 50%
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 50% >= 50% (same response)
+		},
+		{
+			name:                       "ConflictingResponses_MajorityWins",
+			aggregationThreshold:       6000,              // 60%
+			verificationThreshold:      6000,              // 60%
+			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // All operators respond
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 70% >= 50% (same response)
+			operatorResponses: map[int][]byte{
+				0: []byte("majority-response"), // 40% stake
+				1: []byte("majority-response"), // 30% stake - total 70% for majority
+				2: []byte("minority-response"), // 20% stake
+				3: []byte("minority-response"), // 10% stake - total 30% for minority
+			},
+		},
+		{
+			name:                       "ConflictingResponses_StakeWeightTieBreak",
+			aggregationThreshold:       4000,           // 40% - aggregation threshold is low
+			verificationThreshold:      4000,           // 40% - but verification requires high consensus
+			respondingOperatorIdxs:     []int{2, 1, 0}, // 90% total stake responds
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 40% >= 40%
+			operatorResponses: map[int][]byte{
+				0: []byte("response-a"), // 40% stake
+				1: []byte("response-b"), // 30% stake
+				2: []byte("response-c"), // 20% stake - all different responses
+			},
+		},
+		{
+			name:                       "StakeWeighted_MinorityOperatorsMajorityStake",
+			aggregationThreshold:       7500,           // 75% threshold
+			verificationThreshold:      7500,           // 75% threshold
+			respondingOperatorIdxs:     []int{0, 1, 2}, // 3 out of 4 operators respond
+			shouldVerifySucceed:        false,          // Should succeed because they have 70% stake combined
+			shouldMeetSigningThreshold: false,          // 40% <= 50%
+			operatorResponses: map[int][]byte{
+				0: []byte("majority-response"), // 40% stake
+				1: []byte("majority-response"), // 30% stake - total 70% stake (doesn't meet 75% threshold)
+				2: []byte("minority-response"), // 30% stake - total 70% stake (doesn't meet 75% threshold)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testBN254WithThresholds(
+				t,
+				ctx,
+				l,
+				chainConfig,
+				l1CC,
+				operatorKeyMap,
+				executorOperatorSetId,
+				currentBlock,
+				tc,
+			)
+		})
+	}
 }
 
-func testBN254WithSingleResponder(
+func testBN254WithThresholds(
 	t *testing.T,
 	ctx context.Context,
 	l *zap.Logger,
@@ -347,8 +486,15 @@ func testBN254WithSingleResponder(
 	operatorKeyMap map[string]*testUtils.WrappedKeyPair,
 	executorOperatorSetId uint32,
 	currentBlock uint64,
+	tc thresholdTestCase,
 ) {
-	taskId := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	t.Logf("=== Testing: %s ===", tc.name)
+	t.Logf("Aggregation threshold: %d/10000 (%.1f%%)", tc.aggregationThreshold, float64(tc.aggregationThreshold)/100)
+	t.Logf("Verification threshold: %d/10000 (%.1f%%)", tc.verificationThreshold, float64(tc.verificationThreshold)/100)
+	t.Logf("Responding operator indices: %v", tc.respondingOperatorIdxs)
+	t.Logf("Expected verification result: %v", tc.shouldVerifySucceed)
+
+	taskId := fmt.Sprintf("0x%064x", time.Now().UnixNano()) // Unique task ID for each test
 	taskInputData := []byte("test-task-input-data")
 	deadline := time.Now().Add(1 * time.Minute)
 
@@ -375,6 +521,13 @@ func testBN254WithSingleResponder(
 
 	// Create BN254 aggregator
 	var operators []*aggregation.Operator[signing.PublicKey]
+	operatorAddressList := []string{
+		chainConfig.ExecOperatorAccountAddress,
+		chainConfig.ExecOperator2AccountAddress,
+		chainConfig.ExecOperator3AccountAddress,
+		chainConfig.ExecOperator4AccountAddress,
+	}
+
 	for _, peer := range operatorPeersWeight.Operators {
 		opset, err := peer.GetOperatorSet(executorOperatorSetId)
 		if err != nil {
@@ -393,17 +546,21 @@ func testBN254WithSingleResponder(
 	}
 
 	t.Logf("======= BN254 Operators =======")
+	totalWeight := big.NewInt(0)
 	for i, op := range operators {
-		t.Logf("Operator %d: Address=%s, Index=%d, Weights=%v",
-			i, op.Address, op.OperatorIndex, op.Weights)
+		weight := op.Weights[0]
+		totalWeight.Add(totalWeight, weight)
+		t.Logf("Operator %d: Address=%s, Index=%d, Weight=%s",
+			i, op.Address, op.OperatorIndex, weight.String())
 	}
+	t.Logf("Total weight: %s", totalWeight.String())
 
 	agg, err := aggregation.NewBN254TaskResultAggregator(
 		context.Background(),
 		taskId,
 		operatorPeersWeight.RootReferenceTimestamp,
 		executorOperatorSetId,
-		1000, // Threshold: 25% (with 4 operators having weights 2, 1.5, 1, 0.5 = 5 total, 25% = 1.25)
+		tc.aggregationThreshold,
 		l1CC,
 		taskInputData,
 		&deadline,
@@ -413,116 +570,182 @@ func testBN254WithSingleResponder(
 		t.Fatalf("Failed to create BN254 task result aggregator: %v", err)
 	}
 
-	// WHEN: only the 0th indexed operator responds
-	respondingOperator := operators[0]
-	t.Logf("Testing scenario: Operator %s (index %d) responds", respondingOperator.Address, respondingOperator.OperatorIndex)
+	// Process signatures from all responding operators
+	totalSigningWeight := big.NewInt(0)
 
-	operatorKeys, ok := operatorKeyMap[strings.ToLower(respondingOperator.Address)]
-	if !ok {
-		t.Fatalf("Could not find BN254 keys for operator %s", respondingOperator.Address)
-	}
-	responderPrivateKey := operatorKeys.PrivateKey
+	for _, operatorIdx := range tc.respondingOperatorIdxs {
+		respondingOperatorAddress := operatorAddressList[operatorIdx]
+		var respondingOperator *aggregation.Operator[signing.PublicKey]
+		for _, op := range operators {
+			if strings.EqualFold(op.Address, respondingOperatorAddress) {
+				respondingOperator = op
+				break
+			}
+		}
+		if respondingOperator == nil {
+			t.Fatalf("Could not find operator at index %d", operatorIdx)
+		}
 
-	// Create signature from the responding operator
-	var taskIdBytes [32]byte
-	copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
-	messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, taskInputData)
-	if err != nil {
-		t.Fatalf("Failed to calculate task message hash: %v", err)
+		operatorWeight := respondingOperator.Weights[0]
+		operatorPercentage := new(big.Float).Quo(
+			new(big.Float).SetInt(operatorWeight),
+			new(big.Float).SetInt(totalWeight),
+		)
+		operatorPercentage.Mul(operatorPercentage, big.NewFloat(100))
+		percentFloat, _ := operatorPercentage.Float64()
+
+		t.Logf("Processing operator %d: %s (index %d) with weight %s (%.1f%% of total)",
+			operatorIdx, respondingOperator.Address, respondingOperator.OperatorIndex, operatorWeight.String(), percentFloat)
+
+		operatorKeys, ok := operatorKeyMap[strings.ToLower(respondingOperator.Address)]
+		if !ok {
+			t.Fatalf("Could not find BN254 keys for operator %s", respondingOperator.Address)
+		}
+		responderPrivateKey := operatorKeys.PrivateKey
+
+		// Determine what response this operator should provide
+		operatorResponse := taskInputData // Default response
+		if tc.operatorResponses != nil {
+			if customResponse, ok := tc.operatorResponses[operatorIdx]; ok {
+				operatorResponse = customResponse
+				t.Logf("  Using custom response for operator %d: %s", operatorIdx, string(customResponse))
+			}
+		}
+
+		// Create signature from this operator's response
+		var taskIdBytes [32]byte
+		copy(taskIdBytes[:], common.HexToHash(taskId).Bytes())
+		messageHash, err := l1CC.CalculateTaskMessageHash(ctx, taskIdBytes, operatorResponse)
+		if err != nil {
+			t.Fatalf("Failed to calculate task message hash: %v", err)
+		}
+		bn254DigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
+			ctx,
+			operatorPeersWeight.RootReferenceTimestamp,
+			messageHash,
+		)
+		if err != nil {
+			t.Fatalf("Failed to calculate BN254 certificate digest: %v", err)
+		}
+
+		responderSigner := inMemorySigner.NewInMemorySigner(responderPrivateKey, config.CurveTypeBN254)
+
+		resultSig, err := responderSigner.SignMessageForSolidity(bn254DigestBytes)
+		if err != nil {
+			t.Fatalf("Failed to sign BN254 certificate: %v", err)
+		}
+
+		resultSigDigest := util.GetKeccak256Digest(resultSig)
+		authData := &types.AuthSignatureData{
+			TaskId:          taskId,
+			AvsAddress:      chainConfig.AVSAccountAddress,
+			OperatorAddress: respondingOperator.Address,
+			OperatorSetId:   executorOperatorSetId,
+			ResultSigDigest: resultSigDigest,
+		}
+
+		authBytes := authData.ToSigningBytes()
+		authSig, err := responderSigner.SignMessage(authBytes)
+		if err != nil {
+			t.Fatalf("Failed to sign auth data: %v", err)
+		}
+
+		// Create task result with this operator's response
+		taskResult := &types.TaskResult{
+			TaskId:          taskId,
+			AvsAddress:      chainConfig.AVSAccountAddress,
+			OperatorSetId:   executorOperatorSetId,
+			Output:          operatorResponse, // Use the operator's specific response
+			OperatorAddress: respondingOperator.Address,
+			ResultSignature: resultSig,
+			AuthSignature:   authSig,
+		}
+
+		// Process the signature
+		if err := agg.ProcessNewSignature(ctx, taskResult); err != nil {
+			t.Fatalf("Failed to process signature from operator %s: %v", respondingOperator.Address, err)
+		}
+
+		totalSigningWeight.Add(totalSigningWeight, operatorWeight)
+		t.Logf("Processed signature from operator %d with weight %s", operatorIdx, operatorWeight.String())
 	}
-	bn254DigestBytes, err := l1CC.CalculateBN254CertificateDigestBytes(
-		ctx,
-		operatorPeersWeight.RootReferenceTimestamp,
-		messageHash,
+
+	// Calculate total signing percentage
+	signingPercentage := new(big.Float).Quo(
+		new(big.Float).SetInt(totalSigningWeight),
+		new(big.Float).SetInt(totalWeight),
 	)
-	if err != nil {
-		t.Fatalf("Failed to calculate BN254 certificate digest: %v", err)
+	signingPercentage.Mul(signingPercentage, big.NewFloat(100))
+	percentFloat, _ := signingPercentage.Float64()
+
+	t.Logf("Total signing weight: %s (%.1f%% of total)", totalSigningWeight.String(), percentFloat)
+
+	// Check if threshold is met for aggregation
+	signingThresholdMet := agg.SigningThresholdMet()
+
+	// Check if the signing threshold expectation matches reality
+	if tc.shouldMeetSigningThreshold && !signingThresholdMet {
+		t.Errorf("Expected signing threshold to be met but it was not. Most common response stake may be below %.1f%% threshold",
+			float64(tc.aggregationThreshold)/100)
+		return
+	} else if !tc.shouldMeetSigningThreshold && signingThresholdMet {
+		t.Errorf("Expected signing threshold to NOT be met but it was. Most common response stake exceeds %.1f%% threshold",
+			float64(tc.aggregationThreshold)/100)
+		return
 	}
 
-	responderSigner := inMemorySigner.NewInMemorySigner(responderPrivateKey, config.CurveTypeBN254)
-
-	resultSig, err := responderSigner.SignMessageForSolidity(bn254DigestBytes)
-	if err != nil {
-		t.Fatalf("Failed to sign BN254 certificate: %v", err)
+	if !signingThresholdMet {
+		t.Logf("✓ Signing threshold correctly not met (most common response stake < %.1f%% threshold)",
+			float64(tc.aggregationThreshold)/100)
+		return
 	}
 
-	resultSigDigest := util.GetKeccak256Digest(resultSig)
-	authData := &types.AuthSignatureData{
-		TaskId:          taskId,
-		AvsAddress:      chainConfig.AVSAccountAddress,
-		OperatorAddress: respondingOperator.Address,
-		OperatorSetId:   executorOperatorSetId,
-		ResultSigDigest: resultSigDigest,
-	}
-
-	authBytes := authData.ToSigningBytes()
-	authSig, err := responderSigner.SignMessage(authBytes)
-	if err != nil {
-		t.Fatalf("Failed to sign auth data: %v", err)
-	}
-
-	// Create task result
-	taskResult := &types.TaskResult{
-		TaskId:          taskId,
-		AvsAddress:      chainConfig.AVSAccountAddress,
-		OperatorSetId:   executorOperatorSetId,
-		Output:          taskInputData,
-		OperatorAddress: respondingOperator.Address,
-		ResultSignature: resultSig,
-		AuthSignature:   authSig,
-	}
-
-	// Process the signature
-	if err := agg.ProcessNewSignature(ctx, taskResult); err != nil {
-		t.Fatalf("Failed to process new signature: %v", err)
-	}
-
-	// Check if threshold is met
-	// The threshold calculation depends on the actual stake weights that were delegated
-	if !agg.SigningThresholdMet() {
-		t.Logf("Threshold not met with single operator - adjusting test expectations")
-	}
+	t.Logf("✓ Signing threshold correctly met (most common response stake >= %.1f%% threshold)",
+		float64(tc.aggregationThreshold)/100)
 
 	finalCert, err := agg.GenerateFinalCertificate()
 	if err != nil {
 		t.Fatalf("Failed to generate final certificate: %v", err)
 	}
 
-	t.Logf("Final certificate generated with %d non-signers", len(operators)-1)
+	numSigners := len(tc.respondingOperatorIdxs)
+	numNonSigners := len(operators) - numSigners
+	t.Logf("Final certificate generated with %d signers and %d non-signers", numSigners, numNonSigners)
 
-	// The certificate should include merkle proofs for the 3 non-signing operators
+	// The certificate should include merkle proofs for the non-signing operators
 	submitParams := finalCert.ToSubmitParams()
 	t.Logf("Non-signer count: %d", len(submitParams.NonSignerOperators))
-	for i, nonSigner := range submitParams.NonSignerOperators {
-		t.Logf("Non-signer %d: OperatorIndex=%d", i, nonSigner.OperatorIndex)
-	}
 
-	require.NoError(t, err, "Failed to get executor peers and weights after transport")
-
-	submitParams.OperatorInfos = operatorPeersWeight.OperatorInfos
-
-	thresholdPercentage := uint16(1000)
-
+	// Now verify with the test case's verification threshold
 	verified, err := l1CC.VerifyBN254Certificate(
 		ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
 		executorOperatorSetId,
 		submitParams,
+		operatorPeersWeight.OperatorInfos,
 		operatorPeersWeight.RootReferenceTimestamp,
 		operatorPeersWeight.OperatorInfoTreeRoot,
-		thresholdPercentage,
+		tc.verificationThreshold,
 	)
+
 	if err != nil {
-		t.Logf("Failed to verify BN254 certificate: %v", err)
-		t.Fail()
+		if tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to succeed but got error: %v", err)
+		} else {
+			t.Logf("Verification failed as expected with error: %v", err)
+		}
 	} else {
 		t.Logf("BN254 certificate verification result: %v (threshold: %d/10000 = %.1f%%)",
-			verified, thresholdPercentage, float64(thresholdPercentage)/100)
-		if verified {
-			t.Log("✓ Certificate successfully verified - single operator with weight 2 exceeds 50% threshold")
+			verified, tc.verificationThreshold, float64(tc.verificationThreshold)/100)
+
+		if verified && !tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to fail but it succeeded")
+		} else if !verified && tc.shouldVerifySucceed {
+			t.Errorf("Expected verification to succeed but it failed")
+		} else if verified && tc.shouldVerifySucceed {
+			t.Logf("✓ Test passed: Verification succeeded as expected")
 		} else {
-			t.Log("✗ Certificate did not meet threshold - this should not happen!")
-			t.Fail()
+			t.Logf("✓ Test passed: Verification failed as expected")
 		}
 	}
 }

@@ -2,6 +2,7 @@ package contractCaller
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
@@ -70,7 +71,6 @@ type BN254TaskResultParams struct {
 	SignersPublicKey       *bn254.G2Point
 	NonSignerOperators     []BN254NonSignerOperator
 	SortedOperatorsByIndex []BN254OperatorWithWeights // All operators sorted by index with weights
-	OperatorInfos          []BN254OperatorInfo
 }
 
 // BN254OperatorWithWeights contains operator info including weights for merkle proof generation
@@ -94,17 +94,16 @@ type ECDSATaskResultParams struct {
 	SignersSignatures  map[common.Address][]byte
 }
 
+// ErrOperatorKeyNotRegistered is returned when an operator has not registered a key for the specified operator set
+var ErrOperatorKeyNotRegistered = fmt.Errorf("operator key not registered for operator set")
+
 type IContractCaller interface {
-	SubmitBN254TaskResult(
-		ctx context.Context,
-		params *BN254TaskResultParams,
-		globalTableRootReferenceTimestamp uint32,
-		operatorInfoTreeRoot [32]byte,
-	) (*ethereumTypes.Receipt, error)
+	SubmitBN254TaskResult(ctx context.Context, params *BN254TaskResultParams, infos []BN254OperatorInfo, globalTableRootReferenceTimestamp uint32, operatorInfoTreeRoot [32]byte) (*ethereumTypes.Receipt, error)
 
 	SubmitBN254TaskResultRetryable(
 		ctx context.Context,
 		params *BN254TaskResultParams,
+		infos []BN254OperatorInfo,
 		globalTableRootReferenceTimestamp uint32,
 		operatorInfoTreeRoot [32]byte,
 	) (*ethereumTypes.Receipt, error)
@@ -126,10 +125,20 @@ type IContractCaller interface {
 		avsAddress common.Address,
 		operatorSetId uint32,
 		params *BN254TaskResultParams,
+		operatorInfos []BN254OperatorInfo,
 		globalTableRootReferenceTimestamp uint32,
 		operatorInfoTreeRoot [32]byte,
 		thresholdPercentage uint16,
 	) (bool, error)
+
+	VerifyECDSACertificate(
+		messageHash [32]byte,
+		signature []byte,
+		avsAddress common.Address,
+		operatorSetId uint32,
+		globalTableRootReferenceTimestamp uint32,
+		threshold uint16,
+	) (bool, []common.Address, error)
 
 	GetAVSConfig(avsAddress string, blockNumber uint64) (*AVSConfig, error)
 
