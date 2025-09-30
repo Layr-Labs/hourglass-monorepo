@@ -230,11 +230,10 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		numExecutorOperators = 2
 	}
 	t.Logf("------------------------------------------- Setting up %d executor operator(s) for %s mode -------------------------------------------", numExecutorOperators, mode)
-	execKeys := make([]*testUtils.WrappedKeyPair, numExecutorOperators)
 
 	// Get keys for aggregator and executors using the helper method
 	// This returns the aggregator key and all executor keys at once
-	_, execKeys, err = testUtils.GetKeysForCurveTypeFromChainConfig(t, sigConfig.AggregatorCurve, sigConfig.ExecutorCurve, chainConfig)
+	_, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(t, sigConfig.AggregatorCurve, sigConfig.ExecutorCurve, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys: %v", err)
 	}
