@@ -558,7 +558,11 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 	maxStalenessPeriod := uint32(604800)
 
-	aggCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.AggregatorCurve)
+	aggCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.AggregatorCurve, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to operators: %v", err)
+	}
+
 	t.Logf("Creating generation reservation with %s table calculator %s for aggregator operator set %d",
 		sigConfig.AggregatorCurve, aggCalculatorAddr.Hex(), sigConfig.AggregatorOpsetId)
 	_, err = avsCcL1Temp.CreateGenerationReservation(
@@ -573,8 +577,11 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Logf("Warning: Failed to create generation reservation for aggregator operator set %d: %v", sigConfig.AggregatorOpsetId, err)
 	}
 
-	// Create generation reservation for executor operator set based on its curve type
-	execCalculatorAddr := avsCcL1Temp.GetTableCalculatorAddress(sigConfig.ExecutorCurve)
+	execCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.ExecutorCurve, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to operators: %v", err)
+	}
+	
 	t.Logf("Creating generation reservation with %s table calculator %s for executor operator set %d",
 		sigConfig.ExecutorCurve, execCalculatorAddr.Hex(), sigConfig.ExecutorOpsetId)
 	_, err = avsCcL1Temp.CreateGenerationReservation(
@@ -605,9 +612,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	// For aggregator test, we need L2 transport - don't ignore L2 chain
 	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(11155111), // eth sepolia
-		new(big.Int).SetUint64(17000),    // holesky
-		new(big.Int).SetUint64(84532),    // base sepolia
+		new(big.Int).SetUint64(1),    // Ethereum Mainnet
+		new(big.Int).SetUint64(8453), // Base Mainnet
 	}
 
 	// Stake weights: 60% and 40% (both meet threshold)

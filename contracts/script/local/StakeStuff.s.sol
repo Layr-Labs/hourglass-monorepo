@@ -31,14 +31,16 @@ interface IStETH {
 }
 
 contract StakeStuff is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a);
+    // Eigenlayer Core Contracts (Mainnet)
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
 
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
-    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
-    IStrategyManager public STRATEGY_MANAGER = IStrategyManager(0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D);
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
+    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A);
+    IStrategyManager public STRATEGY_MANAGER = IStrategyManager(0x858646372CC42E1A627fcE94aa7A7033e7CF075A);
 
-    IStrategy public STRATEGY_WETH = IStrategy(0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc);
-    IStrategy public STRATEGY_STETH = IStrategy(0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574);
+    // Eigenlayer Strategies (Mainnet)
+    IStrategy public STRATEGY_WETH = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6); // swETH strategy
+    IStrategy public STRATEGY_STETH = IStrategy(0x93c4b944D05dfe6df7645A86cd2206016c51564D);
 
     uint64 public magnitudeToSet = 1e18;
 

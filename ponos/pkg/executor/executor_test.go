@@ -189,7 +189,10 @@ func testWithKeyType(
 	maxStalenessPeriod := uint32(0) // 0 allows certificates to always be valid regardless of referenceTimestamp
 
 	// BN254 table calculator for aggregator
-	bn254CalculatorAddr := common.HexToAddress(caller.BN254TableCalculatorAddress)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get table calculator address: %v", err)
+	}
 	_, err = avsConfigCaller.CreateGenerationReservation(
 		ctx,
 		avsAddr,
@@ -204,7 +207,10 @@ func testWithKeyType(
 	t.Logf("Created generation reservation for operator set %d with BN254 table calculator", aggOpsetId)
 
 	// ECDSA table calculator for executor
-	ecdsaCalculatorAddr := common.HexToAddress(caller.ECDSATableCalculatorAddress)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get table calculator address: %v", err)
+	}
 	_, err = avsConfigCaller.CreateGenerationReservation(
 		ctx,
 		avsAddr,
@@ -531,11 +537,18 @@ func testWithBadgerStorage(
 
 	// Create generation reservations
 	maxStalenessPeriod := uint32(0)
-	bn254CalculatorAddr := common.HexToAddress(caller.BN254TableCalculatorAddress)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for aggregator operator set: %v", err)
+	}
+
 	_, err = avsConfigCaller.CreateGenerationReservation(ctx, avsAddr, aggOpsetId, bn254CalculatorAddr, avsAddr, maxStalenessPeriod)
 	require.NoError(t, err)
 
-	ecdsaCalculatorAddr := common.HexToAddress(caller.ECDSATableCalculatorAddress)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to create generation reservation for aggregator operator set: %v", err)
+	}
 	_, err = avsConfigCaller.CreateGenerationReservation(ctx, avsAddr, execOpsetId, ecdsaCalculatorAddr, avsAddr, maxStalenessPeriod)
 	require.NoError(t, err)
 

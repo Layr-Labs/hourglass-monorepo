@@ -129,9 +129,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		pollerEthClient = l1EthereumClient
 	} else {
 		pollerConfig = &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:              config.ChainId_BaseSepoliaAnvil,
+			ChainId:              config.ChainId_BaseAnvil,
 			PollingInterval:      time.Duration(10) * time.Second,
-			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseSepoliaAnvil),
+			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseAnvil),
 			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l2EthereumClient
@@ -403,8 +403,10 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	l.Sugar().Infow("Waiting for stake delegations to be processed on-chain...")
 	time.Sleep(time.Second * 3)
 
-	// BN254 table calculator for aggregator operator set
-	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get BN254 calculator address: %v", err)
+	}
 	t.Logf(
 		"Creating generation reservation with BN254 table calculator %s for aggregator operator set %d",
 		bn254CalculatorAddr.Hex(),
@@ -423,8 +425,10 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Logf("Warning: Failed to create generation reservation for aggregator: %v", err)
 	}
 
-	// ECDSA table calculator for executor operator set
-	ecdsaCalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeECDSA)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get ECDSA calculator address: %v", err)
+	}
 	t.Logf(
 		"Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(),
@@ -491,8 +495,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	var l2RpcUrl string
 	var l2ChainId uint64
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(11155111), // eth sepolia
-		big.NewInt(84532),    // base sepolia
+		big.NewInt(1),    // Ethereum Mainnet
+		big.NewInt(8453), // Base Mainnet
 	}
 
 	if networkTarget == NetworkTarget_L1 {
@@ -580,8 +584,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	opManagerChainIds := []config.ChainId{config.ChainId_EthereumAnvil}
 
 	if networkTarget == NetworkTarget_L2 {
-		callerMap[config.ChainId_BaseSepoliaAnvil] = l2CC
-		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseSepoliaAnvil)
+		callerMap[config.ChainId_BaseAnvil] = l2CC
+		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseAnvil)
 	}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{

@@ -16,14 +16,14 @@ import {IStrategyManager} from "@eigenlayer-contracts/src/contracts/interfaces/I
 import {ISignatureUtilsMixinTypes} from "@eigenlayer-contracts/src/contracts/interfaces/ISignatureUtilsMixin.sol";
 
 contract DelegateToOperators is Script {
-    // Constants
+    // Constants (Mainnet)
     IAllocationManager public constant ALLOCATION_MANAGER =
-        IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
+        IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
     IDelegationManager public constant DELEGATION_MANAGER =
-        IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
+        IDelegationManager(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A);
 
-    IStrategy public constant STRATEGY_WETH = IStrategy(0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc);
-    IStrategy public constant STRATEGY_STETH = IStrategy(0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574);
+    IStrategy public constant STRATEGY_WETH = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6); // swETH strategy
+    IStrategy public constant STRATEGY_STETH = IStrategy(0x93c4b944D05dfe6df7645A86cd2206016c51564D);
 
     uint64 public constant MAGNITUDE_TO_SET = 1e18;
 

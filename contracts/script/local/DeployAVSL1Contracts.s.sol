@@ -14,11 +14,11 @@ import {MockTaskAVSRegistrar} from "@eigenlayer-middleware/test/mocks/MockTaskAV
 import {ITaskAVSRegistrarBaseTypes} from "@eigenlayer-middleware/src/interfaces/ITaskAVSRegistrarBase.sol";
 
 contract DeployAVSL1Contracts is Script {
-    // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
-    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0xA4dB30D08d8bbcA00D40600bee9F029984dB162a);
+    // Eigenlayer Core Contracts (Mainnet)
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
+    IKeyRegistrar public KEY_REGISTRAR = IKeyRegistrar(0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4);
     IPermissionController public PERMISSION_CONTROLLER =
-        IPermissionController(0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37);
+        IPermissionController(0x25E5F8B1E7aDf44518d35D5B2271f114e081f0E5);
 
     function setUp() public {}
 

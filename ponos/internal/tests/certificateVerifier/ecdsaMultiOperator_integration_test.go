@@ -277,7 +277,11 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 
 	// Create generation reservation to set up the operator table calculator
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
-	ecdsaCalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeECDSA)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to create calculator address: %v", err)
+	}
+	
 	t.Logf(
 		"Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(),
@@ -303,9 +307,9 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 	// ECDSA doesn't require special BLS operator info
 	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(11155111), // Sepolia
-		big.NewInt(84532),    // Base Sepolia
-		big.NewInt(31338),    // L2 anvil
+		big.NewInt(1),     // Ethereum Mainnet
+		big.NewInt(8453),  // Base Mainnet
+		big.NewInt(31338), // L2 anvil
 	}
 
 	// Use the standard transport method for ECDSA

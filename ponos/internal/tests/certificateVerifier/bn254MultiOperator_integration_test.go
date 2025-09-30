@@ -265,7 +265,11 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
-	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get table calculator address: %v", err)
+	}
+
 	t.Logf(
 		"Creating generation reservation with BN254 table calculator %s for executor operator set %d",
 		bn254CalculatorAddr.Hex(),
@@ -288,9 +292,9 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	time.Sleep(time.Second * 3)
 
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(11155111), // Sepolia
-		big.NewInt(84532),    // Base Sepolia
-		big.NewInt(31338),    // L2 anvil
+		big.NewInt(1),     // Ethereum Mainnet
+		big.NewInt(8453),  // Base Mainnet
+		big.NewInt(31338), // L2 anvil
 	}
 
 	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))

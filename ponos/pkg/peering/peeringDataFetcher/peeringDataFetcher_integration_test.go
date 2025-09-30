@@ -121,13 +121,17 @@ func Test_PeeringDataFetcher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to configure AVS operator set: %v", err)
 		}
+		updaterAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+		if err != nil {
+			t.Fatalf("Failed to get table calculator address: %v", err)
+		}
 
 		// Create generation reservation for BN254 operator set
 		_, err = avsCc.CreateGenerationReservation(
 			ctx,
 			common.HexToAddress(chainConfig.AVSAccountAddress),
 			0, // operator set id
-			common.HexToAddress(caller.BN254TableCalculatorAddress),
+			updaterAddr,
 			common.HexToAddress(chainConfig.AVSAccountAddress), // AVS is the owner
 			0, // maxStalenessPeriod - 0 means always valid
 		)
@@ -331,12 +335,17 @@ func Test_PeeringDataFetcher(t *testing.T) {
 			t.Fatalf("Failed to configure AVS operator set: %v", err)
 		}
 
+		updaterAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+		if err != nil {
+			t.Fatalf("Failed to get table calculator address: %v", err)
+		}
+
 		// Create generation reservation for ECDSA operator set
 		_, err = avsCc.CreateGenerationReservation(
 			ctx,
 			common.HexToAddress(chainConfig.AVSAccountAddress),
 			1, // operator set id
-			common.HexToAddress(caller.ECDSATableCalculatorAddress),
+			updaterAddr,
 			common.HexToAddress(chainConfig.AVSAccountAddress), // AVS is the owner
 			0, // maxStalenessPeriod - 0 means always valid
 		)

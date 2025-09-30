@@ -236,7 +236,11 @@ func Test_CertificateVerifier(t *testing.T) {
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
 	// Create generation reservation for aggregator operator set (BN254)
-	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to create AVS config private key signer: %v", err)
+	}
+
 	t.Logf("Creating generation reservation with BN254 table calculator %s for aggregator operator set %d",
 		bn254CalculatorAddr.Hex(), aggOpsetId)
 	_, err = avsConfigCaller.CreateGenerationReservation(
@@ -252,7 +256,11 @@ func Test_CertificateVerifier(t *testing.T) {
 	}
 
 	// Create generation reservation for executor operator set (ECDSA)
-	ecdsaCalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeECDSA)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to create ECDSA config private key signer: %v", err)
+	}
+	
 	t.Logf("Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(), execOpsetId)
 	_, err = avsConfigCaller.CreateGenerationReservation(

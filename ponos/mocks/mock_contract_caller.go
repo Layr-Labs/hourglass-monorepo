@@ -319,20 +319,6 @@ func (mr *MockIContractCallerMockRecorder) GetSupportedChainsForMultichain(ctx, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSupportedChainsForMultichain", reflect.TypeOf((*MockIContractCaller)(nil).GetSupportedChainsForMultichain), ctx, referenceBlockNumber)
 }
 
-// GetTableCalculatorAddress mocks base method.
-func (m *MockIContractCaller) GetTableCalculatorAddress(curveType config.CurveType) common.Address {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTableCalculatorAddress", curveType)
-	ret0, _ := ret[0].(common.Address)
-	return ret0
-}
-
-// GetTableCalculatorAddress indicates an expected call of GetTableCalculatorAddress.
-func (mr *MockIContractCallerMockRecorder) GetTableCalculatorAddress(curveType any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTableCalculatorAddress", reflect.TypeOf((*MockIContractCaller)(nil).GetTableCalculatorAddress), curveType)
-}
-
 // GetTableUpdaterReferenceTimeAndBlock mocks base method.
 func (m *MockIContractCaller) GetTableUpdaterReferenceTimeAndBlock(ctx context.Context, tableUpdaterAddr common.Address, atBlockNumber uint64) (*contractCaller.LatestReferenceTimeAndBlock, error) {
 	m.ctrl.T.Helper()

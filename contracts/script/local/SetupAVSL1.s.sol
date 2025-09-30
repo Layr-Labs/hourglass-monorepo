@@ -11,12 +11,12 @@ import {IAVSRegistrar} from "@eigenlayer-contracts/src/contracts/interfaces/IAVS
 import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrategy.sol";
 
 contract SetupAVSL1 is Script {
-    // Eigenlayer Core Contracts
-    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x42583067658071247ec8CE0A516A58f682002d07);
+    // Eigenlayer Core Contracts (Mainnet)
+    IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
 
-    // Eigenlayer Strategies
-    IStrategy public STRATEGY_WETH = IStrategy(0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc);
-    IStrategy public STRATEGY_STETH = IStrategy(0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574);
+    // Eigenlayer Strategies (Mainnet)
+    IStrategy public STRATEGY_WETH = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6); // swETH strategy
+    IStrategy public STRATEGY_STETH = IStrategy(0x93c4b944D05dfe6df7645A86cd2206016c51564D);
 
     function setUp() public {}
 

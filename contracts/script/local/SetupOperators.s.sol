@@ -6,7 +6,8 @@ import {Script, console} from "forge-std/Script.sol";
 import {IDelegationManager} from "@eigenlayer-contracts/src/contracts/interfaces/IDelegationManager.sol";
 
 contract SetupOperators is Script {
-    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0xD4A7E1Bd8015057293f0D0A557088c286942e84b);
+    // Mainnet DelegationManager
+    IDelegationManager public DELEGATION_MANAGER = IDelegationManager(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A);
 
     function setUp() public {}
 
