@@ -119,15 +119,13 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
-	// Setup Kind cluster for Kubernetes mode only
 	var cluster *testUtils.KindCluster
 	if mode == "kubernetes" {
-		// Clean up any existing test clusters first to prevent port conflicts
+
 		if err := testUtils.CleanupAllTestClusters(l.Sugar()); err != nil {
 			t.Logf("Warning: Failed to cleanup existing test clusters: %v", err)
 		}
 
-		// Create Kind cluster
 		kindConfig := testUtils.DefaultKindClusterConfig(l.Sugar())
 		var clusterCleanup func()
 		cluster, clusterCleanup, err = testUtils.CreateKindCluster(ctx, t, kindConfig)
@@ -135,22 +133,18 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			t.Fatalf("Failed to create Kind cluster: %v", err)
 		}
 		defer func() {
-			// Nuclear option: just delete the cluster to avoid hanging cleanup
 			t.Log("Using fast cluster deletion to avoid hanging cleanup")
 			clusterCleanup()
 		}()
 
-		// Load performer image from executor config (assumes image is already built)
 		if err := loadPerformerImage(ctx, cluster, l.Sugar()); err != nil {
 			t.Fatalf("Failed to load performer image: %v", err)
 		}
 
-		// Install CRDs first (required for Performer objects)
 		if err := installPerformerCRD(ctx, cluster, root, l.Sugar()); err != nil {
 			t.Fatalf("Failed to install Performer CRD: %v", err)
 		}
 
-		// Load pre-built operator image
 		if err := loadOperatorImage(ctx, cluster, l.Sugar()); err != nil {
 			t.Fatalf("Failed to load operator image: %v", err)
 		}
@@ -161,8 +155,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		if err != nil {
 			t.Fatalf("Failed to deploy operator: %v", err)
 		}
+
 		defer func() {
-			// Run cleanup with timeout to avoid hanging
 			t.Log("Running operator cleanup with timeout")
 			done := make(chan struct{})
 			go func() {
@@ -180,15 +174,11 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 		t.Logf("Operator deployed successfully: %s", hgOperator.ReleaseName)
 
-		// Create NodePort service to expose performer pods to the host
 		if err := createPerformerNodePortService(ctx, cluster, l.Sugar()); err != nil {
 			t.Fatalf("Failed to create NodePort service: %v", err)
 		}
 	}
 
-	// ------------------------------------------------------------------------
-	// Executor setup
-	// ------------------------------------------------------------------------
 	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode, sigConfig.ExecutorCurve)))
 	if err != nil {
 		t.Fatalf("failed to create executor config: %v", err)
@@ -196,13 +186,12 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	if err := execConfig.Validate(); err != nil {
 		t.Fatalf("failed to validate executor config: %v", err)
 	}
-	// Set signing keys based on the curve type
+
 	if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
 		execConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 			PrivateKey: chainConfig.ExecOperatorAccountPk,
 		}
 	}
-	// BLS keys are already set in the YAML config when needed
 
 	execConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.ExecOperatorAccountPk,
@@ -210,45 +199,29 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
-	// Configure Kubernetes config based on mode
 	if mode == "kubernetes" {
-		// Set the actual kubeconfig path for the Kind cluster
 		execConfig.Kubernetes.KubeConfigPath = cluster.KubeConfig
 	}
 
-	_, _, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, sigConfig.ExecutorCurve)
-	if err != nil {
-		t.Fatalf("Failed to parse keys from config: %v", err)
-	}
-	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, sigConfig.ExecutorCurve)
-
-	// ------------------------------------------------------------------------
-	// Generate keys for executor operators (2 for Docker, 1 for Kubernetes)
-	// ------------------------------------------------------------------------
 	numExecutorOperators := 1
 	if mode == "docker" {
 		numExecutorOperators = 2
 	}
 	t.Logf("------------------------------------------- Setting up %d executor operator(s) for %s mode -------------------------------------------", numExecutorOperators, mode)
 
-	// Get keys for aggregator and executors using the helper method
-	// This returns the aggregator key and all executor keys at once
-	_, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(t, sigConfig.AggregatorCurve, sigConfig.ExecutorCurve, chainConfig)
+	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(t, sigConfig.AggregatorCurve, sigConfig.ExecutorCurve, chainConfig)
 	if err != nil {
 		t.Fatalf("Failed to get keys: %v", err)
 	}
 
-	// Verify we got the expected number of executor keys
+	execSigner := inMemorySigner.NewInMemorySigner(execKeys[0].PrivateKey, sigConfig.ExecutorCurve)
+
 	if len(execKeys) < numExecutorOperators {
 		t.Fatalf("Expected at least %d executor keys, got %d", numExecutorOperators, len(execKeys))
 	}
 
-	// Use only the first 2 executor keys
 	execKeys = execKeys[:numExecutorOperators]
 
-	// ------------------------------------------------------------------------
-	// 	Aggregator setup
-	// ------------------------------------------------------------------------
 	aggConfigYaml := getAggregatorConfigYaml(L1RPCUrl, L2RPCUrl, sigConfig.AggregatorCurve)
 
 	aggConfig, err := aggregatorConfig.NewAggregatorConfigFromYamlBytes([]byte(aggConfigYaml))
@@ -261,30 +234,19 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
 
-	// Set signing keys based on the curve type for aggregator
 	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {
 		aggConfig.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 			PrivateKey: chainConfig.OperatorAccountPrivateKey,
 		}
 		aggConfig.Operator.SigningKeys.BLS = nil
 	} else {
-		// BLS keys are already set in the YAML config
 		aggConfig.Operator.SigningKeys.ECDSA = nil
 	}
 
-	aggBn254PrivateSigningKey, aggEcdsaPrivateSigningKey, aggGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(aggConfig.Operator, sigConfig.AggregatorCurve)
-	if err != nil {
-		t.Fatalf("Failed to parse keys from config: %v", err)
-	}
+	aggSigner := inMemorySigner.NewInMemorySigner(aggKey.PrivateKey, sigConfig.AggregatorCurve)
 
-	aggSigner := inMemorySigner.NewInMemorySigner(aggGenericExecutorSigningKey, sigConfig.AggregatorCurve)
-
-	// ------------------------------------------------------------------------
-	// L1Chain & l1Anvil setup
-	// ------------------------------------------------------------------------
 	anvilWg := &sync.WaitGroup{}
 
-	// Both Docker and Kubernetes modes use localhost for executor/aggregator
 	l1RpcUrl := L1RPCUrl
 	l2RpcUrl := L2RPCUrl
 	l2WsUrl := L2WSUrl
@@ -320,9 +282,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	}
 	go testUtils.WaitForAnvil(anvilWg, anvilCtx, t, l1EthereumClient, startErrorsChan)
 
-	// ------------------------------------------------------------------------
-	// L2Chain & l2Anvil setup
-	// ------------------------------------------------------------------------
 	anvilWg.Add(1)
 	l2Anvil, err := testUtils.StartL2Anvil(root, ctx)
 	if err != nil {
@@ -339,6 +298,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		}
 	}
 	anvilCancel()
+
+	testUtils.SyncL2TimestampWithL1(t, l1EthClient, l2EthClient)
 
 	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
@@ -393,12 +354,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		zap.String("AVSAccountAddress", chainConfig.AVSAccountAddress),
 	)
 
-	// ------------------------------------------------------------------------
-	// Configure operator sets dynamically based on test configuration
-	// ------------------------------------------------------------------------
 	t.Logf("------------------------------------------- Configuring operator sets dynamically -------------------------------------------")
 
-	// Create AVS contract caller for configuring operator sets
 	avsConfigPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS config private key signer: %v", err)
@@ -409,7 +366,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to create AVS config caller: %v", err)
 	}
 
-	// Configure aggregator operator set with its curve type
 	t.Logf("Configuring operator set %d with curve type %s for aggregator", sigConfig.AggregatorOpsetId, sigConfig.AggregatorCurve)
 	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
@@ -419,7 +375,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to configure aggregator operator set %d: %v", sigConfig.AggregatorOpsetId, err)
 	}
 
-	// Configure executor operator set with its curve type
 	t.Logf("Configuring operator set %d with curve type %s for executor", sigConfig.ExecutorOpsetId, sigConfig.ExecutorCurve)
 	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
@@ -431,10 +386,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	t.Logf("Successfully configured operator sets dynamically")
 
-	// ------------------------------------------------------------------------
-	// Validate operator signing keys match configured curve types
-	// ------------------------------------------------------------------------
-	// Validate aggregator keys
 	if sigConfig.AggregatorCurve == config.CurveTypeBN254 && aggConfig.Operator.SigningKeys.BLS == nil {
 		t.Fatalf("BLS signing key required for BN254 curve but not configured for aggregator")
 	}
@@ -442,7 +393,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("ECDSA signing key required but not configured for aggregator")
 	}
 
-	// Validate executor keys
 	if sigConfig.ExecutorCurve == config.CurveTypeBN254 && execConfig.Operator.SigningKeys.BLS == nil {
 		t.Fatalf("BLS signing key required for BN254 curve but not configured for executor")
 	}
@@ -452,22 +402,11 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	t.Logf("Operator signing keys validated successfully")
 
-	// ------------------------------------------------------------------------
-	// Register multiple executor operators
-	// ------------------------------------------------------------------------
 	t.Logf("------------------------------------------- Registering aggregator and executor operators -------------------------------------------")
-	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
 	allOperatorSetIds := []uint32{sigConfig.AggregatorOpsetId, sigConfig.ExecutorOpsetId}
 
-	// Select the correct signing key based on curve type for aggregator
-	var aggSigningKey interface{}
-	if sigConfig.AggregatorCurve == config.CurveTypeBN254 {
-		aggSigningKey = aggBn254PrivateSigningKey
-	} else {
-		aggSigningKey = aggEcdsaPrivateSigningKey
-	}
+	aggSigningKey := aggKey.PrivateKey
 
-	// Create executor operators based on mode
 	operatorPkList := []string{chainConfig.ExecOperatorAccountPk, chainConfig.ExecOperator2AccountPk}
 
 	executorsWithSockets := make([]testUtils.ExecutorWithSocket, numExecutorOperators)
@@ -483,13 +422,11 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		}
 	}
 
-	// Register aggregator and all executor operators
 	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		// aggregator with configured curve
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
 			SigningPrivateKey:     aggSigningKey,
@@ -505,12 +442,33 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	time.Sleep(time.Second * 6)
 
-	// ------------------------------------------------------------------------
-	// Delegate stake to all operators
-	// ------------------------------------------------------------------------
 	t.Logf("------------------------------------------- Delegating stake to operators -------------------------------------------")
 
-	// Build stake configs dynamically based on number of operators
+	t.Logf("Delegating stake to aggregator operator (operator set %d)", sigConfig.AggregatorOpsetId)
+	aggStakeConfig := []*testUtils.StakerDelegationConfig{
+		{
+			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.AggStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			OperatorAddress:    chainConfig.OperatorAccountAddress,
+			OperatorSetId:      sigConfig.AggregatorOpsetId,
+			StrategyAddress:    testUtils.Strategy_WETH,
+		},
+	}
+
+	err = testUtils.DelegateStakeToMultipleOperators(
+		t,
+		ctx,
+		aggStakeConfig,
+		chainConfig.AVSAccountAddress,
+		l1EthClient,
+		l,
+	)
+	if err != nil {
+		t.Fatalf("Failed to delegate stake to aggregator operator: %v", err)
+	}
+
+	t.Logf("Delegating stake to executor operators (operator set %d)", sigConfig.ExecutorOpsetId)
 	stakerPkList := []string{chainConfig.ExecStakerAccountPrivateKey, chainConfig.ExecStaker2AccountPrivateKey}
 	stakerAddrList := []string{chainConfig.ExecStakerAccountAddress, chainConfig.ExecStaker2AccountAddress}
 	operatorAddrList := []string{chainConfig.ExecOperatorAccountAddress, chainConfig.ExecOperator2AccountAddress}
@@ -536,15 +494,13 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		l,
 	)
 	if err != nil {
-		t.Fatalf("Failed to delegate stake to operators: %v", err)
+		t.Fatalf("Failed to delegate stake to executor operators: %v", err)
 	}
 
 	t.Logf("All operator set IDs: %v", allOperatorSetIds)
 
-	// Create generation reservations for each operator set
 	t.Logf("------------------------ Creating generation reservations ------------------------")
 
-	// Create a temporary AVS contract caller to set up the generation reservations
 	avsCcL1TempSigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS L1 private key signer for generation reservation setup: %v", err)
@@ -596,10 +552,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Logf("Warning: Failed to create generation reservation for executor operator set %d: %v", sigConfig.ExecutorOpsetId, err)
 	}
 
-	// Wait for transactions to be mined
 	time.Sleep(time.Second * 3)
 
-	// update current block to account for transport
 	currentBlock, err := l1EthClient.BlockNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current block number: %v", err)
@@ -610,16 +564,14 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
 
-	// For aggregator test, we need L2 transport - don't ignore L2 chain
 	chainIdsToIgnore := []*big.Int{
 		new(big.Int).SetUint64(1),    // Ethereum Mainnet
 		new(big.Int).SetUint64(8453), // Base Mainnet
 	}
 
-	// Stake weights: 60% and 40% (both meet threshold)
 	stakeWeights := []*big.Int{
-		big.NewInt(1500000000000000000), // 1.5e18 = 60%
-		big.NewInt(1000000000000000000), // 1e18   = 40%
+		big.NewInt(600000000000000000), // 0.6e18 = 60%
+		big.NewInt(400000000000000000), // 0.4e18 = 40%
 	}
 
 	operatorAddressList := []string{
@@ -627,7 +579,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		chainConfig.ExecOperator2AccountAddress,
 	}
 
-	// Build operator key infos for both operators
 	operatorKeyInfos := make([]tableTransporter.OperatorKeyInfo, numExecutorOperators)
 	for i := 0; i < numExecutorOperators; i++ {
 		var privateKeyHex string
@@ -715,7 +666,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to set up task mailbox: %v", err)
 	}
 
-	// update current block to account for transport
 	currentBlock, err = l1EthClient.BlockNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current block number: %v", err)
@@ -723,23 +673,17 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	l.Sugar().Infow("Current block number", zap.Uint64("blockNumber", currentBlock))
 	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
 
-	// ------------------------------------------------------------------------
-	// Setup executors (2 for Docker mode, 1 for Kubernetes mode)
-	// ------------------------------------------------------------------------
 	var executors []*executor.Executor
 
 	if mode == "docker" {
-		// Docker mode: Create 2 separate executor instances
 		t.Logf("Creating 2 executor instances for Docker mode")
 
 		for i := 0; i < numExecutorOperators; i++ {
-			// Create separate config for each executor
 			execConfigForOp, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml(mode, sigConfig.ExecutorCurve)))
 			if err != nil {
 				t.Fatalf("Failed to create executor config for operator %d: %v", i, err)
 			}
 
-			// Set operator-specific fields
 			operatorPkList := []string{chainConfig.ExecOperatorAccountPk, chainConfig.ExecOperator2AccountPk}
 			operatorAddrList := []string{chainConfig.ExecOperatorAccountAddress, chainConfig.ExecOperator2AccountAddress}
 
@@ -750,7 +694,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			execConfigForOp.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 			execConfigForOp.GrpcPort = 9000 + i
 
-			// Set signing keys based on curve type
 			if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
 				execConfigForOp.Operator.SigningKeys.ECDSA = &config.ECDSAKeyConfig{
 					PrivateKey: operatorPkList[i],
@@ -769,7 +712,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 			execPdfForOp := peeringDataFetcher.NewPeeringDataFetcher(execCc, l)
 
-			// Set up executor signers based on curve type
 			var execSignersForOp signer.Signers
 			if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
 				execSignersForOp = signer.Signers{
@@ -781,7 +723,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 				}
 			}
 
-			// Use in-memory storage for the executor
 			execStoreForOp := executorMemory.NewInMemoryExecutorStore()
 			exec, err := executor.NewExecutorWithRpcServers(execConfigForOp.GrpcPort, execConfigForOp.GrpcPort, execConfigForOp, l, execSignersForOp, execPdfForOp, execCc, execStoreForOp)
 			if err != nil {
@@ -790,12 +731,12 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			executors = append(executors, exec)
 			t.Logf("Created executor %d on port %d with address %s", i, execConfigForOp.GrpcPort, operatorAddrList[i])
 		}
+
 	} else {
-		// Kubernetes mode: Create single executor (as before)
+
 		t.Logf("Creating single executor instance for Kubernetes mode")
 		execPdf := peeringDataFetcher.NewPeeringDataFetcher(l1ExecCc, l)
 
-		// Set up executor signers based on curve type
 		var execSigners signer.Signers
 		if sigConfig.ExecutorCurve == config.CurveTypeECDSA {
 			execSigners = signer.Signers{
@@ -807,7 +748,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 			}
 		}
 
-		// Use in-memory storage for the executor
 		execStore := executorMemory.NewInMemoryExecutorStore()
 		realExec, err := executor.NewExecutorWithRpcServers(execConfig.GrpcPort, execConfig.GrpcPort, execConfig, l, execSigners, execPdf, l1ExecCc, execStore)
 		if err != nil {
@@ -816,9 +756,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		executors = append(executors, realExec)
 	}
 
-	// ------------------------------------------------------------------------
-	// Setup the aggregator
-	// ------------------------------------------------------------------------
 	eigenlayerContracts, err := eigenlayer.LoadContracts()
 	if err != nil {
 		t.Fatalf("failed to load contracts: %v", err)
@@ -829,10 +766,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	tlp := transactionLogParser.NewTransactionLogParser(imContractStore, l)
 	aggPdf := peeringDataFetcher.NewPeeringDataFetcher(l1AggCc, l)
 
-	// Create in-memory storage for testing
 	aggStore := memory.NewInMemoryAggregatorStore()
 
-	// Set up aggregator signers based on curve type
 	var aggSigners signer.Signers
 	if sigConfig.AggregatorCurve == config.CurveTypeECDSA {
 		aggSigners = signer.Signers{
@@ -864,10 +799,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Fatalf("Failed to create aggregator: %v", err)
 	}
 
-	// ------------------------------------------------------------------------
-	// Boot up everything
-	// ------------------------------------------------------------------------
-	// Initialize and run all executors
 	for i, exec := range executors {
 		t.Logf("Initializing and running executor %d", i)
 		if err := exec.Initialize(ctx); err != nil {
@@ -888,9 +819,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		}
 	}()
 
-	// ------------------------------------------------------------------------
-	// Listen for TaskVerified event to know that the test is done
-	// ------------------------------------------------------------------------
 	wsEthClient, err := l2EthereumClient.GetWebsocketConnection(l2WsUrl)
 	if err != nil {
 		t.Fatalf("Failed to get websocket connection: %v", err)
@@ -946,9 +874,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		}
 	}()
 
-	// ------------------------------------------------------------------------
-	// Push a message to the mailbox
-	// ------------------------------------------------------------------------
 	l2AppPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AppAccountPrivateKey, l2EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create L2 app private key bn254Signer: %v", err)
@@ -986,9 +911,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	cancel()
 }
 
-// loadPerformerImage loads the performer image referenced in executorConfigYaml into the Kind cluster
 func loadPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
-	// Parse executor config to extract image info (use ECDSA as default for loading image)
 	execConfig, err := executorConfig.NewExecutorConfigFromYamlBytes([]byte(getExecutorConfigYaml("kubernetes", config.CurveTypeECDSA)))
 	if err != nil {
 		return fmt.Errorf("failed to parse executor config: %v", err)
@@ -998,13 +921,10 @@ func loadPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, log
 		return fmt.Errorf("no AVS performers found in executor config")
 	}
 
-	// Get the first performer's image (assuming single performer for now)
 	performer := execConfig.AvsPerformers[0]
 	imageName := fmt.Sprintf("%s:%s", performer.Image.Repository, performer.Image.Tag)
 
 	logger.Infof("Loading performer image into Kind cluster: %s", imageName)
-
-	// Load the image into Kind cluster (assumes image is already built locally)
 	if err := cluster.LoadDockerImage(ctx, imageName); err != nil {
 		return fmt.Errorf("failed to load image into Kind cluster: %v", err)
 	}
@@ -1013,14 +933,11 @@ func loadPerformerImage(ctx context.Context, cluster *testUtils.KindCluster, log
 	return nil
 }
 
-// installPerformerCRD installs the Performer CRD required for the test
 func installPerformerCRD(ctx context.Context, cluster *testUtils.KindCluster, projectRoot string, logger *zap.SugaredLogger) error {
-	// Path to the Performer CRD file
 	crdPath := filepath.Join(projectRoot, "..", "hourglass-operator", "config", "crd", "bases", "hourglass.eigenlayer.io_performers.yaml")
 
 	logger.Infof("Installing Performer CRD from: %s", crdPath)
 
-	// Apply the CRD
 	output, err := cluster.RunKubectl(ctx, "apply", "-f", crdPath)
 	if err != nil {
 		return fmt.Errorf("failed to apply Performer CRD: %v\nOutput: %s", err, string(output))
@@ -1030,16 +947,13 @@ func installPerformerCRD(ctx context.Context, cluster *testUtils.KindCluster, pr
 	return nil
 }
 
-// getAggregatorConfigYaml returns the aggregator configuration with configurable RPC URLs and curve type
 func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string, curveType config.CurveType) string {
-	// Build signing keys section based on curve type
 	var signingKeysSection string
 	if curveType == config.CurveTypeECDSA {
 		signingKeysSection = `  signingKeys:
     ecdsa:
       privateKey: "0xebf9626f161c0f7becb1aad06b6eab6290c312c03ce12eeeb9ff9b2e204c8a35"`
 	} else {
-		// BN254 keystore - using the actual test keystore from testKeys/aggregator
 		signingKeysSection = `  signingKeys:
     bls:
       password: ""
@@ -1106,7 +1020,6 @@ avss:
 }
 
 func getExecutorConfigYaml(mode string, curveType config.CurveType) string {
-	// BLS keystore for when executor uses BN254 - using the actual test keystore
 	blsKeystore := `
         {
           "crypto": {
@@ -1141,7 +1054,6 @@ func getExecutorConfigYaml(mode string, curveType config.CurveType) string {
           "curveType": "bn254"
         }`
 
-	// Build signing keys section based on curve type
 	var signingKeysSection string
 	if curveType == config.CurveTypeECDSA {
 		signingKeysSection = `  signingKeys:
@@ -1210,11 +1122,9 @@ avsPerformers:
 	}
 }
 
-// loadOperatorImage loads the pre-built Hourglass operator image into the Kind cluster
 func loadOperatorImage(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
 	logger.Info("Loading pre-built Hourglass operator image into Kind cluster")
 
-	// Load the pre-built operator image
 	if err := cluster.LoadDockerImage(ctx, "hourglass/operator:test"); err != nil {
 		return fmt.Errorf("failed to load operator image to Kind: %v", err)
 	}
@@ -1223,11 +1133,9 @@ func loadOperatorImage(ctx context.Context, cluster *testUtils.KindCluster, logg
 	return nil
 }
 
-// createPerformerNodePortService creates a NodePort service to expose performer pods
 func createPerformerNodePortService(ctx context.Context, cluster *testUtils.KindCluster, logger *zap.SugaredLogger) error {
 	logger.Info("Creating NodePort service to expose performer pods")
 
-	// Create the NodePort service YAML
 	serviceYAML := `
 apiVersion: v1
 kind: Service
@@ -1245,7 +1153,6 @@ spec:
     protocol: TCP
 `
 
-	// Apply the service
 	if err := cluster.RunKubectlWithInput(ctx, serviceYAML, "apply", "-f", "-"); err != nil {
 		return fmt.Errorf("failed to create NodePort service: %v", err)
 	}
@@ -1254,7 +1161,6 @@ spec:
 	return nil
 }
 
-// Test_DeRegisterAvs tests the DeRegisterAvs handler function
 func Test_DeRegisterAvs(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -1269,7 +1175,7 @@ func Test_DeRegisterAvs(t *testing.T) {
 			name: "successful_deregistration",
 			setupAggregator: func(t *testing.T) *Aggregator {
 				agg := createTestAggregator(t)
-				// Pre-register an AVS to deregister later
+
 				mockAEM := &avsExecutionManager.AvsExecutionManager{}
 				avsInfo := &AvsExecutionManagerInfo{
 					Address:          "0x123avs",
@@ -1304,7 +1210,7 @@ func Test_DeRegisterAvs(t *testing.T) {
 			name: "deregister_with_auth_disabled_but_provided",
 			setupAggregator: func(t *testing.T) *Aggregator {
 				agg := createTestAggregator(t)
-				// Pre-register an AVS
+
 				mockAEM := &avsExecutionManager.AvsExecutionManager{}
 				avsInfo := &AvsExecutionManagerInfo{
 					Address:          "0x456avs",
@@ -1356,7 +1262,6 @@ func Test_DeRegisterAvs(t *testing.T) {
 			assert.Equal(t, tt.expectSuccess, response.Success)
 
 			if tt.expectSuccess {
-				// Verify the AVS was actually removed from the map
 				_, exists := agg.avsManagers[tt.request.AvsAddress]
 				assert.False(t, exists, "AVS should be removed from avsManagers")
 				assert.Equal(t, initialCount-1, len(agg.avsManagers), "AVS count should decrease by 1")
@@ -1365,16 +1270,13 @@ func Test_DeRegisterAvs(t *testing.T) {
 	}
 }
 
-// Test_DeRegisterAvs_ContextCancellation tests that the context cancellation mechanism works
 func Test_DeRegisterAvs_ContextCancellation(t *testing.T) {
 	ctx := context.Background()
 	agg := createTestAggregator(t)
 
-	// Simulate an AVS being started (normally done in Start() method)
 	avsAddress := "0x123avs"
 	mockAEM := &avsExecutionManager.AvsExecutionManager{}
 
-	// Create a mock cancel function to verify it gets called
 	cancelCalled := false
 	mockCancel := func() {
 		cancelCalled = true
@@ -1387,10 +1289,8 @@ func Test_DeRegisterAvs_ContextCancellation(t *testing.T) {
 	}
 	agg.avsManagers[avsAddress] = avsInfo
 
-	// Verify initial state
 	assert.Equal(t, 1, len(agg.avsManagers))
 
-	// Deregister the AVS
 	request := &aggregatorV1.DeRegisterAvsRequest{
 		AvsAddress: avsAddress,
 		Auth:       nil,
@@ -1401,18 +1301,14 @@ func Test_DeRegisterAvs_ContextCancellation(t *testing.T) {
 	require.NotNil(t, response)
 	assert.True(t, response.Success)
 
-	// Verify the cancel function was called
 	assert.True(t, cancelCalled, "Cancel function should have been called")
 
-	// Verify cleanup of the map
 	_, avsExists := agg.avsManagers[avsAddress]
 	assert.False(t, avsExists, "AVS should be removed from avsManagers map")
 
-	// Verify final state
 	assert.Equal(t, 0, len(agg.avsManagers))
 }
 
-// Test_DeRegisterAvs_ThreadSafety tests concurrent register/deregister operations
 func Test_DeRegisterAvs_ThreadSafety(t *testing.T) {
 	ctx := context.Background()
 	agg := createTestAggregator(t)
@@ -1423,7 +1319,6 @@ func Test_DeRegisterAvs_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	// Run concurrent register/deregister operations
 	for i := 0; i < numGoroutines; i++ {
 		go func(goroutineID int) {
 			defer wg.Done()
@@ -1431,7 +1326,6 @@ func Test_DeRegisterAvs_ThreadSafety(t *testing.T) {
 			for j := 0; j < numOperations; j++ {
 				avsAddress := fmt.Sprintf("0x%d%davs", goroutineID, j)
 
-				// Register AVS by directly adding to maps (simulating successful registration)
 				agg.avsMutex.Lock()
 				if _, exists := agg.avsManagers[avsAddress]; !exists {
 					mockAEM := &avsExecutionManager.AvsExecutionManager{}
@@ -1445,17 +1339,14 @@ func Test_DeRegisterAvs_ThreadSafety(t *testing.T) {
 				}
 				agg.avsMutex.Unlock()
 
-				// Small delay to increase chance of race conditions
 				time.Sleep(time.Microsecond * 100)
 
-				// Attempt to deregister
 				request := &aggregatorV1.DeRegisterAvsRequest{
 					AvsAddress: avsAddress,
 					Auth:       nil,
 				}
 
 				_, err := agg.DeRegisterAvs(ctx, request)
-				// Either succeeds or fails with "not registered" - both are valid outcomes
 				if err != nil {
 					assert.Contains(t, err.Error(), "not registered")
 				}
