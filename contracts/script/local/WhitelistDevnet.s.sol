@@ -35,8 +35,10 @@ contract WhitelistDevnet is Script {
         tableUpdaters[0] = address(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
         tableUpdaters[1] = address(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
 
-        // Impersonate the owner to make the call
-        vm.prank(owner);
+        vm.startBroadcast();
         CROSS_CHAIN_REGISTRY.addChainIDsToWhitelist(chainIds, tableUpdaters);
+        vm.stopBroadcast();
+
+        console.log("Successfully whitelisted chains:", l1ChainId, l2ChainId);
     }
 }

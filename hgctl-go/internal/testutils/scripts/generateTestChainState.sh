@@ -59,21 +59,21 @@ KEYS_DIR="$HGCTL_ROOT/internal/testutils/keys"
 # Create keys directory
 mkdir -p "$KEYS_DIR"
 
-# ethereum sepolia
-L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
+# ethereum mainnet
+L1_FORK_RPC_URL=https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9
 
 anvilL1ChainId=31337
-anvilL1StartBlock=9259025
+anvilL1StartBlock=23477799
 anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
 anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
 anvilL1RpcPort=8545
 anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 
 # base mainnet
-L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
+L2_FORK_RPC_URL=https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=31408197
+anvilL2StartBlock=36235532
 anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
 anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
 anvilL2RpcPort=9545

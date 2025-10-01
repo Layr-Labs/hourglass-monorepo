@@ -418,7 +418,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsAddr,
 		aggOpsetId,
 		bn254CalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {

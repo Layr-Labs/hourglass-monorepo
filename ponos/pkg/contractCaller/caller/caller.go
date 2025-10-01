@@ -1287,12 +1287,14 @@ func (cc *ContractCaller) ModifyAllocations(
 	avsAddress common.Address,
 	operatorSetId uint32,
 	strategy common.Address,
+	magnitude uint64,
 ) (interface{}, error) {
 	cc.logger.Sugar().Infow("Modifying allocations",
 		zap.String("operatorAddress", operatorAddress.String()),
 		zap.String("avsAddress", avsAddress.String()),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategy", strategy.String()),
+		zap.Uint64("magnitude", magnitude),
 	)
 	alloactionDelay, err := cc.allocationManager.GetAllocationDelay(&bind.CallOpts{}, operatorAddress)
 	if err != nil {
@@ -1315,7 +1317,7 @@ func (cc *ContractCaller) ModifyAllocations(
 				Id:  operatorSetId,
 			},
 			Strategies:    []common.Address{strategy},
-			NewMagnitudes: []uint64{1e18},
+			NewMagnitudes: []uint64{magnitude},
 		},
 	})
 	if err != nil {

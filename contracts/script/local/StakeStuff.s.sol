@@ -39,7 +39,7 @@ contract StakeStuff is Script {
     IStrategyManager public STRATEGY_MANAGER = IStrategyManager(0x858646372CC42E1A627fcE94aa7A7033e7CF075A);
 
     // Eigenlayer Strategies (Mainnet)
-    IStrategy public STRATEGY_WETH = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6); // swETH strategy
+    IStrategy public STRATEGY_WETH = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6);
     IStrategy public STRATEGY_STETH = IStrategy(0x93c4b944D05dfe6df7645A86cd2206016c51564D);
 
     uint64 public magnitudeToSet = 1e18;
@@ -65,12 +65,11 @@ contract StakeStuff is Script {
         IERC20 wethToken = STRATEGY_WETH.underlyingToken();
         IERC20 stethToken = STRATEGY_STETH.underlyingToken();
 
-        // Stake for aggregator (WETH) - 20 ETH
         vm.deal(aggStakerAddr, 100_000e18);
         vm.startBroadcast(aggStakerPrivateKey);
         IWETH(address(wethToken)).deposit{value: 20e18}();
         wethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_WETH, wethToken, 1 ether);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_WETH, wethToken, 10 ether);
         vm.stopBroadcast();
 
         uint256 balance = IERC20(wethToken).balanceOf(aggStakerAddr);
@@ -78,13 +77,11 @@ contract StakeStuff is Script {
         uint256 depositedAmount = STRATEGY_MANAGER.stakerDepositShares(aggStakerAddr, STRATEGY_WETH);
         console.log("Aggregator staker deposit shares in STRATEGY_WETH:", depositedAmount);
 
-        // Stake for all executors using stETH (since operator set 1 only supports STETH)
-        // Executor 1: 2 ETH
         vm.deal(execStakerAddr, 100_000e18);
         vm.startBroadcast(execStakerPrivateKey);
         IStETH(address(stethToken)).submit{value: 20e18}(address(0));
         stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 2 ether);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 10 ether);
         vm.stopBroadcast();
 
         balance = IERC20(stethToken).balanceOf(execStakerAddr);
@@ -92,12 +89,11 @@ contract StakeStuff is Script {
         depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStakerAddr, STRATEGY_STETH);
         console.log("Executor 1 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
-        // Stake for executor 2 (stETH) - 1.5 ETH
         vm.deal(execStaker2Addr, 100_000e18);
         vm.startBroadcast(execStaker2PrivateKey);
         IStETH(address(stethToken)).submit{value: 20e18}(address(0));
         stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 1.5 ether);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 10 ether);
         vm.stopBroadcast();
 
         balance = IERC20(stethToken).balanceOf(execStaker2Addr);
@@ -105,12 +101,11 @@ contract StakeStuff is Script {
         depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker2Addr, STRATEGY_STETH);
         console.log("Executor 2 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
-        // Stake for executor 3 (stETH) - 1 ETH
         vm.deal(execStaker3Addr, 100_000e18);
         vm.startBroadcast(execStaker3PrivateKey);
         IStETH(address(stethToken)).submit{value: 20e18}(address(0));
         stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 1 ether);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 10 ether);
         vm.stopBroadcast();
 
         balance = IERC20(stethToken).balanceOf(execStaker3Addr);
@@ -118,12 +113,11 @@ contract StakeStuff is Script {
         depositedAmount = STRATEGY_MANAGER.stakerDepositShares(execStaker3Addr, STRATEGY_STETH);
         console.log("Executor 3 staker deposit shares in STRATEGY_STETH:", depositedAmount);
 
-        // Stake for executor 4 (stETH) - 0.5 ETH
         vm.deal(execStaker4Addr, 100_000e18);
         vm.startBroadcast(execStaker4PrivateKey);
         IStETH(address(stethToken)).submit{value: 20e18}(address(0));
         stethToken.approve(address(STRATEGY_MANAGER), type(uint256).max);
-        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 0.5 ether);
+        STRATEGY_MANAGER.depositIntoStrategy(STRATEGY_STETH, stethToken, 10 ether);
         vm.stopBroadcast();
 
         balance = IERC20(stethToken).balanceOf(execStaker4Addr);
@@ -133,10 +127,10 @@ contract StakeStuff is Script {
 
         console.log("All staking operations completed successfully!");
         console.log("Stake weights summary:");
-        console.log("- Aggregator: 1 ETH (WETH)");
-        console.log("- Executor 1: 2 ETH (stETH)");
-        console.log("- Executor 2: 1.5 ETH (stETH)");
-        console.log("- Executor 3: 1 ETH (stETH)");
-        console.log("- Executor 4: 0.5 ETH (stETH)");
+        console.log("- Aggregator: 10 ETH (WETH)");
+        console.log("- Executor 1: 20 ETH (stETH)");
+        console.log("- Executor 2: 10 ETH (stETH)");
+        console.log("- Executor 3: 10 ETH (stETH)");
+        console.log("- Executor 4: 10 ETH (stETH)");
     }
 }

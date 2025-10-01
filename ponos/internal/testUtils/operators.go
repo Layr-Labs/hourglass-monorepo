@@ -2,21 +2,25 @@ package testUtils
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/operator"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"go.uber.org/zap"
 )
 
 const (
-	Strategy_WETH  = "0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc"
-	Strategy_STETH = "0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
+	Strategy_WETH  = "0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6"
+	Strategy_STETH = "0x93c4b944D05dfe6df7645A86cd2206016c51564D"
 )
 
 type ExecutorWithSocket struct {
@@ -31,6 +35,7 @@ type StakerDelegationConfig struct {
 	OperatorAddress    string
 	OperatorSetId      uint32
 	StrategyAddress    string
+	Magnitude          uint64
 }
 
 // OperatorConfig holds all configuration for an operator including
@@ -271,6 +276,13 @@ func DelegateStakeToOperators(
 	l *zap.Logger,
 ) error {
 	t.Logf("------------------------ Delegating aggregator ------------------------")
+
+	// Use configured magnitude or default to 1e18
+	aggMagnitude := aggregatorConfig.Magnitude
+	if aggMagnitude == 0 {
+		aggMagnitude = 1e18
+	}
+
 	err := DelegateStakeToOperator(
 		ctx,
 		aggregatorConfig.StakerPrivateKey,
@@ -280,6 +292,7 @@ func DelegateStakeToOperators(
 		avsAddress,
 		aggregatorConfig.OperatorSetId,
 		aggregatorConfig.StrategyAddress,
+		aggMagnitude,
 		ethClient,
 		l,
 	)
@@ -288,6 +301,13 @@ func DelegateStakeToOperators(
 	}
 
 	t.Logf("------------------------ Delegating Executor ------------------------")
+
+	// Use configured magnitude or default to 1e18
+	execMagnitude := executorConfig.Magnitude
+	if execMagnitude == 0 {
+		execMagnitude = 1e18
+	}
+
 	err = DelegateStakeToOperator(
 		ctx,
 		executorConfig.StakerPrivateKey,
@@ -297,6 +317,7 @@ func DelegateStakeToOperators(
 		avsAddress,
 		executorConfig.OperatorSetId,
 		executorConfig.StrategyAddress,
+		execMagnitude,
 		ethClient,
 		l,
 	)
@@ -317,6 +338,16 @@ func DelegateStakeToMultipleOperators(
 ) error {
 	for i, config := range configs {
 		t.Logf("------------------------ Delegating Operator %d ------------------------", i+1)
+
+		// Use configured magnitude or default to 1e18 if not specified
+		magnitude := config.Magnitude
+		if magnitude == 0 {
+			magnitude = 1e18
+			l.Sugar().Warnw("No magnitude specified, using default 1e18",
+				zap.String("operatorAddress", config.OperatorAddress),
+			)
+		}
+
 		err := DelegateStakeToOperator(
 			ctx,
 			config.StakerPrivateKey,
@@ -326,6 +357,7 @@ func DelegateStakeToMultipleOperators(
 			avsAddress,
 			config.OperatorSetId,
 			config.StrategyAddress,
+			magnitude,
 			ethClient,
 			l,
 		)
@@ -345,7 +377,8 @@ func DelegateStakeToOperator(
 	avsAddress string,
 	operatorSetId uint32,
 	strategyAddress string,
-	ethclient *ethclient.Client,
+	magnitude uint64,
+	ec *ethclient.Client,
 	l *zap.Logger,
 ) error {
 	l.Sugar().Infow("Delegating stake to operator",
@@ -355,15 +388,76 @@ func DelegateStakeToOperator(
 		zap.String("avsAddress", avsAddress),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategyAddress", strategyAddress),
+		zap.Uint64("magnitude", magnitude),
 	)
-	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, ethclient, l)
+	stakerPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(stakerPrivateKey, ec, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker private key signer: %v", err)
 	}
 
-	stakerCc, err := caller.NewContractCaller(ethclient, stakerPrivateKeySigner, l)
+	stakerCc, err := caller.NewContractCaller(ec, stakerPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create staker contract caller: %v", err)
+	}
+
+	operatorAddr := common.HexToAddress(operatorAddress)
+	client, err := ethclient.Dial("http://localhost:8545")
+	if err != nil {
+		return fmt.Errorf("failed to connect to operator: %v", err)
+	}
+	defer client.Close()
+
+	// Calculate storage slot for *allocationDelayInfo mapping
+	// For mapping(address => struct), storage slot = keccak256(abi.encode(key, slot))
+	slotBytes := make([]byte, 32)
+	binary.BigEndian.PutUint64(slotBytes[24:], 155)
+	keyBytes := common.LeftPadBytes(operatorAddr.Bytes(), 32)
+
+	encoded := append(keyBytes, slotBytes...)
+	storageKey := common.BytesToHash(crypto.Keccak256(encoded))
+
+	// Define struct fields
+	var (
+		delay        uint32 = 0    // rightmost 4 bytes
+		isSet        byte   = 0x00 // 1 byte before delay
+		pendingDelay uint32 = 0    // 4 bytes before isSet
+		effectBlock  uint32 = 1    // 4 bytes before pendingDelay - set to early block (far in the past)
+	)
+
+	// Create a 32-byte array (filled with zeros)
+	structValue := make([]byte, 32)
+
+	// Offset starts from the right
+	offset := 32
+
+	// Set delay (4 bytes)
+	offset -= 4
+	binary.BigEndian.PutUint32(structValue[offset:], delay)
+
+	// Set isSet (1 byte)
+	offset -= 1
+	structValue[offset] = isSet
+
+	// Set pendingDelay (4 bytes)
+	offset -= 4
+	binary.BigEndian.PutUint32(structValue[offset:], pendingDelay)
+
+	// Set effectBlock (4 bytes)
+	offset -= 4
+	binary.BigEndian.PutUint32(structValue[offset:], effectBlock)
+
+	// Mainnet AllocationManager address
+	allocationManagerAddr := common.HexToAddress("0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39")
+
+	var setStorageResult interface{}
+	err = client.Client().Call(&setStorageResult, "anvil_setStorageAt",
+		allocationManagerAddr.Hex(),
+		storageKey.Hex(),
+		"0x"+hex.EncodeToString(structValue))
+	if err != nil {
+		l.Warn("Failed to manipulate AllocationDelayInfo storage for operator")
+	} else {
+		l.Info("Manipulated AllocationDelayInfo storage for operator at effectBlock")
 	}
 
 	if _, err := stakerCc.DelegateToOperator(
@@ -373,15 +467,17 @@ func DelegateStakeToOperator(
 		return fmt.Errorf("failed to delegate stake to operator %s: %v", operatorAddress, err)
 	}
 
-	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, ethclient, l)
+	opPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(operatorPrivateKey, ec, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator private key signer: %v", err)
 	}
 
-	opCc, err := caller.NewContractCaller(ethclient, opPrivateKeySigner, l)
+	opCc, err := caller.NewContractCaller(ec, opPrivateKeySigner, l)
 	if err != nil {
 		return fmt.Errorf("failed to create operator contract caller: %v", err)
 	}
+
+	time.Sleep(time.Duration(6) * time.Second)
 
 	_, err = opCc.ModifyAllocations(
 		ctx,
@@ -389,9 +485,11 @@ func DelegateStakeToOperator(
 		common.HexToAddress(avsAddress),
 		operatorSetId,
 		common.HexToAddress(strategyAddress),
+		magnitude,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to modify allocations for operator %s: %v", operatorAddress, err)
 	}
+
 	return nil
 }

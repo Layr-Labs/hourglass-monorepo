@@ -300,7 +300,7 @@ func TransportTable(
 			chainIdsToIgnore,
 		)
 		if err != nil {
-			l.Sugar().Fatalf("Failed to sign and transport AVS stake table for opset %v: %v", opset, err)
+			l.Sugar().Warnf("Failed to sign and transport AVS stake table for opset %v: %v (skipping)", opset, err)
 		} else {
 			l.Sugar().Infof("Successfully signed and transported AVS stake table for opset %v", opset)
 		}

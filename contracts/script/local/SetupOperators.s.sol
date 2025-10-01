@@ -31,39 +31,33 @@ contract SetupOperators is Script {
 
         // Register aggregator
         vm.startBroadcast(aggregatorPrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 0, "");
         console.log("Aggregator registered as operator:", aggregatorAddr);
         vm.stopBroadcast();
 
         // Register executor 1
         vm.startBroadcast(executorPrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 0, "");
         console.log("Executor 1 registered as operator:", executorAddr);
         vm.stopBroadcast();
 
         // Register executor 2
         vm.startBroadcast(executor2PrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 0, "");
         console.log("Executor 2 registered as operator:", executor2Addr);
         vm.stopBroadcast();
 
         // Register executor 3
         vm.startBroadcast(executor3PrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 0, "");
         console.log("Executor 3 registered as operator:", executor3Addr);
         vm.stopBroadcast();
 
         // Register executor 4
         vm.startBroadcast(executor4PrivateKey);
-        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 1, "");
+        DELEGATION_MANAGER.registerAsOperator(zeroAddress, 0, "");
         console.log("Executor 4 registered as operator:", executor4Addr);
         vm.stopBroadcast();
-
-        // Fast forward past the allocation delay
-        uint256 currentTimestamp = block.timestamp;
-        console.log("Current timestamp:", currentTimestamp);
-        vm.warp(currentTimestamp + 10);
-        console.log("Warped to timestamp:", block.timestamp);
 
         // Verify all operators are registered
         bool isOperator = DELEGATION_MANAGER.isOperator(aggregatorAddr);
