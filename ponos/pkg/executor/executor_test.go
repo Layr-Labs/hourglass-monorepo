@@ -76,11 +76,18 @@ func testWithKeyType(
 	execConfig.Operator.Address = chainConfig.ExecOperatorAccountAddress
 	execConfig.AvsPerformers[0].AvsAddress = chainConfig.AVSAccountAddress
 
-	_, execEcdsaPrivateSigningKey, execGenericExecutorSigningKey, err := testUtils.ParseKeysFromConfig(execConfig.Operator, config.CurveTypeECDSA)
+	// Get keys using the helper function
+	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(
+		t,
+		config.CurveTypeBN254, // Aggregator uses BN254
+		config.CurveTypeECDSA, // Executor uses ECDSA
+		chainConfig,
+	)
 	if err != nil {
-		t.Fatalf("Failed to parse keys from config: %v", err)
+		t.Fatalf("Failed to get keys from chain config: %v", err)
 	}
-	execSigner := inMemorySigner.NewInMemorySigner(execGenericExecutorSigningKey, config.CurveTypeECDSA)
+
+	execSigner := inMemorySigner.NewInMemorySigner(execKeys[0].PrivateKey, config.CurveTypeECDSA)
 
 	// ------------------------------------------------------------------------
 	// Aggregator setup
@@ -94,11 +101,6 @@ func testWithKeyType(
 	}
 	simAggConfig.Operator.Address = chainConfig.OperatorAccountAddress
 	simAggConfig.Avss[0].Address = chainConfig.AVSAccountAddress
-
-	aggBn254PrivateSigningKey, _, _, err := testUtils.ParseKeysFromConfig(simAggConfig.Operator, config.CurveTypeBN254)
-	if err != nil {
-		t.Fatalf("Failed to parse keys from config: %v", err)
-	}
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   L1RpcUrl,
 		BlockType: ethereum.BlockType_Latest,
@@ -234,14 +236,14 @@ func testWithKeyType(
 		// aggregator is BN254
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
-			SigningPrivateKey:     aggBn254PrivateSigningKey,
+			SigningPrivateKey:     aggKey.PrivateKey,
 			Curve:                 config.CurveTypeBN254,
 			OperatorSetIds:        []uint32{aggOpsetId},
 		},
 		// executor is ecdsa
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
-			SigningPrivateKey:     execEcdsaPrivateSigningKey,
+			SigningPrivateKey:     execKeys[0].PrivateKey,
 			Curve:                 config.CurveTypeECDSA,
 			OperatorSetIds:        []uint32{execOpsetId},
 		},
@@ -343,8 +345,7 @@ func testWithKeyType(
 	var payloadSig []byte
 	if simAggConfig.Operator.SigningKeys.BLS != nil {
 		// BN254 signing - sign the hashed message
-		bn254Key := aggBn254PrivateSigningKey
-		bn254Signer := inMemorySigner.NewInMemorySigner(bn254Key, config.CurveTypeBN254)
+		bn254Signer := inMemorySigner.NewInMemorySigner(aggKey.PrivateKey, config.CurveTypeBN254)
 		signature, err := bn254Signer.SignMessage(encodedMessage[:])
 		if err != nil {
 			t.Fatalf("Failed to sign task payload with BN254: %v", err)
@@ -367,35 +368,36 @@ func testWithKeyType(
 		OperatorSetId:      1,
 		Version:            1,
 	})
+
 	if err != nil {
 		cancel()
 		time.Sleep(5 * time.Second)
 		t.Fatalf("Failed to submit task: %v", err)
 	}
+
 	assert.NotNil(t, taskResult)
 
 	if curveType == config.CurveTypeBN254 {
-		// BN254 signature verification - check signature format
+
 		sig, err := bn254.NewSignatureFromBytes(taskResult.ResultSignature)
 		if err != nil {
 			t.Fatalf("Failed to create BN254 signature from bytes: %v", err)
 		}
-		// Just verify the signature is valid BN254 format
 		assert.NotNil(t, sig, "BN254 signature should be valid")
 		assert.Len(t, taskResult.ResultSignature, 64, "BN254 signature should be 64 bytes")
 		t.Logf("BN254 result signature present and valid format")
+
 	} else if curveType == config.CurveTypeECDSA {
-		// ECDSA signature verification - check signature format
+
 		sig, err := cryptoLibsEcdsa.NewSignatureFromBytes(taskResult.ResultSignature)
 		if err != nil {
 			t.Fatalf("Failed to create ECDSA signature from bytes: %v", err)
 		}
-		// Just verify the signature is valid ECDSA format
+
 		assert.NotNil(t, sig, "ECDSA signature should be valid")
 		assert.Len(t, taskResult.ResultSignature, 65, "ECDSA signature should be 65 bytes")
 		t.Logf("ECDSA result signature present and valid format")
 
-		// Also verify the AuthSignature (used for identity verification)
 		if len(taskResult.AuthSignature) > 0 {
 			authSig, err := cryptoLibsEcdsa.NewSignatureFromBytes(taskResult.AuthSignature)
 			if err != nil {
@@ -406,9 +408,11 @@ func testWithKeyType(
 				t.Logf("AuthSignature present and valid format, length: %d bytes", len(taskResult.AuthSignature))
 			}
 		}
+
 	} else {
 		t.Errorf("Unsupported curve type: %s", curveType)
 	}
+
 	cancel()
 	t.Logf("Successfully verified signature for task %s", taskResult.TaskId)
 
