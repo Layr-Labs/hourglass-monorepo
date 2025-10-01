@@ -3,12 +3,14 @@ package certificateVerifier
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
+	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/testUtils"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/web3signer"
@@ -49,15 +51,17 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
-	// aggregator is bn254, executor is ecdsa
-	aggKeysBN254, _, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254, chainConfig)
+	aggKeysBN254, execKeysECDSA, err := testUtils.GetKeysForCurveTypeFromChainConfig(
+		t,
+		config.CurveTypeBN254,
+		config.CurveTypeECDSA,
+		chainConfig,
+	)
 	if err != nil {
-		t.Fatalf("Failed to get keys for BN254 curve type: %v", err)
+		t.Fatalf("Failed to get keys: %v", err)
 	}
-	_, execKeysECDSA, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeECDSA, chainConfig)
-	if err != nil {
-		t.Fatalf("Failed to get keys for ECDSA curve type: %v", err)
-	}
+
+	execKeysECDSA = []*testUtils.WrappedKeyPair{execKeysECDSA[0]}
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   L1RpcUrl,
@@ -137,7 +141,6 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	t.Logf("------------------------------------------- Configuring operator sets -------------------------------------------")
 
-	// Create AVS contract caller for configuring operator sets
 	avsConfigPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS config private key signer: %v", err)
@@ -148,7 +151,6 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to create AVS config caller: %v", err)
 	}
 
-	// Configure aggregator operator set with BN254 curve type
 	t.Logf("Configuring operator set %d with curve type BN254 for aggregator", aggOpsetId)
 	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
@@ -158,7 +160,6 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to configure aggregator operator set %d: %v", aggOpsetId, err)
 	}
 
-	// Configure executor operator set with ECDSA curve type
 	t.Logf("Configuring operator set %d with curve type ECDSA for executor", execOpsetId)
 	_, err = avsConfigCaller.ConfigureAVSOperatorSet(ctx,
 		common.HexToAddress(chainConfig.AVSAccountAddress),
@@ -171,24 +172,21 @@ func Test_CertificateVerifier(t *testing.T) {
 	t.Logf("Successfully configured operator sets")
 
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
-	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
 
 	err = testUtils.SetupOperatorPeering(
 		ctx,
 		chainConfig,
 		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		// aggregator is BN254
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
 			SigningPrivateKey:     aggKeysBN254.PrivateKey,
 			Curve:                 config.CurveTypeBN254,
 			OperatorSetIds:        []uint32{aggOpsetId},
 		},
-		// executor is ecdsa
 		&operator.Operator{
 			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
-			SigningPrivateKey:     execKeysECDSA.PrivateKey,
+			SigningPrivateKey:     execKeysECDSA[0].PrivateKey,
 			Curve:                 config.CurveTypeECDSA,
 			OperatorSetIds:        []uint32{execOpsetId},
 		},
@@ -230,15 +228,13 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	t.Logf("All operator set IDs: %v", allOperatorSetIds)
 
-	// Create generation reservations for each operator set
 	t.Logf("------------------------ Creating generation reservations ------------------------")
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
-	// Create generation reservation for aggregator operator set (BN254)
 	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
 	if err != nil {
-		t.Fatalf("Failed to create AVS config private key signer: %v", err)
+		t.Fatalf("Failed to get BN254 calculator address: %v", err)
 	}
 
 	t.Logf("Creating generation reservation with BN254 table calculator %s for aggregator operator set %d",
@@ -248,17 +244,16 @@ func Test_CertificateVerifier(t *testing.T) {
 		avsAddr,
 		aggOpsetId,
 		bn254CalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
 		t.Logf("Warning: Failed to create generation reservation for aggregator operator set %d: %v", aggOpsetId, err)
 	}
 
-	// Create generation reservation for executor operator set (ECDSA)
 	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
 	if err != nil {
-		t.Fatalf("Failed to create ECDSA config private key signer: %v", err)
+		t.Fatalf("Failed to get ECDSA calculator address: %v", err)
 	}
 
 	t.Logf("Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
@@ -268,34 +263,57 @@ func Test_CertificateVerifier(t *testing.T) {
 		avsAddr,
 		execOpsetId,
 		ecdsaCalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
 		t.Logf("Warning: Failed to create generation reservation for executor operator set %d: %v", execOpsetId, err)
 	}
 
-	// Wait for transactions to be mined
-	time.Sleep(time.Second * 3)
-
-	// update current block to account for transport
-	currentBlock, err := l1EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get current block number: %v", err)
-	}
-	_ = currentBlock
-	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
-
-	time.Sleep(time.Second * 6)
-
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
-	// transport the tables for good measure
-	testUtils.TransportStakeTables(l, false)
+
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+	chainIdsToIgnore := []*big.Int{
+		big.NewInt(1),
+		big.NewInt(8453),
+		big.NewInt(31338),
+	}
+
+	ecdsaPrivKey := execKeysECDSA[0].PrivateKey.(*ecdsa.PrivateKey)
+	privateKeyHex := fmt.Sprintf("0x%x", ecdsaPrivKey.Bytes())
+	ecdsaInfos := []tableTransporter.OperatorKeyInfo{
+		{
+			PrivateKeyHex:   privateKeyHex,
+			OperatorAddress: common.HexToAddress(chainConfig.ExecOperatorAccountAddress),
+		},
+	}
+
+	cfg := &tableTransporter.MultipleOperatorConfig{
+		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
+		L1RpcUrl:                  "http://localhost:8545",
+		L1ChainId:                 31337,
+		L2RpcUrl:                  "",
+		L2ChainId:                 0,
+		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
+		ChainIdsToIgnore:          chainIdsToIgnore,
+		Logger:                    l,
+		Operators:                 ecdsaInfos,
+		AVSAddress:                common.HexToAddress(chainConfig.AVSAccountAddress),
+		OperatorSetId:             execOpsetId,
+		TransportBLSPrivateKey:    transportBlsKey,
+		CurveType:                 config.CurveTypeECDSA,
+	}
+
+	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
+	if err != nil {
+		t.Fatalf("Failed to transport stake tables: %v", err)
+	}
+
 	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
 	time.Sleep(time.Second * 6)
 
 	l.Sugar().Infow("------------------------ Debugging tables ------------------------")
-	currentBlock, err = l1EthClient.BlockNumber(ctx)
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
@@ -304,7 +322,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Creating aggregated certificate ------------------------")
 
-	inMemExecutorSigner := inMemorySigner.NewInMemorySigner(execKeysECDSA.PrivateKey, config.CurveTypeECDSA)
+	inMemExecutorSigner := inMemorySigner.NewInMemorySigner(execKeysECDSA[0].PrivateKey, config.CurveTypeECDSA)
 	web3SignerClient, err := web3signer.NewClient(&web3signer.Config{
 		BaseURL: testUtils.L1Web3SignerUrl,
 		Timeout: 5 * time.Second,
@@ -313,26 +331,23 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Fatalf("Failed to create Web3Signer client: %v", err)
 	}
 
-	// First, check what keys Web3Signer actually has loaded
 	availableAccounts, err := web3SignerClient.EthAccounts(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to get Web3Signer accounts: %v", err)
 	}
-	t.Logf("Web3Signer available accounts: %v", availableAccounts)
-	t.Logf("Expected executor address: %s", execKeysECDSA.Address.Hex())
-	t.Logf("Expected executor public key: %s", execKeysECDSA.PublicKey.(string))
 
-	// Verify that the public key corresponds to the expected address
-	// by deriving the address from the private key used by InMemorySigner
-	execPrivKey := execKeysECDSA.PrivateKey.(*ecdsa.PrivateKey)
+	t.Logf("Web3Signer available accounts: %v", availableAccounts)
+	t.Logf("Expected executor address: %s", execKeysECDSA[0].Address.Hex())
+	t.Logf("Expected executor public key: %s", execKeysECDSA[0].PublicKey.(string))
+
+	execPrivKey := execKeysECDSA[0].PrivateKey.(*ecdsa.PrivateKey)
 	derivedAddr, err := execPrivKey.DeriveAddress()
 	if err != nil {
 		t.Fatalf("Failed to derive address from private key: %v", err)
 	}
 	t.Logf("Address derived from InMemorySigner private key: %s", derivedAddr.Hex())
 
-	// Check if the expected address is in the available accounts
-	expectedAddr := execKeysECDSA.Address.Hex()
+	expectedAddr := execKeysECDSA[0].Address.Hex()
 	found := false
 	for _, addr := range availableAccounts {
 		if strings.EqualFold(addr, expectedAddr) {
@@ -346,8 +361,8 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	executorSigner, err := web3Signer.NewWeb3Signer(
 		web3SignerClient,
-		execKeysECDSA.Address,
-		execKeysECDSA.PublicKey.(string),
+		execKeysECDSA[0].Address,
+		execKeysECDSA[0].PublicKey.(string),
 		config.CurveTypeECDSA,
 		l,
 	)
@@ -504,7 +519,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	}
 
 	// Verify both signatures against the same address
-	executorAddr := execKeysECDSA.Address
+	executorAddr := execKeysECDSA[0].Address
 	hashedDigestData := util.GetKeccak256Digest(ecdsaDigestBytes)
 	resultHashCopy := make([]byte, 32)
 	copy(resultHashCopy, hashedDigestData[:])
