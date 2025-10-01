@@ -572,11 +572,20 @@ func (em *AvsExecutionManager) processBN254Task(
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
 
 		default:
-			em.logger.Sugar().Errorw("task session encountered an error",
-				zap.String("taskId", task.TaskId),
-				zap.Error(ctx.Err()),
-			)
-			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
+			if err != nil {
+				if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+					em.logger.Sugar().Warnw("Failed to update task status to failed",
+						"error", updateErr,
+						"taskId", task.TaskId,
+					)
+				}
+				em.logger.Sugar().Errorw("task session encountered an error",
+					zap.String("taskId", task.TaskId),
+					zap.Error(err),
+				)
+				err = fmt.Errorf("task session encountered an error: %w", err)
+			}
+			return err
 		}
 
 	}
@@ -702,18 +711,20 @@ func (em *AvsExecutionManager) processECDSATask(
 			return fmt.Errorf("task session context deadline exceeded: %w", ctx.Err())
 
 		default:
-			if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
-				em.logger.Sugar().Warnw("Failed to update task status to failed",
-					"error", updateErr,
-					"taskId", task.TaskId,
+			if err != nil {
+				if updateErr := em.store.UpdateTaskStatus(ctx, task.TaskId, storage.TaskStatusFailed); updateErr != nil {
+					em.logger.Sugar().Warnw("Failed to update task status to failed",
+						"error", updateErr,
+						"taskId", task.TaskId,
+					)
+				}
+				em.logger.Sugar().Errorw("task session encountered an error",
+					zap.String("taskId", task.TaskId),
+					zap.Error(err),
 				)
+				err = fmt.Errorf("task session encountered an error: %w", err)
 			}
-			em.logger.Sugar().Errorw("task session encountered an error",
-				zap.String("taskId", task.TaskId),
-				zap.Error(ctx.Err()),
-			)
-			return fmt.Errorf("task session encountered an error: %w", ctx.Err())
-
+			return err
 		}
 	}
 }

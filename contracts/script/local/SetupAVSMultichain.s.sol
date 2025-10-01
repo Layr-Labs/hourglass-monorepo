@@ -16,6 +16,8 @@ import {BLSApkRegistry} from "@eigenlayer-middleware/src/BLSApkRegistry.sol";
 contract SetupAVSMultichain is Script {
     ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
 
+    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
+        IBN254TableCalculator(0xa19E3B00cf4aC46B5e6dc0Bbb0Fb0c86D0D65603);
     IECDSATableCalculator public ECDSA_TABLE_CALCULATOR =
         IECDSATableCalculator(0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa);
 
@@ -39,9 +41,9 @@ contract SetupAVSMultichain is Script {
 
             // aggregator is bn254, executor is ecdsa
             if (i == 0) {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, IBN254TableCalculator(bn254Calculator), config);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config);
             } else {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, IECDSATableCalculator(ecdsaCalculator), config);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config);
             }
 
             console.log("Generation reservation created for operator set", i);
