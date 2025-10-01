@@ -1,6 +1,11 @@
 package testUtils
 
 import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IBN254CertificateVerifier"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
@@ -12,8 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"testing"
-	"time"
 )
 
 func DebugOpsetData(
@@ -185,4 +188,43 @@ func DebugOpsetData(
 			t.Fatalf("Unsupported curve type: %s", curveType)
 		}
 	}
+}
+
+// SyncL2TimestampWithL1 synchronizes the L2 anvil instance's timestamp with L1
+func SyncL2TimestampWithL1(
+	t *testing.T,
+	l1EthClient *ethclient.Client,
+	l2EthClient *ethclient.Client,
+) {
+	// Get current L1 block timestamp
+	l1Block, err := l1EthClient.BlockByNumber(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Failed to get L1 block: %v", err)
+	}
+	l1Timestamp := l1Block.Time()
+
+	// Add a buffer to ensure L2 timestamp is ahead
+	l2Timestamp := l1Timestamp + 100
+
+	t.Logf("Syncing L2 timestamp: L1=%d, setting L2=%d", l1Timestamp, l2Timestamp)
+
+	// Set L2's next block timestamp
+	var result interface{}
+	err = l2EthClient.Client().Call(&result, "anvil_setNextBlockTimestamp", fmt.Sprintf("0x%x", l2Timestamp))
+	if err != nil {
+		t.Fatalf("Failed to set L2 timestamp: %v", err)
+	}
+
+	// Mine a block to apply the timestamp
+	err = l2EthClient.Client().Call(&result, "anvil_mine", "0x1")
+	if err != nil {
+		t.Fatalf("Failed to mine L2 block: %v", err)
+	}
+
+	// Verify the timestamp was set
+	l2Block, err := l2EthClient.BlockByNumber(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Failed to get L2 block after timestamp sync: %v", err)
+	}
+	t.Logf("L2 timestamp synced successfully: %d", l2Block.Time())
 }
