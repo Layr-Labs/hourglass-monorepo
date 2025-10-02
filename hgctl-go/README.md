@@ -10,6 +10,8 @@
 * Configure multiple environments through contexts with hierarchical configuration
 * Fetch and deploy AVS releases from OCI registries via ReleaseManager contracts
 
+**✨ Mainnet Support**: Version `v0.1.0.mainnet-rc.1` includes full support for Ethereum mainnet, Sepolia testnet, and local development with Anvil.
+
 ## 📦 Installation
 
 ### Quick Install (Recommended)
@@ -33,14 +35,14 @@ Download pre-built binaries from [GitHub Releases](https://github.com/Layr-Labs/
 
 ```bash
 # Example for macOS ARM64
-curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.testnet-rc.2/hgctl-darwin-arm64-v0.1.0.testnet-rc.2.tar.gz
-tar -xzf hgctl-darwin-arm64-v0.1.0.testnet-rc.2.tar.gz
+curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.mainnet-rc.1/hgctl-darwin-arm64-v0.1.0.mainnet-rc.1.tar.gz
+tar -xzf hgctl-darwin-arm64-v0.1.0.mainnet-rc.1.tar.gz
 chmod +x hgctl-darwin-arm64
 sudo mv hgctl-darwin-arm64 /usr/local/bin/hgctl
 
 # Example for Linux AMD64
-curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.testnet-rc.2/hgctl-linux-amd64-v0.1.0.testnet-rc.2.tar.gz
-tar -xzf hgctl-linux-amd64-v0.1.0.testnet-rc.2.tar.gz
+curl -LO https://github.com/Layr-Labs/hourglass-monorepo/releases/download/hgctl-v0.1.0.mainnet-rc.1/hgctl-linux-amd64-v0.1.0.mainnet-rc.1.tar.gz
+tar -xzf hgctl-linux-amd64-v0.1.0.mainnet-rc.1.tar.gz
 chmod +x hgctl-linux-amd64
 sudo mv hgctl-linux-amd64 /usr/local/bin/hgctl
 ```
