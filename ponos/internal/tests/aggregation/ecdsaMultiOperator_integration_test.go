@@ -419,7 +419,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 			shouldMeetSigningThreshold: true, // 50% >= 50% (same response)
 		},
 		{
-			name:                       "Success_AllOperators_",
+			name:                       "Success_AllOperators_HigherStake",
 			aggregationThreshold:       6000,              // 60%
 			verificationThreshold:      6000,              // 60%
 			respondingOperatorIdxs:     []int{3, 2, 1, 0}, // All operators respond
