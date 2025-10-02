@@ -17,7 +17,7 @@ import (
 
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/ethereum/go-ethereum/common"
-
+	
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
@@ -545,9 +545,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
 
-		// Verify mostCommonCount is 1 and points to digest A
-		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// Verify winningWeight is 1 and points to digest A
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(1)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 1 submits digest B
 		taskResult1, err := createSignedBN254TaskResult(taskId, operators[1], 1, payloadB, privateKeys[1], testReferenceTimestamp, l1CC)
@@ -555,9 +555,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
 
-		// Most common should still be A (both have count 1, A came first)
-		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// Winning should still be A (both have weight 1, A came first)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(1)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 2 submits digest A
 		taskResult2, err := createSignedBN254TaskResult(taskId, operators[2], 1, payloadA, privateKeys[2], testReferenceTimestamp, l1CC)
@@ -565,10 +565,10 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
 
-		// Now A should have count 2 and be most common
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
-		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.mostCommonDigest].response.TaskResult.Output)
+		// Now A should have weight 2 and be winning
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
+		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.winningDigest].response.TaskResult.Output)
 
 		// Operator 3 submits digest C
 		taskResult3, err := createSignedBN254TaskResult(taskId, operators[3], 1, payloadC, privateKeys[3], testReferenceTimestamp, l1CC)
@@ -576,9 +576,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
 
-		// A should still be most common with count 2
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// A should still be winning with weight 2
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 4 submits digest B
 		taskResult4, err := createSignedBN254TaskResult(taskId, operators[4], 1, payloadB, privateKeys[4], testReferenceTimestamp, l1CC)
@@ -586,9 +586,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
 
-		// A should still be most common (both A and B have count 2, but A reached 2 first)
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// A should still be winning (both A and B have weight 2, but A reached 2 first)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Verify digest counts through digest groups
 		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count)
@@ -664,11 +664,11 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult)
 		require.NoError(t, err)
 
-		// Verify most common digest tracking is set correctly
+		// Verify winning digest tracking is set correctly
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[digest])
-		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digest, agg.aggregatedOperators.mostCommonDigest)
-		assert.Equal(t, payload, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.mostCommonDigest].response.TaskResult.Output)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(1)))
+		assert.Equal(t, digest, agg.aggregatedOperators.winningDigest)
+		assert.Equal(t, payload, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.winningDigest].response.TaskResult.Output)
 
 		// Verify threshold is met
 		assert.True(t, agg.SigningThresholdMet())
@@ -760,9 +760,10 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 
-			// Most common count should increase with each submission
-			assert.Equal(t, i+1, agg.aggregatedOperators.mostCommonCount)
-			assert.Equal(t, digest, agg.aggregatedOperators.mostCommonDigest)
+			// Winning weight should increase with each submission (operators without Weights field get weight 0)
+			// Since these operators don't have Weights set, winning weight stays at 0
+			assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(0)))
+			assert.Equal(t, digest, agg.aggregatedOperators.winningDigest)
 		}
 
 		// Generate certificate
@@ -836,8 +837,8 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		}
 
 		// Verify tracking
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digest, agg.aggregatedOperators.mostCommonDigest)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digest, agg.aggregatedOperators.winningDigest)
 		assert.Equal(t, 2, agg.aggregatedOperators.totalSignerCount)
 
 		// Verify threshold is NOT met (only 2/5 operators participated, need 3/5 for 60%)
@@ -923,9 +924,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult0)
 		require.NoError(t, err)
 
-		// Verify mostCommonCount is 1 and points to digest A
-		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// Verify winningWeight is 1 and points to digest A
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(1)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 1 submits digest B
 		taskResult1, err := createSignedECDSATaskResult(taskId, operators[1], 1, payloadB, privateKeys[1], testReferenceTimestamp, l1CC)
@@ -933,9 +934,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult1)
 		require.NoError(t, err)
 
-		// Most common should still be A (both have count 1, A came first)
-		assert.Equal(t, 1, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// Winning should still be A (both have weight 1, A came first)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(1)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 2 submits digest A
 		taskResult2, err := createSignedECDSATaskResult(taskId, operators[2], 1, payloadA, privateKeys[2], testReferenceTimestamp, l1CC)
@@ -943,10 +944,10 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult2)
 		require.NoError(t, err)
 
-		// Now A should have count 2 and be most common
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
-		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.mostCommonDigest].response.TaskResult.Output)
+		// Now A should have weight 2 and be winning
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
+		assert.Equal(t, payloadA, agg.aggregatedOperators.digestGroups[agg.aggregatedOperators.winningDigest].response.TaskResult.Output)
 
 		// Operator 3 submits digest C
 		taskResult3, err := createSignedECDSATaskResult(taskId, operators[3], 1, payloadC, privateKeys[3], testReferenceTimestamp, l1CC)
@@ -954,9 +955,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult3)
 		require.NoError(t, err)
 
-		// A should still be most common with count 2
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// A should still be winning with weight 2
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Operator 4 submits digest B
 		taskResult4, err := createSignedECDSATaskResult(taskId, operators[4], 1, payloadB, privateKeys[4], testReferenceTimestamp, l1CC)
@@ -964,9 +965,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		err = agg.ProcessNewSignature(context.Background(), taskResult4)
 		require.NoError(t, err)
 
-		// A should still be most common (both A and B have count 2, but A reached 2 first)
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount)
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest)
+		// A should still be winning (both A and B have weight 2, but A reached 2 first)
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
 		// Verify digest counts
 		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count)
@@ -1047,9 +1048,9 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 			err = agg.ProcessNewSignature(context.Background(), taskResult)
 			require.NoError(t, err)
 
-			// Most common count should increase with each submission
-			assert.Equal(t, i+1, agg.aggregatedOperators.mostCommonCount)
-			assert.Equal(t, digest, agg.aggregatedOperators.mostCommonDigest)
+			// Winning weight should increase with each submission
+			assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(int64(i+1))))
+			assert.Equal(t, digest, agg.aggregatedOperators.winningDigest)
 		}
 
 		// Generate certificate
@@ -1417,11 +1418,12 @@ func Test_NonSignerOrdering_Weighted(t *testing.T) {
 						TaskResult:   &types.TaskResult{Output: []byte("dummy")},
 						OutputDigest: dummyDigest,
 					},
-					count: 0,
+					count:         0,
+					currentWeight: big.NewInt(0),
 				},
 			},
-			mostCommonDigest: dummyDigest,
-			mostCommonCount:  0,
+			winningDigest: dummyDigest,
+			winningWeight: big.NewInt(0),
 		}
 
 		cert, err := agg.GenerateFinalCertificate()
@@ -1627,11 +1629,11 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		assert.Equal(t, 1, agg.aggregatedOperators.digestGroups[digestB].count,
 			"Digest B should have 1 operator")
 
-		// The most common digest should be A
-		assert.Equal(t, digestA, agg.aggregatedOperators.mostCommonDigest,
-			"Most common digest should be A")
-		assert.Equal(t, 2, agg.aggregatedOperators.mostCommonCount,
-			"Most common count should be 2")
+		// The winning digest should be A
+		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest,
+			"Winning digest should be A")
+		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(200)),
+			"Winning weight should be 200 (2 operators * 100 weight each)")
 	})
 }
 
@@ -1764,7 +1766,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		assert.Contains(t, err.Error(), mismatchedTaskId)
 
 		// Verify that no signature was recorded
-		assert.Equal(t, 0, len(agg.ReceivedSignatures))
+		assert.Equal(t, 0, len(agg.OperatorSignatures))
 		assert.False(t, agg.SigningThresholdMet())
 
 		// Now submit with correct task ID to verify aggregator works properly
@@ -1775,7 +1777,7 @@ func Test_TaskIDMismatchValidation(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify signature was recorded
-		assert.Equal(t, 1, len(agg.ReceivedSignatures))
+		assert.Equal(t, 1, len(agg.OperatorSignatures))
 		assert.True(t, agg.SigningThresholdMet()) // 1/2 = 50% threshold met
 	})
 }

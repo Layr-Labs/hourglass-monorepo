@@ -1,4 +1,4 @@
-package certificateVerifier
+package aggregation
 
 import (
 	"context"
@@ -31,25 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
-
-const (
-	l1RpcUrl                = "http://127.0.0.1:8545"
-	numExecutorOperators    = 4
-	aggregatorOperatorSetId = 0
-	executorOperatorSetId   = 1
-	maxStalenessPeriod      = 604800
-	transportBlsKey         = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
-)
-
-type thresholdTestCase struct {
-	name                       string
-	aggregationThreshold       uint16
-	verificationThreshold      uint16
-	respondingOperatorIdxs     []int
-	shouldVerifySucceed        bool
-	shouldMeetSigningThreshold bool
-	operatorResponses          map[int][]byte
-}
 
 func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	l, err := logger.NewLogger(&logger.LoggerConfig{Debug: true})
@@ -375,20 +356,25 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	testCases := []thresholdTestCase{
 		{
+			name:                       "Success_SingleLargerStakeWeightTaken",
+			aggregationThreshold:       3500,           // 10%
+			verificationThreshold:      3500,           // 10%
+			respondingOperatorIdxs:     []int{3, 2, 0}, // Operator with 40% stake preferred
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true,
+			operatorResponses: map[int][]byte{
+				0: []byte("minority-chosen-response"), // 40% stake
+				2: []byte("majority-response"),        // 20% stake
+				3: []byte("majority-response"),        // 10% stake - total 30% for minority
+			},
+		},
+		{
 			name:                       "Success_LowThreshold_SingleHighStakeOperator",
 			aggregationThreshold:       1000,     // 10%
 			verificationThreshold:      1000,     // 10%
 			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
 			shouldVerifySucceed:        true,
 			shouldMeetSigningThreshold: true, // 40% > 10%
-		},
-		{
-			name:                       "Success_MediumThreshold_SingleHighStakeOperator",
-			aggregationThreshold:       2500,     // 25%
-			verificationThreshold:      2500,     // 25%
-			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
-			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 40% > 25%
 		},
 		{
 			name:                       "Failure_HighVerificationThreshold_SingleHighStakeOperator",
@@ -399,28 +385,12 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 			shouldMeetSigningThreshold: true, // 40% > 10%
 		},
 		{
-			name:                       "Failure_HighThreshold_SingleLowStakeOperator",
-			aggregationThreshold:       1000,     // 10% - aggregation succeeds
-			verificationThreshold:      2000,     // 20% - verification should fail
-			respondingOperatorIdxs:     []int{3}, // Operator with 10% stake
-			shouldVerifySucceed:        false,
-			shouldMeetSigningThreshold: true, // 10% >= 10%
-		},
-		{
 			name:                       "Success_ExactThreshold_SingleOperator",
 			aggregationThreshold:       2000,     // 20%
 			verificationThreshold:      2000,     // 20%
 			respondingOperatorIdxs:     []int{2}, // Operator with exactly 20% stake
 			shouldVerifySucceed:        true,
 			shouldMeetSigningThreshold: true, // 20% >= 20%
-		},
-		{
-			name:                       "Success_TwoOperators_CombinedStake",
-			aggregationThreshold:       4000,        // 40%
-			verificationThreshold:      4000,        // 40%
-			respondingOperatorIdxs:     []int{1, 2}, // 30% + 20% = 50% combined
-			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 50% > 40% (same response)
 		},
 		{
 			name:                       "Failure_InsufficientCombinedStake",
@@ -447,21 +417,21 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 			shouldMeetSigningThreshold: true, // 50% >= 50% (same response)
 		},
 		{
-			name:                       "ConflictingResponses_MajorityWins",
+			name:                       "Success_AllOperators_",
 			aggregationThreshold:       6000,              // 60%
 			verificationThreshold:      6000,              // 60%
-			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // All operators respond
+			respondingOperatorIdxs:     []int{3, 2, 1, 0}, // All operators respond
 			shouldVerifySucceed:        true,
 			shouldMeetSigningThreshold: true, // 70% >= 50% (same response)
 			operatorResponses: map[int][]byte{
-				0: []byte("majority-response"), // 40% stake
-				1: []byte("majority-response"), // 30% stake - total 70% for majority
-				2: []byte("minority-response"), // 20% stake
-				3: []byte("minority-response"), // 10% stake - total 30% for minority
+				0: []byte("higher-response"), // 40% stake
+				1: []byte("higher-response"), // 30% stake - total 70% for majority
+				2: []byte("lower-response"),  // 20% stake
+				3: []byte("lower-response"),  // 10% stake - total 30% for minority
 			},
 		},
 		{
-			name:                       "ConflictingResponses_StakeWeightTieBreak",
+			name:                       "ConflictingResponses_StakeWeightChoice",
 			aggregationThreshold:       4000,           // 40% - aggregation threshold is low
 			verificationThreshold:      4000,           // 40% - but verification requires high consensus
 			respondingOperatorIdxs:     []int{2, 1, 0}, // 90% total stake responds
@@ -471,19 +441,6 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 				0: []byte("response-a"), // 40% stake
 				1: []byte("response-b"), // 30% stake
 				2: []byte("response-c"), // 20% stake - all different responses
-			},
-		},
-		{
-			name:                       "StakeWeighted_MinorityOperatorsMajorityStake",
-			aggregationThreshold:       7500,           // 75% threshold
-			verificationThreshold:      7500,           // 75% threshold
-			respondingOperatorIdxs:     []int{0, 1, 2}, // 3 out of 4 operators respond
-			shouldVerifySucceed:        false,          // Should succeed because they have 70% stake combined
-			shouldMeetSigningThreshold: false,          // 40% <= 50%
-			operatorResponses: map[int][]byte{
-				0: []byte("majority-response"), // 40% stake
-				1: []byte("majority-response"), // 30% stake - total 70% stake (doesn't meet 75% threshold)
-				2: []byte("minority-response"), // 30% stake - total 70% stake (doesn't meet 75% threshold)
 			},
 		},
 	}

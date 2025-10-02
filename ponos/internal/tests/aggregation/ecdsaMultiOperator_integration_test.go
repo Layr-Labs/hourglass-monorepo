@@ -1,4 +1,4 @@
-package certificateVerifier
+package aggregation
 
 import (
 	"context"
@@ -30,16 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"go.uber.org/zap"
 )
-
-type ecdsaThresholdTestCase struct {
-	name                       string
-	aggregationThreshold       uint16
-	verificationThreshold      uint16
-	respondingOperatorIdxs     []int
-	shouldVerifySucceed        bool
-	shouldMeetSigningThreshold bool
-	operatorResponses          map[int][]byte
-}
 
 func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 
@@ -366,22 +356,43 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 	// Operator 1 (OperatorIndex=1): 30% stake
 	// Operator 2 (OperatorIndex=2): 20% stake
 	// Operator 3 (OperatorIndex=3): 10% stake
-	testCases := []ecdsaThresholdTestCase{
+	testCases := []thresholdTestCase{
 		{
-			name:                       "Success_SingleOperator_HighStake",
-			aggregationThreshold:       1000,     // 10%
-			verificationThreshold:      1000,     // 10%
-			respondingOperatorIdxs:     []int{0}, // Operator 0 with 40% stake
+			name:                       "Success_SingleLargerStakeWeightTaken",
+			aggregationThreshold:       3500,           // 10%
+			verificationThreshold:      3500,           // 10%
+			respondingOperatorIdxs:     []int{3, 2, 0}, // Operator with 40% stake preferred
 			shouldVerifySucceed:        true,
 			shouldMeetSigningThreshold: true,
+			operatorResponses: map[int][]byte{
+				0: []byte("minority-chosen-response"), // 40% stake
+				2: []byte("majority-response"),        // 20% stake
+				3: []byte("majority-response"),        // 10% stake - total 30% for minority
+			},
 		},
 		{
-			name:                       "Success_TwoOperators_CombinedStake",
-			aggregationThreshold:       4000,        // 40%
-			verificationThreshold:      4000,        // 40%
-			respondingOperatorIdxs:     []int{1, 2}, // 30% + 20% = 50% combined
+			name:                       "Success_LowThreshold_SingleHighStakeOperator",
+			aggregationThreshold:       1000,     // 10%
+			verificationThreshold:      1000,     // 10%
+			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
 			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 50% > 40%
+			shouldMeetSigningThreshold: true, // 40% > 10%
+		},
+		{
+			name:                       "Failure_HighVerificationThreshold_SingleHighStakeOperator",
+			aggregationThreshold:       1000,     // 10% - aggregation succeeds
+			verificationThreshold:      5000,     // 50% - verification should fail
+			respondingOperatorIdxs:     []int{0}, // Operator with 40% stake
+			shouldVerifySucceed:        false,
+			shouldMeetSigningThreshold: true, // 40% > 10%
+		},
+		{
+			name:                       "Success_ExactThreshold_SingleOperator",
+			aggregationThreshold:       2000,     // 20%
+			verificationThreshold:      2000,     // 20%
+			respondingOperatorIdxs:     []int{2}, // Operator with exactly 20% stake
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 20% >= 20%
 		},
 		{
 			name:                       "Failure_InsufficientCombinedStake",
@@ -389,7 +400,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 			verificationThreshold:      4000,        // 40% - verification should fail
 			respondingOperatorIdxs:     []int{2, 3}, // 20% + 10% = 30% combined
 			shouldVerifySucceed:        false,
-			shouldMeetSigningThreshold: true, // 30% > 20%
+			shouldMeetSigningThreshold: true, // 30% > 20% (same response)
 		},
 		{
 			name:                       "Success_AllOperators",
@@ -397,15 +408,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 			verificationThreshold:      9000,              // 90%
 			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // 100% combined
 			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 100% > 90%
-		},
-		{
-			name:                       "Failure_SingleLowStakeOperator",
-			aggregationThreshold:       500,      // 5% - aggregation succeeds
-			verificationThreshold:      2000,     // 20% - verification should fail
-			respondingOperatorIdxs:     []int{3}, // Operator 3 with 10% stake
-			shouldVerifySucceed:        false,
-			shouldMeetSigningThreshold: true, // 10% > 5%
+			shouldMeetSigningThreshold: true, // 100% > 90% (same response)
 		},
 		{
 			name:                       "Success_ExactThreshold_MultipleOperators",
@@ -413,72 +416,33 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 			verificationThreshold:      5000,        // 50%
 			respondingOperatorIdxs:     []int{0, 3}, // 40% + 10% = exactly 50%
 			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 50% >= 50%
+			shouldMeetSigningThreshold: true, // 50% >= 50% (same response)
 		},
 		{
-			name:                       "ConflictingResponses_MajorityWins",
+			name:                       "Success_AllOperators_",
 			aggregationThreshold:       6000,              // 60%
 			verificationThreshold:      6000,              // 60%
-			respondingOperatorIdxs:     []int{0, 1, 2, 3}, // All operators respond
+			respondingOperatorIdxs:     []int{3, 2, 1, 0}, // All operators respond
 			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 70% (majority) > 60%
+			shouldMeetSigningThreshold: true, // 70% >= 50% (same response)
 			operatorResponses: map[int][]byte{
-				0: []byte("majority-response"), // 40% stake
-				1: []byte("majority-response"), // 30% stake - total 70% for majority
-				2: []byte("minority-response"), // 20% stake
-				3: []byte("minority-response"), // 10% stake - total 30% for minority
+				0: []byte("higher-response"), // 40% stake
+				1: []byte("higher-response"), // 30% stake - total 70% for majority
+				2: []byte("lower-response"),  // 20% stake
+				3: []byte("lower-response"),  // 10% stake - total 30% for minority
 			},
 		},
 		{
-			name:                       "ConflictingResponses_InsufficientConsensus",
-			aggregationThreshold:       3000,           // 30% - aggregation threshold is low
-			verificationThreshold:      7000,           // 70% - but verification requires high consensus
-			respondingOperatorIdxs:     []int{0, 1, 2}, // 90% total stake responds
-			shouldVerifySucceed:        false,
-			shouldMeetSigningThreshold: true, // 40% (largest) > 30%
+			name:                       "ConflictingResponses_StakeWeightChoice",
+			aggregationThreshold:       4000,           // 40% - aggregation threshold is low
+			verificationThreshold:      4000,           // 40% - but verification requires high consensus
+			respondingOperatorIdxs:     []int{2, 1, 0}, // 90% total stake responds
+			shouldVerifySucceed:        true,
+			shouldMeetSigningThreshold: true, // 40% >= 40%
 			operatorResponses: map[int][]byte{
 				0: []byte("response-a"), // 40% stake
 				1: []byte("response-b"), // 30% stake
 				2: []byte("response-c"), // 20% stake - all different responses
-			},
-		},
-		{
-			name:                       "StakeWeighted_MinorityOperatorsMajorityStake",
-			aggregationThreshold:       7000,        // 70% threshold
-			verificationThreshold:      7000,        // 70% threshold
-			respondingOperatorIdxs:     []int{0, 1}, // 2 out of 4 operators respond
-			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 70% stake (40% + 30%) >= 70%
-			operatorResponses: map[int][]byte{
-				0: []byte("consensus-response"), // 40% stake
-				1: []byte("consensus-response"), // 30% stake - total 70% stake
-			},
-		},
-		{
-			name:                       "StakeWeighted_MajorityOperatorsMinorityStake",
-			aggregationThreshold:       4000,           // 40% threshold
-			verificationThreshold:      4000,           // 40% threshold
-			respondingOperatorIdxs:     []int{1, 2, 3}, // 3 out of 4 operators respond
-			shouldVerifySucceed:        false,
-			shouldMeetSigningThreshold: false, // No single response has 40% stake
-			operatorResponses: map[int][]byte{
-				1: []byte("response-a"), // 30% stake - most common response below 40%
-				2: []byte("response-b"), // 20% stake
-				3: []byte("response-c"), // 10% stake
-			},
-		},
-		{
-			name:                       "TieBreaking_HigherStakeWins",
-			aggregationThreshold:       3500,              // 35% threshold
-			verificationThreshold:      3500,              // 35% threshold
-			respondingOperatorIdxs:     []int{3, 2, 1, 0}, // All operators
-			shouldVerifySucceed:        true,
-			shouldMeetSigningThreshold: true, // 40% (single op) > 35%
-			operatorResponses: map[int][]byte{
-				0: []byte("high-stake-response"), // 40% stake - 1 operator wins
-				1: []byte("low-stake-response"),  // 30% stake
-				2: []byte("low-stake-response"),  // 20% stake - 2 operators total 50%
-				3: []byte("third-response"),      // 10% stake
 			},
 		},
 	}
@@ -509,7 +473,7 @@ func testECDSAWithThresholds(
 	operatorKeyMap map[string]*testUtils.WrappedKeyPair,
 	executorOperatorSetId uint32,
 	currentBlock uint64,
-	tc ecdsaThresholdTestCase,
+	tc thresholdTestCase,
 ) {
 	t.Logf("=== Testing: %s ===", tc.name)
 	t.Logf("Aggregation threshold: %d/10000 (%.1f%%)", tc.aggregationThreshold, float64(tc.aggregationThreshold)/100)

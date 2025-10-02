@@ -94,15 +94,18 @@ type digestGroup struct {
 
 	// Count of signatures for this digest
 	count int
+
+	// Total stake weight of all signers for this digest
+	currentWeight *big.Int
 }
 
 type aggregatedBN254Operators struct {
 	// Group signatures by the digest they signed
 	digestGroups map[[32]byte]*digestGroup
 
-	// Track the most common digest
-	mostCommonDigest [32]byte
-	mostCommonCount  int
+	// Track the digest with the highest stake weight
+	winningDigest [32]byte
+	winningWeight *big.Int
 
 	// Track total count of all signers across all digests
 	totalSignerCount int
@@ -200,15 +203,18 @@ type ecdsaDigestGroup struct {
 
 	// Count of signatures for this digest
 	count int
+
+	// Total stake weight of all signers for this digest
+	currentWeight *big.Int
 }
 
 type aggregatedECDSAOperators struct {
 	// Group signatures by the digest they signed
 	digestGroups map[[32]byte]*ecdsaDigestGroup
 
-	// Track the most common digest
-	mostCommonDigest [32]byte
-	mostCommonCount  int
+	// Track the digest with the highest stake weight
+	winningDigest [32]byte
+	winningWeight *big.Int
 }
 
 type AggregatedECDSACertificate struct {

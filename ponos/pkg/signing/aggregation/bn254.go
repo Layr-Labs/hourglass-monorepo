@@ -68,8 +68,8 @@ func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
 		return false
 	}
 
-	mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-	if mostCommonGroup == nil {
+	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.winningDigest]
+	if winningGroup == nil {
 		return false
 	}
 
@@ -84,14 +84,9 @@ func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
 		return false
 	}
 
-	signersStake := big.NewInt(0)
-	for signerAddr := range mostCommonGroup.signers {
-		for _, op := range tra.Operators {
-			if strings.EqualFold(op.Address, signerAddr) && len(op.Weights) > 0 {
-				signersStake.Add(signersStake, op.Weights[0])
-				break
-			}
-		}
+	signersStake := winningGroup.currentWeight
+	if signersStake == nil {
+		return false
 	}
 
 	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
@@ -159,9 +154,10 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &digestGroup{
-			signers:  make(map[string]*signerInfo),
-			response: rr,
-			count:    0,
+			signers:       make(map[string]*signerInfo),
+			response:      rr,
+			count:         0,
+			currentWeight: big.NewInt(0),
 		}
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
@@ -173,42 +169,30 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 	}
 	group.count++
 
-	tra.updateMostCommonResponse(group, outputTaskMessage)
+	if len(operator.Weights) > 0 {
+		group.currentWeight.Add(group.currentWeight, operator.Weights[0])
+	}
+
+	tra.updateWinningResponse(group, outputTaskMessage)
 
 	tra.aggregatedOperators.totalSignerCount++
 
 	return nil
 }
 
-func (tra *BN254TaskResultAggregator) updateMostCommonResponse(group *digestGroup, outputTaskMessage [32]byte) {
+func (tra *BN254TaskResultAggregator) updateWinningResponse(group *digestGroup, outputTaskMessage [32]byte) {
 
-	if group.count > tra.aggregatedOperators.mostCommonCount {
-		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-	} else if group.count == tra.aggregatedOperators.mostCommonCount && group.count > 0 {
-
-		currentGroupStake := tra.calculateGroupStake(group)
-
-		mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-		mostCommonGroupStake := tra.calculateGroupStake(mostCommonGroup)
-
-		if currentGroupStake.Cmp(mostCommonGroupStake) > 0 {
-			tra.aggregatedOperators.mostCommonCount = group.count
-			tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-		}
+	if tra.aggregatedOperators.winningWeight == nil {
+		tra.aggregatedOperators.winningWeight = new(big.Int).Set(group.currentWeight)
+		tra.aggregatedOperators.winningDigest = outputTaskMessage
+		return
 	}
-}
 
-func (tra *BN254TaskResultAggregator) calculateGroupStake(group *digestGroup) *big.Int {
-	totalStake := big.NewInt(0)
-	if group != nil {
-		for _, signer := range group.signers {
-			if signer.operator != nil && len(signer.operator.Weights) > 0 {
-				totalStake.Add(totalStake, signer.operator.Weights[0])
-			}
-		}
+	cmp := group.currentWeight.Cmp(tra.aggregatedOperators.winningWeight)
+	if cmp > 0 {
+		tra.aggregatedOperators.winningWeight = new(big.Int).Set(group.currentWeight)
+		tra.aggregatedOperators.winningDigest = outputTaskMessage
 	}
-	return totalStake
 }
 
 func (tra *BN254TaskResultAggregator) VerifyResponseSignature(
@@ -280,8 +264,8 @@ func (tra *BN254TaskResultAggregator) GenerateFinalCertificate() (*AggregatedBN2
 		return nil, fmt.Errorf("no signatures collected")
 	}
 
-	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-	if winningGroup == nil || winningGroup.count == 0 {
+	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.winningDigest]
+	if winningGroup == nil || len(winningGroup.signers) == 0 {
 		return nil, fmt.Errorf("no signatures for winning digest")
 	}
 
