@@ -286,7 +286,7 @@ func (em *AvsExecutionManager) getExecutorTaskConfig(
 
 	if taskConfig.Consensus.ConsensusType != STAKE_PROPORTION_THRESHOLD {
 		return nil, fmt.Errorf(
-			"invalid consensus type %d for task %d",
+			"invalid consensus type %d for task %s",
 			taskConfig.Consensus.ConsensusType,
 			task.TaskId,
 		)
