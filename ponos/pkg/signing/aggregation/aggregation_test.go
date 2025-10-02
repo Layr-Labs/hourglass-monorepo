@@ -17,7 +17,7 @@ import (
 
 	"github.com/Layr-Labs/crypto-libs/pkg/signing"
 	"github.com/ethereum/go-ethereum/common"
-	
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	cryptoLibsEcdsa "github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/types"
