@@ -69,26 +69,16 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
-	// For ECDSA operators, use their actual transaction private keys (not freshly generated)
-	// Parse the operator transaction private keys into ECDSA PrivateKey objects
-	operatorPrivateKeyStrings := []string{
-		chainConfig.ExecOperatorAccountPk,
-		chainConfig.ExecOperator2AccountPk,
-		chainConfig.ExecOperator3AccountPk,
-		chainConfig.ExecOperator4AccountPk,
+	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(
+		t,
+		config.CurveTypeBN254,
+		config.CurveTypeECDSA,
+		chainConfig,
+	)
+	if err != nil {
+		t.Fatalf("Failed to get keys from chain config: %v", err)
 	}
-
-	execKeys := make([]*testUtils.WrappedKeyPair, numExecutorOperators)
-	for i, pkHex := range operatorPrivateKeyStrings {
-		ecdsaPk, err := cryptoLibsEcdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(pkHex, "0x"))
-		if err != nil {
-			t.Fatalf("Failed to parse ECDSA private key for operator %d: %v", i, err)
-		}
-		execKeys[i] = &testUtils.WrappedKeyPair{
-			PrivateKey: ecdsaPk,
-			PublicKey:  ecdsaPk.Public(),
-		}
-	}
+	execKeys = execKeys[:numExecutorOperators]
 
 	// Create operator key map for lookup
 	operatorKeyMap := make(map[string]*testUtils.WrappedKeyPair)
@@ -129,9 +119,9 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		pollerEthClient = l1EthereumClient
 	} else {
 		pollerConfig = &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:              config.ChainId_BaseSepoliaAnvil,
+			ChainId:              config.ChainId_BaseAnvil,
 			PollingInterval:      time.Duration(10) * time.Second,
-			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseSepoliaAnvil),
+			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseAnvil),
 			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l2EthereumClient
@@ -197,6 +187,10 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	}
 	anvilCancel()
 	t.Logf("Anvil is running")
+
+	if networkTarget == NetworkTarget_L2 {
+		testUtils.SyncL2TimestampWithL1(t, l1EthClient, l2EthClient)
+	}
 
 	l1ChainId, err := l1EthClient.ChainID(ctx)
 	if err != nil {
@@ -282,73 +276,77 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
 	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
 
-	// Create operator configs for aggregator + 4 executors
-	operatorConfigs := []*testUtils.OperatorConfig{
+	aggregator := &operator.Operator{
+		TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+		SigningPrivateKey:     aggKey.PrivateKey,
+		Curve:                 config.CurveTypeBN254,
+		OperatorSetIds:        []uint32{aggOpsetId},
+	}
+
+	executors := []testUtils.ExecutorWithSocket{
 		{
-			Operator: &operator.Operator{
+			Executor: &operator.Operator{
 				TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
 				SigningPrivateKey:     execKeys[0].PrivateKey,
 				Curve:                 config.CurveTypeECDSA,
 				OperatorSetIds:        []uint32{execOpsetId},
 			},
-			Socket:          fmt.Sprintf("localhost:%d", 9001),
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
+			Socket: fmt.Sprintf("localhost:%d", 9001),
 		},
 		{
-			Operator: &operator.Operator{
+			Executor: &operator.Operator{
 				TransactionPrivateKey: chainConfig.ExecOperator2AccountPk,
 				SigningPrivateKey:     execKeys[1].PrivateKey,
 				Curve:                 config.CurveTypeECDSA,
 				OperatorSetIds:        []uint32{execOpsetId},
 			},
-			Socket:          fmt.Sprintf("localhost:%d", 9002),
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
+			Socket: fmt.Sprintf("localhost:%d", 9002),
 		},
 		{
-			Operator: &operator.Operator{
+			Executor: &operator.Operator{
 				TransactionPrivateKey: chainConfig.ExecOperator3AccountPk,
 				SigningPrivateKey:     execKeys[2].PrivateKey,
 				Curve:                 config.CurveTypeECDSA,
 				OperatorSetIds:        []uint32{execOpsetId},
 			},
-			Socket:          fmt.Sprintf("localhost:%d", 9003),
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
+			Socket: fmt.Sprintf("localhost:%d", 9003),
 		},
 		{
-			Operator: &operator.Operator{
+			Executor: &operator.Operator{
 				TransactionPrivateKey: chainConfig.ExecOperator4AccountPk,
 				SigningPrivateKey:     execKeys[3].PrivateKey,
 				Curve:                 config.CurveTypeECDSA,
 				OperatorSetIds:        []uint32{execOpsetId},
 			},
-			Socket:          fmt.Sprintf("localhost:%d", 9004),
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
+			Socket: fmt.Sprintf("localhost:%d", 9004),
 		},
 	}
 
-	err = testUtils.RegisterMultipleOperators(
+	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
+		chainConfig,
+		config.ChainId_EthereumAnvil,
 		l1EthClient,
-		chainConfig.AVSAccountAddress,
-		chainConfig.AVSAccountPrivateKey,
-		operatorConfigs,
+		aggregator,
+		executors,
 		l,
 	)
 	if err != nil {
-		t.Fatalf("Failed to register operators: %v", err)
+		t.Fatalf("Failed to setup operator peering: %v", err)
 	}
 
 	time.Sleep(time.Second * 6)
 
 	// Delegate stake to aggregator + 4 executors with different weights
-	// Stake weights: 2, 1.5, 1, 0.5 ETH = total 5 ETH
-	// Percentages: 40%, 30%, 20%, 10%
 	stakeConfigs := []*testUtils.StakerDelegationConfig{
-		// Executor 1: 40% stake (2 ETH)
+		{
+			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
+			StakerAddress:      chainConfig.AggStakerAccountAddress,
+			OperatorPrivateKey: chainConfig.OperatorAccountPrivateKey,
+			OperatorAddress:    chainConfig.OperatorAccountAddress,
+			OperatorSetId:      aggOpsetId,
+			StrategyAddress:    testUtils.Strategy_WETH,
+		},
 		{
 			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStakerAccountAddress,
@@ -357,7 +355,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 2: 30% stake (1.5 ETH)
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker2AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker2AccountAddress,
@@ -366,7 +363,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 3: 20% stake (1 ETH)
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker3AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker3AccountAddress,
@@ -375,7 +371,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 4: 10% stake (0.5 ETH)
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker4AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker4AccountAddress,
@@ -399,12 +394,13 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	}
 
 	t.Logf("All operator set IDs: %v", allOperatorSetIds)
-	// update current block to account for transport
 	l.Sugar().Infow("Waiting for stake delegations to be processed on-chain...")
 	time.Sleep(time.Second * 3)
 
-	// BN254 table calculator for aggregator operator set
-	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get BN254 calculator address: %v", err)
+	}
 	t.Logf(
 		"Creating generation reservation with BN254 table calculator %s for aggregator operator set %d",
 		bn254CalculatorAddr.Hex(),
@@ -416,15 +412,17 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		avsAddr,
 		aggOpsetId,
 		bn254CalculatorAddr,
-		avsAddr, // AVS is the owner
+		avsAddr,
 		maxStalenessPeriod,
 	)
 	if err != nil {
 		t.Logf("Warning: Failed to create generation reservation for aggregator: %v", err)
 	}
 
-	// ECDSA table calculator for executor operator set
-	ecdsaCalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeECDSA)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get ECDSA calculator address: %v", err)
+	}
 	t.Logf(
 		"Creating generation reservation with ECDSA table calculator %s for executor operator set %d",
 		ecdsaCalculatorAddr.Hex(),
@@ -445,16 +443,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	time.Sleep(time.Second * 3)
 
-	currentBlock, err := l1EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get current block number: %v", err)
-	}
-	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlock, allOperatorSetIds)
-
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 
-	// Prepare operator key info for table transport with ECDSA keys and custom weights
-	// Stake weights: 2, 1.5, 1, 0.5 ETH (40%, 30%, 20%, 10%)
 	operatorAddressList := []string{
 		chainConfig.ExecOperatorAccountAddress,
 		chainConfig.ExecOperator2AccountAddress,
@@ -463,14 +453,12 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	}
 
 	stakeWeights := []*big.Int{
-		big.NewInt(2000000000000000000), // 2 ETH = 40%
-		big.NewInt(1500000000000000000), // 1.5 ETH = 30%
-		big.NewInt(1000000000000000000), // 1 ETH = 20%
-		big.NewInt(500000000000000000),  // 0.5 ETH = 10%
+		big.NewInt(400000000000000000), // 0.4e18 = 40%
+		big.NewInt(300000000000000000), // 0.3e18 = 30%
+		big.NewInt(200000000000000000), // 0.2e18 = 20%
+		big.NewInt(100000000000000000), // 0.1e18 = 10%
 	}
 
-	// For ECDSA operators, use their actual transaction private keys
-	// (not freshly generated keys) so the derived address matches the operator's registered address
 	operatorPrivateKeys := []string{
 		chainConfig.ExecOperatorAccountPk,
 		chainConfig.ExecOperator2AccountPk,
@@ -491,8 +479,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	var l2RpcUrl string
 	var l2ChainId uint64
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(11155111), // eth sepolia
-		big.NewInt(84532),    // base sepolia
+		big.NewInt(1),
+		big.NewInt(8453),
 	}
 
 	if networkTarget == NetworkTarget_L1 {
@@ -502,7 +490,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		l2ChainId = 31338
 	}
 
-	// Transport tables with multi-operator configuration
 	transportConfig := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  L1RpcUrl,
@@ -523,17 +510,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	if err != nil {
 		t.Fatalf("Failed to transport stake tables: %v", err)
 	}
-
-	l.Sugar().Infow("Sleeping for 6 seconds to allow table transport to complete")
-	time.Sleep(time.Second * 6)
-
-	// Debug: Query the operator table after transport to verify weights
-	l.Sugar().Infow("------------------------ Verifying transported operator table ------------------------")
-	currentBlockAfterTransport, err := l1EthClient.BlockNumber(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get current block number after transport: %v", err)
-	}
-	testUtils.DebugOpsetData(t, chainConfig, eigenlayerContractAddrs, l1EthClient, currentBlockAfterTransport, []uint32{execOpsetId})
 
 	l.Sugar().Infow("------------------------ Setting up mailbox ------------------------")
 
@@ -580,8 +556,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	opManagerChainIds := []config.ChainId{config.ChainId_EthereumAnvil}
 
 	if networkTarget == NetworkTarget_L2 {
-		callerMap[config.ChainId_BaseSepoliaAnvil] = l2CC
-		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseSepoliaAnvil)
+		callerMap[config.ChainId_BaseAnvil] = l2CC
+		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseAnvil)
 	}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
@@ -620,7 +596,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				return
 			}
 
-			operators := []*aggregation.Operator[common.Address]{}
+			var operators []*aggregation.Operator[common.Address]
 			for _, peer := range operatorPeersWeight.Operators {
 				opset, err := peer.GetOperatorSet(task.OperatorSetId)
 				if err != nil {
@@ -647,7 +623,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 				task.TaskId,
 				operatorPeersWeight.RootReferenceTimestamp,
 				task.OperatorSetId,
-				6667,
+				10_000,
 				l1CC,
 				task.Payload,
 				task.DeadlineUnixSeconds,

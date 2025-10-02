@@ -14,12 +14,12 @@ import {IECDSATableCalculator} from "@eigenlayer-middleware/src/interfaces/IECDS
 import {BLSApkRegistry} from "@eigenlayer-middleware/src/BLSApkRegistry.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a);
+    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
+
     IBN254TableCalculator public BN254_TABLE_CALCULATOR =
         IBN254TableCalculator(0xa19E3B00cf4aC46B5e6dc0Bbb0Fb0c86D0D65603);
-
     IECDSATableCalculator public ECDSA_TABLE_CALCULATOR =
-        IECDSATableCalculator(0xaCB5DE6aa94a1908E6FA577C2ade65065333B450);
+        IECDSATableCalculator(0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa);
 
     function setUp() public {}
 

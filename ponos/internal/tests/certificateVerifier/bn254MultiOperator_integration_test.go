@@ -33,11 +33,12 @@ import (
 )
 
 const (
-	l1RpcUrl              = "http://127.0.0.1:8545"
-	numExecutorOperators  = 4
-	executorOperatorSetId = 1
-	maxStalenessPeriod    = 604800
-	transportBlsKey       = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
+	l1RpcUrl                = "http://127.0.0.1:8545"
+	numExecutorOperators    = 4
+	aggregatorOperatorSetId = 0
+	executorOperatorSetId   = 1
+	maxStalenessPeriod      = 604800
+	transportBlsKey         = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 )
 
 type thresholdTestCase struct {
@@ -64,16 +65,20 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Fatalf("Failed to read chain config: %v", err)
 	}
 
-	execKeys := make([]*testUtils.WrappedKeyPair, 4)
 	operatorKeyMap := make(map[string]*testUtils.WrappedKeyPair)
 
-	for index := 0; index < numExecutorOperators; index++ {
-		_, execKeysBN254, _, err := testUtils.GetKeysForCurveType(t, config.CurveTypeBN254, chainConfig)
-		if err != nil {
-			t.Fatalf("Failed to get BN254 keys for executor %d: %v", index+1, err)
-		}
-		execKeys[index] = execKeysBN254
+	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(
+		t,
+		config.CurveTypeECDSA, // Aggregator curve
+		config.CurveTypeBN254, // Executor curve
+		chainConfig,
+	)
+	if err != nil {
+		t.Fatalf("Failed to get keys: %v", err)
 	}
+
+	// Use only the first 4 executor keys
+	execKeys = execKeys[:numExecutorOperators]
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
 		BaseUrl:   l1RpcUrl,
@@ -156,33 +161,23 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Fatalf("Failed to configure executor operator set %d: %v", executorOperatorSetId, err)
 	}
 
+	_, err = avsConfigCaller.ConfigureAVSOperatorSet(
+		ctx,
+		common.HexToAddress(chainConfig.AVSAccountAddress),
+		aggregatorOperatorSetId,
+		config.CurveTypeECDSA,
+	)
+	if err != nil {
+		t.Fatalf("Failed to configure executor operator set %d: %v", aggregatorOperatorSetId, err)
+	}
+
 	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
 
-	operators := []*operator.Operator{
-		{
-			TransactionPrivateKey: chainConfig.ExecOperatorAccountPk,
-			SigningPrivateKey:     execKeys[0].PrivateKey,
-			Curve:                 config.CurveTypeBN254,
-			OperatorSetIds:        []uint32{executorOperatorSetId},
-		},
-		{
-			TransactionPrivateKey: chainConfig.ExecOperator2AccountPk,
-			SigningPrivateKey:     execKeys[1].PrivateKey,
-			Curve:                 config.CurveTypeBN254,
-			OperatorSetIds:        []uint32{executorOperatorSetId},
-		},
-		{
-			TransactionPrivateKey: chainConfig.ExecOperator3AccountPk,
-			SigningPrivateKey:     execKeys[2].PrivateKey,
-			Curve:                 config.CurveTypeBN254,
-			OperatorSetIds:        []uint32{executorOperatorSetId},
-		},
-		{
-			TransactionPrivateKey: chainConfig.ExecOperator4AccountPk,
-			SigningPrivateKey:     execKeys[3].PrivateKey,
-			Curve:                 config.CurveTypeBN254,
-			OperatorSetIds:        []uint32{executorOperatorSetId},
-		},
+	operatorPkList := []string{
+		chainConfig.ExecOperatorAccountPk,
+		chainConfig.ExecOperator2AccountPk,
+		chainConfig.ExecOperator3AccountPk,
+		chainConfig.ExecOperator4AccountPk,
 	}
 
 	operatorKeyMap[strings.ToLower(chainConfig.ExecOperatorAccountAddress)] = execKeys[0]
@@ -190,64 +185,115 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	operatorKeyMap[strings.ToLower(chainConfig.ExecOperator3AccountAddress)] = execKeys[2]
 	operatorKeyMap[strings.ToLower(chainConfig.ExecOperator4AccountAddress)] = execKeys[3]
 
-	operatorConfigs := make([]*testUtils.OperatorConfig, len(operators))
-	for i, op := range operators {
-		operatorConfigs[i] = &testUtils.OperatorConfig{
-			Operator:        op,
-			Socket:          fmt.Sprintf("localhost:%d", 9000+i),
-			MetadataUri:     "https://some-metadata-uri.com",
-			AllocationDelay: 1,
+	executorsWithSockets := make([]testUtils.ExecutorWithSocket, numExecutorOperators)
+	for i := 0; i < numExecutorOperators; i++ {
+		executorsWithSockets[i] = testUtils.ExecutorWithSocket{
+			Executor: &operator.Operator{
+				TransactionPrivateKey: operatorPkList[i],
+				SigningPrivateKey:     execKeys[i].PrivateKey,
+				Curve:                 config.CurveTypeBN254,
+				OperatorSetIds:        []uint32{executorOperatorSetId},
+			},
+			Socket: fmt.Sprintf("localhost:%d", 9000+i),
 		}
 	}
 
-	err = testUtils.RegisterMultipleOperators(
+	aggregatorOperator := &operator.Operator{
+		TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
+		SigningPrivateKey:     aggKey.PrivateKey,
+		Curve:                 config.CurveTypeECDSA,
+		OperatorSetIds:        []uint32{aggregatorOperatorSetId},
+	}
+
+	t.Logf("Setting up operator peering with %d executors", numExecutorOperators)
+	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
+		chainConfig,
+		config.ChainId(l1ChainId.Uint64()),
 		l1EthClient,
-		chainConfig.AVSAccountAddress,
-		chainConfig.AVSAccountPrivateKey,
-		operatorConfigs,
+		aggregatorOperator,
+		executorsWithSockets,
 		l,
 	)
-
 	if err != nil {
-		t.Fatalf("Failed to register operators: %v", err)
+		t.Fatalf("Failed to set up operator peering: %v", err)
+	}
+
+	t.Log("Verifying operator registration in AllocationManager")
+	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	if err != nil {
+		t.Fatalf("Failed to get current block number: %v", err)
+	}
+
+	registeredOperators, err := l1CC.GetOperatorSetMembersWithPeering(
+		chainConfig.AVSAccountAddress,
+		executorOperatorSetId,
+		currentBlock,
+	)
+	if err != nil {
+		t.Logf("Failed to get operator set members: %v", err)
+	} else {
+		t.Logf("Found %d operators registered to operator set %d at block %d:",
+			len(registeredOperators), executorOperatorSetId, currentBlock)
+		for i, op := range registeredOperators {
+			t.Logf("  Operator %d: %s", i, op.OperatorAddress)
+		}
+	}
+
+	// Also log what operators we expect to be registered
+	t.Log("Expected operator addresses:")
+	for i, exec := range executorsWithSockets {
+		operatorAddr, _ := exec.Executor.DeriveAddress()
+		t.Logf("  Executor %d: %s", i, operatorAddr.Hex())
 	}
 
 	time.Sleep(time.Second * 6)
 
-	stakeConfigs := []*testUtils.StakerDelegationConfig{
-		{
-			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
-			StakerAddress:      chainConfig.ExecStakerAccountAddress,
-			OperatorPrivateKey: chainConfig.ExecOperatorAccountPk,
-			OperatorAddress:    chainConfig.ExecOperatorAccountAddress,
+	// ------------------------------------------------------------------------
+	// Delegate stake to all operators
+	// ------------------------------------------------------------------------
+	t.Log("Delegating stake to executor operators")
+
+	// Build stake configs for all 4 executors
+	stakerPkList := []string{
+		chainConfig.ExecStakerAccountPrivateKey,
+		chainConfig.ExecStaker2AccountPrivateKey,
+		chainConfig.ExecStaker3AccountPrivateKey,
+		chainConfig.ExecStaker4AccountPrivateKey,
+	}
+	stakerAddrList := []string{
+		chainConfig.ExecStakerAccountAddress,
+		chainConfig.ExecStaker2AccountAddress,
+		chainConfig.ExecStaker3AccountAddress,
+		chainConfig.ExecStaker4AccountAddress,
+	}
+	operatorAddrList := []string{
+		chainConfig.ExecOperatorAccountAddress,
+		chainConfig.ExecOperator2AccountAddress,
+		chainConfig.ExecOperator3AccountAddress,
+		chainConfig.ExecOperator4AccountAddress,
+	}
+
+	// Define stake weights: 2, 1.5, 1, 0.5 = 5 total
+	// Operator 0: 40%, Operator 1: 30%, Operator 2: 20%, Operator 3: 10%
+	stakeWeights := []uint64{
+		400000000000000000, // 40% of total
+		300000000000000000, // 30%
+		200000000000000000, // 20%
+		100000000000000000, // 10%
+	}
+
+	stakeConfigs := make([]*testUtils.StakerDelegationConfig, numExecutorOperators)
+	for i := 0; i < numExecutorOperators; i++ {
+		stakeConfigs[i] = &testUtils.StakerDelegationConfig{
+			StakerPrivateKey:   stakerPkList[i],
+			StakerAddress:      stakerAddrList[i],
+			OperatorPrivateKey: operatorPkList[i],
+			OperatorAddress:    operatorAddrList[i],
 			OperatorSetId:      executorOperatorSetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
-		},
-		{
-			StakerPrivateKey:   chainConfig.ExecStaker2AccountPrivateKey,
-			StakerAddress:      chainConfig.ExecStaker2AccountAddress,
-			OperatorPrivateKey: chainConfig.ExecOperator2AccountPk,
-			OperatorAddress:    chainConfig.ExecOperator2AccountAddress,
-			OperatorSetId:      executorOperatorSetId,
-			StrategyAddress:    testUtils.Strategy_STETH,
-		},
-		{
-			StakerPrivateKey:   chainConfig.ExecStaker3AccountPrivateKey,
-			StakerAddress:      chainConfig.ExecStaker3AccountAddress,
-			OperatorPrivateKey: chainConfig.ExecOperator3AccountPk,
-			OperatorAddress:    chainConfig.ExecOperator3AccountAddress,
-			OperatorSetId:      executorOperatorSetId,
-			StrategyAddress:    testUtils.Strategy_STETH,
-		},
-		{
-			StakerPrivateKey:   chainConfig.ExecStaker4AccountPrivateKey,
-			StakerAddress:      chainConfig.ExecStaker4AccountAddress,
-			OperatorPrivateKey: chainConfig.ExecOperator4AccountPk,
-			OperatorAddress:    chainConfig.ExecOperator4AccountAddress,
-			OperatorSetId:      executorOperatorSetId,
-			StrategyAddress:    testUtils.Strategy_STETH,
-		},
+			Magnitude:          stakeWeights[i],
+		}
 	}
 
 	err = testUtils.DelegateStakeToMultipleOperators(
@@ -258,14 +304,17 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		l1EthClient,
 		l,
 	)
-
 	if err != nil {
 		t.Fatalf("Failed to delegate stake to operators: %v", err)
 	}
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
-	bn254CalculatorAddr := avsConfigCaller.GetTableCalculatorAddress(config.CurveTypeBN254)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	if err != nil {
+		t.Fatalf("Failed to get table calculator address: %v", err)
+	}
+
 	t.Logf(
 		"Creating generation reservation with BN254 table calculator %s for executor operator set %d",
 		bn254CalculatorAddr.Hex(),
@@ -285,12 +334,10 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Logf("Warning: Failed to create generation reservation: %v", err)
 	}
 
-	time.Sleep(time.Second * 3)
-
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(11155111), // Sepolia
-		big.NewInt(84532),    // Base Sepolia
-		big.NewInt(31338),    // L2 anvil
+		big.NewInt(1),
+		big.NewInt(8453),
+		big.NewInt(31338),
 	}
 
 	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))
@@ -301,20 +348,10 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		chainConfig.ExecOperator4AccountAddress,
 	}
 
-	// Stake weights: 2, 1.5, 1, 0.5 = 5 total
-	// Operator 0: 40%, Operator 1: 30%, Operator 2: 20%, Operator 3: 10%
-	stakeWeights := []*big.Int{
-		big.NewInt(2000000000000000000),
-		big.NewInt(1500000000000000000),
-		big.NewInt(1000000000000000000),
-		big.NewInt(500000000000000000),
-	}
-
 	for i, keyPair := range execKeys {
 		blsPrivKey := keyPair.PrivateKey.(*bn254.PrivateKey)
 		blsInfos[i] = tableTransporter.OperatorKeyInfo{
 			PrivateKeyHex:   fmt.Sprintf("0x%x", blsPrivKey.Bytes()),
-			Weights:         []*big.Int{stakeWeights[i]},
 			OperatorAddress: common.HexToAddress(operatorAddressList[i]),
 		}
 	}
@@ -338,9 +375,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
 	require.NoError(t, err, "Failed to transport stake tables")
 
-	time.Sleep(time.Second * 6)
-
-	currentBlock, err := l1EthClient.BlockNumber(ctx)
+	currentBlock, err = l1EthClient.BlockNumber(ctx)
 	if err != nil {
 		t.Fatalf("Failed to get current block number: %v", err)
 	}
@@ -655,7 +690,7 @@ func testBN254WithThresholds(
 			TaskId:          taskId,
 			AvsAddress:      chainConfig.AVSAccountAddress,
 			OperatorSetId:   executorOperatorSetId,
-			Output:          operatorResponse, // Use the operator's specific response
+			Output:          operatorResponse,
 			OperatorAddress: respondingOperator.Address,
 			ResultSignature: resultSig,
 			AuthSignature:   authSig,

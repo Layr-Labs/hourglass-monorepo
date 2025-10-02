@@ -21,8 +21,10 @@ import (
 )
 
 const (
-	L1Web3SignerUrl = "http://localhost:9100"
-	L2Web3SignerUrl = "http://localhost:9101"
+	L1Web3SignerUrl                  = "http://localhost:9100"
+	L2Web3SignerUrl                  = "http://localhost:9101"
+	pinnedL1BlockHeightFromAnvilDump = "23477916"
+	pinnedL2BlockHeightFromAnvilDump = "36235613"
 )
 
 func GetProjectRootPath() string {
@@ -128,7 +130,7 @@ func WaitForAnvil(
 	errorsChan chan error,
 ) {
 	defer anvilWg.Done()
-	time.Sleep(2 * time.Second) // give anvil some time to start
+	time.Sleep(2 * time.Second)
 
 	for {
 		select {
@@ -160,10 +162,10 @@ func KillallAnvils() error {
 }
 
 func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	forkUrl := "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/"
+	forkUrl := "https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9"
 	portNumber := "8545"
 	blockTime := "2"
-	forkBlockNumber := "9259025"
+	forkBlockNumber := pinnedL1BlockHeightFromAnvilDump
 	chainId := "31337"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
@@ -190,10 +192,10 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 }
 
 func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
-	forkUrl := "https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/"
+	forkUrl := "https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/"
 	portNumber := "9545"
 	blockTime := "2"
-	forkBlockNumber := "31408197"
+	forkBlockNumber := pinnedL2BlockHeightFromAnvilDump
 	chainId := "31338"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))

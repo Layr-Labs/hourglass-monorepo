@@ -8,11 +8,11 @@ import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/Operato
 contract CheckL2State is Script {
     function run() public view {
         console.log("\n========================================");
-        console.log("L2 STATE CHECK (BASE SEPOLIA FORK)");
+        console.log("L2 STATE CHECK (BASE MAINNET FORK)");
         console.log("========================================\n");
 
         // Check CrossChainRegistry getSupportedChains
-        address crossChainRegistry = 0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a;
+        address crossChainRegistry = 0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b;
         console.log("CrossChainRegistry:", crossChainRegistry);
 
         (bool success, bytes memory data) =
@@ -31,7 +31,7 @@ contract CheckL2State is Script {
         }
 
         // Check OperatorTableUpdater
-        address operatorTableUpdater = 0xB02A15c6Bd0882b35e9936A9579f35FB26E11476;
+        address operatorTableUpdater = 0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5;
         console.log("\nOperatorTableUpdater:", operatorTableUpdater);
 
         (success, data) = operatorTableUpdater.staticcall(abi.encodeWithSignature("getLatestReferenceTimestamp()"));

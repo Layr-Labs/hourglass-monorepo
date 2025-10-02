@@ -2,9 +2,42 @@ package config
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"slices"
+
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
+type TableCalculatorAddresses struct {
+	BN254 string
+	ECDSA string
+}
+
+var TableCalculatorsByChain = map[ChainId]*TableCalculatorAddresses{
+	ChainId_EthereumMainnet: {
+		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
+		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
+	},
+	ChainId_BaseMainnet: {
+		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
+		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
+	},
+	ChainId_EthereumAnvil: {
+		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
+		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
+	},
+	ChainId_BaseAnvil: {
+		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
+		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
+	},
+	ChainId_EthereumSepolia: {
+		BN254: "0x797d076aB96a5d4104062C15c727447fD8b71eB0",
+		ECDSA: "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38",
+	},
+	ChainId_BaseSepolia: {
+		BN254: "0x797d076aB96a5d4104062C15c727447fD8b71eB0",
+		ECDSA: "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38",
+	},
+}
 
 type CurveType string
 
@@ -50,13 +83,14 @@ func ConvertSolidityEnumToCurveType(enumValue uint8) (CurveType, error) {
 type ChainId uint
 
 const (
-	ChainId_EthereumMainnet  ChainId = 1
-	ChainId_EthereumHolesky  ChainId = 17000
-	ChainId_EthereumHoodi    ChainId = 560048
-	ChainId_EthereumSepolia  ChainId = 11155111
-	ChainId_BaseSepolia      ChainId = 84532
-	ChainId_EthereumAnvil    ChainId = 31337
-	ChainId_BaseSepoliaAnvil ChainId = 31338
+	ChainId_EthereumMainnet ChainId = 1
+	ChainId_EthereumHolesky ChainId = 17000
+	ChainId_EthereumHoodi   ChainId = 560048
+	ChainId_EthereumSepolia ChainId = 11155111
+	ChainId_BaseSepolia     ChainId = 84532
+	ChainId_BaseMainnet     ChainId = 8453
+	ChainId_EthereumAnvil   ChainId = 31337
+	ChainId_BaseAnvil       ChainId = 31338
 )
 
 const (
@@ -97,6 +131,21 @@ type CoreContractAddresses struct {
 }
 
 var (
+	ethereumMainnetCoreContracts = &CoreContractAddresses{
+		AllocationManager:        "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+		DelegationManager:        "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+		ReleaseManager:           "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+		TaskMailbox:              "0x132b466d9d5723531F68797519DfED701aC2C749",
+		KeyRegistrar:             "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+		CrossChainRegistry:       "0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b",
+		ECDSACertificateVerifier: "0xd0930ee96D07de4F9d493c259232222e46B6EC25",
+		BN254CertificateVerifier: "0x3F55654b2b2b86bB11bE2f72657f9C33bf88120A",
+	}
+	baseMainnetCoreContracts = &CoreContractAddresses{
+		TaskMailbox:              "0x132b466d9d5723531F68797519DfED701aC2C749",
+		ECDSACertificateVerifier: "0xd0930ee96D07de4F9d493c259232222e46B6EC25",
+		BN254CertificateVerifier: "0x3F55654b2b2b86bB11bE2f72657f9C33bf88120A",
+	}
 	ethereumSepoliaCoreContracts = &CoreContractAddresses{
 		AllocationManager:        "0x42583067658071247ec8ce0a516a58f682002d07",
 		DelegationManager:        "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
@@ -114,10 +163,8 @@ var (
 	}
 
 	CoreContracts = map[ChainId]*CoreContractAddresses{
-		ChainId_EthereumMainnet: {
-			AllocationManager: "0x42583067658071247ec8CE0A516A58f682002d07",
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-		},
+		ChainId_EthereumMainnet: ethereumMainnetCoreContracts,
+		ChainId_BaseMainnet:     baseMainnetCoreContracts,
 		ChainId_EthereumHolesky: {
 			AllocationManager: "0x78469728304326cbc65f8f95fa756b0b73164462",
 			DelegationManager: "0xa44151489861fe9e3055d95adc98fbd462b948e7",
@@ -126,10 +173,10 @@ var (
 			AllocationManager: "",
 			DelegationManager: "",
 		},
-		ChainId_EthereumSepolia:  ethereumSepoliaCoreContracts,
-		ChainId_BaseSepolia:      baseSepoliaCoreContracts,
-		ChainId_EthereumAnvil:    ethereumSepoliaCoreContracts, // fork of ethereum sepolia
-		ChainId_BaseSepoliaAnvil: baseSepoliaCoreContracts,     // fork of base sepolia
+		ChainId_EthereumSepolia: ethereumSepoliaCoreContracts,
+		ChainId_BaseSepolia:     baseSepoliaCoreContracts,
+		ChainId_EthereumAnvil:   ethereumMainnetCoreContracts,
+		ChainId_BaseAnvil:       baseMainnetCoreContracts,
 	}
 )
 
@@ -144,12 +191,13 @@ func GetCoreContractsForChainId(chainId ChainId) (*CoreContractAddresses, error)
 var (
 	SupportedChainIds = []ChainId{
 		ChainId_EthereumMainnet,
+		ChainId_BaseMainnet,
 		ChainId_EthereumHolesky,
 		ChainId_EthereumHoodi,
 		ChainId_EthereumSepolia,
 		ChainId_BaseSepolia,
 		ChainId_EthereumAnvil,
-		ChainId_BaseSepoliaAnvil,
+		ChainId_BaseAnvil,
 	}
 )
 

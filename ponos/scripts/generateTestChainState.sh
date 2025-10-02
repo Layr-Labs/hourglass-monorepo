@@ -12,21 +12,21 @@ function cleanup() {
 trap cleanup ERR
 set -e
 
-# ethereum holesky
-L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
+# ethereum mainnet
+L1_FORK_RPC_URL=https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9
 
 anvilL1ChainId=31337
-anvilL1StartBlock=9259025
+anvilL1StartBlock=23477799
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
 anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 
 # base mainnet
-L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
+L2_FORK_RPC_URL=https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=31408197
+anvilL2StartBlock=36235532
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -277,8 +277,11 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 echo "Setting up L1 multichain..."
 export L1_CHAIN_ID=$anvilL1ChainId
 export L2_CHAIN_ID=$anvilL2ChainId
-cast rpc anvil_impersonateAccount "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --rpc-url $L1_RPC_URL
-forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --unlocked --broadcast --sig "run()"
+
+CROSS_CHAIN_REGISTRY_OWNER="0xBE1685C81aA44FF9FB319dD389addd9374383e90"
+cast rpc anvil_impersonateAccount "$CROSS_CHAIN_REGISTRY_OWNER" --rpc-url $L1_RPC_URL
+fundAccount "$CROSS_CHAIN_REGISTRY_OWNER"
+forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "$CROSS_CHAIN_REGISTRY_OWNER" --unlocked --broadcast --sig "run()"
 
 # -----------------------------------------------------------------------------
 # Deploy L2
@@ -323,14 +326,17 @@ export EXEC_STAKER_PRIVATE_KEY="0x$execStakerAccountPk"
 export EXEC_STAKER2_PRIVATE_KEY="0x$execStaker2AccountPk"
 export EXEC_STAKER3_PRIVATE_KEY="0x$execStaker3AccountPk"
 export EXEC_STAKER4_PRIVATE_KEY="0x$execStaker4AccountPk"
-forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()" -vvvv
+forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
 
-# move past the global ALLOCATION_CONFIGURATION_DELAY which is 75 blocks for sepolia
+# Note: We bypass ALLOCATION_CONFIGURATION_DELAY using storage manipulation in SetupOperators.s.sol
 cast rpc --rpc-url $L1_RPC_URL anvil_mine 80
 cast rpc --rpc-url $L2_RPC_URL anvil_mine 80
 
-echo "Ended at block number: "
+echo "L1 ended at block number: "
 cast block-number --rpc-url $L1_RPC_URL
+
+echo "L2 ended at block number: "
+cast block-number --rpc-url $L2_RPC_URL
 
 kill $anvilL1Pid
 kill $anvilL2Pid

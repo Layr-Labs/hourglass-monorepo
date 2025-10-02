@@ -207,11 +207,10 @@ func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
 		}
 	}
 
-	signersStakeScaled := new(big.Int).Mul(signersStake, big.NewInt(10000))
 	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
+	thresholdStake.Quo(thresholdStake, big.NewInt(10000))
 
-	result := signersStakeScaled.Cmp(thresholdStake) >= 0
-	return result
+	return signersStake.Cmp(thresholdStake) >= 0
 }
 
 // VerifyResponseSignature verifies both result and auth signatures

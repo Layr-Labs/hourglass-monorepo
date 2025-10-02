@@ -94,10 +94,10 @@ func (tra *BN254TaskResultAggregator) SigningThresholdMet() bool {
 		}
 	}
 
-	signersStakeScaled := new(big.Int).Mul(signersStake, big.NewInt(10000))
 	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
+	thresholdStake.Quo(thresholdStake, big.NewInt(10000))
 
-	return signersStakeScaled.Cmp(thresholdStake) >= 0
+	return signersStake.Cmp(thresholdStake) >= 0
 }
 
 func (tra *BN254TaskResultAggregator) ProcessNewSignature(

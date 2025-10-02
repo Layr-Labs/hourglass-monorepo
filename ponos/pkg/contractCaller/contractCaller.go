@@ -177,8 +177,6 @@ type IContractCaller interface {
 		maxStalenessPeriod uint32,
 	) (*ethereumTypes.Receipt, error)
 
-	GetTableCalculatorAddress(curveType config.CurveType) common.Address
-
 	GetOperatorInfos(
 		ctx context.Context,
 		avsAddress common.Address,

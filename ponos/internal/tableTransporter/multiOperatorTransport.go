@@ -166,7 +166,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		return fmt.Errorf("unsupported curve type: %s", cfg.CurveType)
 	}
 
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 
 	gen := IOperatorTableUpdater.OperatorSet{
 		Avs: cfg.AVSAddress,
@@ -223,11 +223,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		}
 
 		// Switch the operator set ID
-		if generatorOpSet.Id == 1 {
-			generatorOpSet.Id = 2
-		} else {
-			generatorOpSet.Id = 1
-		}
+		generatorOpSet.Id = 5
 
 		cfg.Logger.Sugar().Infow("Setting up generator operator set",
 			zap.String("currentGeneratorAvs", currentGen.Avs.String()),
@@ -275,9 +271,7 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 		return fmt.Errorf("failed to create StakeTableRootCalculator: %v", err)
 	}
 
-	cfg.Logger.Sugar().Infow("Calculating stake table root from CrossChainRegistry",
-		zap.String("info", "This fetches operator data from CrossChainRegistry, NOT from KeyRegistrar"),
-	)
+	cfg.Logger.Sugar().Infow("Calculating stake table root from CrossChainRegistry")
 
 	root, tree, dist, err := tableCalc.CalculateStakeTableRoot(ctx, block.NumberU64())
 	if err != nil {
@@ -304,7 +298,6 @@ func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
 				// Log what operators the StakeTableRootCalculator found
 				cfg.Logger.Sugar().Infow("StakeTableRootCalculator operator data preview",
 					zap.String("first32bytes", fmt.Sprintf("0x%x", tableData[:min(32, len(tableData))])),
-					zap.String("WARNING", "This data comes from CrossChainRegistry, NOT from KeyRegistrar where we registered our test operators"),
 				)
 			}
 		}
@@ -599,7 +592,7 @@ func checkOperatorRegistered(
 	avsAddress common.Address,
 	operatorSetId uint32,
 ) (bool, error) {
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		return false, fmt.Errorf("failed to create KeyRegistrar: %w", err)
@@ -790,7 +783,7 @@ func registerKeyAsOperator(
 	}
 
 	// Get the KeyRegistrar contract
-	keyRegistrarAddress := common.HexToAddress("0xA4dB30D08d8bbcA00D40600bee9F029984dB162a")
+	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		_ = client.Client().CallContext(ctx, &ok, "anvil_stopImpersonatingAccount", operatorAddress.Hex())

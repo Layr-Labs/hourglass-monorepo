@@ -12,7 +12,8 @@ contract SomeFunc is Script {
     function run() external {
         uint256 avsPrivateKey = 0x90a7b1bcc84977a8b008fea51da40ad7e58b844095b13518f575ded17a4c67e4;
 
-        IKeyRegistrar KEY_REGISTRAR = IKeyRegistrar(0xA4dB30D08d8bbcA00D40600bee9F029984dB162a);
+        // Mainnet KeyRegistrar address
+        IKeyRegistrar KEY_REGISTRAR = IKeyRegistrar(0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4);
 
         address someAddr = 0x6B58f6762689DF33fe8fa3FC40Fb5a3089D3a8cc;
         bytes memory packedAddr = abi.encodePacked(someAddr);

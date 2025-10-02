@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/harness"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,6 +206,22 @@ func TestOperatorRegistration(t *testing.T) {
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
+
+		// Initialize AllocationDelayInfo storage to avoid UninitializedAllocationDelay error
+		ctx := context.Background()
+		header, err := h.L1Client.HeaderByNumber(ctx, nil)
+		require.NoError(t, err)
+		currentBlock := uint32(header.Number.Uint64())
+
+		rpcClient, err := rpc.Dial(h.ChainConfig.L1RPC)
+		require.NoError(t, err)
+		defer rpcClient.Close()
+
+		allocationManagerAddr := common.HexToAddress(h.ChainConfig.AllocationManagerAddress)
+		operatorAddr := common.HexToAddress(h.ChainConfig.OperatorAccountAddress)
+
+		err = tools.InitializeAllocationDelay(rpcClient, allocationManagerAddr, operatorAddr, currentBlock)
+		require.NoError(t, err)
 
 		// Allocate (no operator-set-id flag needed - uses context)
 		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",

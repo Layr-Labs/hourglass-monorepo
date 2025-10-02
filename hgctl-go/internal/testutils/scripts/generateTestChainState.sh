@@ -59,21 +59,21 @@ KEYS_DIR="$HGCTL_ROOT/internal/testutils/keys"
 # Create keys directory
 mkdir -p "$KEYS_DIR"
 
-# ethereum sepolia
-L1_FORK_RPC_URL=https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/
+# ethereum mainnet
+L1_FORK_RPC_URL=https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9
 
 anvilL1ChainId=31337
-anvilL1StartBlock=9259025
+anvilL1StartBlock=23477799
 anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
 anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
 anvilL1RpcPort=8545
 anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 
 # base mainnet
-L2_FORK_RPC_URL=https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/
+L2_FORK_RPC_URL=https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=31408197
+anvilL2StartBlock=36235532
 anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
 anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -275,6 +275,9 @@ done
 fundAccount "0x8736311E6b706AfF3D8132Adf351387092802bA6"
 fundAccount "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0"
 
+# Fund CrossChainRegistry owner for impersonation
+fundAccount "0xBE1685C81aA44FF9FB319dD389addd9374383e90"
+
 # Fund our generated operator accounts
 echo "Funding generated operator accounts..."
 fundAccount "$AGGREGATOR_ADDRESS"
@@ -361,8 +364,8 @@ export L2_CHAIN_ID=$anvilL2ChainId
 export AVS_ADDRESS=$avsAccountAddress
 
 # Whitelist chains
-cast rpc anvil_impersonateAccount "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --rpc-url $L1_RPC_URL
-forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xb094Ba769b4976Dc37fC689A76675f31bc4923b0" --unlocked --broadcast --sig "run()"
+cast rpc anvil_impersonateAccount "0xBE1685C81aA44FF9FB319dD389addd9374383e90" --rpc-url $L1_RPC_URL
+forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xBE1685C81aA44FF9FB319dD389addd9374383e90" --unlocked --broadcast --sig "run()"
 
 forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
 
@@ -434,11 +437,11 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
       "avsTaskHookAddressL1": "$taskHookAddressL1",
       "avsTaskHookAddressL2": "$taskHookAddressL2",
-      "keyRegistrarAddress": "0xa4db30d08d8bbca00d40600bee9f029984db162a",
-      "releaseManagerAddress": "0x59c8d715dca616e032b744a753c017c9f3e16bf4",
-      "delegationManagerAddress": "0xd4a7e1bd8015057293f0d0a557088c286942e84b",
-      "allocationManagerAddress": "0x42583067658071247ec8CE0A516A58f682002d07",
-      "strategyManagerAddress": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+      "keyRegistrarAddress": "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+      "releaseManagerAddress": "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+      "delegationManagerAddress": "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+      "allocationManagerAddress": "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+      "strategyManagerAddress": "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
       "destinationEnv": "anvil",
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock,

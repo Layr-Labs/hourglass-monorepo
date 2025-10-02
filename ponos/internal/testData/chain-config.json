@@ -42,6 +42,6 @@
       "avsTaskHookAddressL1": "0x9919106488065b78bf35b6329532f1243781a15d",
       "avsTaskHookAddressL2": "0x6dda75ef27e3b56d8f832ffe0fe9cd73974692a7",
       "destinationEnv": "anvil",
-      "forkL1Block": 9259025,
-      "forkL2Block": 31408197
+      "forkL1Block": 23477799,
+      "forkL2Block": 36235532
 }

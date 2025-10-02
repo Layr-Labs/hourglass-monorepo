@@ -39,12 +39,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// Table calculator contract addresses
-const (
-	BN254TableCalculatorAddress = "0x797d076aB96a5d4104062C15c727447fD8b71eB0"
-	ECDSATableCalculatorAddress = "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38"
-)
-
 type OperatorInfo struct {
 	PubkeyX *big.Int
 	PubkeyY *big.Int
@@ -1293,12 +1287,14 @@ func (cc *ContractCaller) ModifyAllocations(
 	avsAddress common.Address,
 	operatorSetId uint32,
 	strategy common.Address,
+	magnitude uint64,
 ) (interface{}, error) {
 	cc.logger.Sugar().Infow("Modifying allocations",
 		zap.String("operatorAddress", operatorAddress.String()),
 		zap.String("avsAddress", avsAddress.String()),
 		zap.Uint32("operatorSetId", operatorSetId),
 		zap.String("strategy", strategy.String()),
+		zap.Uint64("magnitude", magnitude),
 	)
 	alloactionDelay, err := cc.allocationManager.GetAllocationDelay(&bind.CallOpts{}, operatorAddress)
 	if err != nil {
@@ -1321,7 +1317,7 @@ func (cc *ContractCaller) ModifyAllocations(
 				Id:  operatorSetId,
 			},
 			Strategies:    []common.Address{strategy},
-			NewMagnitudes: []uint64{1e18},
+			NewMagnitudes: []uint64{magnitude},
 		},
 	})
 	if err != nil {
@@ -1413,18 +1409,19 @@ func (cc *ContractCaller) CreateGenerationReservation(
 	return cc.signAndSendTransaction(ctx, tx, "CreateGenerationReservation")
 }
 
-// GetTableCalculatorAddress returns the appropriate table calculator address for a given curve type
-func (cc *ContractCaller) GetTableCalculatorAddress(curveType config.CurveType) common.Address {
+func GetTableCalculatorAddress(curveType config.CurveType, chainId config.ChainId) (common.Address, error) {
+	calculators, ok := config.TableCalculatorsByChain[chainId]
+	if !ok {
+		return common.Address{}, fmt.Errorf("no table calculators configured for chain ID: %d", chainId)
+	}
+
 	switch curveType {
 	case config.CurveTypeBN254:
-		return common.HexToAddress(BN254TableCalculatorAddress)
+		return common.HexToAddress(calculators.BN254), nil
 	case config.CurveTypeECDSA:
-		return common.HexToAddress(ECDSATableCalculatorAddress)
+		return common.HexToAddress(calculators.ECDSA), nil
 	default:
-		cc.logger.Sugar().Warnw("Unknown curve type for table calculator",
-			zap.String("curveType", curveType.String()),
-		)
-		return common.Address{}
+		return common.Address{}, fmt.Errorf("unknown curve type: %v", curveType)
 	}
 }
 
