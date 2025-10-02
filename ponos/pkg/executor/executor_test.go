@@ -189,7 +189,7 @@ func testWithKeyType(
 	maxStalenessPeriod := uint32(0) // 0 allows certificates to always be valid regardless of referenceTimestamp
 
 	// BN254 table calculator for aggregator
-	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get table calculator address: %v", err)
 	}
@@ -207,7 +207,7 @@ func testWithKeyType(
 	t.Logf("Created generation reservation for operator set %d with BN254 table calculator", aggOpsetId)
 
 	// ECDSA table calculator for executor
-	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get table calculator address: %v", err)
 	}
@@ -539,7 +539,7 @@ func testWithBadgerStorage(
 
 	// Create generation reservations
 	maxStalenessPeriod := uint32(0)
-	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to create generation reservation for aggregator operator set: %v", err)
 	}
@@ -547,7 +547,7 @@ func testWithBadgerStorage(
 	_, err = avsConfigCaller.CreateGenerationReservation(ctx, avsAddr, aggOpsetId, bn254CalculatorAddr, avsAddr, maxStalenessPeriod)
 	require.NoError(t, err)
 
-	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to create generation reservation for aggregator operator set: %v", err)
 	}
@@ -852,7 +852,7 @@ operator:
       password: ""
 l1Chain:
   rpcUrl: "http://localhost:8545"
-  chainId: 31337
+  chainId: 1
 avsPerformers:
 - image:
     repository: "hello-performer"
@@ -868,7 +868,7 @@ avsPerformers:
 chains:
   - name: ethereum
     network: mainnet
-    chainId: 31337
+    chainId: 1
     rpcUrl: https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID
 operator:
   address: "0xf701291C8276DFbc3A7ea29c13A16304Dbc9F845"
@@ -917,7 +917,7 @@ avss:
     privateSigningKey: "some private signing key"
     privateSigningKeyType: "ecdsa"
     responseTimeout: 3000
-    chainIds: [31337]
+    chainIds: [1]
     avsRegistrarAddress: "0xf4c5c29b14f0237131f7510a51684c8191f98e06"
 `
 )

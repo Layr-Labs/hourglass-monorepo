@@ -177,20 +177,20 @@ fmtcheck:
 .PHONY: anvil/start
 anvil/start/l1:
 	anvil \
-		--fork-url https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/ \
-		--fork-block-number 8836180 \
+		--fork-url https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9 \
+		--fork-block-number 23477799 \
 		--load-state ./internal/testData/anvil-l1-state.json \
-		--chain-id 31337 \
+		--chain-id 1 \
 		--block-time 2 \
 		--host 0.0.0.0
 
 .PHONY: anvil/start
 anvil/start/l2:
 	anvil \
-		--fork-url https://soft-alpha-grass.base-sepolia.quiknode.pro/fd5e4bf346247d9b6e586008a9f13df72ce6f5b2/ \
-		--fork-block-number 28820370 \
+		--fork-url https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/ \
+		--fork-block-number 36235532 \
 		--load-state ./internal/testData/anvil-l2-state.json \
-		--chain-id 31338 \
+		--chain-id 8453 \
 		--port 9545 \
 		--block-time 2 \
 		--host 0.0.0.0

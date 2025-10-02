@@ -69,15 +69,14 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(
 		t,
-		config.CurveTypeECDSA, // Aggregator curve
-		config.CurveTypeBN254, // Executor curve
+		config.CurveTypeECDSA,
+		config.CurveTypeBN254,
 		chainConfig,
 	)
 	if err != nil {
 		t.Fatalf("Failed to get keys: %v", err)
 	}
 
-	// Use only the first 4 executor keys
 	execKeys = execKeys[:numExecutorOperators]
 
 	l1EthereumClient := ethereum.NewEthereumClient(&ethereum.EthereumClientConfig{
@@ -171,7 +170,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Fatalf("Failed to configure executor operator set %d: %v", aggregatorOperatorSetId, err)
 	}
 
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumMainnet]
 
 	operatorPkList := []string{
 		chainConfig.ExecOperatorAccountPk,
@@ -247,8 +246,6 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Logf("  Executor %d: %s", i, operatorAddr.Hex())
 	}
 
-	time.Sleep(time.Second * 6)
-
 	// ------------------------------------------------------------------------
 	// Delegate stake to all operators
 	// ------------------------------------------------------------------------
@@ -310,7 +307,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
-	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get table calculator address: %v", err)
 	}
@@ -334,11 +331,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		t.Logf("Warning: Failed to create generation reservation: %v", err)
 	}
 
-	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),
-		big.NewInt(8453),
-		big.NewInt(31338),
-	}
+	chainIdsToIgnore := []*big.Int{big.NewInt(8453)}
 
 	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))
 	operatorAddressList := []string{
@@ -359,7 +352,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	cfg := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
-		L1ChainId:                 31337,
+		L1ChainId:                 1,
 		L2RpcUrl:                  "",
 		L2ChainId:                 0,
 		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
@@ -535,18 +528,18 @@ func testBN254WithThresholds(
 
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 	callerMap := map[config.ChainId]contractCaller.IContractCaller{
-		config.ChainId_EthereumAnvil: l1CC,
+		config.ChainId_EthereumMainnet: l1CC,
 	}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
 		AvsAddress: chainConfig.AVSAccountAddress,
-		ChainIds:   []config.ChainId{config.ChainId_EthereumAnvil},
-		L1ChainId:  config.ChainId_EthereumAnvil,
+		ChainIds:   []config.ChainId{config.ChainId_EthereumMainnet},
+		L1ChainId:  config.ChainId_EthereumMainnet,
 	}, callerMap, pdf, l)
 
 	operatorPeersWeight, err := opManager.GetExecutorPeersAndWeightsForBlock(
 		ctx,
-		config.ChainId_EthereumAnvil,
+		config.ChainId_EthereumMainnet,
 		currentBlock,
 		executorOperatorSetId,
 	)

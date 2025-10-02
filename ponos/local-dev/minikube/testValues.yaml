@@ -20,17 +20,17 @@ aggregator:
                 {"crypto":{"kdf":{"function":"scrypt","params":{"dklen":32,"n":262144,"p":1,"r":8,"salt":"1222b66e6092fbe30eadbd301b1f94492ebc4b0953d6e9c817bfac8b82151219"},"message":""},"checksum":{"function":"sha256","params":{},"message":"44e5e3a0593df13d20c43168e883838890fec6e48d1b8bc5e36d21e3fd45633a"},"cipher":{"function":"aes-128-ctr","params":{"iv":"5a728603d2f7b0710e8b93af0b1ec9fc"},"message":"028c58531a51151f268a6166bf62eb72dca5fa169fefdfa6b2ce5033b4f70d23"}},"pubkey":"110936c375f725bb6474b0facf2c243b8fa97f7066c51111049875d2674771402a1cd975e6b9d9bebf7e3e5f9d840e85d35afa22d3e6f6870f991f54fb137b132723a3d2d285a3d48ef9308a40e5a57d895816ed875e32152e4478d6d039e6c4114709c9fc9fdf80454b628307aea4f326d573a84ef5018d4551cf0879359650","path":"m/1/0/0","uuid":"5e02731b-11d3-41f5-bcfc-f3594f29dcb3","version":4,"curveType":"bn254"}
               password: ""
         
-        l1ChainId: 31337
+        l1ChainId: 1
         
         chains:
           - name: "ethereum"
             network: "mainnet"
-            chainId: 31337
+            chainId: 1
             rpcUrl: "http://host.docker.internal:8545"
             pollIntervalSeconds: 10
           - name: "base"
-            network: "sepolia"
-            chainId: 31338
+            network: "mainnet"
+            chainId: 8453
             rpcUrl: "http://host.docker.internal:9545"
             pollIntervalSeconds: 2
         
@@ -38,7 +38,7 @@ aggregator:
           - address: "0xce2ac75be2e0951f1f7b288c7a6a9bfb6c331dc4"
             responseTimeout: 3000
             chainIds:
-            - 31338
+            - 8453
             avsRegistrarAddress: "0x203ca0e6b9bce319937ab44660f3854c41f3331f"
         
         # Storage configuration for persistence
@@ -62,7 +62,7 @@ executor:
               password: ""
         l1Chain:
           rpcUrl: "http://host.docker.internal:8545"
-          chainId: 31337
+          chainId: 1
         
         avsPerformers:
           - image:

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,10 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/internal/tableTransporter"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/clients/ethereum"
-	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
-	"go.uber.org/zap"
 )
 
 const (
@@ -166,7 +162,7 @@ func StartL1Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	portNumber := "8545"
 	blockTime := "2"
 	forkBlockNumber := pinnedL1BlockHeightFromAnvilDump
-	chainId := "31337"
+	chainId := "1"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l1-state.json", projectRoot))
 	if err != nil {
@@ -196,7 +192,7 @@ func StartL2Anvil(projectRoot string, ctx context.Context) (*exec.Cmd, error) {
 	portNumber := "9545"
 	blockTime := "2"
 	forkBlockNumber := pinnedL2BlockHeightFromAnvilDump
-	chainId := "31338"
+	chainId := "8453"
 
 	fullPath, err := filepath.Abs(fmt.Sprintf("%s/internal/testData/anvil-l2-state.json", projectRoot))
 	if err != nil {
@@ -282,40 +278,4 @@ func KillAnvil(cmd *exec.Cmd) error {
 
 	fmt.Println("Anvil process killed successfully")
 	return nil
-}
-
-func TransportStakeTables(l *zap.Logger, includeL2 bool) {
-	transportBlsPrivateKey := os.Getenv("HOURGLASS_TRANSPORT_BLS_KEY")
-	if transportBlsPrivateKey == "" {
-		transportBlsPrivateKey = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
-	}
-	transportEcdsaPrivateKey := transportBlsPrivateKey
-	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(11155111), // eth sepolia
-		new(big.Int).SetUint64(17000),    // holesky
-		new(big.Int).SetUint64(84532),    // base sepolia
-	}
-
-	var l2RpcUrl string
-	var l2ChainId uint64
-	if includeL2 {
-		l2RpcUrl = "http://localhost:9545"
-		l2ChainId = 31338
-	} else {
-		chainIdsToIgnore = append(chainIdsToIgnore, new(big.Int).SetUint64(31338))
-	}
-
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
-
-	tableTransporter.TransportTable(
-		transportEcdsaPrivateKey,
-		"http://localhost:8545",
-		31337,
-		l2RpcUrl,
-		l2ChainId,
-		contractAddresses.CrossChainRegistry,
-		transportBlsPrivateKey,
-		chainIdsToIgnore,
-		l,
-	)
 }

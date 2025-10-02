@@ -111,23 +111,22 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	var pollerEthClient *ethereum.EthereumClient
 	if networkTarget == NetworkTarget_L1 {
 		pollerConfig = &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:              config.ChainId_EthereumAnvil,
+			ChainId:              config.ChainId_EthereumMainnet,
 			PollingInterval:      time.Duration(10) * time.Second,
-			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumAnvil),
+			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_EthereumMainnet),
 			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l1EthereumClient
 	} else {
 		pollerConfig = &EVMChainPoller.EVMChainPollerConfig{
-			ChainId:              config.ChainId_BaseAnvil,
+			ChainId:              config.ChainId_BaseMainnet,
 			PollingInterval:      time.Duration(10) * time.Second,
-			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseAnvil),
+			InterestingContracts: imContractStore.ListContractAddressesForChain(config.ChainId_BaseMainnet),
 			AvsAddress:           chainConfig.AVSAccountAddress,
 		}
 		pollerEthClient = l2EthereumClient
 	}
 
-	// Create an in-memory store for the poller
 	aggStore := aggregatorMemory.NewInMemoryAggregatorStore()
 	poller := EVMChainPoller.NewEVMChainPoller(
 		pollerEthClient,
@@ -325,7 +324,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
 		chainConfig,
-		config.ChainId_EthereumAnvil,
+		config.ChainId_EthereumMainnet,
 		l1EthClient,
 		aggregator,
 		executors,
@@ -334,8 +333,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	if err != nil {
 		t.Fatalf("Failed to setup operator peering: %v", err)
 	}
-
-	time.Sleep(time.Second * 6)
 
 	// Delegate stake to aggregator + 4 executors with different weights
 	stakeConfigs := []*testUtils.StakerDelegationConfig{
@@ -395,9 +392,8 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	t.Logf("All operator set IDs: %v", allOperatorSetIds)
 	l.Sugar().Infow("Waiting for stake delegations to be processed on-chain...")
-	time.Sleep(time.Second * 3)
 
-	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get BN254 calculator address: %v", err)
 	}
@@ -419,7 +415,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		t.Logf("Warning: Failed to create generation reservation for aggregator: %v", err)
 	}
 
-	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get ECDSA calculator address: %v", err)
 	}
@@ -440,8 +436,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	if err != nil {
 		t.Logf("Warning: Failed to create generation reservation: %v", err)
 	}
-
-	time.Sleep(time.Second * 3)
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 
@@ -478,26 +472,23 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	// Determine chains to ignore and L2 config based on network target
 	var l2RpcUrl string
 	var l2ChainId uint64
-	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),
-		big.NewInt(8453),
-	}
 
+	var chainsIdsToIgnore []*big.Int
 	if networkTarget == NetworkTarget_L1 {
-		chainIdsToIgnore = append(chainIdsToIgnore, big.NewInt(31338))
+		chainsIdsToIgnore = append(chainsIdsToIgnore, big.NewInt(8453))
 	} else {
 		l2RpcUrl = L2RpcUrl
-		l2ChainId = 31338
+		l2ChainId = 8453
 	}
 
 	transportConfig := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  L1RpcUrl,
-		L1ChainId:                 31337,
+		L1ChainId:                 1,
 		L2RpcUrl:                  l2RpcUrl,
 		L2ChainId:                 l2ChainId,
 		CrossChainRegistryAddress: eigenlayerContractAddrs.CrossChainRegistry,
-		ChainIdsToIgnore:          chainIdsToIgnore,
+		ChainIdsToIgnore:          chainsIdsToIgnore,
 		Logger:                    l,
 		Operators:                 operatorKeyInfos,
 		AVSAddress:                common.HexToAddress(chainConfig.AVSAccountAddress),
@@ -550,20 +541,18 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 
-	callerMap := map[config.ChainId]contractCaller.IContractCaller{
-		config.ChainId_EthereumAnvil: l1CC,
-	}
-	opManagerChainIds := []config.ChainId{config.ChainId_EthereumAnvil}
+	callerMap := map[config.ChainId]contractCaller.IContractCaller{config.ChainId_EthereumMainnet: l1CC}
+	opManagerChainIds := []config.ChainId{config.ChainId_EthereumMainnet}
 
 	if networkTarget == NetworkTarget_L2 {
-		callerMap[config.ChainId_BaseAnvil] = l2CC
-		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseAnvil)
+		callerMap[config.ChainId_BaseMainnet] = l2CC
+		opManagerChainIds = append(opManagerChainIds, config.ChainId_BaseMainnet)
 	}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
 		AvsAddress: chainConfig.AVSAccountAddress,
 		ChainIds:   opManagerChainIds,
-		L1ChainId:  config.ChainId_EthereumAnvil,
+		L1ChainId:  config.ChainId_EthereumMainnet,
 	}, callerMap, pdf, l)
 
 	hasErrors := false
@@ -782,8 +771,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			cert.SignedAt = &signedAt
 			fmt.Printf("cert: %+v\n", cert)
 
-			time.Sleep(4 * time.Second)
-
 			fmt.Printf("Submitting task result to AVS\n\n\n")
 			receipt, err := avsCc.SubmitECDSATaskResult(ctx, cert.ToSubmitParams(), operatorPeersWeight.RootReferenceTimestamp)
 			if err != nil {
@@ -804,8 +791,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	if networkTarget == NetworkTarget_L2 {
 		publishTaskCc = l2CC
 	}
-
-	time.Sleep(10 * time.Second)
 
 	// submit a task
 	payloadJsonBytes := util.BigIntToHex(new(big.Int).SetUint64(4))

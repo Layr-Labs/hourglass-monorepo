@@ -129,7 +129,6 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 		t.Fatalf("Failed to create L1 contract caller: %v", err)
 	}
 
-	// Create AVS contract caller for configuring operator sets
 	avsConfigPrivateKeySigner, err := transactionSigner.NewPrivateKeySigner(chainConfig.AVSAccountPrivateKey, l1EthClient, l)
 	if err != nil {
 		t.Fatalf("Failed to create AVS config private key signer: %v", err)
@@ -292,7 +291,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 
 	// Create generation reservation to set up the operator table calculator
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
-	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to create calculator address: %v", err)
 	}
@@ -316,12 +315,8 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 		t.Logf("Warning: Failed to create generation reservation: %v", err)
 	}
 
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
-	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),
-		big.NewInt(8453),
-		big.NewInt(31338),
-	}
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumMainnet]
+	chainIdsToIgnore := []*big.Int{big.NewInt(8453)}
 
 	ecdsaInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))
 	operatorAddressList := []string{
@@ -343,7 +338,7 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 	cfg := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
-		L1ChainId:                 31337,
+		L1ChainId:                 1,
 		L2RpcUrl:                  "",
 		L2ChainId:                 0,
 		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
@@ -528,18 +523,18 @@ func testECDSAWithThresholds(
 
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 	callerMap := map[config.ChainId]contractCaller.IContractCaller{
-		config.ChainId_EthereumAnvil: l1CC,
+		config.ChainId_EthereumMainnet: l1CC,
 	}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
 		AvsAddress: chainConfig.AVSAccountAddress,
-		ChainIds:   []config.ChainId{config.ChainId_EthereumAnvil},
-		L1ChainId:  config.ChainId_EthereumAnvil,
+		ChainIds:   []config.ChainId{config.ChainId_EthereumMainnet},
+		L1ChainId:  config.ChainId_EthereumMainnet,
 	}, callerMap, pdf, l)
 
 	operatorPeersWeight, err := opManager.GetExecutorPeersAndWeightsForBlock(
 		ctx,
-		config.ChainId_EthereumAnvil,
+		config.ChainId_EthereumMainnet,
 		currentBlock,
 		executorOperatorSetId,
 	)

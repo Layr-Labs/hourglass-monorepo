@@ -242,7 +242,7 @@ func (em *AvsExecutionManager) getExecutorTaskConfig(
 		return nil, fmt.Errorf("failed to get contract caller for chain %d: %w", taskChainId, err)
 	}
 
-	l1ReferenceBlockNumber, err := em.getL1BlockForChainBlock(ctx, taskChainId, task.SourceBlockNumber)
+	l1ReferenceBlockNumber, err := em.getL1BlockForChainBlock(ctx, taskChainId, task.SourceBlockNumber, task.L1ReferenceBlockNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get l1 reference block number for chain %d: %w", taskChainId, err)
 	}
@@ -737,10 +737,15 @@ func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId)
 	return caller, nil
 }
 
-func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chainId config.ChainId, blockNumber uint64) (uint64, error) {
+func (em *AvsExecutionManager) getL1BlockForChainBlock(
+	ctx context.Context,
+	chainId config.ChainId,
+	taskBlockNumber uint64,
+	l1ReferenceBlockNumber uint64,
+) (uint64, error) {
 
 	if chainId == em.config.L1ChainId {
-		return blockNumber, nil
+		return taskBlockNumber, nil
 	}
 
 	l1Cc, ok := em.chainContractCallers[em.config.L1ChainId]
@@ -754,7 +759,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 	}
 
 	// Get supported chains from L1 to find the table updater address using 0 (latest) for L2 chains
-	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, blockNumber)
+	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, l1ReferenceBlockNumber)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get supported chains: %w", err)
 	}
@@ -774,7 +779,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 	referenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(
 		ctx,
 		destTableUpdaterAddress,
-		blockNumber,
+		taskBlockNumber,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get reference time and block: %w", err)
