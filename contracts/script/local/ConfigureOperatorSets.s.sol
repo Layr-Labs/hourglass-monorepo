@@ -7,7 +7,8 @@ import {IKeyRegistrar, IKeyRegistrarTypes} from "@eigenlayer-contracts/src/contr
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract ConfigureOperatorSets is Script {
-    IKeyRegistrar constant KEY_REGISTRAR = IKeyRegistrar(0xA4dB30D08d8bbcA00D40600bee9F029984dB162a);
+    // Mainnet KeyRegistrar address
+    IKeyRegistrar constant KEY_REGISTRAR = IKeyRegistrar(0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4);
 
     function run(
         address avsAddress

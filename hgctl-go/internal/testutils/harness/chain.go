@@ -148,8 +148,8 @@ func (c *ChainManager) startAnvilL1() (*exec.Cmd, error) {
 		"--chain-id", "31337",
 		"--port", "8545",
 		"--block-time", "2",
-		"--fork-url", "https://practical-serene-mound.ethereum-sepolia.quiknode.pro/3aaa48bd95f3d6aed60e89a1a466ed1e2a440b61/",
-		"--fork-block-number", "8897639",
+		"--fork-url", "https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9",
+		"--fork-block-number", "23477799",
 		"--silent",
 	)
 

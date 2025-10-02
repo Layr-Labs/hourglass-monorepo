@@ -4,12 +4,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
+	"strings"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
-	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -95,7 +96,15 @@ type DefaultContractAddresses struct {
 // getDefaultContractAddresses returns the default contract addresses for a given chain ID
 func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, error) {
 	switch chainID {
-	case 11155111:
+	case 1: // Ethereum Mainnet
+		return &DefaultContractAddresses{
+			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+			KeyRegistrar:      "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+			ReleaseManager:    "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+		}, nil
+	case 11155111: // Sepolia Testnet
 		return &DefaultContractAddresses{
 			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
 			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
@@ -103,13 +112,13 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
 			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		}, nil
-	case 31337:
+	case 31337: // Local Anvil (mainnet fork)
 		return &DefaultContractAddresses{
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
-			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0xd9Cb89F1993292dEC2F973934bC63B0f2A702776",
+			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+			KeyRegistrar:      "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+			ReleaseManager:    "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
 		}, nil
 	default:
 		return nil, fmt.Errorf("default contract addresses not found for chain")
