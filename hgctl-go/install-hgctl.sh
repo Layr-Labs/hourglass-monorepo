@@ -3,7 +3,7 @@
 set -e
 
 # hgctl version
-HGCTL_VERSION="v0.1.0.testnet-rc.2"
+HGCTL_VERSION="v0.1.0.mainnet-rc.1"
 
 # Ensure version has 'v' prefix for consistency
 if [[ ! "$HGCTL_VERSION" =~ ^v ]]; then
