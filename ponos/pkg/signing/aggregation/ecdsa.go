@@ -18,22 +18,18 @@ import (
 )
 
 type ECDSATaskResultAggregator struct {
-	mu                 sync.Mutex
-	TaskId             string
-	ReferenceTimestamp uint32
-	OperatorSetId      uint32
-	ThresholdBips      uint16
-	TaskData           []byte
-	TaskExpirationTime *time.Time
-	Operators          []*Operator[common.Address]
-	ReceivedSignatures map[string]*ReceivedECDSAResponseWithDigest // operator address -> signature
-
+	mu                  sync.Mutex
+	TaskId              string
+	ReferenceTimestamp  uint32
+	OperatorSetId       uint32
+	ThresholdBips       uint16
+	TaskData            []byte
+	TaskExpirationTime  *time.Time
+	Operators           []*Operator[common.Address]
+	OperatorSignatures  map[string]*ReceivedECDSAResponseWithDigest
 	AggregatePublicKeys []common.Address
-
 	aggregatedOperators *aggregatedECDSAOperators
 	L1ContractCaller    contractCaller.IContractCaller
-
-	// Add more fields as needed for aggregation
 }
 
 func NewECDSATaskResultAggregator(
@@ -78,6 +74,38 @@ func NewECDSATaskResultAggregator(
 	return cert, nil
 }
 
+func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
+	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
+		return false
+	}
+
+	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.winningDigest]
+	if winningGroup == nil {
+		return false
+	}
+
+	totalStake := big.NewInt(0)
+	for _, op := range tra.Operators {
+		if len(op.Weights) > 0 {
+			totalStake.Add(totalStake, op.Weights[0])
+		}
+	}
+
+	if totalStake.Sign() == 0 {
+		return false
+	}
+
+	signersStake := winningGroup.currentWeight
+	if signersStake == nil {
+		return false
+	}
+
+	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
+	thresholdStake.Quo(thresholdStake, big.NewInt(10000))
+
+	return signersStake.Cmp(thresholdStake) >= 0
+}
+
 func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	ctx context.Context,
 	taskResponse *types.TaskResult,
@@ -85,18 +113,15 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	tra.mu.Lock()
 	defer tra.mu.Unlock()
 
-	// Validate task ID matches the expected task ID for this aggregator
 	if tra.TaskId != taskResponse.TaskId {
 		return fmt.Errorf("task ID mismatch: expected %s, got %s", tra.TaskId, taskResponse.TaskId)
 	}
 
-	// Validate OperatorSetId matches
 	if taskResponse.OperatorSetId != tra.OperatorSetId {
 		return fmt.Errorf("operator set ID mismatch: expected %d, got %d",
 			tra.OperatorSetId, taskResponse.OperatorSetId)
 	}
 
-	// Validate operator is in the allowed set
 	operator := util.Find(tra.Operators, func(op *Operator[common.Address]) bool {
 		match := strings.EqualFold(op.Address, taskResponse.OperatorAddress)
 		return match
@@ -115,12 +140,12 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 	}
 
 	// Initialize map if nil
-	if tra.ReceivedSignatures == nil {
-		tra.ReceivedSignatures = make(map[string]*ReceivedECDSAResponseWithDigest)
+	if tra.OperatorSignatures == nil {
+		tra.OperatorSignatures = make(map[string]*ReceivedECDSAResponseWithDigest)
 	}
 
 	// check to see if the operator has already submitted a signature
-	if _, ok := tra.ReceivedSignatures[taskResponse.OperatorAddress]; ok {
+	if _, ok := tra.OperatorSignatures[taskResponse.OperatorAddress]; ok {
 		return fmt.Errorf("operator %s has already submitted a signature", taskResponse.OperatorAddress)
 	}
 
@@ -144,22 +169,20 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		OutputDigest: outputTaskMessage,
 	}
 
-	tra.ReceivedSignatures[taskResponse.OperatorAddress] = rr
+	tra.OperatorSignatures[taskResponse.OperatorAddress] = rr
 
-	// Aggregate when generating the final certificate
 	if tra.aggregatedOperators == nil {
 		tra.aggregatedOperators = &aggregatedECDSAOperators{
 			digestGroups: make(map[[32]byte]*ecdsaDigestGroup),
 		}
 	}
 
-	// Get or create the digest group for this output
 	group, exists := tra.aggregatedOperators.digestGroups[outputTaskMessage]
 	if !exists {
 		group = &ecdsaDigestGroup{
-			signers:  make(map[string]*ecdsaSignerInfo),
-			response: rr,
-			count:    0,
+			signers:       make(map[string]*ecdsaSignerInfo),
+			response:      rr,
+			currentWeight: big.NewInt(0),
 		}
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
 	}
@@ -169,51 +192,16 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		signature: taskResponse.ResultSignature,
 		operator:  operator,
 	}
-	group.count++
 
-	tra.updateMostCommonResponse(group, outputTaskMessage)
+	if len(operator.Weights) > 0 {
+		group.currentWeight.Add(group.currentWeight, operator.Weights[0])
+	}
+
+	tra.updateWinningResponse(group, outputTaskMessage)
 
 	return nil
 }
 
-func (tra *ECDSATaskResultAggregator) SigningThresholdMet() bool {
-	if tra.aggregatedOperators == nil || len(tra.aggregatedOperators.digestGroups) == 0 {
-		return false
-	}
-
-	mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-	if mostCommonGroup == nil {
-		return false
-	}
-
-	totalStake := big.NewInt(0)
-	for _, op := range tra.Operators {
-		if len(op.Weights) > 0 {
-			totalStake.Add(totalStake, op.Weights[0])
-		}
-	}
-
-	if totalStake.Sign() == 0 {
-		return false
-	}
-
-	signersStake := big.NewInt(0)
-	for signerAddr := range mostCommonGroup.signers {
-		for _, op := range tra.Operators {
-			if strings.EqualFold(op.Address, signerAddr) && len(op.Weights) > 0 {
-				signersStake.Add(signersStake, op.Weights[0])
-				break
-			}
-		}
-	}
-
-	thresholdStake := new(big.Int).Mul(totalStake, big.NewInt(int64(tra.ThresholdBips)))
-	thresholdStake.Quo(thresholdStake, big.NewInt(10000))
-
-	return signersStake.Cmp(thresholdStake) >= 0
-}
-
-// VerifyResponseSignature verifies both result and auth signatures
 func (tra *ECDSATaskResultAggregator) VerifyResponseSignature(
 	taskResponse *types.TaskResult,
 	operator *Operator[common.Address],
@@ -281,8 +269,8 @@ func (tra *ECDSATaskResultAggregator) GenerateFinalCertificate() (*AggregatedECD
 		return nil, fmt.Errorf("no signatures collected")
 	}
 
-	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-	if winningGroup == nil || winningGroup.count == 0 {
+	winningGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.winningDigest]
+	if winningGroup == nil || len(winningGroup.signers) == 0 {
 		return nil, fmt.Errorf("no signatures for winning digest")
 	}
 
@@ -335,34 +323,16 @@ func (cert *AggregatedECDSACertificate) GetFinalSignature() ([]byte, error) {
 	return finalSignature, nil
 }
 
-func (tra *ECDSATaskResultAggregator) updateMostCommonResponse(group *ecdsaDigestGroup, outputTaskMessage [32]byte) {
-
-	if group.count > tra.aggregatedOperators.mostCommonCount {
-		tra.aggregatedOperators.mostCommonCount = group.count
-		tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-
-	} else if group.count == tra.aggregatedOperators.mostCommonCount && group.count > 0 {
-		currentGroupStake := tra.calculateGroupStake(group)
-
-		mostCommonGroup := tra.aggregatedOperators.digestGroups[tra.aggregatedOperators.mostCommonDigest]
-		mostCommonGroupStake := tra.calculateGroupStake(mostCommonGroup)
-
-		cmp := currentGroupStake.Cmp(mostCommonGroupStake)
-		if cmp > 0 {
-			tra.aggregatedOperators.mostCommonCount = group.count
-			tra.aggregatedOperators.mostCommonDigest = outputTaskMessage
-		}
+func (tra *ECDSATaskResultAggregator) updateWinningResponse(group *ecdsaDigestGroup, outputTaskMessage [32]byte) {
+	if tra.aggregatedOperators.winningWeight == nil {
+		tra.aggregatedOperators.winningWeight = new(big.Int).Set(group.currentWeight)
+		tra.aggregatedOperators.winningDigest = outputTaskMessage
+		return
 	}
-}
 
-func (tra *ECDSATaskResultAggregator) calculateGroupStake(group *ecdsaDigestGroup) *big.Int {
-	totalStake := big.NewInt(0)
-	if group != nil {
-		for _, signer := range group.signers {
-			if signer.operator != nil && len(signer.operator.Weights) > 0 {
-				totalStake.Add(totalStake, signer.operator.Weights[0])
-			}
-		}
+	cmp := group.currentWeight.Cmp(tra.aggregatedOperators.winningWeight)
+	if cmp > 0 {
+		tra.aggregatedOperators.winningWeight = new(big.Int).Set(group.currentWeight)
+		tra.aggregatedOperators.winningDigest = outputTaskMessage
 	}
-	return totalStake
 }

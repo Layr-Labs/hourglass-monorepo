@@ -25,6 +25,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	NONE ConsensusType = iota
+	STAKE_PROPORTION_THRESHOLD
+)
+
 type AvsExecutionManagerConfig struct {
 	AvsAddress               string
 	SupportedChainIds        []config.ChainId
@@ -277,6 +282,14 @@ func (em *AvsExecutionManager) getExecutorTaskConfig(
 			Threshold:     consensusValue,
 		},
 		L1ReferenceBlockNumber: l1ReferenceBlockNumber,
+	}
+
+	if taskConfig.Consensus.ConsensusType != STAKE_PROPORTION_THRESHOLD {
+		return nil, fmt.Errorf(
+			"invalid consensus type %d for task %s",
+			taskConfig.Consensus.ConsensusType,
+			task.TaskId,
+		)
 	}
 
 	return taskConfig, nil
@@ -737,10 +750,14 @@ func (em *AvsExecutionManager) getContractCallerForChain(chainId config.ChainId)
 	return caller, nil
 }
 
-func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chainId config.ChainId, blockNumber uint64) (uint64, error) {
+func (em *AvsExecutionManager) getL1BlockForChainBlock(
+	ctx context.Context,
+	chainId config.ChainId,
+	taskBlockNumber uint64,
+) (uint64, error) {
 
 	if chainId == em.config.L1ChainId {
-		return blockNumber, nil
+		return taskBlockNumber, nil
 	}
 
 	l1Cc, ok := em.chainContractCallers[em.config.L1ChainId]
@@ -774,7 +791,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 	referenceTimeAndBlock, err := targetChainCc.GetTableUpdaterReferenceTimeAndBlock(
 		ctx,
 		destTableUpdaterAddress,
-		blockNumber,
+		taskBlockNumber,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get reference time and block: %w", err)

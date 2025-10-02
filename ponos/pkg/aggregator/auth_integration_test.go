@@ -59,7 +59,7 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 	aggConfig.Operator.OperatorPrivateKey = &config.ECDSAKeyConfig{
 		PrivateKey: chainConfig.OperatorAccountPrivateKey,
 	}
-	aggConfig.L1ChainId = 31337
+	aggConfig.L1ChainId = 1
 
 	// Parse keys for aggregator - using ECDSA for auth testing to match executor tests
 	// This simplifies test setup as ECDSA just needs a hex private key
@@ -197,7 +197,7 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 
 		resp, err := authClient.RegisterAvs(ctx, &aggregatorV1.RegisterAvsRequest{
 			AvsAddress: chainConfig.AVSAccountAddress,
-			ChainIds:   []uint32{31337},
+			ChainIds:   []uint32{1},
 		})
 
 		// We expect this to succeed with authentication
@@ -223,7 +223,7 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 
 		_, err = client.RegisterAvs(ctx, &aggregatorV1.RegisterAvsRequest{
 			AvsAddress: chainConfig.AVSAccountAddress,
-			ChainIds:   []uint32{31337},
+			ChainIds:   []uint32{1},
 		})
 
 		assert.Error(t, err)
@@ -256,7 +256,7 @@ func TestAuthenticationWithRealAggregator(t *testing.T) {
 
 		req := &aggregatorV1.RegisterAvsRequest{
 			AvsAddress: tokenTestAvsAddress,
-			ChainIds:   []uint32{31337},
+			ChainIds:   []uint32{1},
 			Auth: &commonV1.AuthSignature{
 				ChallengeToken: tokenResp.ChallengeToken,
 				Signature:      signature,
@@ -447,7 +447,7 @@ func TestAggregatorAuthVerifier(t *testing.T) {
 const authTestAggregatorConfigYaml = `
 ---
 managementServerGrpcPort: 9092
-l1ChainId: 31337
+l1ChainId: 1
 operator:
   address: "0xaggregator..."
   operatorPrivateKey:
@@ -456,7 +456,7 @@ operator:
     ecdsa:
       privateKey: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
 chains:
-  - chainId: 31337
+  - chainId: 1
     name: "L1 Anvil"
     rpcURL: "http://localhost:8545"
 avss: []

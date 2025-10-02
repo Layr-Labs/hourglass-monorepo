@@ -15,7 +15,7 @@ set -e
 # ethereum mainnet
 L1_FORK_RPC_URL=https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9
 
-anvilL1ChainId=31337
+anvilL1ChainId=1
 anvilL1StartBlock=23477799
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
@@ -25,7 +25,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 # base mainnet
 L2_FORK_RPC_URL=https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/
 
-anvilL2ChainId=31338
+anvilL2ChainId=8453
 anvilL2StartBlock=36235532
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
@@ -277,11 +277,6 @@ forge script script/local/SetupAVSL1.s.sol --slow --rpc-url $L1_RPC_URL --broadc
 echo "Setting up L1 multichain..."
 export L1_CHAIN_ID=$anvilL1ChainId
 export L2_CHAIN_ID=$anvilL2ChainId
-
-CROSS_CHAIN_REGISTRY_OWNER="0xBE1685C81aA44FF9FB319dD389addd9374383e90"
-cast rpc anvil_impersonateAccount "$CROSS_CHAIN_REGISTRY_OWNER" --rpc-url $L1_RPC_URL
-fundAccount "$CROSS_CHAIN_REGISTRY_OWNER"
-forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "$CROSS_CHAIN_REGISTRY_OWNER" --unlocked --broadcast --sig "run()"
 
 # -----------------------------------------------------------------------------
 # Deploy L2

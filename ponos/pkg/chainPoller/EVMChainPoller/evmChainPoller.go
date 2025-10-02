@@ -88,7 +88,7 @@ func NewEVMChainPoller(
 
 func (ecp *EVMChainPoller) Start(ctx context.Context) error {
 
-	ecp.logger.Sugar().Infow("Starting Ethereum L1Chain Listener",
+	ecp.logger.Sugar().Infow("Starting Ethereum Listener",
 		zap.Any("chainId", ecp.config.ChainId),
 		zap.Duration("pollingInterval", ecp.config.PollingInterval),
 	)

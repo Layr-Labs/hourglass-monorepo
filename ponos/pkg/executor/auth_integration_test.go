@@ -432,6 +432,6 @@ operator:
       privateKey: "..."
 l1Chain:
   rpcUrl: "http://localhost:8545"
-  chainId: 31337
+  chainId: 1
 avsPerformers: []
 `

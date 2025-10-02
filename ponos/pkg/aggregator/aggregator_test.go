@@ -514,7 +514,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 	maxStalenessPeriod := uint32(604800)
 
-	aggCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.AggregatorCurve, config.ChainId_EthereumAnvil)
+	aggCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.AggregatorCurve, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to delegate stake to operators: %v", err)
 	}
@@ -533,7 +533,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		t.Logf("Warning: Failed to create generation reservation for aggregator operator set %d: %v", sigConfig.AggregatorOpsetId, err)
 	}
 
-	execCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.ExecutorCurve, config.ChainId_EthereumAnvil)
+	execCalculatorAddr, err := caller.GetTableCalculatorAddress(sigConfig.ExecutorCurve, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to delegate stake to operators: %v", err)
 	}
@@ -564,11 +564,6 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
 
-	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(1),
-		new(big.Int).SetUint64(8453),
-	}
-
 	stakeWeights := []*big.Int{
 		big.NewInt(600000000000000000), // 0.6e18 = 60%
 		big.NewInt(400000000000000000), // 0.4e18 = 40%
@@ -597,17 +592,17 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 		}
 	}
 
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumMainnet]
 
 	err = tableTransporter.TransportTableWithSimpleMultiOperators(
 		&tableTransporter.MultipleOperatorConfig{
 			TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 			L1RpcUrl:                  "http://localhost:8545",
-			L1ChainId:                 31337,
+			L1ChainId:                 1,
 			L2RpcUrl:                  l2RpcUrl,
-			L2ChainId:                 31338,
+			L2ChainId:                 8453,
 			CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
-			ChainIdsToIgnore:          chainIdsToIgnore,
+			ChainIdsToIgnore:          []*big.Int{},
 			Logger:                    l,
 			Operators:                 operatorKeyInfos,
 			AVSAddress:                avsAddr,
@@ -815,6 +810,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	go func() {
 		if err := agg.Start(ctx); err != nil {
+			t.Errorf("ERROR: Aggregator Start() returned error: %v", err)
 			cancel()
 		}
 	}()
@@ -997,15 +993,15 @@ func getAggregatorConfigYaml(l1RpcUrl, l2RpcUrl string, curveType config.CurveTy
 chains:
   - name: ethereum
     network: sepolia
-    chainId: 31337
+    chainId: 1
     rpcUrl: %s
     pollIntervalSeconds: 5
   - name: base
     network: sepolia
-    chainId: 31338
+    chainId: 8453
     rpcUrl: %s
     pollIntervalSeconds: 5
-l1ChainId: 31337
+l1ChainId: 1
 operator:
   address: "0x204AFca2CBE13C81140f16Fe05063D1b62B56d7D"
   operatorPrivateKey:
@@ -1014,7 +1010,7 @@ operator:
 avss:
   - address: "0x8e14dB002737F89745bc98F987caeB18D0d47635"
     responseTimeout: 3000
-    chainIds: [31338]
+    chainIds: [8453]
     avsRegistrarAddress: "0x005ba0ba463b0709380afdf8ff5045c461878c90"
 `, l1RpcUrl, l2RpcUrl, signingKeysSection)
 }
@@ -1077,7 +1073,7 @@ operator:
 %s
 l1Chain:
   rpcUrl: "http://localhost:8545"
-  chainId: 31337
+  chainId: 1
 kubernetes:
   namespace: "default"
   operatorNamespace: "hourglass-system"
@@ -1109,7 +1105,7 @@ operator:
 %s
 l1Chain:
   rpcUrl: "http://localhost:8545"
-  chainId: 31337
+  chainId: 1
 avsPerformers:
 - image:
     repository: "hello-performer"

@@ -33,6 +33,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	maxStalenessPeriod = 604800
+	transportBlsKey    = "0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
+)
+
 func Test_CertificateVerifier(t *testing.T) {
 	const (
 		L1RpcUrl = "http://127.0.0.1:8545"
@@ -232,7 +237,7 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	avsAddr := common.HexToAddress(chainConfig.AVSAccountAddress)
 
-	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumAnvil)
+	bn254CalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeBN254, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get BN254 calculator address: %v", err)
 	}
@@ -251,7 +256,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		t.Logf("Warning: Failed to create generation reservation for aggregator operator set %d: %v", aggOpsetId, err)
 	}
 
-	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumAnvil)
+	ecdsaCalculatorAddr, err := caller.GetTableCalculatorAddress(config.CurveTypeECDSA, config.ChainId_EthereumMainnet)
 	if err != nil {
 		t.Fatalf("Failed to get ECDSA calculator address: %v", err)
 	}
@@ -272,12 +277,8 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 
-	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
-	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),
-		big.NewInt(8453),
-		big.NewInt(31338),
-	}
+	contractAddresses := config.CoreContracts[config.ChainId_EthereumMainnet]
+	chainIdsToIgnore := []*big.Int{big.NewInt(8453)}
 
 	ecdsaPrivKey := execKeysECDSA[0].PrivateKey.(*ecdsa.PrivateKey)
 	privateKeyHex := fmt.Sprintf("0x%x", ecdsaPrivKey.Bytes())
@@ -291,7 +292,7 @@ func Test_CertificateVerifier(t *testing.T) {
 	cfg := &tableTransporter.MultipleOperatorConfig{
 		TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 		L1RpcUrl:                  "http://localhost:8545",
-		L1ChainId:                 31337,
+		L1ChainId:                 1,
 		L2RpcUrl:                  "",
 		L2ChainId:                 0,
 		CrossChainRegistryAddress: contractAddresses.CrossChainRegistry,
@@ -379,19 +380,17 @@ func Test_CertificateVerifier(t *testing.T) {
 
 	pdf := peeringDataFetcher.NewPeeringDataFetcher(l1CC, l)
 
-	callerMap := map[config.ChainId]contractCaller.IContractCaller{
-		config.ChainId_EthereumAnvil: l1CC,
-	}
+	callerMap := map[config.ChainId]contractCaller.IContractCaller{config.ChainId_EthereumMainnet: l1CC}
 
 	opManager := operatorManager.NewOperatorManager(&operatorManager.OperatorManagerConfig{
 		AvsAddress: chainConfig.AVSAccountAddress,
-		ChainIds:   []config.ChainId{config.ChainId_EthereumAnvil},
-		L1ChainId:  config.ChainId_EthereumAnvil,
+		ChainIds:   []config.ChainId{config.ChainId_EthereumMainnet},
+		L1ChainId:  config.ChainId_EthereumMainnet,
 	}, callerMap, pdf, l)
 
 	operatorPeersWeight, err := opManager.GetExecutorPeersAndWeightsForBlock(
 		ctx,
-		config.ChainId_EthereumAnvil,
+		config.ChainId_EthereumMainnet,
 		taskCreatedBlock,
 		taskOpsetId,
 	)
