@@ -754,7 +754,7 @@ func (em *AvsExecutionManager) getL1BlockForChainBlock(ctx context.Context, chai
 	}
 
 	// Get supported chains from L1 to find the table updater address using 0 (latest) for L2 chains
-	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, 0)
+	destChainIds, tableUpdaterAddresses, err := l1Cc.GetSupportedChainsForMultichain(ctx, blockNumber)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get supported chains: %w", err)
 	}
