@@ -95,9 +95,9 @@ func Test_Aggregator(t *testing.T) {
 				runAggregatorTest(t, "docker", sigConfig)
 			})
 
-			//t.Run("Kubernetes", func(t *testing.T) {
-			//	runAggregatorTest(t, "kubernetes", sigConfig)
-			//})
+			t.Run("Kubernetes", func(t *testing.T) {
+				runAggregatorTest(t, "kubernetes", sigConfig)
+			})
 		})
 	}
 }

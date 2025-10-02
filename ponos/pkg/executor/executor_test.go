@@ -152,8 +152,6 @@ func testWithKeyType(
 		t.Fatalf("Failed to create L2 contract caller: %v", err)
 	}
 
-	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
-	// NOTE: we must register ALL opsets regardles of which curve type we are using, otherwise table transport fails
 	aggOpsetId := uint32(0)
 	execOpsetId := uint32(1)
 

@@ -16,7 +16,9 @@ contract CheckMaxMagnitude is Script {
 
     function setUp() public {}
 
-    function run(address operatorAddr) public view {
+    function run(
+        address operatorAddr
+    ) public view {
         console.log("=== Checking Max Magnitude for Operator ===");
         console.log("Operator:", operatorAddr);
         console.log("");

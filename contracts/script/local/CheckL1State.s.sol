@@ -4,7 +4,10 @@ pragma solidity ^0.8.27;
 import {Script, console} from "forge-std/Script.sol";
 import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN254TableCalculator.sol";
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
-import {IOperatorTableCalculator, IOperatorTableCalculatorTypes} from "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableCalculator.sol";
+import {
+    IOperatorTableCalculator,
+    IOperatorTableCalculatorTypes
+} from "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableCalculator.sol";
 import {IBN254CertificateVerifier} from "@eigenlayer-contracts/src/contracts/interfaces/IBN254CertificateVerifier.sol";
 import {ICrossChainRegistry} from "@eigenlayer-contracts/src/contracts/interfaces/ICrossChainRegistry.sol";
 import {IOperatorTableUpdater} from "@eigenlayer-contracts/src/contracts/interfaces/IOperatorTableUpdater.sol";
@@ -16,7 +19,8 @@ import {IStrategy} from "@eigenlayer-contracts/src/contracts/interfaces/IStrateg
 contract CheckL1State is Script {
     // Mainnet contract addresses
     ICrossChainRegistry constant CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
-    IOperatorTableUpdater constant OPERATOR_TABLE_UPDATER = IOperatorTableUpdater(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
+    IOperatorTableUpdater constant OPERATOR_TABLE_UPDATER =
+        IOperatorTableUpdater(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
     IStrategyManager constant STRATEGY_MANAGER = IStrategyManager(0x858646372CC42E1A627fcE94aa7A7033e7CF075A);
     IDelegationManager constant DELEGATION_MANAGER = IDelegationManager(0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A);
     IAllocationManager constant ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
@@ -25,7 +29,8 @@ contract CheckL1State is Script {
     IStrategy constant WETH_STRATEGY = IStrategy(0x0Fe4F44beE93503346A3Ac9EE5A26b130a5796d6);
 
     // BN254 Table Calculator address
-    IBN254TableCalculator constant BN254_TABLE_CALCULATOR = IBN254TableCalculator(0x55F4b21681977F412B318eCB204cB933bD1dF57c);
+    IBN254TableCalculator constant BN254_TABLE_CALCULATOR =
+        IBN254TableCalculator(0x55F4b21681977F412B318eCB204cB933bD1dF57c);
 
     // Test addresses (from chain config)
     address constant AVS_ADDRESS = 0x8e14dB002737F89745bc98F987caeB18D0d47635;
@@ -58,10 +63,7 @@ contract CheckL1State is Script {
         console.log("=== CrossChainRegistry ===");
         console.log("Address:", address(CROSS_CHAIN_REGISTRY));
 
-        try CROSS_CHAIN_REGISTRY.getSupportedChains() returns (
-            uint256[] memory chainIds,
-            address[] memory updaters
-        ) {
+        try CROSS_CHAIN_REGISTRY.getSupportedChains() returns (uint256[] memory chainIds, address[] memory updaters) {
             console.log("Supported chains count:", chainIds.length);
             for (uint256 i = 0; i < chainIds.length; i++) {
                 console.log("  Chain ID:", chainIds[i], "Updater:", updaters[i]);
@@ -107,10 +109,7 @@ contract CheckL1State is Script {
     }
 
     function checkOperatorSetConfig(address avs, uint32 operatorSetId) internal view {
-        OperatorSet memory operatorSet = OperatorSet({
-            avs: avs,
-            id: operatorSetId
-        });
+        OperatorSet memory operatorSet = OperatorSet({avs: avs, id: operatorSetId});
 
         // Check if table calculator is configured
         try CROSS_CHAIN_REGISTRY.getOperatorTableCalculator(operatorSet) returns (IOperatorTableCalculator tableCalc) {
@@ -130,11 +129,13 @@ contract CheckL1State is Script {
         checkOperatorInSet(EXEC_OPERATOR_4, avs, operatorSetId, "Executor 4");
     }
 
-    function checkOperatorInSet(address operator, address avs, uint32 operatorSetId, string memory label) internal view {
-        OperatorSet memory operatorSet = OperatorSet({
-            avs: avs,
-            id: operatorSetId
-        });
+    function checkOperatorInSet(
+        address operator,
+        address avs,
+        uint32 operatorSetId,
+        string memory label
+    ) internal view {
+        OperatorSet memory operatorSet = OperatorSet({avs: avs, id: operatorSetId});
 
         console.log("  ", label, ":", operator);
         try ALLOCATION_MANAGER.isMemberOfOperatorSet(operator, operatorSet) returns (bool isRegistered) {
@@ -217,10 +218,7 @@ contract CheckL1State is Script {
     function checkOperatorState(address operator, address avs, uint32 operatorSetId) internal view {
         console.log("Address:", operator);
 
-        OperatorSet memory operatorSet = OperatorSet({
-            avs: avs,
-            id: operatorSetId
-        });
+        OperatorSet memory operatorSet = OperatorSet({avs: avs, id: operatorSetId});
 
         // Check if operator is registered
         try DELEGATION_MANAGER.isOperator(operator) returns (bool isOperator) {
@@ -230,7 +228,9 @@ contract CheckL1State is Script {
         }
 
         // Check allocated magnitude for STETH strategy
-        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, STETH_STRATEGY) returns (IAllocationManager.Allocation memory allocation) {
+        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, STETH_STRATEGY) returns (
+            IAllocationManager.Allocation memory allocation
+        ) {
             console.log("STETH allocation - current magnitude:", allocation.currentMagnitude);
             console.log("STETH allocation - pending diff:", uint256(uint128(allocation.pendingDiff)));
             console.log("STETH allocation - effect block:", allocation.effectBlock);
@@ -239,7 +239,9 @@ contract CheckL1State is Script {
         }
 
         // Check allocated magnitude for WETH strategy
-        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, WETH_STRATEGY) returns (IAllocationManager.Allocation memory allocation) {
+        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, WETH_STRATEGY) returns (
+            IAllocationManager.Allocation memory allocation
+        ) {
             console.log("WETH allocation - current magnitude:", allocation.currentMagnitude);
             console.log("WETH allocation - pending diff:", uint256(uint128(allocation.pendingDiff)));
             console.log("WETH allocation - effect block:", allocation.effectBlock);
@@ -267,10 +269,7 @@ contract CheckL1State is Script {
         console.log("Address:", address(BN254_TABLE_CALCULATOR));
 
         // Check for executor operator set (opset 1)
-        OperatorSet memory executorOpSet = OperatorSet({
-            avs: AVS_ADDRESS,
-            id: 1
-        });
+        OperatorSet memory executorOpSet = OperatorSet({avs: AVS_ADDRESS, id: 1});
 
         console.log("\n--- Executor Operator Set (ID: 1) ---");
 
@@ -329,10 +328,7 @@ contract CheckL1State is Script {
 
         // Try to find the certificate verifier address from the CrossChainRegistry
         // The verifier is typically configured per operator set
-        OperatorSet memory executorOpSet = OperatorSet({
-            avs: AVS_ADDRESS,
-            id: 1
-        });
+        OperatorSet memory executorOpSet = OperatorSet({avs: AVS_ADDRESS, id: 1});
 
         // Try to get the verifier address from known deployment addresses
         // The BN254CertificateVerifier is typically deployed at a fixed address on mainnet
@@ -376,10 +372,9 @@ contract CheckL1State is Script {
         }
 
         // Try to get operator set info for the executor operator set
-        try IBN254CertificateVerifier(verifierAddress).getOperatorSetInfo(
-            executorOpSet,
-            latestTimestamp
-        ) returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo) {
+        try IBN254CertificateVerifier(verifierAddress).getOperatorSetInfo(executorOpSet, latestTimestamp) returns (
+            IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo
+        ) {
             console.log("\n--- Stored Operator Set Info ---");
             console.log("Operator Info Tree Root:");
             console.logBytes32(opSetInfo.operatorInfoTreeRoot);
