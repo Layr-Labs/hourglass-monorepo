@@ -182,7 +182,6 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		group = &ecdsaDigestGroup{
 			signers:       make(map[string]*ecdsaSignerInfo),
 			response:      rr,
-			count:         0,
 			currentWeight: big.NewInt(0),
 		}
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
@@ -193,7 +192,6 @@ func (tra *ECDSATaskResultAggregator) ProcessNewSignature(
 		signature: taskResponse.ResultSignature,
 		operator:  operator,
 	}
-	group.count++
 
 	if len(operator.Weights) > 0 {
 		group.currentWeight.Add(group.currentWeight, operator.Weights[0])

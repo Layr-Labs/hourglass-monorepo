@@ -156,7 +156,6 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		group = &digestGroup{
 			signers:       make(map[string]*signerInfo),
 			response:      rr,
-			count:         0,
 			currentWeight: big.NewInt(0),
 		}
 		tra.aggregatedOperators.digestGroups[outputTaskMessage] = group
@@ -167,15 +166,12 @@ func (tra *BN254TaskResultAggregator) ProcessNewSignature(
 		signature: sig,
 		operator:  operator,
 	}
-	group.count++
 
 	if len(operator.Weights) > 0 {
 		group.currentWeight.Add(group.currentWeight, operator.Weights[0])
 	}
 
 	tra.updateWinningResponse(group, outputTaskMessage)
-
-	tra.aggregatedOperators.totalSignerCount++
 
 	return nil
 }

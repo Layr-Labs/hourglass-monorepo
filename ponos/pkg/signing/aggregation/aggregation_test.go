@@ -590,10 +590,10 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
 		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
-		// Verify digest counts through digest groups
-		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count)
-		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestB].count)
-		assert.Equal(t, 1, agg.aggregatedOperators.digestGroups[digestC].count)
+		// Verify digest weights through digest groups
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestA].currentWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestB].currentWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestC].currentWeight.Cmp(big.NewInt(1)))
 
 		// Verify threshold IS met (5/5 operators participated, need 3/5 for 60% participation)
 		// Total participation is what matters, not consensus on the same message
@@ -839,7 +839,6 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		// Verify tracking
 		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
 		assert.Equal(t, digest, agg.aggregatedOperators.winningDigest)
-		assert.Equal(t, 2, agg.aggregatedOperators.totalSignerCount)
 
 		// Verify threshold is NOT met (only 2/5 operators participated, need 3/5 for 60%)
 		assert.False(t, agg.SigningThresholdMet(),
@@ -969,10 +968,10 @@ func Test_MostCommonDigestTracking_Weighted(t *testing.T) {
 		assert.Equal(t, 0, agg.aggregatedOperators.winningWeight.Cmp(big.NewInt(2)))
 		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest)
 
-		// Verify digest counts
-		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count)
-		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestB].count)
-		assert.Equal(t, 1, agg.aggregatedOperators.digestGroups[digestC].count)
+		// Verify digest weights
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestA].currentWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestB].currentWeight.Cmp(big.NewInt(2)))
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestC].currentWeight.Cmp(big.NewInt(1)))
 
 		// ECDSA threshold check is based on most common (not total participation)
 		// Only 2/5 signed same message, need 3/5 for 60%
@@ -1418,7 +1417,6 @@ func Test_NonSignerOrdering_Weighted(t *testing.T) {
 						TaskResult:   &types.TaskResult{Output: []byte("dummy")},
 						OutputDigest: dummyDigest,
 					},
-					count:         0,
 					currentWeight: big.NewInt(0),
 				},
 			},
@@ -1624,10 +1622,10 @@ func Test_DigestBasedAggregation(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[digestA], "Digest A group should exist")
 		assert.NotNil(t, agg.aggregatedOperators.digestGroups[digestB], "Digest B group should exist")
-		assert.Equal(t, 2, agg.aggregatedOperators.digestGroups[digestA].count,
-			"Digest A should have 2 operators")
-		assert.Equal(t, 1, agg.aggregatedOperators.digestGroups[digestB].count,
-			"Digest B should have 1 operator")
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestA].currentWeight.Cmp(big.NewInt(200)),
+			"Digest A should have weight 200 (2 operators * 100 weight each)")
+		assert.Equal(t, 0, agg.aggregatedOperators.digestGroups[digestB].currentWeight.Cmp(big.NewInt(100)),
+			"Digest B should have weight 100 (1 operator * 100 weight)")
 
 		// The winning digest should be A
 		assert.Equal(t, digestA, agg.aggregatedOperators.winningDigest,

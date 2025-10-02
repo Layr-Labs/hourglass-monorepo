@@ -92,9 +92,6 @@ type digestGroup struct {
 	// Representative response for this digest
 	response *ReceivedBN254ResponseWithDigest
 
-	// Count of signatures for this digest
-	count int
-
 	// Total stake weight of all signers for this digest
 	currentWeight *big.Int
 }
@@ -106,9 +103,6 @@ type aggregatedBN254Operators struct {
 	// Track the digest with the highest stake weight
 	winningDigest [32]byte
 	winningWeight *big.Int
-
-	// Track total count of all signers across all digests
-	totalSignerCount int
 }
 
 type AggregatedBN254Certificate struct {
@@ -200,9 +194,6 @@ type ecdsaDigestGroup struct {
 
 	// Representative response for this digest
 	response *ReceivedECDSAResponseWithDigest
-
-	// Count of signatures for this digest
-	count int
 
 	// Total stake weight of all signers for this digest
 	currentWeight *big.Int
