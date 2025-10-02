@@ -335,9 +335,9 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 	}
 
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),     // Ethereum Mainnet
-		big.NewInt(8453),  // Base Mainnet
-		big.NewInt(31338), // L2 anvil
+		big.NewInt(1),
+		big.NewInt(8453),
+		big.NewInt(31338),
 	}
 
 	blsInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))

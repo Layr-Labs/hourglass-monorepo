@@ -565,8 +565,8 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 	l.Sugar().Infow("------------------------ Transporting L1 & L2 tables ------------------------")
 
 	chainIdsToIgnore := []*big.Int{
-		new(big.Int).SetUint64(1),    // Ethereum Mainnet
-		new(big.Int).SetUint64(8453), // Base Mainnet
+		new(big.Int).SetUint64(1),
+		new(big.Int).SetUint64(8453),
 	}
 
 	stakeWeights := []*big.Int{

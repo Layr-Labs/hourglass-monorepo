@@ -60,8 +60,8 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 
 	aggKey, execKeys, err := testUtils.GetKeysForCurveTypeFromChainConfig(
 		t,
-		config.CurveTypeECDSA, // Aggregator curve
-		config.CurveTypeECDSA, // Executor curve (ECDSA for this test)
+		config.CurveTypeECDSA,
+		config.CurveTypeECDSA,
 		chainConfig,
 	)
 	if err != nil {
@@ -318,9 +318,9 @@ func Test_ECDSA_MultiOperator_Thresholds(t *testing.T) {
 
 	contractAddresses := config.CoreContracts[config.ChainId_EthereumAnvil]
 	chainIdsToIgnore := []*big.Int{
-		big.NewInt(1),     // Ethereum Mainnet
-		big.NewInt(8453),  // Base Mainnet
-		big.NewInt(31338), // L2 anvil
+		big.NewInt(1),
+		big.NewInt(8453),
+		big.NewInt(31338),
 	}
 
 	ecdsaInfos := make([]tableTransporter.OperatorKeyInfo, len(execKeys))

@@ -22,7 +22,7 @@ func TestAggregatorCrashRecovery(t *testing.T) {
 
 	// Simulate some state before "crash"
 	avsAddress := "0xtest"
-	chainId := config.ChainId(1) // Ethereum mainnet
+	chainId := config.ChainId(1)
 	blockRecord := &storage.BlockRecord{
 		Number:     1000,
 		Hash:       "0xhash1000",

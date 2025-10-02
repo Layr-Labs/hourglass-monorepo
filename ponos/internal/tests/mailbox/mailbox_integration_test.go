@@ -276,7 +276,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 	t.Logf("------------------------------------------- Setting up operator peering -------------------------------------------")
 	// NOTE: we must register ALL opsets regardless of which curve type we are using, otherwise table transport fails
 
-	// Create aggregator operator
 	aggregator := &operator.Operator{
 		TransactionPrivateKey: chainConfig.OperatorAccountPrivateKey,
 		SigningPrivateKey:     aggKey.PrivateKey,
@@ -284,7 +283,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		OperatorSetIds:        []uint32{aggOpsetId},
 	}
 
-	// Create executor operators
 	executors := []testUtils.ExecutorWithSocket{
 		{
 			Executor: &operator.Operator{
@@ -324,7 +322,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		},
 	}
 
-	// Use the helper to register aggregator + executors
 	err = testUtils.SetupOperatorPeeringWithMultipleExecutors(
 		ctx,
 		chainConfig,
@@ -342,7 +339,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	// Delegate stake to aggregator + 4 executors with different weights
 	stakeConfigs := []*testUtils.StakerDelegationConfig{
-		// Aggregator: stake for BN254 operator set
 		{
 			StakerPrivateKey:   chainConfig.AggStakerAccountPrivateKey,
 			StakerAddress:      chainConfig.AggStakerAccountAddress,
@@ -351,7 +347,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      aggOpsetId,
 			StrategyAddress:    testUtils.Strategy_WETH,
 		},
-		// Executor 1: 40% stake
 		{
 			StakerPrivateKey:   chainConfig.ExecStakerAccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStakerAccountAddress,
@@ -360,7 +355,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 2: 30% stake
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker2AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker2AccountAddress,
@@ -369,7 +363,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 3: 20% stake
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker3AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker3AccountAddress,
@@ -378,7 +371,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 			OperatorSetId:      execOpsetId,
 			StrategyAddress:    testUtils.Strategy_STETH,
 		},
-		// Executor 4: 10% stake
 		{
 			StakerPrivateKey:   chainConfig.ExecStaker4AccountPrivateKey,
 			StakerAddress:      chainConfig.ExecStaker4AccountAddress,
@@ -453,8 +445,6 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 
 	l.Sugar().Infow("------------------------ Transporting L1 tables ------------------------")
 
-	// Prepare operator key info for table transport with ECDSA keys and custom weights
-	// Stake weights: 40%, 30%, 20%, 10%
 	operatorAddressList := []string{
 		chainConfig.ExecOperatorAccountAddress,
 		chainConfig.ExecOperator2AccountAddress,

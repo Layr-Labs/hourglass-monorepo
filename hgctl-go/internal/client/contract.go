@@ -96,7 +96,7 @@ type DefaultContractAddresses struct {
 // getDefaultContractAddresses returns the default contract addresses for a given chain ID
 func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, error) {
 	switch chainID {
-	case 1: // Ethereum Mainnet
+	case 1:
 		return &DefaultContractAddresses{
 			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
 			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",

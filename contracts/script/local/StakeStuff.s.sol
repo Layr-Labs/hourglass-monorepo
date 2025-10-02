@@ -128,7 +128,7 @@ contract StakeStuff is Script {
         console.log("All staking operations completed successfully!");
         console.log("Stake weights summary:");
         console.log("- Aggregator: 10 ETH (WETH)");
-        console.log("- Executor 1: 20 ETH (stETH)");
+        console.log("- Executor 1: 10 ETH (stETH)");
         console.log("- Executor 2: 10 ETH (stETH)");
         console.log("- Executor 3: 10 ETH (stETH)");
         console.log("- Executor 4: 10 ETH (stETH)");

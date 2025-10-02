@@ -13,17 +13,14 @@ type TableCalculatorAddresses struct {
 }
 
 var TableCalculatorsByChain = map[ChainId]*TableCalculatorAddresses{
-	// Ethereum Mainnet
 	ChainId_EthereumMainnet: {
 		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
 		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
 	},
-	// Base Mainnet
 	ChainId_BaseMainnet: {
 		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
 		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
 	},
-	// Anvil forks use mainnet addresses
 	ChainId_EthereumAnvil: {
 		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
 		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
@@ -32,7 +29,6 @@ var TableCalculatorsByChain = map[ChainId]*TableCalculatorAddresses{
 		BN254: "0x55F4b21681977F412B318eCB204cB933bD1dF57c",
 		ECDSA: "0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa",
 	},
-	// Sepolia Testnet
 	ChainId_EthereumSepolia: {
 		BN254: "0x797d076aB96a5d4104062C15c727447fD8b71eB0",
 		ECDSA: "0xbcff2Cb40eD4A80e3A9EB095840986F9c8395a38",
