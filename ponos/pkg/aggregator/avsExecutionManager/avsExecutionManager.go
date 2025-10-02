@@ -25,6 +25,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	NONE ConsensusType = iota
+	STAKE_PROPORTION_THRESHOLD
+)
+
 type AvsExecutionManagerConfig struct {
 	AvsAddress               string
 	SupportedChainIds        []config.ChainId
@@ -277,6 +282,14 @@ func (em *AvsExecutionManager) getExecutorTaskConfig(
 			Threshold:     consensusValue,
 		},
 		L1ReferenceBlockNumber: l1ReferenceBlockNumber,
+	}
+
+	if taskConfig.Consensus.ConsensusType != STAKE_PROPORTION_THRESHOLD {
+		return nil, fmt.Errorf(
+			"invalid consensus type %d for task %d",
+			taskConfig.Consensus.ConsensusType,
+			task.TaskId,
+		)
 	}
 
 	return taskConfig, nil
