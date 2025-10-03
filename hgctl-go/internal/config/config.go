@@ -196,6 +196,22 @@ func GetOperatorPrivateKey(ctx *Context) (string, error) {
 	return "", fmt.Errorf("operator signer configuration is invalid")
 }
 
+// GetSystemECDSAPrivateKey retrieves the system ECDSA private key from environment variable
+// Only private key mode is supported for system ECDSA
+func GetSystemECDSAPrivateKey(ctx *Context) (string, error) {
+	// Ensure context and system signer keys are configured
+	if ctx == nil || ctx.SystemSignerKeys == nil || ctx.SystemSignerKeys.ECDSA == nil {
+		return "", fmt.Errorf("no system ECDSA signer configured in context")
+	}
+
+	// Only support private key from environment variable
+	privateKey := os.Getenv("SYSTEM_PRIVATE_KEY")
+	if privateKey == "" {
+		return "", fmt.Errorf("SYSTEM_PRIVATE_KEY environment variable is required for system ECDSA key")
+	}
+	return privateKey, nil
+}
+
 // LoggerFromContext retrieves the logger from the context
 func LoggerFromContext(ctx context.Context) logger.Logger {
 	if l, ok := ctx.Value(LoggerKey).(logger.Logger); ok {

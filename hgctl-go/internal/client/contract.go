@@ -11,7 +11,6 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -842,8 +841,8 @@ func (c *ContractClient) EncodeBN254KeyData(pubKey *bn254.PublicKey) ([]byte, er
 	)
 }
 
-// GenerateBN254KeyRegistrationSignature gets the message hash for BN254 key registration
-func (c *ContractClient) GenerateBN254KeyRegistrationSignature(
+// GetBN254KeyRegistrationMessageHash gets the message hash for BN254 key registration
+func (c *ContractClient) GetBN254KeyRegistrationMessageHash(
 	ctx context.Context,
 	operatorSetID uint32,
 	keyData []byte,

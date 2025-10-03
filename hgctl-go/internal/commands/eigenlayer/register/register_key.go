@@ -3,6 +3,9 @@ package register
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/Layr-Labs/crypto-libs/pkg/ecdsa"
 	blskeystore "github.com/Layr-Labs/crypto-libs/pkg/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
@@ -10,8 +13,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"os"
-	"strings"
 
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/ethereum/go-ethereum/common"
@@ -197,79 +198,39 @@ func (h *ECDSAKeyHandler) ValidateParams(c *cli.Context) error {
 }
 
 func (h *ECDSAKeyHandler) PrepareKeyData(c *cli.Context, _ *client.ContractClient) ([]byte, error) {
-	// Get system ECDSA key address from context configuration
-	systemECDSA := h.ctx.SystemSignerKeys.ECDSA
-	var keyAddress string
-
-	if systemECDSA.Keystore != nil {
-		// Load keystore to get address
-		password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
-		if password == "" {
-			return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system ECDSA keystore")
-		}
-
-		// Find keystore path
-		var keystorePath string
-		for _, ks := range h.ctx.Keystores {
-			if ks.Name == systemECDSA.Keystore.Name {
-				keystorePath = ks.Path
-				break
-			}
-		}
-
-		if keystorePath == "" {
-			return nil, fmt.Errorf("system ECDSA keystore '%s' not found in context", systemECDSA.Keystore.Name)
-		}
-
-		// Load keystore and extract address
-		keystoreBytes, err := os.ReadFile(keystorePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read system ECDSA keystore: %w", err)
-		}
-
-		key, err := keystore.DecryptKey(keystoreBytes, password)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt system ECDSA keystore: %w", err)
-		}
-		keyAddress = key.Address.Hex()
-
-	} else if systemECDSA.PrivateKey {
-		// For system ECDSA private key mode, we need the address
-		// The address should be provided via SYSTEM_ECDSA_ADDRESS environment variable
-		keyAddress = os.Getenv("SYSTEM_ECDSA_ADDRESS")
-		if keyAddress == "" {
-			return nil, fmt.Errorf("SYSTEM_ECDSA_ADDRESS environment variable required when using system ECDSA private key")
-		}
-
-	} else if systemECDSA.RemoteSignerConfig != nil {
-		// For remote signer, we need to get the address from the configuration
-		// This would typically be stored in the RemoteSignerConfig
-		return nil, fmt.Errorf("remote signer not yet supported for system keys")
-	} else {
-		return nil, fmt.Errorf("system ECDSA key configuration not recognized")
+	// Get the system ECDSA private key to derive the address
+	privateKeyHex, err := config.GetSystemECDSAPrivateKey(h.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system ECDSA private key: %w", err)
 	}
 
-	if keyAddress == "" {
-		return nil, fmt.Errorf("could not determine system ECDSA key address")
+	// Parse the private key to derive the address
+	privateKey, err := ecdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(privateKeyHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid private key: %w", err)
 	}
 
-	h.log.Info("Using system ECDSA key", zap.String("address", keyAddress))
-	addr := common.HexToAddress(keyAddress)
-	return addr.Bytes(), nil
+	// Get the Ethereum address from the public key
+	keyAddress, err := privateKey.DeriveAddress()
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive private key address: %w", err)
+	}
+	h.log.Info("Using system ECDSA key", zap.String("address", keyAddress.Hex()))
+
+	return keyAddress.Bytes(), nil
 }
 
-func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *client.ContractClient, operatorSetID uint32, keyData []byte) ([]byte, error) {
+func (h *ECDSAKeyHandler) GenerateSignature(
+	c *cli.Context,
+	contractClient *client.ContractClient,
+	operatorSetID uint32,
+	keyData []byte,
+) ([]byte, error) {
 	h.log.Info("Generating signature for ECDSA key registration")
 
-	// Get the private key from context
-	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
-	if currentCtx == nil {
-		return nil, fmt.Errorf("no context configured")
-	}
-
-	privateKeyHex, err := config.GetOperatorPrivateKey(currentCtx)
+	privateKeyHex, err := config.GetSystemECDSAPrivateKey(h.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get operator private key: %w", err)
+		return nil, fmt.Errorf("failed to get system ECDSA private key: %w", err)
 	}
 
 	privateKey, err := ecdsa.NewPrivateKeyFromHexString(strings.TrimPrefix(privateKeyHex, "0x"))
@@ -277,10 +238,8 @@ func (h *ECDSAKeyHandler) GenerateSignature(c *cli.Context, contractClient *clie
 		return nil, fmt.Errorf("invalid private key: %w", err)
 	}
 
-	// Convert keyData back to address
 	addr := common.BytesToAddress(keyData)
 
-	// Get the message hash
 	messageHash, err := contractClient.GenerateECDSAKeyRegistrationSignature(
 		c.Context,
 		operatorSetID,
@@ -403,7 +362,7 @@ func (h *BN254KeyHandler) GenerateSignature(
 	h.log.Info("Generating BN254 signature")
 
 	// Get message hash from contract
-	messageHash, err := contractClient.GenerateBN254KeyRegistrationSignature(
+	messageHash, err := contractClient.GetBN254KeyRegistrationMessageHash(
 		c.Context,
 		operatorSetID,
 		keyData,
