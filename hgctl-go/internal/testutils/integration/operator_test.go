@@ -164,7 +164,6 @@ func TestOperatorRegistration(t *testing.T) {
 		require.NoError(t, err)
 
 		// Configure system signer with BN254 keystore
-		// This assumes the keystore name has been configured
 		_, err = h.ExecuteCLI(
 			"signer", "system", "keystore",
 			"--name", "executor",

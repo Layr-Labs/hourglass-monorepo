@@ -196,6 +196,55 @@ func GetOperatorPrivateKey(ctx *Context) (string, error) {
 	return "", fmt.Errorf("operator signer configuration is invalid")
 }
 
+// GetSystemECDSAPrivateKey retrieves the system ECDSA private key
+func GetSystemECDSAPrivateKey(ctx *Context) (string, error) {
+	// Ensure context and system signer keys are configured
+	if ctx == nil || ctx.SystemSignerKeys == nil || ctx.SystemSignerKeys.ECDSA == nil {
+		return "", fmt.Errorf("no system ECDSA signer configured in context")
+	}
+
+	// Handle private key from environment variable
+	if ctx.SystemSignerKeys.ECDSA.PrivateKey {
+		privateKey := os.Getenv("SYSTEM_PRIVATE_KEY")
+		if privateKey == "" {
+			return "", fmt.Errorf("SYSTEM_PRIVATE_KEY environment variable is required for system ECDSA key")
+		}
+		return privateKey, nil
+	}
+
+	return "", fmt.Errorf("system ECDSA signer configuration is invalid")
+}
+
+// GetSystemBN254KeystorePath retrieves the system BN254 keystore path and password
+func GetSystemBN254KeystorePath(ctx *Context) (keystorePath string, password string, err error) {
+	// Ensure context and system signer keys are configured
+	if ctx == nil || ctx.SystemSignerKeys == nil || ctx.SystemSignerKeys.BN254 == nil {
+		return "", "", fmt.Errorf("no system BN254 signer configured in context")
+	}
+
+	bn254KeyRef := ctx.SystemSignerKeys.BN254
+
+	// Find keystore path from context
+	for _, ks := range ctx.Keystores {
+		if ks.Name == bn254KeyRef.Name {
+			keystorePath = ks.Path
+			break
+		}
+	}
+
+	if keystorePath == "" {
+		return "", "", fmt.Errorf("system BN254 keystore '%s' not found in context", bn254KeyRef.Name)
+	}
+
+	// Get password from environment
+	password = os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
+	if password == "" {
+		return "", "", fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system BN254 keystore")
+	}
+
+	return keystorePath, password, nil
+}
+
 // LoggerFromContext retrieves the logger from the context
 func LoggerFromContext(ctx context.Context) logger.Logger {
 	if l, ok := ctx.Value(LoggerKey).(logger.Logger); ok {

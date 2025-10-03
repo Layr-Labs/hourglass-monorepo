@@ -22,7 +22,7 @@ help: ## Show available commands
 
 build: ## Build the binary
 	@mkdir -p $(BIN)
-	CGO_ENABLED=1 go build $(GO_FLAGS) -o $(BIN)/$(APP_NAME) cmd/$(APP_NAME)/main.go
+	@go build $(GO_FLAGS) -o $(BIN)/$(APP_NAME) cmd/$(APP_NAME)/main.go
 
 test: ## Run unit tests (excludes integration tests)
 	@$(GO) test -v $(shell go list ./... | grep -v /testutils/integration) -p 1
