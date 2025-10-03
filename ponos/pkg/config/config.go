@@ -175,8 +175,8 @@ var (
 		},
 		ChainId_EthereumSepolia: ethereumSepoliaCoreContracts,
 		ChainId_BaseSepolia:     baseSepoliaCoreContracts,
-		ChainId_EthereumAnvil:   ethereumMainnetCoreContracts,
-		ChainId_BaseAnvil:       baseMainnetCoreContracts,
+		ChainId_EthereumAnvil:   ethereumSepoliaCoreContracts,
+		ChainId_BaseAnvil:       baseSepoliaCoreContracts,
 	}
 )
 
