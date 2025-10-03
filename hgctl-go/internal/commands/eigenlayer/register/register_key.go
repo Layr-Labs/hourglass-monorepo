@@ -288,29 +288,13 @@ func (h *BN254KeyHandler) ValidateParams(c *cli.Context) error {
 }
 
 func (h *BN254KeyHandler) PrepareKeyData(c *cli.Context, contractClient *client.ContractClient) ([]byte, error) {
-	// Get system BN254 keystore configuration
-	bn254KeyRef := h.ctx.SystemSignerKeys.BN254
-
-	// Find keystore path
-	var keystorePath string
-	for _, ks := range h.ctx.Keystores {
-		if ks.Name == bn254KeyRef.Name {
-			keystorePath = ks.Path
-			break
-		}
+	// Get system BN254 keystore path and password
+	keystorePath, password, err := config.GetSystemBN254KeystorePath(h.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get system BN254 keystore: %w", err)
 	}
 
-	if keystorePath == "" {
-		return nil, fmt.Errorf("system BN254 keystore '%s' not found in context", bn254KeyRef.Name)
-	}
-
-	// Get password from environment
-	password := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
-	if password == "" {
-		return nil, fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system BN254 keystore")
-	}
-
-	h.log.Info("Using system BN254 keystore", zap.String("keystore", bn254KeyRef.Name))
+	h.log.Info("Using system BN254 keystore", zap.String("keystore", h.ctx.SystemSignerKeys.BN254.Name))
 	return h.prepareKeyDataFromKeystore(contractClient, keystorePath, password)
 }
 
