@@ -34,7 +34,7 @@ func removePerformerAction(c *cli.Context) error {
 		return fmt.Errorf("no context configured")
 	}
 
-	if currentCtx.ExecutorAddress == "" {
+	if currentCtx.ExecutorEndpoint == "" {
 		return fmt.Errorf("executor address not configured")
 	}
 
@@ -42,7 +42,7 @@ func removePerformerAction(c *cli.Context) error {
 		zap.String("performerID", performerID))
 
 	// Create executor client
-	executorClient, err := client.NewExecutorClient(currentCtx.ExecutorAddress, log)
+	executorClient, err := client.NewExecutorClient(currentCtx.ExecutorEndpoint, log)
 	if err != nil {
 		return fmt.Errorf("failed to create executor client: %w", err)
 	}

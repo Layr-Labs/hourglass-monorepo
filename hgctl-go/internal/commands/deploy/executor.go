@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
@@ -338,7 +339,7 @@ func (d *ExecutorDeployer) saveExecutorAddress(cfg *DeploymentConfig) error {
 		executorMgmtPort = "9091"
 	}
 
-	executorAddress := fmt.Sprintf("localhost:%s", executorMgmtPort)
+	executorEndpoint := fmt.Sprintf("localhost:%s", executorMgmtPort)
 
 	configData, err := config.LoadConfig()
 	if err != nil {
@@ -346,14 +347,14 @@ func (d *ExecutorDeployer) saveExecutorAddress(cfg *DeploymentConfig) error {
 	}
 
 	if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
-		ctx.ExecutorAddress = executorAddress
+		ctx.ExecutorEndpoint = executorEndpoint
 
 		if err := config.SaveConfig(configData); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
 		d.Log.Info("Saved executor management address to context",
-			zap.String("address", executorAddress),
+			zap.String("address", executorEndpoint),
 			zap.String("context", configData.CurrentContext))
 	}
 
@@ -373,8 +374,8 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 	}
 
 	// Create executor client
-	executorAddr := fmt.Sprintf("localhost:%s", mgmtPort)
-	executorClient, err := client.NewExecutorClient(executorAddr, d.Log)
+	executorEndpoint := fmt.Sprintf("localhost:%s", mgmtPort)
+	executorClient, err := client.NewExecutorClient(executorEndpoint, d.Log)
 	if err != nil {
 		return fmt.Errorf("failed to create executor client: %w", err)
 	}
@@ -396,7 +397,7 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 
 	// Deploy the performer via gRPC
 	d.Log.Info("Deploying performer to existing executor via gRPC",
-		zap.String("executor", executorAddr),
+		zap.String("executor", executorEndpoint),
 		zap.String("avsAddress", d.Context.AVSAddress),
 		zap.String("image", performerComponent.Registry),
 		zap.String("digest", performerComponent.Digest))
@@ -413,14 +414,14 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 	}
 
 	// Update executor address in context if needed
-	if d.Context.ExecutorAddress != executorAddr {
+	if d.Context.ExecutorEndpoint != executorEndpoint {
 		configData, err := config.LoadConfig()
 		if err == nil {
 			if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
-				ctx.ExecutorAddress = executorAddr
+				ctx.ExecutorEndpoint = executorEndpoint
 				if err := config.SaveConfig(configData); err == nil {
 					d.Log.Info("Updated executor address in context",
-						zap.String("address", executorAddr))
+						zap.String("address", executorEndpoint))
 				}
 			}
 		}

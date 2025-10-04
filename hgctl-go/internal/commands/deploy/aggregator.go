@@ -3,10 +3,11 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"github.com/urfave/cli/v2"
-	"go.uber.org/zap"
 	"os"
 	"path/filepath"
+
+	"github.com/urfave/cli/v2"
+	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
@@ -98,23 +99,7 @@ func deployAggregatorAction(c *cli.Context) error {
 func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	containerName := fmt.Sprintf("hgctl-aggregator-%s-%s", d.Context.Name, d.Context.AVSAddress)
 
-	isRunning, containerID, err := d.CheckContainerRunning(containerName)
-	if err != nil {
-		d.Log.Warn("Error checking container status, proceeding with deployment", zap.Error(err))
-		return err
-	}
-	if isRunning {
-		d.Log.Info("Found existing running aggregator container",
-			zap.String("container", containerName),
-			zap.String("containerID", containerID[:12]))
-
-		if err = d.registerWithExistingAggregator(ctx, containerName, containerID); err != nil {
-			return err
-		} else {
-			return nil
-		}
-	}
-
+	// Fetch runtime spec first to determine required chain IDs
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
@@ -123,6 +108,29 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	component, err := d.ExtractComponent(spec, "aggregator")
 	if err != nil {
 		return err
+	}
+
+	// Determine which chain IDs are required based on the runtime spec
+	chainIDs, err := d.extractChainIDsFromSpec(component)
+	if err != nil {
+		return err
+	}
+
+	// Check if an aggregator container is already running
+	isRunning, containerID, err := d.CheckContainerRunning(containerName)
+	if err != nil {
+		return fmt.Errorf("failed to check aggregator container status: %w", err)
+	}
+
+	if isRunning {
+		d.Log.Info("Found existing running aggregator container",
+			zap.String("container", containerName),
+			zap.String("containerID", containerID[:12]))
+
+		if err = d.registerAvsWithAggregator(ctx, containerName, containerID, chainIDs); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	cfg := &DeploymentConfig{
@@ -157,11 +165,59 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	return d.deployContainer(component, cfg)
+	if err := d.deployContainer(component, cfg); err != nil {
+		return err
+	}
+
+	// Save aggregator endpoint to context
+	if err := d.saveAggregatorEndpoint(cfg); err != nil {
+		d.Log.Warn("Failed to save aggregator endpoint to context", zap.Error(err))
+	}
+
+	if err := d.registerAvsWithAggregator(ctx, containerName, "", chainIDs); err != nil {
+		d.Log.Warn("Failed to register AVS with newly deployed aggregator", zap.Error(err))
+		fmt.Printf("\n⚠️  Warning: Aggregator deployed successfully but AVS registration failed: %v\n", err)
+	}
+
+	return nil
 }
 
-// registerWithExistingAggregator attempts to register AVS with an existing aggregator container
-func (d *AggregatorDeployer) registerWithExistingAggregator(ctx context.Context, containerName string, containerID string) error {
+// extractChainIDsFromSpec determines which chain IDs are required based on the runtime spec
+func (d *AggregatorDeployer) extractChainIDsFromSpec(component *runtime.ComponentSpec) ([]uint32, error) {
+	hasL2ChainID := false
+	for _, envVar := range component.Env {
+		if envVar.Name == "L2_CHAIN_ID" {
+			hasL2ChainID = true
+			break
+		}
+	}
+
+	// Build chain IDs slice based on what's required
+	chainIDs := []uint32{d.Context.L1ChainID}
+
+	if hasL2ChainID {
+		if d.Context.L2ChainID == 0 {
+			return nil, fmt.Errorf("L2_CHAIN_ID is required by the runtime spec but not configured in context. Run: hgctl context set --l2-chain-id <id>")
+		}
+		chainIDs = append(chainIDs, d.Context.L2ChainID)
+		d.Log.Info("Including both L1 and L2 chain IDs (L2_CHAIN_ID required in runtime spec)",
+			zap.Uint32("l1ChainID", d.Context.L1ChainID),
+			zap.Uint32("l2ChainID", d.Context.L2ChainID))
+	} else {
+		d.Log.Info("Using L1 chain ID only (L2_CHAIN_ID not required in runtime spec)",
+			zap.Uint32("l1ChainID", d.Context.L1ChainID))
+	}
+
+	return chainIDs, nil
+}
+
+// registerAvsWithAggregator registers the AVS with an aggregator
+func (d *AggregatorDeployer) registerAvsWithAggregator(
+	ctx context.Context,
+	containerName string,
+	containerID string,
+	chainIDs []uint32,
+) error {
 	// Try to get the management port from the running container
 	mgmtPort, err := d.GetContainerPort(containerName, "9010")
 	if err != nil {
@@ -184,41 +240,46 @@ func (d *AggregatorDeployer) registerWithExistingAggregator(ctx context.Context,
 		}
 	}()
 
-	// Extract chain IDs from environment
-	chainIDs, err := d.extractChainIDs()
-	if err != nil {
-		return err
-	}
-
 	// Register AVS with the aggregator
 	if err := aggregatorClient.RegisterAvs(ctx, d.Context.AVSAddress, chainIDs); err != nil {
 		return fmt.Errorf("failed to register AVS with aggregator: %w", err)
 	}
 
-	// Success - print confirmation
-	d.Log.Info("Successfully registered AVS with existing aggregator")
-	fmt.Printf("\n✅ AVS registered with existing aggregator\n")
-	fmt.Printf("Container Name: %s\n", containerName)
-	fmt.Printf("Container ID: %s\n", containerID[:12])
-	fmt.Printf("Management Port: %s\n", mgmtPort)
-	fmt.Printf("AVS Address: %s\n", d.Context.AVSAddress)
-	fmt.Printf("Chain IDs: %v\n", chainIDs)
-	fmt.Printf("\nUseful commands:\n")
-	fmt.Printf("  View logs:    docker logs -f %s\n", containerName)
-	fmt.Printf("  Stop:         docker stop %s\n", containerName)
-	fmt.Printf("  Restart:      docker restart %s\n", containerName)
+	fmt.Printf("\n✅ AVS registered with aggregator\n")
+	fmt.Printf("   AVS Address: %s\n", d.Context.AVSAddress)
+	fmt.Printf("   Chain IDs: %v\n", chainIDs)
+	fmt.Printf("   Management Port: %s\n\n", mgmtPort)
 
 	return nil
 }
 
-// extractChainIDs extracts chain IDs from environment configuration
-func (d *AggregatorDeployer) extractChainIDs() ([]uint32, error) {
-	ctx, err := config.GetCurrentContext()
-	if err != nil {
-		d.Log.Warn("Failed to get current context", zap.Error(err))
-		return nil, err
+// saveAggregatorEndpoint saves the aggregator management gRPC address to the context configuration
+func (d *AggregatorDeployer) saveAggregatorEndpoint(cfg *DeploymentConfig) error {
+	aggregatorMgmtPort := cfg.Env["AGGREGATOR_MGMT_PORT"]
+	if aggregatorMgmtPort == "" {
+		aggregatorMgmtPort = "9010"
 	}
-	return []uint32{ctx.L1ChainID, ctx.L2ChainID}, nil
+
+	aggregatorEndpoint := fmt.Sprintf("localhost:%s", aggregatorMgmtPort)
+
+	configData, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if ctx, exists := configData.Contexts[configData.CurrentContext]; exists {
+		ctx.AggregatorEndpoint = aggregatorEndpoint
+
+		if err := config.SaveConfig(configData); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		d.Log.Info("Saved aggregator management endpoint to context",
+			zap.String("endpoint", aggregatorEndpoint),
+			zap.String("context", configData.CurrentContext))
+	}
+
+	return nil
 }
 
 // generateConfiguration generates aggregator configuration files
@@ -308,20 +369,11 @@ func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string
 
 // printSuccessMessage prints a user-friendly success message
 func (d *AggregatorDeployer) printSuccessMessage(containerName, containerID string, cfg *DeploymentConfig) {
-	d.Log.Info("✅ Aggregator deployed successfully",
-		zap.String("container", containerName),
-		zap.String("containerID", containerID),
-		zap.String("config", cfg.ConfigDir),
-		zap.String("tempDir", cfg.TempDir))
-
-	fmt.Printf("\n✅ Aggregator deployed successfully\n")
-	fmt.Printf("Container Name: %s\n", containerName)
-	fmt.Printf("Container ID: %s\n", containerID[:12])
-	fmt.Printf("Network Mode: %s\n", d.networkMode)
-	fmt.Printf("Config Path: %s\n", cfg.ConfigPath)
-	fmt.Printf("\nUseful commands:\n")
-	fmt.Printf("  View logs:    docker logs -f %s\n", containerName)
-	fmt.Printf("  Stop:         docker stop %s\n", containerName)
-	fmt.Printf("  Restart:      docker restart %s\n", containerName)
-	fmt.Printf("  Inspect:      docker inspect %s\n", containerName)
+	fmt.Printf("\n✅ Aggregator container deployed successfully\n")
+	fmt.Printf("   Container ID: %s\n", containerID[:12])
+	fmt.Printf("   Config Path: %s\n\n", cfg.ConfigPath)
+	fmt.Printf("Useful commands:\n")
+	fmt.Printf("  View logs:  docker logs -f %s\n", containerName)
+	fmt.Printf("  Stop:       docker stop %s\n", containerName)
+	fmt.Printf("  Restart:    docker restart %s\n\n", containerName)
 }
