@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
 	"github.com/urfave/cli/v2"
 )
@@ -69,11 +70,11 @@ func contextRemoveAction(c *cli.Context) error {
 	removed := false
 
 	// Remove simple string fields
-	if c.Bool("executor-address") {
-		if ctx.ExecutorAddress != "" {
-			ctx.ExecutorAddress = ""
+	if c.Bool("executor-endpoint") {
+		if ctx.ExecutorEndpoint != "" {
+			ctx.ExecutorEndpoint = ""
 			removed = true
-			log.Info("Removed executor address")
+			log.Info("Removed executor endpoint")
 		}
 	}
 

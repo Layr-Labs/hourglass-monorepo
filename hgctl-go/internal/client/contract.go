@@ -1044,6 +1044,53 @@ func (c *ContractClient) GetOperatorSetMetadataURI(ctx context.Context, operator
 	return metadataURI, nil
 }
 
+// DeregisterOperatorFromAVS deregisters an operator from an AVS
+func (c *ContractClient) DeregisterOperatorFromAVS(ctx context.Context, operatorSetIDs []uint32) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create deregistration parameters
+	deregisterParams := IAllocationManager.IAllocationManagerTypesDeregisterParams{
+		Operator:       c.operatorAddress,
+		Avs:            c.avsAddress,
+		OperatorSetIds: operatorSetIDs,
+	}
+
+	// Deregister from operator sets
+	tx, err := c.allocationManager.DeregisterFromOperatorSets(opts, deregisterParams)
+	if err != nil {
+		return fmt.Errorf("failed to deregister operator from AVS: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully deregistered operator from AVS",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }

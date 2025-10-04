@@ -62,8 +62,8 @@ func deployPerformerAction(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
-	if currentCtx.ExecutorAddress == "" {
-		return fmt.Errorf("no executor address found in context. Please deploy an executor first using 'hgctl deploy executor' or set manually with 'hgctl context set --executor-address <address>'")
+	if currentCtx.ExecutorEndpoint == "" {
+		return fmt.Errorf("no executor endpoint found in context. Please deploy an executor first using 'hgctl deploy executor' or set manually with 'hgctl context set --executor-address <address>'")
 	}
 
 	contractClient, err := middleware.GetContractClient(c)
@@ -123,14 +123,14 @@ func (d *PerformerDeployer) deployViaExecutor(
 	component *runtime.ComponentSpec,
 	cfg *DeploymentConfig,
 ) error {
-	executorClient, err := client.NewExecutorClient(d.Context.ExecutorAddress, d.Log)
+	executorClient, err := client.NewExecutorClient(d.Context.ExecutorEndpoint, d.Log)
 	if err != nil {
 		return fmt.Errorf("failed to create executor client: %w", err)
 	}
 	defer executorClient.Close()
 
 	d.Log.Info("Deploying performer via executor",
-		zap.String("executor", d.Context.ExecutorAddress),
+		zap.String("executor", d.Context.ExecutorEndpoint),
 		zap.String("avsAddress", d.Context.AVSAddress),
 		zap.String("image", component.Registry),
 		zap.String("digest", component.Digest),
@@ -157,7 +157,7 @@ func (d *PerformerDeployer) handleDryRun(cfg *DeploymentConfig, registry string,
 
 	d.Log.Info("Configuration:",
 		zap.String("avsAddress", d.Context.AVSAddress),
-		zap.String("executorAddress", d.Context.ExecutorAddress),
+		zap.String("executorAddress", d.Context.ExecutorEndpoint),
 		zap.String("performerImage", registry),
 		zap.String("performerDigest", digest))
 
@@ -181,12 +181,12 @@ func (d *PerformerDeployer) printSuccessMessage(deploymentID string, component *
 	d.Log.Info("✅ Performer deployed successfully",
 		zap.String("deploymentID", deploymentID),
 		zap.String("avsAddress", d.Context.AVSAddress),
-		zap.String("executor", d.Context.ExecutorAddress))
+		zap.String("executor", d.Context.ExecutorEndpoint))
 
 	fmt.Printf("\n✅ Performer deployed successfully\n")
 	fmt.Printf("Deployment ID: %s\n", deploymentID)
 	fmt.Printf("AVS Address: %s\n", d.Context.AVSAddress)
-	fmt.Printf("Executor: %s\n", d.Context.ExecutorAddress)
+	fmt.Printf("Executor: %s\n", d.Context.ExecutorEndpoint)
 	fmt.Printf("Image: %s@%s\n", component.Registry, component.Digest)
 	fmt.Printf("\nThe performer is now running on the executor.\n")
 	fmt.Printf("\nUseful commands:\n")

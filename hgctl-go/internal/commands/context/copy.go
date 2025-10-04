@@ -160,17 +160,17 @@ func displayCopySuccess(sourceName, copyName string, setCurrent bool) {
 // deepCopyContext creates a deep copy of a context
 func deepCopyContext(src *config.Context) *config.Context {
 	dst := &config.Context{
-		Name:            src.Name,
-		ExecutorAddress: src.ExecutorAddress,
-		AVSAddress:      src.AVSAddress,
-		OperatorAddress: src.OperatorAddress,
-		OperatorSetID:   src.OperatorSetID,
-		L1ChainID:       src.L1ChainID,
-		L1RPCUrl:        src.L1RPCUrl,
-		L2ChainID:       src.L2ChainID,
-		L2RPCUrl:        src.L2RPCUrl,
-		PrivateKey:      src.PrivateKey,
-		EnvSecretsPath:  src.EnvSecretsPath,
+		Name:             src.Name,
+		ExecutorEndpoint: src.ExecutorEndpoint,
+		AVSAddress:       src.AVSAddress,
+		OperatorAddress:  src.OperatorAddress,
+		OperatorSetID:    src.OperatorSetID,
+		L1ChainID:        src.L1ChainID,
+		L1RPCUrl:         src.L1RPCUrl,
+		L2ChainID:        src.L2ChainID,
+		L2RPCUrl:         src.L2RPCUrl,
+		PrivateKey:       src.PrivateKey,
+		EnvSecretsPath:   src.EnvSecretsPath,
 	}
 
 	// Copy slices and nested structures
