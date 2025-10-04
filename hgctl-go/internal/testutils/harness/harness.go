@@ -362,7 +362,7 @@ func (h *TestHarness) useTestContext() error {
 		flag  string
 		value string
 	}{
-		{"--executor-address", "127.0.0.1:9090"},
+		{"--executor-endpoint", "127.0.0.1:9090"},
 		{"--avs-address", h.ChainConfig.AVSAccountAddress},
 		{"--operator-address", h.ChainConfig.OperatorAccountAddress},
 		{"--l1-rpc-url", h.ChainConfig.L1RPC}, // Critical: contract middleware needs this

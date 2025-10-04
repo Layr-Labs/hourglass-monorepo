@@ -63,7 +63,7 @@ func deployPerformerAction(c *cli.Context) error {
 	}
 
 	if currentCtx.ExecutorEndpoint == "" {
-		return fmt.Errorf("no executor endpoint found in context. Please deploy an executor first using 'hgctl deploy executor' or set manually with 'hgctl context set --executor-address <address>'")
+		return fmt.Errorf("no executor endpoint found in context. Please deploy an executor first using 'hgctl deploy executor' or set manually with 'hgctl context set --executor-endpoint <address>'")
 	}
 
 	contractClient, err := middleware.GetContractClient(c)

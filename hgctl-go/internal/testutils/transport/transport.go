@@ -1,4 +1,4 @@
-package tableTransporter
+package transport
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/ICrossChainRegistry"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IOperatorTableUpdater"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/config"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/contractCaller/caller"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/transactionSigner"
@@ -25,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/wealdtech/go-merkletree/v2"
 	"go.uber.org/zap"
 )
@@ -121,7 +123,7 @@ func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 	referenceTimestamp := uint32(block.Time())
 
 	// Transfer ownership of CrossChainRegistry
-	transferOwnership(cfg.Logger, cfg.L1RpcUrl,
+	tools.TransferOwnership(cfg.Logger, cfg.L1RpcUrl,
 		common.HexToAddress(cfg.CrossChainRegistryAddress),
 		cfg.TransporterPrivateKey,
 	)
@@ -208,7 +210,7 @@ func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 			rpcURL = cfg.L2RpcUrl
 		}
 
-		transferOwnership(cfg.Logger, rpcURL, updaterAddress, cfg.TransporterPrivateKey)
+		tools.TransferOwnership(cfg.Logger, rpcURL, updaterAddress, cfg.TransporterPrivateKey)
 
 		currentGen, err := getGenerator(ctx, cfg.Logger, cm, chainId, updaterAddress)
 		if err != nil {
@@ -838,5 +840,84 @@ func registerKeyAsOperator(
 	// Stop impersonating the operator
 	_ = client.Client().CallContext(ctx, &ok, "anvil_stopImpersonatingAccount", operatorAddress.Hex())
 
+	return nil
+}
+
+// Impersonate the AVS and call KeyRegistrar.configureOperatorSet(opSet, curveType)
+func configureCurveTypeAsAVS(
+	ctx context.Context,
+	logger *zap.Logger,
+	rpcURL string,
+	keyRegistrar common.Address,
+	avs common.Address,
+	opSetId uint32,
+	curveType uint8,
+) error {
+	// Connect to provided RPC
+	c, err := rpc.DialContext(ctx, rpcURL)
+	if err != nil {
+		return fmt.Errorf("rpc dial: %w", err)
+	}
+
+	// Build minimal ABI
+	krABI := tools.MustABI(logger, `[
+      {"inputs":[{"components":[{"internalType":"address","name":"avs","type":"address"},{"internalType":"uint32","name":"id","type":"uint32"}],"internalType":"struct OperatorSet","name":"opSet","type":"tuple"}],"name":"getOperatorSetCurveType","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
+      {"inputs":[{"components":[{"internalType":"address","name":"avs","type":"address"},{"internalType":"uint32","name":"id","type":"uint32"}],"internalType":"struct OperatorSet","name":"opSet","type":"tuple"},{"internalType":"uint8","name":"curveType","type":"uint8"}],"name":"configureOperatorSet","outputs":[],"stateMutability":"nonpayable","type":"function"}
+    ]`)
+
+	// Tuple type to match (address avs, uint32 id)
+	type opSetT struct {
+		Avs common.Address
+		Id  uint32
+	}
+	opSet := opSetT{Avs: avs, Id: opSetId}
+
+	// Read current curve type; skip if already set
+	calldataGet, _ := krABI.Pack("getOperatorSetCurveType", opSet)
+	var out string
+	if err := c.CallContext(ctx, &out, "eth_call",
+		map[string]any{"to": keyRegistrar.Hex(), "data": hexutil.Encode(calldataGet)},
+		"latest",
+	); err != nil {
+		return fmt.Errorf("getOperatorSetCurveType call: %w", err)
+	}
+	decoded, err := krABI.Unpack("getOperatorSetCurveType", common.FromHex(out))
+	if err != nil {
+		return fmt.Errorf("unpack getOperatorSetCurveType: %w", err)
+	}
+	if ct, ok := decoded[0].(uint8); ok && ct == curveType {
+		logger.Info("Operator set already configured with curveType, skipping")
+		return nil
+	}
+
+	// Impersonate AVS & fund it
+	var ok bool
+	if err := c.CallContext(ctx, &ok, "anvil_impersonateAccount", avs.Hex()); err != nil {
+		return fmt.Errorf("impersonate avs: %w", err)
+	}
+	defer func() { _ = c.CallContext(ctx, &ok, "anvil_stopImpersonatingAccount", avs.Hex()) }()
+	_ = c.CallContext(ctx, &ok, "anvil_setBalance", avs.Hex(), "0x56BC75E2D63100000") // 100 ETH
+
+	// Send configureOperatorSet from the AVS
+	calldataCfg, err := krABI.Pack("configureOperatorSet", opSet, curveType)
+	if err != nil {
+		return fmt.Errorf("pack configureOperatorSet: %w", err)
+	}
+
+	// Construct tx to send from the AVS
+	tx := map[string]any{
+		"from":  avs.Hex(),
+		"to":    keyRegistrar.Hex(),
+		"data":  hexutil.Encode(calldataCfg),
+		"value": "0x0",
+	}
+	var txHash common.Hash
+	if err := c.CallContext(ctx, &txHash, "eth_sendTransaction", tx); err != nil {
+		return fmt.Errorf("send configureOperatorSet: %w", err)
+	}
+
+	// Await receipt
+	tools.MustWaitReceipt(ctx, logger, c, txHash)
+	logger.Info("ConfigureOperatorSet tx sent by AVS: %s", zap.String("owner", txHash.Hex()))
 	return nil
 }

@@ -305,7 +305,7 @@ func Test_CertificateVerifier(t *testing.T) {
 		CurveType:                 config.CurveTypeECDSA,
 	}
 
-	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
+	err = tableTransporter.TransportTableWithMultiOperators(cfg)
 	if err != nil {
 		t.Fatalf("Failed to transport stake tables: %v", err)
 	}

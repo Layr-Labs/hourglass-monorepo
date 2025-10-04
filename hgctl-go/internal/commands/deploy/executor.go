@@ -303,9 +303,8 @@ func (d *ExecutorDeployer) deployContainer(
 	}
 
 	d.printSuccessMessage(containerName, containerID, cfg)
-
-	if err := d.saveExecutorAddress(cfg); err != nil {
-		d.Log.Warn("Failed to save executor address to context", zap.Error(err))
+	if err := d.saveExecutorEndpoint(cfg); err != nil {
+		d.Log.Warn("Failed to save executor endpoint to context", zap.Error(err))
 	}
 
 	return nil
@@ -332,8 +331,8 @@ func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, 
 	return nil
 }
 
-// saveExecutorAddress saves the executor management gRPC address to the context configuration
-func (d *ExecutorDeployer) saveExecutorAddress(cfg *DeploymentConfig) error {
+// saveExecutorEndpoint saves the executor management gRPC address to the context configuration
+func (d *ExecutorDeployer) saveExecutorEndpoint(cfg *DeploymentConfig) error {
 	executorMgmtPort := cfg.Env["EXECUTOR_MGMT_PORT"]
 	if executorMgmtPort == "" {
 		executorMgmtPort = "9091"
