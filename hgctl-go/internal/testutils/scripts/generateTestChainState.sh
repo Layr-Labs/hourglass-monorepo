@@ -1021,3 +1021,4 @@ echo "  - All accounts funded with 10,000 ETH"
 echo "  - Deployed AVS contracts"
 echo "  - Configured operator sets"
 echo "  - All multichain setup complete"
+
