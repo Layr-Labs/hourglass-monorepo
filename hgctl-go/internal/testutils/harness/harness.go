@@ -50,7 +50,7 @@ type TestHarness struct {
 	cleanupFns []func()
 
 	// Test logger
-	logger logger.Logger
+	Logger logger.Logger
 	t      *testing.T
 
 	// Pre-generated operatorKeystores
@@ -100,7 +100,7 @@ func NewTestHarness(t *testing.T) *TestHarness {
 
 	h := &TestHarness{
 		ContextName:       "test",
-		logger:            l,
+		Logger:            l,
 		t:                 t,
 		cleanupFns:        []func(){},
 		operatorKeystores: make(map[string]*PreGeneratedKeystore),
@@ -115,10 +115,10 @@ func NewTestHarness(t *testing.T) *TestHarness {
 
 // Setup initializes the test environment
 func (h *TestHarness) Setup() error {
-	h.logger.Info("Setting up test harness")
+	h.Logger.Info("Setting up test harness")
 
 	// 1. Initialize chain manager
-	h.chainManager = NewChainManager(h.logger)
+	h.chainManager = NewChainManager(h.Logger)
 
 	// 2. Load chain configuration first
 	chainConfig, err := h.chainManager.LoadChainConfig()
@@ -140,7 +140,7 @@ func (h *TestHarness) Setup() error {
 		return fmt.Errorf("failed to use test context: %w", err)
 	}
 
-	h.logger.Debug("Test harness setup complete")
+	h.Logger.Debug("Test harness setup complete")
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (h *TestHarness) StartChains() error {
 	})
 
 	// Create clients
-	h.logger.Info("Connecting to chains")
+	h.Logger.Info("Connecting to chains")
 	l1Client, err := ethclient.Dial(h.ChainConfig.L1RPC)
 	if err != nil {
 		return fmt.Errorf("failed to connect to L1: %w", err)
@@ -328,7 +328,7 @@ func (h *TestHarness) initializeKeystores() {
 
 // Teardown cleans up all test resources
 func (h *TestHarness) Teardown() {
-	h.logger.Debug("Tearing down test harness")
+	h.Logger.Debug("Tearing down test harness")
 
 	// Execute cleanup functions in reverse order
 	for i := len(h.cleanupFns) - 1; i >= 0; i-- {
@@ -477,7 +477,7 @@ func (h *TestHarness) WaitForTransaction(ctx context.Context, txHash string) err
 }
 
 func (h *TestHarness) waitForTransactionOnChain(ctx context.Context, client *ethclient.Client, txHash string) error {
-	h.logger.Info("Waiting for transaction", zap.String("hash", txHash))
+	h.Logger.Info("Waiting for transaction", zap.String("hash", txHash))
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -496,7 +496,7 @@ func (h *TestHarness) waitForTransactionOnChain(ctx context.Context, client *eth
 				if receipt.Status == 0 {
 					return fmt.Errorf("transaction %s failed", txHash)
 				}
-				h.logger.Info("Transaction mined",
+				h.Logger.Info("Transaction mined",
 					zap.String("hash", txHash),
 					zap.Uint64("block", receipt.BlockNumber.Uint64()))
 				return nil
@@ -543,7 +543,7 @@ func (h *TestHarness) useTestContext() error {
 	if err != nil && result.ExitCode != 0 {
 		return fmt.Errorf("failed to show context: %w", err)
 	}
-	h.logger.Debug("Context configured", zap.String("output", result.Stdout))
+	h.Logger.Debug("Context configured", zap.String("output", result.Stdout))
 
 	return nil
 }

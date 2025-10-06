@@ -8,8 +8,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
 	"github.com/ethereum/go-ethereum/common"
 
-	//"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
-	//"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

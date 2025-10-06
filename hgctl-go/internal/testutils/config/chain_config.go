@@ -16,55 +16,55 @@ type ChainConfig struct {
 	AppAccountPublicKey string `json:"appAccountPublicKey"`
 
 	// Operator accounts
-	OperatorAccountAddress        string `json:"operatorAccountAddress"`
-	OperatorAccountPk             string `json:"operatorAccountPk"`
-	OperatorAccountPublicKey      string `json:"operatorAccountPublicKey"`
-	OperatorKeystorePath          string `json:"operatorKeystorePath"`
-	OperatorKeystorePassword      string `json:"operatorKeystorePassword"`
-	OperatorSystemAddress         string `json:"operatorSystemAddress"`
-	OperatorSystemPk              string `json:"operatorSystemPk"`
-	OperatorSystemKeystorePath    string `json:"operatorSystemKeystorePath"`
+	OperatorAccountAddress         string `json:"operatorAccountAddress"`
+	OperatorAccountPk              string `json:"operatorAccountPk"`
+	OperatorAccountPublicKey       string `json:"operatorAccountPublicKey"`
+	OperatorKeystorePath           string `json:"operatorKeystorePath"`
+	OperatorKeystorePassword       string `json:"operatorKeystorePassword"`
+	OperatorSystemAddress          string `json:"operatorSystemAddress"`
+	OperatorSystemPk               string `json:"operatorSystemPk"`
+	OperatorSystemKeystorePath     string `json:"operatorSystemKeystorePath"`
 	OperatorSystemKeystorePassword string `json:"operatorSystemKeystorePassword"`
 
-	ExecOperatorAccountAddress        string `json:"execOperatorAccountAddress"`
-	ExecOperatorAccountPk             string `json:"execOperatorAccountPk"`
-	ExecOperatorAccountPublicKey      string `json:"execOperatorAccountPublicKey"`
-	ExecOperatorKeystorePath          string `json:"execOperatorKeystorePath"`
-	ExecOperatorKeystorePassword      string `json:"execOperatorKeystorePassword"`
-	ExecOperatorSystemAddress         string `json:"execOperatorSystemAddress"`
-	ExecOperatorSystemPk              string `json:"execOperatorSystemPk"`
-	ExecOperatorSystemKeystorePath    string `json:"execOperatorSystemKeystorePath"`
+	ExecOperatorAccountAddress         string `json:"execOperatorAccountAddress"`
+	ExecOperatorAccountPk              string `json:"execOperatorAccountPk"`
+	ExecOperatorAccountPublicKey       string `json:"execOperatorAccountPublicKey"`
+	ExecOperatorKeystorePath           string `json:"execOperatorKeystorePath"`
+	ExecOperatorKeystorePassword       string `json:"execOperatorKeystorePassword"`
+	ExecOperatorSystemAddress          string `json:"execOperatorSystemAddress"`
+	ExecOperatorSystemPk               string `json:"execOperatorSystemPk"`
+	ExecOperatorSystemKeystorePath     string `json:"execOperatorSystemKeystorePath"`
 	ExecOperatorSystemKeystorePassword string `json:"execOperatorSystemKeystorePassword"`
 
 	// Additional executor operators
-	ExecOperator2AccountAddress        string `json:"execOperator2AccountAddress"`
-	ExecOperator2AccountPk             string `json:"execOperator2AccountPk"`
-	ExecOperator2AccountPublicKey      string `json:"execOperator2AccountPublicKey"`
-	ExecOperator2KeystorePath          string `json:"execOperator2KeystorePath"`
-	ExecOperator2KeystorePassword      string `json:"execOperator2KeystorePassword"`
-	ExecOperator2SystemAddress         string `json:"execOperator2SystemAddress"`
-	ExecOperator2SystemPk              string `json:"execOperator2SystemPk"`
-	ExecOperator2SystemKeystorePath    string `json:"execOperator2SystemKeystorePath"`
+	ExecOperator2AccountAddress         string `json:"execOperator2AccountAddress"`
+	ExecOperator2AccountPk              string `json:"execOperator2AccountPk"`
+	ExecOperator2AccountPublicKey       string `json:"execOperator2AccountPublicKey"`
+	ExecOperator2KeystorePath           string `json:"execOperator2KeystorePath"`
+	ExecOperator2KeystorePassword       string `json:"execOperator2KeystorePassword"`
+	ExecOperator2SystemAddress          string `json:"execOperator2SystemAddress"`
+	ExecOperator2SystemPk               string `json:"execOperator2SystemPk"`
+	ExecOperator2SystemKeystorePath     string `json:"execOperator2SystemKeystorePath"`
 	ExecOperator2SystemKeystorePassword string `json:"execOperator2SystemKeystorePassword"`
 
-	ExecOperator3AccountAddress        string `json:"execOperator3AccountAddress"`
-	ExecOperator3AccountPk             string `json:"execOperator3AccountPk"`
-	ExecOperator3AccountPublicKey      string `json:"execOperator3AccountPublicKey"`
-	ExecOperator3KeystorePath          string `json:"execOperator3KeystorePath"`
-	ExecOperator3KeystorePassword      string `json:"execOperator3KeystorePassword"`
-	ExecOperator3SystemAddress         string `json:"execOperator3SystemAddress"`
-	ExecOperator3SystemPk              string `json:"execOperator3SystemPk"`
-	ExecOperator3SystemKeystorePath    string `json:"execOperator3SystemKeystorePath"`
+	ExecOperator3AccountAddress         string `json:"execOperator3AccountAddress"`
+	ExecOperator3AccountPk              string `json:"execOperator3AccountPk"`
+	ExecOperator3AccountPublicKey       string `json:"execOperator3AccountPublicKey"`
+	ExecOperator3KeystorePath           string `json:"execOperator3KeystorePath"`
+	ExecOperator3KeystorePassword       string `json:"execOperator3KeystorePassword"`
+	ExecOperator3SystemAddress          string `json:"execOperator3SystemAddress"`
+	ExecOperator3SystemPk               string `json:"execOperator3SystemPk"`
+	ExecOperator3SystemKeystorePath     string `json:"execOperator3SystemKeystorePath"`
 	ExecOperator3SystemKeystorePassword string `json:"execOperator3SystemKeystorePassword"`
 
-	ExecOperator4AccountAddress        string `json:"execOperator4AccountAddress"`
-	ExecOperator4AccountPk             string `json:"execOperator4AccountPk"`
-	ExecOperator4AccountPublicKey      string `json:"execOperator4AccountPublicKey"`
-	ExecOperator4KeystorePath          string `json:"execOperator4KeystorePath"`
-	ExecOperator4KeystorePassword      string `json:"execOperator4KeystorePassword"`
-	ExecOperator4SystemAddress         string `json:"execOperator4SystemAddress"`
-	ExecOperator4SystemPk              string `json:"execOperator4SystemPk"`
-	ExecOperator4SystemKeystorePath    string `json:"execOperator4SystemKeystorePath"`
+	ExecOperator4AccountAddress         string `json:"execOperator4AccountAddress"`
+	ExecOperator4AccountPk              string `json:"execOperator4AccountPk"`
+	ExecOperator4AccountPublicKey       string `json:"execOperator4AccountPublicKey"`
+	ExecOperator4KeystorePath           string `json:"execOperator4KeystorePath"`
+	ExecOperator4KeystorePassword       string `json:"execOperator4KeystorePassword"`
+	ExecOperator4SystemAddress          string `json:"execOperator4SystemAddress"`
+	ExecOperator4SystemPk               string `json:"execOperator4SystemPk"`
+	ExecOperator4SystemKeystorePath     string `json:"execOperator4SystemKeystorePath"`
 	ExecOperator4SystemKeystorePassword string `json:"execOperator4SystemKeystorePassword"`
 
 	// Unregistered operators (for testing registration flow)
@@ -124,6 +124,7 @@ type ChainConfig struct {
 	DelegationManagerAddress string `json:"delegationManagerAddress"`
 	AllocationManagerAddress string `json:"allocationManagerAddress"`
 	StrategyManagerAddress   string `json:"strategyManagerAddress"`
+	TaskMailboxAddress       string `json:"taskMailboxAddress"`
 
 	// Chain configuration
 	L1ChainID int    `json:"l1ChainId,omitempty"`

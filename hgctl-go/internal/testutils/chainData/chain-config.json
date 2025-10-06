@@ -98,6 +98,7 @@
       "delegationManagerAddress": "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
       "allocationManagerAddress": "0x42583067658071247ec8CE0A516A58f682002d07",
       "strategyManagerAddress": "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+      "taskMailboxAddress": "0x132b466d9d5723531f68797519dfed701ac2c749",
       "destinationEnv": "anvil",
       "forkL1Block": 9349704,
       "forkL2Block": 31958695,
