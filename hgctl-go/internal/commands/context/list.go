@@ -51,7 +51,7 @@ func contextListAction(c *cli.Context) error {
 		table.Append([]string{
 			current,
 			name,
-			ctx.ExecutorAddress,
+			ctx.ExecutorEndpoint,
 			avsAddr,
 			rpcURL,
 		})

@@ -24,6 +24,10 @@ build: ## Build the binary
 	@mkdir -p $(BIN)
 	@go build $(GO_FLAGS) -o $(BIN)/$(APP_NAME) cmd/$(APP_NAME)/main.go
 
+build-transport: ## Build the transport binary for operator table transport
+	@mkdir -p $(BIN)
+	@go build -o $(BIN)/transport cmd/transport/main.go
+
 test: ## Run unit tests (excludes integration tests)
 	@$(GO) test -v $(shell go list ./... | grep -v /testutils/integration) -p 1
 

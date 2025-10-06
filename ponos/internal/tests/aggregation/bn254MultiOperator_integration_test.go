@@ -346,7 +346,7 @@ func Test_BN254_MultiOperator_NonSigners(t *testing.T) {
 		CurveType:                 config.CurveTypeBN254,
 	}
 
-	err = tableTransporter.TransportTableWithSimpleMultiOperators(cfg)
+	err = tableTransporter.TransportTableWithMultiOperators(cfg)
 	require.NoError(t, err, "Failed to transport stake tables")
 
 	currentBlock, err = l1EthClient.BlockNumber(ctx)

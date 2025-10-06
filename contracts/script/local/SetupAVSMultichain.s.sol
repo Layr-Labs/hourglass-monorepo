@@ -14,22 +14,26 @@ import {IECDSATableCalculator} from "@eigenlayer-middleware/src/interfaces/IECDS
 import {BLSApkRegistry} from "@eigenlayer-middleware/src/BLSApkRegistry.sol";
 
 contract SetupAVSMultichain is Script {
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
-
-    IBN254TableCalculator public BN254_TABLE_CALCULATOR =
-        IBN254TableCalculator(0xa19E3B00cf4aC46B5e6dc0Bbb0Fb0c86D0D65603);
-    IECDSATableCalculator public ECDSA_TABLE_CALCULATOR =
-        IECDSATableCalculator(0xA933CB4cbD0C4C208305917f56e0C3f51ad713Fa);
-
     function setUp() public {}
 
     function run() public {
-        // Load the private key from the environment variable
+        // Load addresses from environment variables
+        address crossChainRegistryAddress = vm.envAddress("CROSS_CHAIN_REGISTRY");
+        address bn254TableCalculatorAddress = vm.envAddress("BN254_TABLE_CALCULATOR");
+        address ecdsaTableCalculatorAddress = vm.envAddress("ECDSA_TABLE_CALCULATOR");
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
+
+        ICrossChainRegistry CROSS_CHAIN_REGISTRY = ICrossChainRegistry(crossChainRegistryAddress);
+        IBN254TableCalculator BN254_TABLE_CALCULATOR = IBN254TableCalculator(bn254TableCalculatorAddress);
+        IECDSATableCalculator ECDSA_TABLE_CALCULATOR = IECDSATableCalculator(ecdsaTableCalculatorAddress);
 
         vm.startBroadcast(avsPrivateKey);
         address avs = vm.addr(avsPrivateKey);
+
         console.log("AVS address:", avs);
+        console.log("CrossChainRegistry:", crossChainRegistryAddress);
+        console.log("BN254 Table Calculator:", bn254TableCalculatorAddress);
+        console.log("ECDSA Table Calculator:", ecdsaTableCalculatorAddress);
 
         // create reservations in the cross chain registry for each operator set
         for (uint32 i = 0; i < 2; i++) {
@@ -39,9 +43,8 @@ contract SetupAVSMultichain is Script {
                 maxStalenessPeriod: 604_800 // 1 week
             });
 
-            // aggregator is bn254, executor is ecdsa
             if (i == 0) {
-                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, BN254_TABLE_CALCULATOR, config);
+                CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config);
             } else {
                 CROSS_CHAIN_REGISTRY.createGenerationReservation(operatorSet, ECDSA_TABLE_CALCULATOR, config);
             }

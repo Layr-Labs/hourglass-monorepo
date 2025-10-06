@@ -61,13 +61,13 @@ type MultipleOperatorConfig struct {
 	TransportBLSPrivateKey string
 }
 
-// TransportTableWithSimpleMultiOperators follows the same pattern as the original
+// TransportTableWithMultiOperators follows the same pattern as the original
 // but supports multiple operators by:
 // 1. Registering all operators in the KeyRegistrar
 // 2. Building a merkle tree of operator info
 // 3. Updating the generator with aggregate pubkey and merkle root
 // 4. Calculating and transporting the stake table
-func TransportTableWithSimpleMultiOperators(cfg *MultipleOperatorConfig) error {
+func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 	ctx := context.Background()
 
 	cm := chainManager.NewChainManager()

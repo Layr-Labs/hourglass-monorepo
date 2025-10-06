@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
@@ -14,8 +15,8 @@ func setCommand() *cli.Command {
 		Usage: "Set context properties",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:  "executor-address",
-				Usage: "Set the executor gRPC address",
+				Name:  "executor-endpoint",
+				Usage: "Set the executor gRPC endpoint",
 			},
 			&cli.StringFlag{
 				Name:  "avs-address",
@@ -79,10 +80,10 @@ func contextSetAction(c *cli.Context) error {
 		log.Info("Updated AVS address", zap.String("address", addr))
 	}
 
-	if addr := c.String("executor-address"); addr != "" {
-		ctx.ExecutorAddress = addr
+	if addr := c.String("executor-endpoint"); addr != "" {
+		ctx.ExecutorEndpoint = addr
 		updated = true
-		log.Info("Updated Executor address", zap.String("address", addr))
+		log.Info("Updated Executor endpoint", zap.String("endpoint", addr))
 	}
 
 	if addr := c.String("operator-address"); addr != "" {

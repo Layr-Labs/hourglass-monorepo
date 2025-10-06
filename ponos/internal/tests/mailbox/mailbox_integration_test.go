@@ -497,7 +497,7 @@ func testL1MailboxForCurve(t *testing.T, curveType config.CurveType, networkTarg
 		TransportBLSPrivateKey:    transportBlsKey,
 	}
 
-	err = tableTransporter.TransportTableWithSimpleMultiOperators(transportConfig)
+	err = tableTransporter.TransportTableWithMultiOperators(transportConfig)
 	if err != nil {
 		t.Fatalf("Failed to transport stake tables: %v", err)
 	}

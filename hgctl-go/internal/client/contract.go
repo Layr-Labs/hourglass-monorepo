@@ -111,13 +111,13 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
 			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		}, nil
-	case 31337: // Local Anvil (mainnet fork)
+	case 31337: // Local Anvil (testnet fork)
 		return &DefaultContractAddresses{
-			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
-			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
-			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
-			KeyRegistrar:      "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
-			ReleaseManager:    "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
+			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
 		}, nil
 	default:
 		return nil, fmt.Errorf("default contract addresses not found for chain")
@@ -1042,6 +1042,53 @@ func (c *ContractClient) GetOperatorSetMetadataURI(ctx context.Context, operator
 	}
 
 	return metadataURI, nil
+}
+
+// DeregisterOperatorFromAVS deregisters an operator from an AVS
+func (c *ContractClient) DeregisterOperatorFromAVS(ctx context.Context, operatorSetIDs []uint32) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.allocationManager == nil {
+		return fmt.Errorf("allocation manager not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create deregistration parameters
+	deregisterParams := IAllocationManager.IAllocationManagerTypesDeregisterParams{
+		Operator:       c.operatorAddress,
+		Avs:            c.avsAddress,
+		OperatorSetIds: operatorSetIDs,
+	}
+
+	// Deregister from operator sets
+	tx, err := c.allocationManager.DeregisterFromOperatorSets(opts, deregisterParams)
+	if err != nil {
+		return fmt.Errorf("failed to deregister operator from AVS: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully deregistered operator from AVS",
+		zap.String("operator", c.operatorAddress.Hex()),
+		zap.String("avs", c.avsAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
 }
 
 func (c *ContractClient) Close() {

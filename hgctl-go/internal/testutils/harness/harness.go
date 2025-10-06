@@ -3,12 +3,15 @@ package harness
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands"
@@ -47,15 +50,40 @@ type TestHarness struct {
 	cleanupFns []func()
 
 	// Test logger
-	logger logger.Logger
+	Logger logger.Logger
 	t      *testing.T
 
-	// Pre-generated keystores
-	keystores map[string]*PreGeneratedKeystore
+	// Pre-generated operatorKeystores
+	operatorKeystores map[string]*PreGeneratedKeystore
+
+	// Pre-generated systemKeystores
+	systemKeystores map[string]*PreGeneratedKeystore
 
 	// CLI app instance
 	app *cli.App
 }
+
+// Keystore name constants
+const (
+	KeystoreAggregatorBN254          = "aggregator-bn254"
+	KeystoreAggregatorECDSA          = "aggregator-ecdsa"
+	KeystoreAggregatorSystem         = "aggregator-system"
+	KeystoreExecutorBN254            = "executor-bn254"
+	KeystoreExecutorECDSA            = "executor-ecdsa"
+	KeystoreExecutorSystem           = "executor-system"
+	KeystoreExecutor2ECDSA           = "executor2-ecdsa"
+	KeystoreExecutor2System          = "executor2-system"
+	KeystoreExecutor3ECDSA           = "executor3-ecdsa"
+	KeystoreExecutor3System          = "executor3-system"
+	KeystoreExecutor4ECDSA           = "executor4-ecdsa"
+	KeystoreExecutor4System          = "executor4-system"
+	KeystoreUnregistered1ECDSA       = "unregistered-operator1-ecdsa"
+	KeystoreUnregistered1SystemBN254 = "unregistered1-system-bn254"
+	KeystoreUnregistered1SystemECDSA = "unregistered1-system-ecdsa"
+	KeystoreUnregistered2ECDSA       = "unregistered-operator2-ecdsa"
+	KeystoreUnregistered2SystemBN254 = "unregistered2-system-bn254"
+	KeystoreUnregistered2SystemECDSA = "unregistered2-system-ecdsa"
+)
 
 // PreGeneratedKeystore represents a keystore from the chain setup
 type PreGeneratedKeystore struct {
@@ -71,11 +99,12 @@ func NewTestHarness(t *testing.T) *TestHarness {
 	l := logger.NewLogger(true)
 
 	h := &TestHarness{
-		ContextName: "test",
-		logger:      l,
-		t:           t,
-		cleanupFns:  []func(){},
-		keystores:   make(map[string]*PreGeneratedKeystore),
+		ContextName:       "test",
+		Logger:            l,
+		t:                 t,
+		cleanupFns:        []func(){},
+		operatorKeystores: make(map[string]*PreGeneratedKeystore),
+		systemKeystores:   make(map[string]*PreGeneratedKeystore),
 	}
 
 	// Create the CLI app instance
@@ -86,10 +115,10 @@ func NewTestHarness(t *testing.T) *TestHarness {
 
 // Setup initializes the test environment
 func (h *TestHarness) Setup() error {
-	h.logger.Info("Setting up test harness")
+	h.Logger.Info("Setting up test harness")
 
 	// 1. Initialize chain manager
-	h.chainManager = NewChainManager(h.logger)
+	h.chainManager = NewChainManager(h.Logger)
 
 	// 2. Load chain configuration first
 	chainConfig, err := h.chainManager.LoadChainConfig()
@@ -98,7 +127,7 @@ func (h *TestHarness) Setup() error {
 	}
 	h.ChainConfig = chainConfig
 
-	// 3. Initialize pre-generated keystores
+	// 3. Initialize pre-generated operatorKeystores
 	h.initializeKeystores()
 
 	// 4. Start chains for this test
@@ -111,7 +140,7 @@ func (h *TestHarness) Setup() error {
 		return fmt.Errorf("failed to use test context: %w", err)
 	}
 
-	h.logger.Debug("Test harness setup complete")
+	h.Logger.Debug("Test harness setup complete")
 	return nil
 }
 
@@ -131,7 +160,7 @@ func (h *TestHarness) StartChains() error {
 	})
 
 	// Create clients
-	h.logger.Info("Connecting to chains")
+	h.Logger.Info("Connecting to chains")
 	l1Client, err := ethclient.Dial(h.ChainConfig.L1RPC)
 	if err != nil {
 		return fmt.Errorf("failed to connect to L1: %w", err)
@@ -155,48 +184,151 @@ func (h *TestHarness) StartChains() error {
 	return nil
 }
 
-// initializeKeystores sets up references to pre-generated keystores
+// initializeKeystores sets up references to pre-generated operatorKeystores
 func (h *TestHarness) initializeKeystores() {
-	// Aggregator/Operator keystores
-	h.keystores["aggregator-bn254"] = &PreGeneratedKeystore{
-		Path:     h.ChainConfig.OperatorKeystorePath,
-		Password: h.ChainConfig.OperatorKeystorePassword,
-		Address:  h.ChainConfig.OperatorAccountAddress,
-		Type:     "bn254",
-	}
-
-	// Aggregator ECDSA keystore
+	// Operator ECDSA keystores (for signing transactions as the operator)
 	aggregatorECDSAPath := strings.Replace(h.ChainConfig.OperatorKeystorePath,
 		"aggregator-keystore.json", "aggregator-ecdsa-keystore.json", 1)
-	h.keystores["aggregator-ecdsa"] = &PreGeneratedKeystore{
+	h.operatorKeystores[KeystoreAggregatorECDSA] = &PreGeneratedKeystore{
 		Path:     aggregatorECDSAPath,
 		Password: h.ChainConfig.OperatorKeystorePassword,
 		Address:  h.ChainConfig.OperatorAccountAddress,
 		Type:     "ecdsa",
 	}
 
-	// Executor keystores
-	h.keystores["executor-bn254"] = &PreGeneratedKeystore{
+	executorECDSAPath := strings.Replace(h.ChainConfig.ExecOperatorKeystorePath,
+		"executor-keystore.json", "executor-ecdsa-keystore.json", 1)
+	h.operatorKeystores[KeystoreExecutorECDSA] = &PreGeneratedKeystore{
+		Path:     executorECDSAPath,
+		Password: h.ChainConfig.ExecOperatorKeystorePassword,
+		Address:  h.ChainConfig.ExecOperatorAccountAddress,
+		Type:     "ecdsa",
+	}
+
+	h.operatorKeystores[KeystoreExecutor2ECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator2KeystorePath,
+		Password: h.ChainConfig.ExecOperator2KeystorePassword,
+		Address:  h.ChainConfig.ExecOperator2AccountAddress,
+		Type:     "ecdsa",
+	}
+
+	h.operatorKeystores[KeystoreExecutor3ECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator3KeystorePath,
+		Password: h.ChainConfig.ExecOperator3KeystorePassword,
+		Address:  h.ChainConfig.ExecOperator3AccountAddress,
+		Type:     "ecdsa",
+	}
+
+	h.operatorKeystores[KeystoreExecutor4ECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator4KeystorePath,
+		Password: h.ChainConfig.ExecOperator4KeystorePassword,
+		Address:  h.ChainConfig.ExecOperator4AccountAddress,
+		Type:     "ecdsa",
+	}
+
+	h.operatorKeystores[KeystoreUnregistered1ECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator1KeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator1KeystorePassword,
+		Address:  h.ChainConfig.UnregisteredOperator1AccountAddress,
+		Type:     "ecdsa",
+	}
+
+	h.operatorKeystores[KeystoreUnregistered2ECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator2KeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator2KeystorePassword,
+		Address:  h.ChainConfig.UnregisteredOperator2AccountAddress,
+		Type:     "ecdsa",
+	}
+
+	// System keystores (BN254 is ONLY for system keys, not operator keys)
+	// Aggregator system keys (BN254 + ECDSA)
+	h.systemKeystores[KeystoreAggregatorBN254] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.OperatorKeystorePath,
+		Password: h.ChainConfig.OperatorKeystorePassword,
+		Address:  h.ChainConfig.OperatorAccountAddress,
+		Type:     "bn254",
+	}
+
+	h.systemKeystores[KeystoreAggregatorSystem] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.OperatorSystemKeystorePath,
+		Password: h.ChainConfig.OperatorSystemKeystorePassword,
+		Address:  h.ChainConfig.OperatorSystemAddress,
+		Type:     "ecdsa",
+	}
+
+	// Executor 1 system keys (BN254 + ECDSA)
+	h.systemKeystores[KeystoreExecutorBN254] = &PreGeneratedKeystore{
 		Path:     h.ChainConfig.ExecOperatorKeystorePath,
 		Password: h.ChainConfig.ExecOperatorKeystorePassword,
 		Address:  h.ChainConfig.ExecOperatorAccountAddress,
 		Type:     "bn254",
 	}
 
-	// Executor ECDSA keystore
-	executorECDSAPath := strings.Replace(h.ChainConfig.ExecOperatorKeystorePath,
-		"executor-keystore.json", "executor-ecdsa-keystore.json", 1)
-	h.keystores["executor-ecdsa"] = &PreGeneratedKeystore{
-		Path:     executorECDSAPath,
-		Password: h.ChainConfig.ExecOperatorKeystorePassword,
-		Address:  h.ChainConfig.ExecOperatorAccountAddress,
+	h.systemKeystores[KeystoreExecutorSystem] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperatorSystemKeystorePath,
+		Password: h.ChainConfig.ExecOperatorSystemKeystorePassword,
+		Address:  h.ChainConfig.ExecOperatorSystemAddress,
+		Type:     "ecdsa",
+	}
+
+	// Executor 2 system key (ECDSA only)
+	h.systemKeystores[KeystoreExecutor2System] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator2SystemKeystorePath,
+		Password: h.ChainConfig.ExecOperator2SystemKeystorePassword,
+		Address:  h.ChainConfig.ExecOperator2SystemAddress,
+		Type:     "ecdsa",
+	}
+
+	// Executor 3 system key (ECDSA only)
+	h.systemKeystores[KeystoreExecutor3System] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator3SystemKeystorePath,
+		Password: h.ChainConfig.ExecOperator3SystemKeystorePassword,
+		Address:  h.ChainConfig.ExecOperator3SystemAddress,
+		Type:     "ecdsa",
+	}
+
+	// Executor 4 system key (ECDSA only)
+	h.systemKeystores[KeystoreExecutor4System] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.ExecOperator4SystemKeystorePath,
+		Password: h.ChainConfig.ExecOperator4SystemKeystorePassword,
+		Address:  h.ChainConfig.ExecOperator4SystemAddress,
+		Type:     "ecdsa",
+	}
+
+	// Unregistered operator 1 system keys (BN254 + ECDSA for testing)
+	h.systemKeystores[KeystoreUnregistered1SystemBN254] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator1SystemBN254KeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator1SystemBN254KeystorePassword,
+		Address:  "", // BN254 keystores don't have ECDSA addresses
+		Type:     "bn254",
+	}
+
+	h.systemKeystores[KeystoreUnregistered1SystemECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator1SystemECDSAKeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator1SystemECDSAKeystorePassword,
+		Address:  h.ChainConfig.UnregisteredOperator1SystemECDSAAddress,
+		Type:     "ecdsa",
+	}
+
+	// Unregistered operator 2 system keys (BN254 + ECDSA for testing)
+	h.systemKeystores[KeystoreUnregistered2SystemBN254] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator2SystemBN254KeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator2SystemBN254KeystorePassword,
+		Address:  "", // BN254 keystores don't have ECDSA addresses
+		Type:     "bn254",
+	}
+
+	h.systemKeystores[KeystoreUnregistered2SystemECDSA] = &PreGeneratedKeystore{
+		Path:     h.ChainConfig.UnregisteredOperator2SystemECDSAKeystorePath,
+		Password: h.ChainConfig.UnregisteredOperator2SystemECDSAKeystorePassword,
+		Address:  h.ChainConfig.UnregisteredOperator2SystemECDSAAddress,
 		Type:     "ecdsa",
 	}
 }
 
 // Teardown cleans up all test resources
 func (h *TestHarness) Teardown() {
-	h.logger.Debug("Tearing down test harness")
+	h.Logger.Debug("Tearing down test harness")
 
 	// Execute cleanup functions in reverse order
 	for i := len(h.cleanupFns) - 1; i >= 0; i-- {
@@ -214,11 +346,50 @@ func (h *TestHarness) Teardown() {
 
 // ExecuteCLI runs hgctl with the given arguments
 func (h *TestHarness) ExecuteCLI(args ...string) (*CLIResult, error) {
-	return h.ExecuteCLIWithKeystore("", args...)
+	return h.ExecuteCLIWithOperatorKeystore("", args...)
 }
 
-// ExecuteCLIWithKeystore runs hgctl with a specific keystore
-func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string) (*CLIResult, error) {
+// ConfigureSystemKey configures a system keystore for use with hgctl signer system
+func (h *TestHarness) ConfigureSystemKey(keystoreName string) error {
+	// Fetch system keystore
+	keystore, exists := h.systemKeystores[keystoreName]
+	if !exists {
+		return fmt.Errorf("unknown system keystore: %s", keystoreName)
+	}
+
+	if keystore.Type == "ecdsa" {
+		privateKey, err := convertKeystoreToPrivateKey(keystore.Path, keystore.Password)
+		if err != nil {
+			return err
+		}
+		err = os.Setenv("SYSTEM_PRIVATE_KEY", privateKey)
+		if err != nil {
+			return err
+		}
+		signerArgs := []string{"hgctl", "signer", "system", "privatekey"}
+		if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
+			return fmt.Errorf("failed to configure system keystore: %w", err)
+		}
+		return nil
+	}
+
+	// Set keystore password environment variable
+	err := os.Setenv("SYSTEM_KEYSTORE_PASSWORD", keystore.Password)
+	if err != nil {
+		return err
+	}
+
+	// Configure the system signer with this keystore
+	signerArgs := []string{"hgctl", "signer", "system", "keystore", "--name", keystoreName, "--type", keystore.Type}
+	if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
+		return fmt.Errorf("failed to configure system keystore: %w", err)
+	}
+
+	return nil
+}
+
+// ExecuteCLIWithOperatorKeystore runs hgctl with a specific keystore
+func (h *TestHarness) ExecuteCLIWithOperatorKeystore(keystoreName string, args ...string) (*CLIResult, error) {
 	// Simple environment restoration using defer
 	var envToRestore []struct{ key, value string }
 	defer func() {
@@ -231,55 +402,40 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 		}
 	}()
 
-	// Set OPERATOR_PRIVATE_KEY for operations that need it
-	// The operator signer is configured with privateKey: true, so it needs this env var
+	// Configure operator keystore if specified
 	if keystoreName != "" {
-		if _, exists := h.keystores[keystoreName]; !exists {
-			return nil, fmt.Errorf("unknown keystore: %s", keystoreName)
+		keystore, exists := h.operatorKeystores[keystoreName]
+		if !exists {
+			return nil, fmt.Errorf("unknown operator keystore: %s", keystoreName)
 		}
 
-		// Determine which private key to use based on keystore name
-		var operatorPrivateKey string
-		switch keystoreName {
-		case "aggregator-ecdsa", "aggregator-bn254":
-			operatorPrivateKey = h.ChainConfig.OperatorAccountPk
-		case "executor-ecdsa", "executor-bn254":
-			operatorPrivateKey = h.ChainConfig.ExecOperatorAccountPk
+		// Update context with the operator address for this keystore
+		contextArgs := []string{"hgctl", "context", "set", "--operator-address", keystore.Address}
+		if err := h.app.RunContext(context.Background(), contextArgs); err != nil {
+			return nil, fmt.Errorf("failed to set operator address in context: %w", err)
 		}
 
-		if operatorPrivateKey != "" {
-			if !strings.HasPrefix(operatorPrivateKey, "0x") {
-				operatorPrivateKey = "0x" + operatorPrivateKey
-			}
-			// Set OPERATOR_PRIVATE_KEY for the operator signer configuration
-			originalValue := os.Getenv("OPERATOR_PRIVATE_KEY")
-			envToRestore = append(envToRestore, struct{ key, value string }{"OPERATOR_PRIVATE_KEY", originalValue})
-			os.Setenv("OPERATOR_PRIVATE_KEY", operatorPrivateKey)
-		}
+		// Set keystore password environment variable
+		originalPwd := os.Getenv("OPERATOR_KEYSTORE_PASSWORD")
+		envToRestore = append(envToRestore, struct{ key, value string }{"OPERATOR_KEYSTORE_PASSWORD", originalPwd})
+		os.Setenv("OPERATOR_KEYSTORE_PASSWORD", keystore.Password)
 
-		// Also set keystore passwords if needed for system signers
-		if strings.Contains(keystoreName, "aggregator") {
-			originalPwd := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
-			envToRestore = append(envToRestore, struct{ key, value string }{"SYSTEM_KEYSTORE_PASSWORD", originalPwd})
-			os.Setenv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.OperatorKeystorePassword)
-		} else if strings.Contains(keystoreName, "executor") {
-			originalPwd := os.Getenv("SYSTEM_KEYSTORE_PASSWORD")
-			envToRestore = append(envToRestore, struct{ key, value string }{"SYSTEM_KEYSTORE_PASSWORD", originalPwd})
-			os.Setenv("SYSTEM_KEYSTORE_PASSWORD", h.ChainConfig.ExecOperatorKeystorePassword)
+		// Configure the operator signer with this keystore
+		signerArgs := []string{"hgctl", "signer", "operator", "keystore", "--name", keystoreName}
+		if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
+			return nil, fmt.Errorf("failed to configure operator keystore: %w", err)
 		}
 	}
 
 	// Simple output capture
 	outputBuf := &bytes.Buffer{}
 
-	// Create fresh app instance
-	app := commands.Hgctl()
-	app.Writer = outputBuf
-	app.ErrWriter = outputBuf
+	h.app.Writer = outputBuf
+	h.app.ErrWriter = outputBuf
 
 	// Run the command
 	allArgs := append([]string{"hgctl"}, args...)
-	err := app.RunContext(context.Background(), allArgs)
+	err := h.app.RunContext(context.Background(), allArgs)
 
 	// Build result
 	result := &CLIResult{
@@ -294,6 +450,7 @@ func (h *TestHarness) ExecuteCLIWithKeystore(keystoreName string, args ...string
 		} else {
 			result.ExitCode = 1
 		}
+		result.Stderr = err.Error()
 	} else {
 		result.ExitCode = 0
 	}
@@ -320,7 +477,7 @@ func (h *TestHarness) WaitForTransaction(ctx context.Context, txHash string) err
 }
 
 func (h *TestHarness) waitForTransactionOnChain(ctx context.Context, client *ethclient.Client, txHash string) error {
-	h.logger.Info("Waiting for transaction", zap.String("hash", txHash))
+	h.Logger.Info("Waiting for transaction", zap.String("hash", txHash))
 
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -339,7 +496,7 @@ func (h *TestHarness) waitForTransactionOnChain(ctx context.Context, client *eth
 				if receipt.Status == 0 {
 					return fmt.Errorf("transaction %s failed", txHash)
 				}
-				h.logger.Info("Transaction mined",
+				h.Logger.Info("Transaction mined",
 					zap.String("hash", txHash),
 					zap.Uint64("block", receipt.BlockNumber.Uint64()))
 				return nil
@@ -362,7 +519,7 @@ func (h *TestHarness) useTestContext() error {
 		flag  string
 		value string
 	}{
-		{"--executor-address", "127.0.0.1:9090"},
+		{"--executor-endpoint", "127.0.0.1:9090"},
 		{"--avs-address", h.ChainConfig.AVSAccountAddress},
 		{"--operator-address", h.ChainConfig.OperatorAccountAddress},
 		{"--l1-rpc-url", h.ChainConfig.L1RPC}, // Critical: contract middleware needs this
@@ -386,7 +543,7 @@ func (h *TestHarness) useTestContext() error {
 	if err != nil && result.ExitCode != 0 {
 		return fmt.Errorf("failed to show context: %w", err)
 	}
-	h.logger.Debug("Context configured", zap.String("output", result.Stdout))
+	h.Logger.Debug("Context configured", zap.String("output", result.Stdout))
 
 	return nil
 }
@@ -449,22 +606,22 @@ func (h *TestHarness) GetBeaconETHStrategy() string {
 
 // GetAggregatorBN254Keystore returns the aggregator BN254 keystore
 func (h *TestHarness) GetAggregatorBN254Keystore() *PreGeneratedKeystore {
-	return h.keystores["aggregator-bn254"]
+	return h.systemKeystores["aggregator-bn254"]
 }
 
 // GetAggregatorECDSAKeystore returns the aggregator ECDSA keystore
 func (h *TestHarness) GetAggregatorECDSAKeystore() *PreGeneratedKeystore {
-	return h.keystores["aggregator-ecdsa"]
+	return h.operatorKeystores["aggregator-ecdsa"]
 }
 
 // GetExecutorBN254Keystore returns the executor BN254 keystore
 func (h *TestHarness) GetExecutorBN254Keystore() *PreGeneratedKeystore {
-	return h.keystores["executor-bn254"]
+	return h.systemKeystores["executor-bn254"]
 }
 
 // GetExecutorECDSAKeystore returns the executor ECDSA keystore
 func (h *TestHarness) GetExecutorECDSAKeystore() *PreGeneratedKeystore {
-	return h.keystores["executor-ecdsa"]
+	return h.operatorKeystores["executor-ecdsa"]
 }
 
 // MineBlocks mines blocks on the L1 chain
@@ -489,4 +646,26 @@ func ParseTransactionHash(output string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no transaction hash found in output")
+}
+
+// ConvertKeystoreToPrivateKey converts an ECDSA keystore to a hex-encoded private key
+func convertKeystoreToPrivateKey(keystorePath, password string) (string, error) {
+	// Clean and validate the path
+	keystorePath = filepath.Clean(keystorePath)
+
+	// Read the keystore file
+	keyStoreContents, err := os.ReadFile(keystorePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read keystore at %s: %w", keystorePath, err)
+	}
+
+	// Decrypt the keystore
+	key, err := keystore.DecryptKey(keyStoreContents, password)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt keystore: %w", err)
+	}
+
+	// Convert to hex string with 0x prefix
+	privateKeyHex := hex.EncodeToString(key.PrivateKey.D.Bytes())
+	return "0x" + privateKeyHex, nil
 }

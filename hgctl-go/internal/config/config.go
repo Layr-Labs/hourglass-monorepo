@@ -39,15 +39,16 @@ type ContractOverrides struct {
 }
 
 type Context struct {
-	Name            string `yaml:"-"`
-	ExecutorAddress string `yaml:"executorAddress,omitempty"`
-	AVSAddress      string `yaml:"avsAddress,omitempty"`
-	OperatorAddress string `yaml:"operatorAddress,omitempty"`
-	OperatorSetID   uint32 `yaml:"operatorSetId,omitempty"`
-	L1ChainID       uint32 `yaml:"l1ChainId,omitempty"`
-	L1RPCUrl        string `yaml:"l1RpcUrl,omitempty"`
-	L2ChainID       uint32 `yaml:"l2ChainId,omitempty"`
-	L2RPCUrl        string `yaml:"l2RpcUrl,omitempty"`
+	Name               string `yaml:"-"`
+	ExecutorEndpoint   string `yaml:"executorEndpoint,omitempty"`
+	AggregatorEndpoint string `yaml:"aggregatorEndpoint,omitempty"`
+	AVSAddress         string `yaml:"avsAddress,omitempty"`
+	OperatorAddress    string `yaml:"operatorAddress,omitempty"`
+	OperatorSetID      uint32 `yaml:"operatorSetId,omitempty"`
+	L1ChainID          uint32 `yaml:"l1ChainId,omitempty"`
+	L1RPCUrl           string `yaml:"l1RpcUrl,omitempty"`
+	L2ChainID          uint32 `yaml:"l2ChainId,omitempty"`
+	L2RPCUrl           string `yaml:"l2RpcUrl,omitempty"`
 
 	// Private key for transactions (should be provided via env var or flag)
 	PrivateKey string `yaml:"-"`
@@ -327,8 +328,7 @@ func defaultConfig() *Config {
 		CurrentContext: "default",
 		Contexts: map[string]*Context{
 			"default": {
-				Name:            "default",
-				ExecutorAddress: "127.0.0.1:9090",
+				Name: "default",
 			},
 		},
 	}
@@ -362,8 +362,12 @@ func (c *Context) ToMap() map[string]interface{} {
 		result["l2-rpc-url"] = c.L2RPCUrl
 	}
 
-	if c.ExecutorAddress != "" {
-		result["executor-address"] = c.ExecutorAddress
+	if c.ExecutorEndpoint != "" {
+		result["executor-endpoint"] = c.ExecutorEndpoint
+	}
+
+	if c.AggregatorEndpoint != "" {
+		result["aggregator-endpoint"] = c.AggregatorEndpoint
 	}
 
 	if c.OperatorAddress != "" {

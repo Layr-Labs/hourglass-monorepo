@@ -42,15 +42,14 @@ func getPerformerAction(c *cli.Context) error {
 		return fmt.Errorf("no context configured")
 	}
 
-	if currentCtx.ExecutorAddress == "" {
+	if currentCtx.ExecutorEndpoint == "" {
 		return fmt.Errorf("executor address not configured")
 	}
 
-	log.Info("Getting performers",
-		zap.String("avs", avsAddress))
+	log.Info("Getting performers")
 
 	// Create executor client
-	executorClient, err := client.NewExecutorClient(currentCtx.ExecutorAddress, log)
+	executorClient, err := client.NewExecutorClient(currentCtx.ExecutorEndpoint, log)
 	if err != nil {
 		return fmt.Errorf("failed to create executor client: %w", err)
 	}

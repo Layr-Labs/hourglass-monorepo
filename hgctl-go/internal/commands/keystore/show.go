@@ -42,6 +42,11 @@ The keystore must have been previously added to your context using 'keystore add
 				Required: false,
 				Usage:    "Name of the key you want to show.",
 			},
+			&cli.StringFlag{
+				Name:     "password",
+				Required: false,
+				Usage:    "Password to decrypt the keystore (if not provided, will prompt interactively)",
+			},
 		},
 		Action: func(c *cli.Context) error {
 			keyName := c.String("name")
@@ -79,20 +84,27 @@ The keystore must have been previously added to your context using 'keystore add
 				return fmt.Errorf("keystore file does not exist at path: %s", keystoreRef.Path)
 			}
 
-			confirm, err := output.Confirm("This will show your private key. Are you sure you want to export?")
-			if err != nil {
-				return err
-			}
-			if !confirm {
-				return nil
+			// Get password from flag or prompt interactively
+			password := c.String("password")
+
+			// Only prompt for confirmation and password if not provided via flag
+			if password == "" {
+				confirm, err := output.Confirm("This will show your private key. Are you sure you want to export?")
+				if err != nil {
+					return err
+				}
+				if !confirm {
+					return nil
+				}
+
+				password, err = output.InputHiddenString("Enter password to decrypt the key", "", func(s string) error {
+					return nil
+				})
+				if err != nil {
+					return err
+				}
 			}
 
-			password, err := output.InputHiddenString("Enter password to decrypt the key", "", func(s string) error {
-				return nil
-			})
-			if err != nil {
-				return err
-			}
 			fmt.Printf("Showing the key '%s' from: %s\n", keyName, keystoreRef.Path)
 
 			privateKey, err := getPrivateKey(strings.ToLower(keystoreRef.Type), keystoreRef.Path, password)

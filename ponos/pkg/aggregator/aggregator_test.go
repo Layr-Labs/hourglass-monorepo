@@ -594,7 +594,7 @@ func runAggregatorTest(t *testing.T, mode string, sigConfig SignatureModeConfig)
 
 	contractAddresses := config.CoreContracts[config.ChainId_EthereumMainnet]
 
-	err = tableTransporter.TransportTableWithSimpleMultiOperators(
+	err = tableTransporter.TransportTableWithMultiOperators(
 		&tableTransporter.MultipleOperatorConfig{
 			TransporterPrivateKey:     chainConfig.AVSAccountPrivateKey,
 			L1RpcUrl:                  "http://localhost:8545",
