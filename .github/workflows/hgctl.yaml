@@ -95,20 +95,25 @@ jobs:
           INSTALL_DIR="$HOME/bin"
           mkdir -p "$INSTALL_DIR"
 
-          # Download with verbose output
           DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
           echo "Downloading from: $DEVKIT_URL"
 
           curl -L -o /tmp/devkit.tar.gz "$DEVKIT_URL"
 
-          # Check if it's actually a gzip file
-          file /tmp/devkit.tar.gz
-
-          # Try to extract
-          tar -xzf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
+          # Extract without gzip decompression (file is already uncompressed tar)
+          tar -xf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
           chmod +x "$INSTALL_DIR/devkit"
 
           echo "$INSTALL_DIR" >> $GITHUB_PATH
+
+      - name: Verify DevKit installation
+        run: devkit --version
+
+      - name: Run integration tests
+        run: |
+          cd hgctl-go
+          make generate-test-state
+          make test-integration
 
   # Quick build test for PRs - only builds Linux AMD64
   build-test:
