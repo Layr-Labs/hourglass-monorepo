@@ -593,20 +593,6 @@ devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metada
 devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
 
 # -----------------------------------------------------------------------------
-# Authenticate with Docker registry for publishing
-# -----------------------------------------------------------------------------
-if [ "$ENVIRONMENT" = "staging" ]; then
-    # Staging: use Docker Hub authentication
-    if [ -n "$DOCKERHUB_TOKEN" ]; then
-        echo "Authenticating with Docker Hub (staging)..."
-        echo "$DOCKERHUB_TOKEN" | docker login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-    else
-        echo "Error: DOCKERHUB_TOKEN not set for staging environment"
-        exit 1
-    fi
-fi
-
-# -----------------------------------------------------------------------------
 # Publish AVS release to ReleaseManager
 # -----------------------------------------------------------------------------
 echo "Publishing AVS release to $REGISTRY_URL..."
