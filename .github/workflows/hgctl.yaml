@@ -107,7 +107,7 @@ jobs:
           echo "$INSTALL_DIR" >> $GITHUB_PATH
 
       - name: Verify DevKit installation
-        run: devkit --version
+        run: devkit version
 
       - name: Run integration tests
         run: |
