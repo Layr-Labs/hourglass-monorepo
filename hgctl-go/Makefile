@@ -24,6 +24,10 @@ build: ## Build the binary
 	@mkdir -p $(BIN)
 	@go build $(GO_FLAGS) -o $(BIN)/$(APP_NAME) cmd/$(APP_NAME)/main.go
 
+build-transport: ## Build the transport binary for operator table transport
+	@mkdir -p $(BIN)
+	@go build -o $(BIN)/transport cmd/transport/main.go
+
 test: ## Run unit tests (excludes integration tests)
 	@$(GO) test -v $(shell go list ./... | grep -v /testutils/integration) -p 1
 
@@ -41,6 +45,11 @@ generate-test-state: ## Generate fresh test chain state with AVS setup
 clean-test-state: ## Clean up test data and keystores
 	@echo "Cleaning test data..."
 	@./internal/testutils/scripts/clean_test_data.sh
+
+.PHONY: run-transport
+run-transport: ## Run operator table transport (requires anvil chains to be running)
+	@echo "Running operator table transport..."
+	@./internal/testutils/scripts/testTransport.sh
 
 fmt: ## Format code
 	@go fmt $(GO_PACKAGES)

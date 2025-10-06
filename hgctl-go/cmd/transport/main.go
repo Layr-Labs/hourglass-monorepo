@@ -20,18 +20,19 @@ type OperatorConfig struct {
 }
 
 type TransportConfig struct {
-	TransporterKey     string           `json:"transporterKey"`
-	L1RpcUrl           string           `json:"l1RpcUrl"`
-	L1ChainId          uint64           `json:"l1ChainId"`
-	L2RpcUrl           string           `json:"l2RpcUrl,omitempty"`
-	L2ChainId          uint64           `json:"l2ChainId,omitempty"`
-	CrossChainRegistry string           `json:"crossChainRegistry"`
-	AVSAddress         string           `json:"avsAddress"`
-	OperatorSetId      uint32           `json:"operatorSetId"`
-	CurveType          string           `json:"curveType"`
-	TransportBLSKey    string           `json:"transportBlsKey"`
-	Operators          []OperatorConfig `json:"operators"`
-	ChainsToIgnore     []uint64         `json:"chainsToIgnore,omitempty"`
+	TransporterKey      string           `json:"transporterKey"`
+	L1RpcUrl            string           `json:"l1RpcUrl"`
+	L1ChainId           uint64           `json:"l1ChainId"`
+	L2RpcUrl            string           `json:"l2RpcUrl,omitempty"`
+	L2ChainId           uint64           `json:"l2ChainId,omitempty"`
+	CrossChainRegistry  string           `json:"crossChainRegistry"`
+	KeyRegistrarAddress string           `json:"keyRegistrarAddress"`
+	AVSAddress          string           `json:"avsAddress"`
+	OperatorSetId       uint32           `json:"operatorSetId"`
+	CurveType           string           `json:"curveType"`
+	TransportBLSKey     string           `json:"transportBlsKey"`
+	Operators           []OperatorConfig `json:"operators"`
+	ChainsToIgnore      []uint64         `json:"chainsToIgnore,omitempty"`
 }
 
 func main() {
@@ -114,6 +115,7 @@ func main() {
 		L2RpcUrl:                  cfg.L2RpcUrl,
 		L2ChainId:                 cfg.L2ChainId,
 		CrossChainRegistryAddress: cfg.CrossChainRegistry,
+		KeyRegistrarAddress:       cfg.KeyRegistrarAddress,
 		AVSAddress:                common.HexToAddress(cfg.AVSAddress),
 		OperatorSetId:             cfg.OperatorSetId,
 		CurveType:                 curveType,

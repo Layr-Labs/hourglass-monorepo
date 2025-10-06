@@ -60,10 +60,10 @@ KEYS_DIR="$HGCTL_ROOT/internal/testutils/keys"
 mkdir -p "$KEYS_DIR"
 
 # ethereum mainnet
-L1_FORK_RPC_URL=https://chaotic-delicate-needle.ethereum-sepolia.quiknode.pro/de95f687aeb82f1e7dc579e7fa5c698931ff2c57/
+L1_FORK_RPC_URL=https://shy-convincing-wave.ethereum-sepolia.quiknode.pro/3dd1c3a3090f08c2452c5bd135ecfbce22cde912
 
 anvilL1ChainId=31337
-anvilL1StartBlock=23477799
+anvilL1StartBlock=9349704
 anvilL1DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l1-state.json
 anvilL1ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -73,7 +73,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://dimensional-compatible-sky.base-sepolia.quiknode.pro/2bd3461589b9a684678254bbd88bccbd65c34b84/
 
 anvilL2ChainId=31338
-anvilL2StartBlock=36235532
+anvilL2StartBlock=31958695
 anvilL2DumpStatePath=$HGCTL_ROOT/internal/testdata/anvil-l2-state.json
 anvilL2ConfigPath=$HGCTL_ROOT/internal/testdata/anvil-l2-config.json
 anvilL2RpcPort=9545
@@ -94,7 +94,7 @@ chmod 644 "$anvilL2ConfigPath" 2>/dev/null || true
 # -----------------------------------------------------------------------------
 echo "Loading accounts from anvilConfig/accounts.json..."
 
-ACCOUNTS_FILE="$PROJECT_ROOT/ponos/anvilConfig/accounts.json"
+ACCOUNTS_FILE="$PROJECT_ROOT/hgctl-go/internal/testutils/anvilConfig/accounts.json"
 
 if [ ! -f "$ACCOUNTS_FILE" ]; then
     echo "Error: accounts.json not found at $ACCOUNTS_FILE"
@@ -183,9 +183,29 @@ execOperator3AccountAddress=$(echo $seedAccounts | jq -r '.[] | select(.name == 
 execOperator4AccountPk=$(echo $seedAccounts | jq -r '.[] | select(.name == "exec_operator4") | .private_key')
 execOperator4AccountAddress=$(echo $seedAccounts | jq -r '.[] | select(.name == "exec_operator4") | .address')
 
-# Load unregistered operator (for testing registration flow)
-unregisteredOperatorAccountPk=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator") | .private_key')
-unregisteredOperatorAccountAddress=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator") | .address')
+# Load or generate unregistered operators (for testing registration flow)
+# Try to load from config first, generate if not present
+unregisteredOperator1AccountPk=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator1") | .private_key')
+unregisteredOperator1AccountAddress=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator1") | .address')
+
+unregisteredOperator2AccountPk=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator2") | .private_key')
+unregisteredOperator2AccountAddress=$(echo $seedAccounts | jq -r '.[] | select(.name == "unregistered_operator2") | .address')
+
+# Generate unregistered operator 1 if not in config
+if [ -z "$unregisteredOperator1AccountPk" ] || [ "$unregisteredOperator1AccountPk" = "null" ]; then
+    echo "Generating unregistered_operator1 (not found in config)..."
+    unregisteredOperator1AccountPk=$(openssl rand -hex 32)
+    unregisteredOperator1AccountAddress=$(cast wallet address --private-key 0x$unregisteredOperator1AccountPk)
+    echo "  Generated address: $unregisteredOperator1AccountAddress"
+fi
+
+# Generate unregistered operator 2 if not in config
+if [ -z "$unregisteredOperator2AccountPk" ] || [ "$unregisteredOperator2AccountPk" = "null" ]; then
+    echo "Generating unregistered_operator2 (not found in config)..."
+    unregisteredOperator2AccountPk=$(openssl rand -hex 32)
+    unregisteredOperator2AccountAddress=$(cast wallet address --private-key 0x$unregisteredOperator2AccountPk)
+    echo "  Generated address: $unregisteredOperator2AccountAddress"
+fi
 
 # Load staker accounts
 aggStakerAccountPk=$(echo $seedAccounts | jq -r '.[] | select(.name == "agg_staker") | .private_key')
@@ -210,7 +230,8 @@ echo "  Exec Operator 1: $execOperatorAccountAddress"
 echo "  Exec Operator 2: $execOperator2AccountAddress"
 echo "  Exec Operator 3: $execOperator3AccountAddress"
 echo "  Exec Operator 4: $execOperator4AccountAddress"
-echo "  Unregistered Operator: $unregisteredOperatorAccountAddress"
+echo "  Unregistered Operator 1: $unregisteredOperator1AccountAddress"
+echo "  Unregistered Operator 2: $unregisteredOperator2AccountAddress"
 echo "  Agg staker: $aggStakerAccountAddress"
 echo "  Exec staker 1: $execStakerAccountAddress"
 echo "  Exec staker 2: $execStaker2AccountAddress"
@@ -226,6 +247,7 @@ echo "Generating test operator keystores..."
 # BN254 private keys are 32 bytes (64 hex chars)
 AGGREGATOR_BN254_PK="1234567890123456789012345678901234567890123456789012345678901234"
 EXECUTOR_BN254_PK="abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+TRANSPORT_BLS_KEY="0x5f8e6420b9cb0c940e3d3f8b99177980785906d16fb3571f70d7a05ecf5f2172"
 
 # Test passwords for integration tests
 AGGREGATOR_PASSWORD="aggregator-test-password"
@@ -290,8 +312,28 @@ create_keystore "executor3-ecdsa" "ecdsa" "$execOperator3AccountPk" "$EXECUTOR_P
 echo "Creating ECDSA keystore for executor 4..."
 create_keystore "executor4-ecdsa" "ecdsa" "$execOperator4AccountPk" "$EXECUTOR_PASSWORD"
 
-echo "Creating ECDSA keystore for unregistered operator..."
-create_keystore "unregistered-operator-ecdsa" "ecdsa" "$unregisteredOperatorAccountPk" "$EXECUTOR_PASSWORD"
+echo "Creating ECDSA keystore for unregistered operator 1..."
+create_keystore "unregistered-operator1-ecdsa" "ecdsa" "$unregisteredOperator1AccountPk" "$EXECUTOR_PASSWORD"
+
+echo "Creating ECDSA keystore for unregistered operator 2..."
+create_keystore "unregistered-operator2-ecdsa" "ecdsa" "$unregisteredOperator2AccountPk" "$EXECUTOR_PASSWORD"
+
+# Create system ECDSA keystores for registered operators (these generate random keys)
+# These are separate from operator signing keys and used for system-level operations
+echo "Creating system ECDSA keystores for registered operators..."
+create_keystore "aggregator-system" "ecdsa" "" "$AGGREGATOR_PASSWORD"
+create_keystore "executor-system" "ecdsa" "" "$EXECUTOR_PASSWORD"
+create_keystore "executor2-system" "ecdsa" "" "$EXECUTOR_PASSWORD"
+create_keystore "executor3-system" "ecdsa" "" "$EXECUTOR_PASSWORD"
+create_keystore "executor4-system" "ecdsa" "" "$EXECUTOR_PASSWORD"
+
+# Create system keystores for unregistered operators (for testing)
+# These will NOT be registered with EigenLayer
+echo "Creating system keystores for unregistered operators..."
+create_keystore "unregistered1-system-bn254" "bn254" "" "$EXECUTOR_PASSWORD"
+create_keystore "unregistered1-system-ecdsa" "ecdsa" "" "$EXECUTOR_PASSWORD"
+create_keystore "unregistered2-system-bn254" "bn254" "" "$EXECUTOR_PASSWORD"
+create_keystore "unregistered2-system-ecdsa" "ecdsa" "" "$EXECUTOR_PASSWORD"
 
 # Debug: Show where keystores are created
 echo "Checking for keystores in possible locations..."
@@ -323,11 +365,53 @@ copy_keystore "executor-ecdsa" "$KEYS_DIR/executor-ecdsa-keystore.json"
 copy_keystore "executor2-ecdsa" "$KEYS_DIR/executor2-ecdsa-keystore.json"
 copy_keystore "executor3-ecdsa" "$KEYS_DIR/executor3-ecdsa-keystore.json"
 copy_keystore "executor4-ecdsa" "$KEYS_DIR/executor4-ecdsa-keystore.json"
-copy_keystore "unregistered-operator-ecdsa" "$KEYS_DIR/unregistered-operator-ecdsa-keystore.json"
+copy_keystore "unregistered-operator1-ecdsa" "$KEYS_DIR/unregistered-operator1-ecdsa-keystore.json"
+copy_keystore "unregistered-operator2-ecdsa" "$KEYS_DIR/unregistered-operator2-ecdsa-keystore.json"
+
+# Copy system keystores for registered operators
+copy_keystore "aggregator-system" "$KEYS_DIR/aggregator-system-keystore.json"
+copy_keystore "executor-system" "$KEYS_DIR/executor-system-keystore.json"
+copy_keystore "executor2-system" "$KEYS_DIR/executor2-system-keystore.json"
+copy_keystore "executor3-system" "$KEYS_DIR/executor3-system-keystore.json"
+copy_keystore "executor4-system" "$KEYS_DIR/executor4-system-keystore.json"
+
+# Copy system keystores for unregistered operators
+copy_keystore "unregistered1-system-bn254" "$KEYS_DIR/unregistered1-system-bn254-keystore.json"
+copy_keystore "unregistered1-system-ecdsa" "$KEYS_DIR/unregistered1-system-ecdsa-keystore.json"
+copy_keystore "unregistered2-system-bn254" "$KEYS_DIR/unregistered2-system-bn254-keystore.json"
+copy_keystore "unregistered2-system-ecdsa" "$KEYS_DIR/unregistered2-system-ecdsa-keystore.json"
+
+# Extract system key information using hgctl keystore show
+echo "Extracting system key information for registered operators..."
+AGGREGATOR_SYSTEM_PK=$("$HGCTL" keystore show --name aggregator-system --password "$AGGREGATOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR_SYSTEM_PK=$("$HGCTL" keystore show --name executor-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR2_SYSTEM_PK=$("$HGCTL" keystore show --name executor2-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR3_SYSTEM_PK=$("$HGCTL" keystore show --name executor3-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR4_SYSTEM_PK=$("$HGCTL" keystore show --name executor4-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+
+echo "Extracting system key information for unregistered operators..."
+UNREGISTERED1_SYSTEM_BN254_PK=$("$HGCTL" keystore show --name unregistered1-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED1_SYSTEM_ECDSA_PK=$("$HGCTL" keystore show --name unregistered1-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED2_SYSTEM_BN254_PK=$("$HGCTL" keystore show --name unregistered2-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED2_SYSTEM_ECDSA_PK=$("$HGCTL" keystore show --name unregistered2-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+
+# Derive addresses from system keys
+AGGREGATOR_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$AGGREGATOR_SYSTEM_PK)
+EXECUTOR_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_SYSTEM_PK)
+EXECUTOR2_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR2_SYSTEM_PK)
+EXECUTOR3_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR3_SYSTEM_PK)
+EXECUTOR4_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR4_SYSTEM_PK)
+UNREGISTERED1_SYSTEM_ECDSA_ADDRESS=$(cast wallet address --private-key 0x$UNREGISTERED1_SYSTEM_ECDSA_PK)
+UNREGISTERED2_SYSTEM_ECDSA_ADDRESS=$(cast wallet address --private-key 0x$UNREGISTERED2_SYSTEM_ECDSA_PK)
 
 echo "Generated test keys:"
 echo "  Aggregator ECDSA address (for funding): $AGGREGATOR_ADDRESS"
 echo "  Executor ECDSA address (for funding): $EXECUTOR_ADDRESS"
+echo "  Aggregator system address: $AGGREGATOR_SYSTEM_ADDRESS"
+echo "  Executor system address: $EXECUTOR_SYSTEM_ADDRESS"
+echo "  Executor 2 system address: $EXECUTOR2_SYSTEM_ADDRESS"
+echo "  Executor 3 system address: $EXECUTOR3_SYSTEM_ADDRESS"
+echo "  Executor 4 system address: $EXECUTOR4_SYSTEM_ADDRESS"
 echo "  Keys directory: $KEYS_DIR"
 echo "  Aggregator keystore: $KEYS_DIR/aggregator-keystore.json"
 echo "  Executor keystore: $KEYS_DIR/executor-keystore.json"
@@ -365,6 +449,24 @@ echo "Funding generated operator accounts..."
 fundAccount "$AGGREGATOR_ADDRESS"
 fundAccount "$EXECUTOR_ADDRESS"
 
+# Fund system key addresses
+echo "Funding system key addresses..."
+fundAccount "$AGGREGATOR_SYSTEM_ADDRESS"
+fundAccount "$EXECUTOR_SYSTEM_ADDRESS"
+fundAccount "$EXECUTOR2_SYSTEM_ADDRESS"
+fundAccount "$EXECUTOR3_SYSTEM_ADDRESS"
+fundAccount "$EXECUTOR4_SYSTEM_ADDRESS"
+
+# Fund unregistered operators for integration testing
+echo "Funding unregistered operator accounts..."
+fundAccount "$unregisteredOperator1AccountAddress"
+fundAccount "$unregisteredOperator2AccountAddress"
+
+# Fund unregistered operator system key addresses (ECDSA only, BN254 keys don't have addresses)
+echo "Funding unregistered operator system key addresses..."
+fundAccount "$UNREGISTERED1_SYSTEM_ECDSA_ADDRESS"
+fundAccount "$UNREGISTERED2_SYSTEM_ECDSA_ADDRESS"
+
 # deployer account
 deployAccountAddress=$(echo $seedAccounts | jq -r '.[0].address')
 deployAccountPk=$(echo $seedAccounts | jq -r '.[0].private_key')
@@ -396,79 +498,184 @@ export PRIVATE_KEY_EXEC_OPERATOR="0x$execOperatorAccountPk"
 echo "Exec Operator account: $execOperatorAccountAddress"
 
 # -----------------------------------------------------------------------------
-# Deploy contracts and setup everything
+# Install DevKit if not already installed
 # -----------------------------------------------------------------------------
-cd $PROJECT_ROOT/contracts
+if ! command -v devkit &> /dev/null; then
+    echo "Installing DevKit..."
+    curl -fsSL https://raw.githubusercontent.com/Layr-Labs/devkit-cli/main/install-devkit.sh | bash
 
-# Ensure Foundry dependencies are installed
-echo "Installing Foundry dependencies..."
-forge install || true  # Continue even if already installed
-forge build  # Build contracts to ensure everything is ready
+    # Source the shell config to get devkit in PATH
+    export PATH="$HOME/.devkit/bin:$PATH"
+fi
 
+echo "DevKit version: $(devkit --version)"
+
+# -----------------------------------------------------------------------------
+# Create AVS project using DevKit
+# -----------------------------------------------------------------------------
+cd $PROJECT_ROOT
+AVS_PROJECT_DIR="$PROJECT_ROOT/integration-test-avs"
+
+# Clean up any existing AVS project
+if [ -d "$AVS_PROJECT_DIR" ]; then
+    echo "Removing existing AVS project..."
+    rm -rf "$AVS_PROJECT_DIR"
+fi
+
+echo "Creating AVS project with DevKit..."
+devkit avs create integration-test-avs
+
+cd "$AVS_PROJECT_DIR"
+
+# -----------------------------------------------------------------------------
+# Configure DevKit context for local anvil chains
+# -----------------------------------------------------------------------------
+echo "Configuring DevKit context for local testnet..."
 export L1_RPC_URL="http://localhost:${anvilL1RpcPort}"
 export L2_RPC_URL="http://localhost:${anvilL2RpcPort}"
 
-# -----------------------------------------------------------------------------
-# Deploy and Setup L1 AVS with ManuallySetupAvsMainnet
-# This single script does:
-# 1. Deploys TaskAVSRegistrar contract (ProxyAdmin + Implementation + Proxy)
-# 2. Creates operator sets (0 for aggregator, 1 for executors)
-# 3. Configures operator sets in KeyRegistrar for ECDSA
-# 4. Publishes operator set metadata URIs
-# 5. Registers for multichain support via CrossChainRegistry
-# -----------------------------------------------------------------------------
-echo "Deploying and setting up L1 AVS with ManuallySetupAvsMainnet..."
-export AVS_PRIVATE_KEY="0x$avsAccountPk"
-forge script script/local/ManuallySetupAvsMainnet.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(uint32,uint32)" 0 1
+# Delete existing testnet context if it exists
+rm -rf "$HOME/.devkit/contexts/testnet" 2>/dev/null || true
+rm -rf "$HOME/.config/devkit/contexts/testnet" 2>/dev/null || true
 
-# Extract the TaskAVSRegistrar proxy address from the broadcast
-avsTaskRegistrarAddress=$(cat ./broadcast/ManuallySetupAvsMainnet.s.sol/$anvilL1ChainId/run-latest.json | jq -r '[.transactions[] | select(.transactionType == "CREATE")] | .[-1].contractAddress')
-echo "L1 AVS TaskAVSRegistrar address: $avsTaskRegistrarAddress"
+# Create testnet context for local anvil deployment
+echo "Creating DevKit context for testnet..."
+devkit avs context create \
+  --context testnet \
+  --l1-rpc-url "$L1_RPC_URL" \
+  --l2-rpc-url "$L2_RPC_URL" \
+  --deployer-private-key "0x$deployAccountPk" \
+  --app-private-key "0x$appAccountPk" \
+  --avs-private-key "0x$avsAccountPk" \
+  --avs-metadata-url "https://example.com/integration-test-avs/metadata.json"
+
+echo "Building AVS with DevKit..."
+devkit avs build
 
 # -----------------------------------------------------------------------------
-# Allowlist aggregator operator for operator set 0
+# Deploy AVS contracts using DevKit
+# -----------------------------------------------------------------------------
+echo "Deploying L1 AVS contracts with DevKit..."
+devkit avs deploy contracts l1
+
+# Extract taskAVSRegistrar proxy address from DevKit context YAML file
+DEVKIT_CONTEXT_FILE="$AVS_PROJECT_DIR/config/contexts/testnet.yaml"
+avsTaskRegistrarAddress=$(grep -B 1 'name: taskAVSRegistrar$' "$DEVKIT_CONTEXT_FILE" | grep "address:" | awk '{print $2}')
+echo "L1 AVS TaskAVSRegistrar (Proxy) address: $avsTaskRegistrarAddress"
+
+# Validate we got a valid address
+if [ -z "$avsTaskRegistrarAddress" ] || [ "$avsTaskRegistrarAddress" = "\"\"" ]; then
+    echo "ERROR: Failed to extract taskAVSRegistrar address from DevKit context"
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# Set release metadata URIs for operator sets
+# -----------------------------------------------------------------------------
+echo "Setting release metadata URIs..."
+devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-0"
+devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
+
+# -----------------------------------------------------------------------------
+# Publish AVS release to ReleaseManager
+# -----------------------------------------------------------------------------
+echo "Publishing AVS release..."
+devkit avs release publish --registry ghcr.io/bdchatham/hgctl-integ --upgrade-by-time 1759793679
+
+# -----------------------------------------------------------------------------
+# Allowlist aggregator operator for operator set 0 (permissioned set)
 # -----------------------------------------------------------------------------
 echo "Allowlisting aggregator operator for operator set 0..."
+cd "$PROJECT_ROOT/contracts"
+
 export AGGREGATOR_PRIVATE_KEY="0x$operatorAccountPk"
-forge script script/local/AllowlistOperators.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run(address)" "$avsTaskRegistrarAddress"
+
+export PRIVATE_KEY_DEPLOYER="0x$avsAccountPk"
+forge script script/local/AllowlistOperators.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --sig "run(address)" \
+    "$avsTaskRegistrarAddress"
 
 # -----------------------------------------------------------------------------
-# Register operators with EigenLayer using hgctl CLI
+# Register operators with EigenLayer using Foundry script
 # -----------------------------------------------------------------------------
-echo "Registering aggregator operator with EigenLayer..."
-"$HGCTL" eigenlayer register-operator \
-    --keystore "$KEYS_DIR/aggregator-ecdsa-keystore.json" \
-    --password "$AGGREGATOR_PASSWORD" \
-    --metadata-uri "https://example.com/aggregator/metadata.json" \
-    --allocation-delay "0"
+echo "Registering operators with EigenLayer..."
 
-echo "Registering executor operator 1 with EigenLayer..."
-"$HGCTL" eigenlayer register-operator \
-    --keystore "$KEYS_DIR/executor-ecdsa-keystore.json" \
-    --password "$EXECUTOR_PASSWORD" \
-    --metadata-uri "https://example.com/executor1/metadata.json" \
-    --allocation-delay "0"
+# Register aggregator operator for operator set 0
+echo "Registering aggregator operator (operator set 0)..."
+forge script script/local/RegisterOperator.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --via-ir \
+    --sig "run(bytes32,bytes32,uint32,string,address,uint32,string)" \
+    "0x$operatorAccountPk" \
+    "0x$AGGREGATOR_SYSTEM_PK" \
+    0 \
+    "https://example.com/aggregator/metadata.json" \
+    "$avsAccountAddress" \
+    0 \
+    "localhost:7070"
 
-echo "Registering executor operator 2 with EigenLayer..."
-"$HGCTL" eigenlayer register-operator \
-    --keystore "$KEYS_DIR/executor2-ecdsa-keystore.json" \
-    --password "$EXECUTOR_PASSWORD" \
-    --metadata-uri "https://example.com/executor2/metadata.json" \
-    --allocation-delay "0"
+# Register executor operator 1 for operator set 1
+echo "Registering executor operator 1 (operator set 1)..."
+forge script script/local/RegisterOperator.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --via-ir \
+    --sig "run(bytes32,bytes32,uint32,string,address,uint32,string)" \
+    "0x$execOperatorAccountPk" \
+    "0x$EXECUTOR_SYSTEM_PK" \
+    0 \
+    "https://example.com/executor1/metadata.json" \
+    "$avsAccountAddress" \
+    1 \
+    "localhost:7071"
 
-echo "Registering executor operator 3 with EigenLayer..."
-"$HGCTL" eigenlayer register-operator \
-    --keystore "$KEYS_DIR/executor3-ecdsa-keystore.json" \
-    --password "$EXECUTOR_PASSWORD" \
-    --metadata-uri "https://example.com/executor3/metadata.json" \
-    --allocation-delay "0"
+# Register executor operator 2 for operator set 1
+echo "Registering executor operator 2 (operator set 1)..."
+forge script script/local/RegisterOperator.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --via-ir \
+    --sig "run(bytes32,bytes32,uint32,string,address,uint32,string)" \
+    "0x$execOperator2AccountPk" \
+    "0x$EXECUTOR2_SYSTEM_PK" \
+    0 \
+    "https://example.com/executor2/metadata.json" \
+    "$avsAccountAddress" \
+    1 \
+    "localhost:7072"
 
-echo "Registering executor operator 4 with EigenLayer..."
-"$HGCTL" eigenlayer register-operator \
-    --keystore "$KEYS_DIR/executor4-ecdsa-keystore.json" \
-    --password "$EXECUTOR_PASSWORD" \
-    --metadata-uri "https://example.com/executor4/metadata.json" \
-    --allocation-delay "0"
+# Register executor operator 3 for operator set 1
+echo "Registering executor operator 3 (operator set 1)..."
+forge script script/local/RegisterOperator.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --via-ir \
+    --sig "run(bytes32,bytes32,uint32,string,address,uint32,string)" \
+    "0x$execOperator3AccountPk" \
+    "0x$EXECUTOR3_SYSTEM_PK" \
+    0 \
+    "https://example.com/executor3/metadata.json" \
+    "$avsAccountAddress" \
+    1 \
+    "localhost:7073"
+
+# Register executor operator 4 for operator set 1
+echo "Registering executor operator 4 (operator set 1)..."
+forge script script/local/RegisterOperator.s.sol \
+    --rpc-url "$L1_RPC_URL" \
+    --broadcast \
+    --via-ir \
+    --sig "run(bytes32,bytes32,uint32,string,address,uint32,string)" \
+    "0x$execOperator4AccountPk" \
+    "0x$EXECUTOR4_SYSTEM_PK" \
+    0 \
+    "https://example.com/executor4/metadata.json" \
+    "$avsAccountAddress" \
+    1 \
+    "localhost:7074"
 
 # -----------------------------------------------------------------------------
 # Stake tokens for operators (WETH for aggregator, stETH for executors)
@@ -480,12 +687,27 @@ echo "  Exec Operator 2: $execOperator2AccountAddress (staker: $execStaker2Accou
 echo "  Exec Operator 3: $execOperator3AccountAddress (staker: $execStaker3AccountAddress)"
 echo "  Exec Operator 4: $execOperator4AccountAddress (staker: $execStaker4AccountAddress)"
 
+cd "$PROJECT_ROOT/contracts"
+
+SEPOLIA_ALLOCATION_MANAGER="0x42583067658071247ec8CE0A516A58f682002d07"
+SEPOLIA_DELEGATION_MANAGER="0xD4A7E1Bd8015057293f0D0A557088c286942e84b"
+SEPOLIA_STRATEGY_MANAGER="0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D"
+SEPOLIA_STRATEGY_WETH="0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc"
+SEPOLIA_STRATEGY_STETH="0x8b29d91e67b013e855EaFe0ad704aC4Ab086a574"
+
 export AGG_STAKER_PRIVATE_KEY="0x$aggStakerAccountPk"
 export EXEC_STAKER_PRIVATE_KEY="0x$execStakerAccountPk"
 export EXEC_STAKER2_PRIVATE_KEY="0x$execStaker2AccountPk"
 export EXEC_STAKER3_PRIVATE_KEY="0x$execStaker3AccountPk"
 export EXEC_STAKER4_PRIVATE_KEY="0x$execStaker4AccountPk"
-forge script script/local/StakeStuff.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
+
+forge script script/local/StakeWithStrategies.sol --slow --rpc-url $L1_RPC_URL --broadcast --via-ir \
+    --sig "run(address,address,address,address,address)" \
+    "$SEPOLIA_ALLOCATION_MANAGER" \
+    "$SEPOLIA_DELEGATION_MANAGER" \
+    "$SEPOLIA_STRATEGY_MANAGER" \
+    "$SEPOLIA_STRATEGY_WETH" \
+    "$SEPOLIA_STRATEGY_STETH"
 
 # Mine blocks to bypass ALLOCATION_CONFIGURATION_DELAY
 echo "Mining blocks to finalize allocations..."
@@ -495,27 +717,141 @@ cast rpc --rpc-url $L2_RPC_URL anvil_mine 80
 # -----------------------------------------------------------------------------
 # Setup L1 multichain
 # -----------------------------------------------------------------------------
+
+CROSS_CHAIN_REGISTRY="0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a"
+
 echo "Setting up L1 multichain..."
 export L1_CHAIN_ID=$anvilL1ChainId
 export L2_CHAIN_ID=$anvilL2ChainId
 export AVS_ADDRESS=$avsAccountAddress
+export CROSS_CHAIN_REGISTRY="$CROSS_CHAIN_REGISTRY"
+export TABLE_UPDATER_ADDRESS="0xB02A15c6Bd0882b35e9936A9579f35FB26E11476"
+export BN254_TABLE_CALCULATOR="0xa19E3B00cf4aC46B5e6dc0Bbb0Fb0c86D0D65603"
+export ECDSA_TABLE_CALCULATOR="0xaCB5DE6aa94a1908E6FA577C2ade65065333B450"
 
-# Whitelist chains
-cast rpc anvil_impersonateAccount "0xBE1685C81aA44FF9FB319dD389addd9374383e90" --rpc-url $L1_RPC_URL
-forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "0xBE1685C81aA44FF9FB319dD389addd9374383e90" --unlocked --broadcast --sig "run()"
+# Whitelist chains in CrossChainRegistry
+echo "Whitelisting anvil chains in CrossChainRegistry..."
+echo "  CrossChainRegistry: $CROSS_CHAIN_REGISTRY"
+echo "  Table Updater: $TABLE_UPDATER_ADDRESS"
+echo "  L1 Chain ID: $anvilL1ChainId"
+echo "  L2 Chain ID: $anvilL2ChainId"
 
-forge script script/local/SetupAVSMultichain.s.sol --slow --rpc-url $L1_RPC_URL --broadcast --sig "run()"
+# Get CrossChainRegistry owner
+CROSS_CHAIN_REGISTRY_OWNER="0xb094Ba769b4976Dc37fC689A76675f31bc4923b0"
+echo "Using CrossChainRegistry owner: $CROSS_CHAIN_REGISTRY_OWNER"
+cast rpc anvil_impersonateAccount "$CROSS_CHAIN_REGISTRY_OWNER" --rpc-url $L1_RPC_URL
+forge script script/local/WhitelistDevnet.s.sol --slow --rpc-url $L1_RPC_URL --sender "$CROSS_CHAIN_REGISTRY_OWNER" --unlocked --broadcast --sig "run()"
 
 # -----------------------------------------------------------------------------
-# Deploy L2
+# Transport operator tables for multichain support
 # -----------------------------------------------------------------------------
-echo "Deploying L2 contracts on L1..."
-forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L1_RPC_URL --broadcast
-taskHookAddressL1=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL1ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+echo "Transporting operator tables for executor operator set..."
 
-echo "Deploying L2 contracts on L2..."
-forge script script/local/DeployAVSL2Contracts.s.sol --slow --rpc-url $L2_RPC_URL --broadcast
-taskHookAddressL2=$(cat ./broadcast/DeployAVSL2Contracts.s.sol/$anvilL2ChainId/run-latest.json | jq -r '.transactions[0].contractAddress')
+# Build the transport binary if not already built
+if [ ! -f "$HGCTL_ROOT/bin/transport" ]; then
+    echo "Building transport binary..."
+    cd "$HGCTL_ROOT"
+    go build -o bin/transport ./cmd/transport
+    cd "$AVS_PROJECT_DIR"
+fi
+
+CROSS_CHAIN_REGISTRY="0x287381B1570d9048c4B4C7EC94d21dDb8Aa1352a"
+
+# Create transport config for executor operator set (ID 1)
+cat > /tmp/transport-config.json <<EOF
+{
+  "transporterKey": "$avsAccountPk",
+  "l1RpcUrl": "$L1_RPC_URL",
+  "l1ChainId": $anvilL1ChainId,
+  "l2RpcUrl": "$L2_RPC_URL",
+  "l2ChainId": $anvilL2ChainId,
+  "crossChainRegistry": "$CROSS_CHAIN_REGISTRY",
+  "keyRegistrarAddress": "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+  "avsAddress": "$AVS_ADDRESS",
+  "operatorSetId": 1,
+  "curveType": "ECDSA",
+  "transportBlsKey": "$TRANSPORT_BLS_KEY",
+  "operators": [
+    {
+      "address": "$execOperatorAccountAddress",
+      "privateKey": "$execOperatorAccountPk"
+    },
+    {
+      "address": "$execOperator2AccountAddress",
+      "privateKey": "$execOperator2AccountPk"
+    },
+    {
+      "address": "$execOperator3AccountAddress",
+      "privateKey": "$execOperator3AccountPk"
+    },
+    {
+      "address": "$execOperator4AccountAddress",
+      "privateKey": "$execOperator4AccountPk"
+    }
+  ],
+  "chainsToIgnore": [11155111, 84532]
+}
+EOF
+
+echo "Transport config for operator set 1:"
+cat /tmp/transport-config.json | jq .
+
+echo "Running operator table transport..."
+"$HGCTL_ROOT/bin/transport" -config /tmp/transport-config.json -v
+
+if [ $? -eq 0 ]; then
+    echo "Operator table transport completed successfully for operator set 1"
+else
+    echo "ERROR: Operator table transport failed for operator set 1"
+    cleanup
+    exit 1
+fi
+
+# Create transport config for executor operator set (ID 0)
+cat > /tmp/transport-config.json <<EOF
+{
+  "transporterKey": "$avsAccountPk",
+  "l1RpcUrl": "$L1_RPC_URL",
+  "l1ChainId": $anvilL1ChainId,
+  "l2RpcUrl": "$L2_RPC_URL",
+  "l2ChainId": $anvilL2ChainId,
+  "crossChainRegistry": "$CROSS_CHAIN_REGISTRY",
+  "keyRegistrarAddress": "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+  "avsAddress": "$AVS_ADDRESS",
+  "operatorSetId": 0,
+  "curveType": "ECDSA",
+  "transportBlsKey": "$TRANSPORT_BLS_KEY",
+  "operators": [
+    {
+      "address": "$operatorAccountAddress",
+      "privateKey": "$operatorAccountPk"
+    }
+  ],
+  "chainsToIgnore": [11155111, 84532]
+}
+EOF
+
+echo "Transport config for operator set 0:"
+cat /tmp/transport-config.json | jq .
+
+echo "Running operator table transport..."
+"$HGCTL_ROOT/bin/transport" -config /tmp/transport-config.json -v
+
+if [ $? -eq 0 ]; then
+    echo "Operator table transport completed successfully for operator set 0"
+else
+    echo "ERROR: Operator table transport failed for operator set 0"
+    cleanup
+    exit 1
+fi
+
+# Clean up temp config
+rm -f /tmp/transport-config.json
+
+cd "$AVS_PROJECT_DIR"
+
+echo "Deploying L2 AVS contracts with DevKit..."
+devkit avs deploy contracts l2
 
 # Still need to mine some blocks for any configuration delays
 echo "Mining initial blocks..."
@@ -547,7 +883,8 @@ execOperatorAccountPublicKey=$(cast wallet public-key --private-key "0x$execOper
 execOperator2AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator2AccountPk")
 execOperator3AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator3AccountPk")
 execOperator4AccountPublicKey=$(cast wallet public-key --private-key "0x$execOperator4AccountPk")
-unregisteredOperatorAccountPublicKey=$(cast wallet public-key --private-key "0x$unregisteredOperatorAccountPk")
+unregisteredOperator1AccountPublicKey=$(cast wallet public-key --private-key "0x$unregisteredOperator1AccountPk")
+unregisteredOperator2AccountPublicKey=$(cast wallet public-key --private-key "0x$unregisteredOperator2AccountPk")
 aggStakerAccountPublicKey=$(cast wallet public-key --private-key "0x$aggStakerAccountPk")
 execStakerAccountPublicKey=$(cast wallet public-key --private-key "0x$execStakerAccountPk")
 execStaker2AccountPublicKey=$(cast wallet public-key --private-key "0x$execStaker2AccountPk")
@@ -575,31 +912,70 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "operatorAccountPublicKey": "$operatorAccountPublicKey",
       "operatorKeystorePath": "$KEYS_DIR/aggregator-keystore.json",
       "operatorKeystorePassword": "$AGGREGATOR_PASSWORD",
+      "operatorSystemAddress": "$AGGREGATOR_SYSTEM_ADDRESS",
+      "operatorSystemPk": "$AGGREGATOR_SYSTEM_PK",
+      "operatorSystemKeystorePath": "$KEYS_DIR/aggregator-system-keystore.json",
+      "operatorSystemKeystorePassword": "$AGGREGATOR_PASSWORD",
       "execOperatorAccountAddress": "$execOperatorAccountAddress",
       "execOperatorAccountPk": "$execOperatorAccountPk",
       "execOperatorAccountPublicKey": "$execOperatorAccountPublicKey",
       "execOperatorKeystorePath": "$KEYS_DIR/executor-keystore.json",
       "execOperatorKeystorePassword": "$EXECUTOR_PASSWORD",
+      "execOperatorSystemAddress": "$EXECUTOR_SYSTEM_ADDRESS",
+      "execOperatorSystemPk": "$EXECUTOR_SYSTEM_PK",
+      "execOperatorSystemKeystorePath": "$KEYS_DIR/executor-system-keystore.json",
+      "execOperatorSystemKeystorePassword": "$EXECUTOR_PASSWORD",
       "execOperator2AccountAddress": "$execOperator2AccountAddress",
       "execOperator2AccountPk": "$execOperator2AccountPk",
       "execOperator2AccountPublicKey": "$execOperator2AccountPublicKey",
       "execOperator2KeystorePath": "$KEYS_DIR/executor2-ecdsa-keystore.json",
       "execOperator2KeystorePassword": "$EXECUTOR_PASSWORD",
+      "execOperator2SystemAddress": "$EXECUTOR2_SYSTEM_ADDRESS",
+      "execOperator2SystemPk": "$EXECUTOR2_SYSTEM_PK",
+      "execOperator2SystemKeystorePath": "$KEYS_DIR/executor2-system-keystore.json",
+      "execOperator2SystemKeystorePassword": "$EXECUTOR_PASSWORD",
       "execOperator3AccountAddress": "$execOperator3AccountAddress",
       "execOperator3AccountPk": "$execOperator3AccountPk",
       "execOperator3AccountPublicKey": "$execOperator3AccountPublicKey",
       "execOperator3KeystorePath": "$KEYS_DIR/executor3-ecdsa-keystore.json",
       "execOperator3KeystorePassword": "$EXECUTOR_PASSWORD",
+      "execOperator3SystemAddress": "$EXECUTOR3_SYSTEM_ADDRESS",
+      "execOperator3SystemPk": "$EXECUTOR3_SYSTEM_PK",
+      "execOperator3SystemKeystorePath": "$KEYS_DIR/executor3-system-keystore.json",
+      "execOperator3SystemKeystorePassword": "$EXECUTOR_PASSWORD",
       "execOperator4AccountAddress": "$execOperator4AccountAddress",
       "execOperator4AccountPk": "$execOperator4AccountPk",
       "execOperator4AccountPublicKey": "$execOperator4AccountPublicKey",
       "execOperator4KeystorePath": "$KEYS_DIR/executor4-ecdsa-keystore.json",
       "execOperator4KeystorePassword": "$EXECUTOR_PASSWORD",
-      "unregisteredOperatorAccountAddress": "$unregisteredOperatorAccountAddress",
-      "unregisteredOperatorAccountPk": "$unregisteredOperatorAccountPk",
-      "unregisteredOperatorAccountPublicKey": "$unregisteredOperatorAccountPublicKey",
-      "unregisteredOperatorKeystorePath": "$KEYS_DIR/unregistered-operator-ecdsa-keystore.json",
-      "unregisteredOperatorKeystorePassword": "$EXECUTOR_PASSWORD",
+      "execOperator4SystemAddress": "$EXECUTOR4_SYSTEM_ADDRESS",
+      "execOperator4SystemPk": "$EXECUTOR4_SYSTEM_PK",
+      "execOperator4SystemKeystorePath": "$KEYS_DIR/executor4-system-keystore.json",
+      "execOperator4SystemKeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator1AccountAddress": "$unregisteredOperator1AccountAddress",
+      "unregisteredOperator1AccountPk": "$unregisteredOperator1AccountPk",
+      "unregisteredOperator1AccountPublicKey": "$unregisteredOperator1AccountPublicKey",
+      "unregisteredOperator1KeystorePath": "$KEYS_DIR/unregistered-operator1-ecdsa-keystore.json",
+      "unregisteredOperator1KeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator1SystemBN254Pk": "$UNREGISTERED1_SYSTEM_BN254_PK",
+      "unregisteredOperator1SystemBN254KeystorePath": "$KEYS_DIR/unregistered1-system-bn254-keystore.json",
+      "unregisteredOperator1SystemBN254KeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator1SystemECDSAPk": "$UNREGISTERED1_SYSTEM_ECDSA_PK",
+      "unregisteredOperator1SystemECDSAAddress": "$UNREGISTERED1_SYSTEM_ECDSA_ADDRESS",
+      "unregisteredOperator1SystemECDSAKeystorePath": "$KEYS_DIR/unregistered1-system-ecdsa-keystore.json",
+      "unregisteredOperator1SystemECDSAKeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator2AccountAddress": "$unregisteredOperator2AccountAddress",
+      "unregisteredOperator2AccountPk": "$unregisteredOperator2AccountPk",
+      "unregisteredOperator2AccountPublicKey": "$unregisteredOperator2AccountPublicKey",
+      "unregisteredOperator2KeystorePath": "$KEYS_DIR/unregistered-operator2-ecdsa-keystore.json",
+      "unregisteredOperator2KeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator2SystemBN254Pk": "$UNREGISTERED2_SYSTEM_BN254_PK",
+      "unregisteredOperator2SystemBN254KeystorePath": "$KEYS_DIR/unregistered2-system-bn254-keystore.json",
+      "unregisteredOperator2SystemBN254KeystorePassword": "$EXECUTOR_PASSWORD",
+      "unregisteredOperator2SystemECDSAPk": "$UNREGISTERED2_SYSTEM_ECDSA_PK",
+      "unregisteredOperator2SystemECDSAAddress": "$UNREGISTERED2_SYSTEM_ECDSA_ADDRESS",
+      "unregisteredOperator2SystemECDSAKeystorePath": "$KEYS_DIR/unregistered2-system-ecdsa-keystore.json",
+      "unregisteredOperator2SystemECDSAKeystorePassword": "$EXECUTOR_PASSWORD",
       "aggStakerAccountAddress": "$aggStakerAccountAddress",
       "aggStakerAccountPk": "$aggStakerAccountPk",
       "aggStakerAccountPublicKey": "$aggStakerAccountPublicKey",
@@ -616,13 +992,11 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "execStaker4AccountPk": "$execStaker4AccountPk",
       "execStaker4AccountPublicKey": "$execStaker4AccountPublicKey",
       "avsTaskRegistrarAddress": "$avsTaskRegistrarAddress",
-      "avsTaskHookAddressL1": "$taskHookAddressL1",
-      "avsTaskHookAddressL2": "$taskHookAddressL2",
-      "keyRegistrarAddress": "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
-      "releaseManagerAddress": "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
-      "delegationManagerAddress": "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
-      "allocationManagerAddress": "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
-      "strategyManagerAddress": "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+      "keyRegistrarAddress": "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+      "releaseManagerAddress": "0xd9Cb89F1993292dEC2F973934bC63B0f2A702776",
+      "delegationManagerAddress": "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+      "allocationManagerAddress": "0x42583067658071247ec8CE0A516A58f682002d07",
+      "strategyManagerAddress": "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
       "destinationEnv": "anvil",
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock,

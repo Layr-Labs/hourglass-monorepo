@@ -12,28 +12,31 @@ import {IBN254TableCalculator} from "@eigenlayer-middleware/src/interfaces/IBN25
 import {OperatorSet} from "@eigenlayer-contracts/src/contracts/libraries/OperatorSetLib.sol";
 
 contract WhitelistDevnet is Script {
-    // Mainnet CrossChainRegistry
-    ICrossChainRegistry public CROSS_CHAIN_REGISTRY = ICrossChainRegistry(0x9376A5863F2193cdE13e1aB7c678F22554E2Ea2b);
-
     function setUp() public {}
 
     function run() public {
+        // Get registry and chain configuration from environment
+        address crossChainRegistryAddress = vm.envAddress("CROSS_CHAIN_REGISTRY");
+        address tableUpdaterAddress = vm.envAddress("TABLE_UPDATER_ADDRESS");
         uint256 l1ChainId = uint256(vm.envUint("L1_CHAIN_ID"));
         uint256 l2ChainId = uint256(vm.envUint("L2_CHAIN_ID"));
 
+        ICrossChainRegistry CROSS_CHAIN_REGISTRY = ICrossChainRegistry(crossChainRegistryAddress);
+
         // Get the owner of the CrossChainRegistry by casting to Ownable
         address owner = Ownable(address(CROSS_CHAIN_REGISTRY)).owner();
+        console.log("CrossChainRegistry address:", crossChainRegistryAddress);
         console.log("CrossChainRegistry owner:", owner);
+        console.log("Table updater address:", tableUpdaterAddress);
 
-        // Mainnet anvil - whitelist anvil chain IDs (31337 for Ethereum, 31338 for Base)
+        // Whitelist anvil chain IDs
         uint256[] memory chainIds = new uint256[](2);
         chainIds[0] = l1ChainId;
         chainIds[1] = l2ChainId;
 
         address[] memory tableUpdaters = new address[](2);
-        // Mainnet OperatorTableUpdater (same for both Ethereum and Base)
-        tableUpdaters[0] = address(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
-        tableUpdaters[1] = address(0x5557E1fE3068A1e823cE5Dcd052c6C352E2617B5);
+        tableUpdaters[0] = tableUpdaterAddress;
+        tableUpdaters[1] = tableUpdaterAddress;
 
         vm.startBroadcast();
         CROSS_CHAIN_REGISTRY.addChainIDsToWhitelist(chainIds, tableUpdaters);

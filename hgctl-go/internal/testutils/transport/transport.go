@@ -52,6 +52,7 @@ type MultipleOperatorConfig struct {
 	L2RpcUrl                  string
 	L2ChainId                 uint64
 	CrossChainRegistryAddress string
+	KeyRegistrarAddress       string
 	ChainIdsToIgnore          []*big.Int
 	Logger                    *zap.Logger
 
@@ -72,9 +73,23 @@ type MultipleOperatorConfig struct {
 func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 	ctx := context.Background()
 
+	cfg.Logger.Info("=== Starting TransportTableWithMultiOperators ===")
+	cfg.Logger.Sugar().Infow("Transport configuration",
+		zap.String("l1RpcUrl", cfg.L1RpcUrl),
+		zap.Uint64("l1ChainId", cfg.L1ChainId),
+		zap.String("l2RpcUrl", cfg.L2RpcUrl),
+		zap.Uint64("l2ChainId", cfg.L2ChainId),
+		zap.String("crossChainRegistry", cfg.CrossChainRegistryAddress),
+		zap.String("avsAddress", cfg.AVSAddress.String()),
+		zap.Uint32("operatorSetId", cfg.OperatorSetId),
+		zap.String("curveType", string(cfg.CurveType)),
+		zap.Int("numOperators", len(cfg.Operators)),
+	)
+
 	cm := chainManager.NewChainManager()
 
 	// Add L1 chain
+	cfg.Logger.Info("Adding L1 chain to chain manager")
 	l1AnvilConfig := &chainManager.ChainConfig{
 		ChainID: cfg.L1ChainId,
 		RPCUrl:  cfg.L1RpcUrl,
@@ -82,6 +97,7 @@ func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 	if err := cm.AddChain(l1AnvilConfig); err != nil {
 		return fmt.Errorf("failed to add chain: %v", err)
 	}
+	cfg.Logger.Sugar().Infow("Added L1 chain", zap.Uint64("chainId", l1AnvilConfig.ChainID))
 
 	l1ChainClient, err := cm.GetChainForId(l1AnvilConfig.ChainID)
 	if err != nil {
@@ -168,7 +184,7 @@ func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 		return fmt.Errorf("unsupported curve type: %s", cfg.CurveType)
 	}
 
-	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
+	keyRegistrarAddress := common.HexToAddress(cfg.KeyRegistrarAddress)
 
 	gen := IOperatorTableUpdater.OperatorSet{
 		Avs: cfg.AVSAddress,
@@ -192,6 +208,7 @@ func TransportTableWithMultiOperators(cfg *MultipleOperatorConfig) error {
 		cfg.Logger,
 		contractCaller,
 		client,
+		keyRegistrarAddress,
 		cfg.Operators,
 		gen,
 		cfg.CurveType,
@@ -569,12 +586,13 @@ func registerOperatorKeysInKeyRegistrar(
 	logger *zap.Logger,
 	contractCaller *caller.ContractCaller,
 	client *ethclient.Client,
+	keyRegistrarAddress common.Address,
 	operators []OperatorKeyInfo,
 	gen IOperatorTableUpdater.OperatorSet,
 	curveType config.CurveType,
 ) error {
 	for _, op := range operators {
-		if err := registerSingleOperatorKey(ctx, logger, contractCaller, client, op, gen, curveType); err != nil {
+		if err := registerSingleOperatorKey(ctx, logger, contractCaller, client, keyRegistrarAddress, op, gen, curveType); err != nil {
 			logger.Sugar().Warnw("Failed to register operator key",
 				zap.String("operator", op.OperatorAddress.String()),
 				zap.Error(err),
@@ -590,11 +608,11 @@ func registerOperatorKeysInKeyRegistrar(
 func checkOperatorRegistered(
 	ctx context.Context,
 	client *ethclient.Client,
+	keyRegistrarAddress common.Address,
 	operatorAddress common.Address,
 	avsAddress common.Address,
 	operatorSetId uint32,
 ) (bool, error) {
-	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		return false, fmt.Errorf("failed to create KeyRegistrar: %w", err)
@@ -621,12 +639,13 @@ func registerSingleOperatorKey(
 	logger *zap.Logger,
 	contractCaller *caller.ContractCaller,
 	client *ethclient.Client,
+	keyRegistrarAddress common.Address,
 	op OperatorKeyInfo,
 	gen IOperatorTableUpdater.OperatorSet,
 	curveType config.CurveType,
 ) error {
 	// First check if the operator is already registered
-	if isRegistered, err := checkOperatorRegistered(ctx, client, op.OperatorAddress, gen.Avs, gen.Id); err != nil {
+	if isRegistered, err := checkOperatorRegistered(ctx, client, keyRegistrarAddress, op.OperatorAddress, gen.Avs, gen.Id); err != nil {
 		logger.Sugar().Warnw("Failed to check if operator is registered",
 			zap.String("operator", op.OperatorAddress.String()),
 			zap.Error(err),
@@ -727,8 +746,8 @@ func registerSingleOperatorKey(
 	if err = registerKeyAsOperator(
 		ctx,
 		logger,
-		contractCaller,
 		client,
+		keyRegistrarAddress,
 		op.OperatorAddress,
 		gen.Avs,
 		gen.Id,
@@ -751,8 +770,8 @@ func registerSingleOperatorKey(
 func registerKeyAsOperator(
 	ctx context.Context,
 	logger *zap.Logger,
-	contractCaller *caller.ContractCaller,
 	client *ethclient.Client,
+	keyRegistrarAddress common.Address,
 	operatorAddress common.Address,
 	avsAddress common.Address,
 	operatorSetId uint32,
@@ -785,7 +804,6 @@ func registerKeyAsOperator(
 	}
 
 	// Get the KeyRegistrar contract
-	keyRegistrarAddress := common.HexToAddress("0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4")
 	keyRegistrar, err := IKeyRegistrar.NewIKeyRegistrar(keyRegistrarAddress, client)
 	if err != nil {
 		_ = client.Client().CallContext(ctx, &ok, "anvil_stopImpersonatingAccount", operatorAddress.Hex())
@@ -853,6 +871,13 @@ func configureCurveTypeAsAVS(
 	opSetId uint32,
 	curveType uint8,
 ) error {
+	logger.Sugar().Infow("Configuring curve type for operator set",
+		zap.String("avs", avs.String()),
+		zap.Uint32("operatorSetId", opSetId),
+		zap.Uint8("curveType", curveType),
+		zap.String("keyRegistrar", keyRegistrar.String()),
+	)
+
 	// Connect to provided RPC
 	c, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
@@ -874,6 +899,10 @@ func configureCurveTypeAsAVS(
 
 	// Read current curve type; skip if already set
 	calldataGet, _ := krABI.Pack("getOperatorSetCurveType", opSet)
+	logger.Sugar().Debugw("Checking if operator set is already configured",
+		zap.String("calldata", hexutil.Encode(calldataGet)),
+	)
+
 	var out string
 	if err := c.CallContext(ctx, &out, "eth_call",
 		map[string]any{"to": keyRegistrar.Hex(), "data": hexutil.Encode(calldataGet)},
@@ -881,13 +910,41 @@ func configureCurveTypeAsAVS(
 	); err != nil {
 		return fmt.Errorf("getOperatorSetCurveType call: %w", err)
 	}
-	decoded, err := krABI.Unpack("getOperatorSetCurveType", common.FromHex(out))
-	if err != nil {
-		return fmt.Errorf("unpack getOperatorSetCurveType: %w", err)
-	}
-	if ct, ok := decoded[0].(uint8); ok && ct == curveType {
-		logger.Info("Operator set already configured with curveType, skipping")
-		return nil
+
+	logger.Sugar().Infow("getOperatorSetCurveType response",
+		zap.String("rawOutput", out),
+		zap.Int("outputLength", len(out)),
+		zap.Int("decodedBytesLength", len(common.FromHex(out))),
+	)
+
+	// If output is empty or too short, the operator set hasn't been configured yet
+	decodedBytes := common.FromHex(out)
+	if out == "" || out == "0x" || len(decodedBytes) == 0 {
+		logger.Info("Operator set not yet configured, will configure now")
+	} else {
+		logger.Sugar().Infow("Attempting to decode operator set curve type",
+			zap.String("rawOutput", out),
+			zap.String("decodedBytesHex", hexutil.Encode(decodedBytes)),
+		)
+		// Try to decode the response
+		decoded, err := krABI.Unpack("getOperatorSetCurveType", decodedBytes)
+		if err != nil {
+			logger.Sugar().Warnw("Failed to unpack curve type (operator set may not be configured)",
+				zap.Error(err),
+				zap.String("output", out),
+			)
+			// Continue to configure it
+		} else if ct, ok := decoded[0].(uint8); ok && ct == curveType {
+			logger.Sugar().Infow("Operator set already configured with correct curveType, skipping",
+				zap.Uint8("existingCurveType", ct),
+			)
+			return nil
+		} else if ok {
+			logger.Sugar().Warnw("Operator set configured with different curveType, will reconfigure",
+				zap.Uint8("existingCurveType", ct),
+				zap.Uint8("desiredCurveType", curveType),
+			)
+		}
 	}
 
 	// Impersonate AVS & fund it

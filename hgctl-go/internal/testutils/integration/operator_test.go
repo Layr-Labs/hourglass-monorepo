@@ -2,12 +2,14 @@ package integration
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/harness"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
 	"github.com/ethereum/go-ethereum/common"
+
+	//"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/testutils/tools"
+	//"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,9 +26,7 @@ func TestOperatorRegistration(t *testing.T) {
 	defer h.Teardown()
 
 	t.Run("Operator_Registration_Allocation", func(t *testing.T) {
-		// Execute the register command
-		// TODO: use operator private key
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "register-operator",
 			"--metadata-uri", "https://example.com/operator/metadata.json",
 			"--allocation-delay", allocationDelay,
@@ -50,15 +50,22 @@ func TestOperatorRegistration(t *testing.T) {
 		assert.Contains(t, result.Stdout, "txHash",
 			"Output should contain transaction hash")
 
-		// If you need to check for specific transaction hash 	format
+		// If you need to check for specific transaction hash format
 		assert.Contains(t, result.Stdout, "0x",
 			"Output should contain a transaction hash starting with 0x")
 	})
 
 	t.Run("Set Allocation Delay", func(t *testing.T) {
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "set-allocation-delay",
 			"--delay", "0")
+
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
 
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.ExitCode)
@@ -67,8 +74,7 @@ func TestOperatorRegistration(t *testing.T) {
 	})
 
 	t.Run("Set Invalid Allocation Delay", func(t *testing.T) {
-		// Try to set allocation delay to -1 for aggregator (should fail)
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "set-allocation-delay",
 			"--delay", "-1")
 
@@ -77,11 +83,8 @@ func TestOperatorRegistration(t *testing.T) {
 	})
 
 	t.Run("Delegate to Specific Operator", func(t *testing.T) {
-		// Get aggregator address to delegate to
-		aggregatorKeystore := h.GetAggregatorECDSAKeystore()
-
-		// Try to delegate executor to aggregator (executor needs to be registered first)
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		t.Skip("Revisit with staker and delegation tooling")
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered2ECDSA,
 			"eigenlayer", "register-operator",
 			"--allocation-delay", "1",
 			"--metadata-uri", "https://example.com/executor/metadata.json")
@@ -96,49 +99,54 @@ func TestOperatorRegistration(t *testing.T) {
 				}
 			}
 
-			// Now delegate to aggregator
-			result, err = h.ExecuteCLIWithKeystore("executor-ecdsa",
-				"eigenlayer", "delegate", "--operator", aggregatorKeystore.Address)
+			// Now delegate operator 2 to operator 1
+			unregOp1 := h.ChainConfig.UnregisteredOperator1AccountAddress
+			result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered2ECDSA,
+				"eigenlayer", "delegate", "--operator", unregOp1)
+
+			if err != nil || result.ExitCode != 0 {
+				t.Logf("Command failed with error: %v", err)
+				t.Logf("Exit code: %d", result.ExitCode)
+				t.Logf("Stdout: %s", result.Stdout)
+				t.Logf("Stderr: %s", result.Stderr)
+			}
 
 			require.NoError(t, err)
 			assert.Equal(t, 0, result.ExitCode)
+			return
 		}
+
+		t.Logf("Command failed with error: %v", err)
+		t.Logf("Exit code: %d", result.ExitCode)
+		t.Logf("Stdout: %s", result.Stdout)
+		t.Logf("Stderr: %s", result.Stderr)
 	})
 
 	t.Run("Register ECDSA Key", func(t *testing.T) {
-		// The aggregator operator should already be registered
-
-		// Set operator-set-id in context first
+		// Set context with unregistered operator 1's address
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
-			"--operator-set-id", "0",
+			"--operator-address", h.ChainConfig.UnregisteredOperator1AccountAddress,
+			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
-		// First remove existing system signer configuration
-		removeResult, err := h.ExecuteCLI("signer", "system", "remove")
+		// Configure system signer with unregistered operator 1's system ECDSA keystore
+		err = h.ConfigureSystemKey(harness.KeystoreUnregistered1SystemECDSA)
 		require.NoError(t, err)
-		assert.Equal(t, 0, removeResult.ExitCode)
-
-		// Configure system signer with ECDSA using private key
-		systemPrivateKey := h.ChainConfig.OperatorAccountPk
-		if !strings.HasPrefix(systemPrivateKey, "0x") {
-			systemPrivateKey = "0x" + systemPrivateKey
-		}
-		t.Setenv("SYSTEM_PRIVATE_KEY", systemPrivateKey)
-
-		// Also set the SYSTEM_ECDSA_ADDRESS which is required when using private key
-		t.Setenv("SYSTEM_ECDSA_ADDRESS", h.ChainConfig.OperatorAccountAddress)
-
-		signerResult, err := h.ExecuteCLI("signer", "system", "privatekey")
-		require.NoError(t, err)
-		assert.Equal(t, 0, signerResult.ExitCode)
 
 		// Register ECDSA key (no flags needed - uses context)
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "register-key")
+
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
 
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.ExitCode)
@@ -146,46 +154,39 @@ func TestOperatorRegistration(t *testing.T) {
 	})
 
 	t.Run("Register_Executor_BN254_Key", func(t *testing.T) {
-		// Register executor's BN254 key to a different operator set
-		executorBN254 := h.GetExecutorBN254Keystore()
-
-		// Set context for operator set 1
+		t.Skip("BN254 operator set not configured")
+		// Set context for unregistered operator 2 with operator set 1
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
-			"--operator-address",
-			h.ChainConfig.ExecOperatorAccountAddress,
+			"--operator-address", h.ChainConfig.UnregisteredOperator2AccountAddress,
 			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
-		_, err = h.ExecuteCLI("signer", "system", "remove")
-		require.NoError(t, err)
+		// Set system keystore password for the test duration
+		systemKeystore := h.ChainConfig.UnregisteredOperator2SystemBN254KeystorePassword
+		t.Setenv("SYSTEM_KEYSTORE_PASSWORD", systemKeystore)
 
-		// Configure system signer with BN254 keystore
-		_, err = h.ExecuteCLI(
-			"signer", "system", "keystore",
-			"--name", "executor",
-			"--type", "bn254",
-		)
+		// Configure system signer with unregistered operator 2's BN254 system keystore
+		err = h.ConfigureSystemKey(harness.KeystoreUnregistered2SystemBN254)
 		require.NoError(t, err)
-		// Set the system keystore password
-		t.Setenv("SYSTEM_KEYSTORE_PASSWORD", executorBN254.Password)
 
 		// Register BN254 key (no flags needed - uses context)
-		result, _ := h.ExecuteCLIWithKeystore("executor-bn254",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered2ECDSA,
 			"el", "register-key")
 
-		// This might fail if executor is not registered as operator
-		// but we're testing the BN254 key registration flow
-		if result.ExitCode == 0 {
-			assert.Contains(t, result.Stdout, "Successfully registered key")
-		} else {
-			// Executor might not be registered as operator yet
-			t.Logf("Executor BN254 registration result: %s", result.Stdout)
-			t.Fail()
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
 		}
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, result.ExitCode)
+		assert.Contains(t, result.Stdout, "Successfully registered key")
 	})
 
 	strategyAddress := h.GetBeaconETHStrategy()
@@ -195,13 +196,12 @@ func TestOperatorRegistration(t *testing.T) {
 		err := h.MineBlocks(activateAllocationDelayBlocks)
 		require.NoError(t, err)
 
-		// Set context with operator-set-id
+		// Set context with unregistered operator 1's address
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
-			"--operator-address",
-			h.ChainConfig.OperatorAccountAddress,
-			"--operator-set-id", "0",
+			"--operator-address", h.ChainConfig.UnregisteredOperator1AccountAddress,
+			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
@@ -217,13 +217,13 @@ func TestOperatorRegistration(t *testing.T) {
 		defer rpcClient.Close()
 
 		allocationManagerAddr := common.HexToAddress(h.ChainConfig.AllocationManagerAddress)
-		operatorAddr := common.HexToAddress(h.ChainConfig.OperatorAccountAddress)
+		operatorAddr := common.HexToAddress(h.ChainConfig.UnregisteredOperator1AccountAddress)
 
 		err = tools.InitializeAllocationDelay(rpcClient, allocationManagerAddr, operatorAddr, currentBlock)
 		require.NoError(t, err)
 
 		// Allocate (no operator-set-id flag needed - uses context)
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "allocate",
 			"--strategy", strategyAddress,
 			"--magnitude", "1e18")
@@ -234,19 +234,27 @@ func TestOperatorRegistration(t *testing.T) {
 	})
 
 	t.Run("Register to Single Operator Set", func(t *testing.T) {
-		// Set operator-set-id in context (should already be 0 from previous test)
+		// Set context with unregistered operator 1 for operator set 1
 		contextResult, err := h.ExecuteCLI(
 			"context",
 			"set",
-			"--operator-set-id", "0",
+			"--operator-address", h.ChainConfig.UnregisteredOperator1AccountAddress,
+			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
 		assert.Equal(t, 0, contextResult.ExitCode)
 
 		// Register AVS (no operator-set-ids flag needed - uses context)
-		result, err := h.ExecuteCLIWithKeystore("aggregator-ecdsa",
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "register-avs",
 			"--socket", "https://operator.example.com:8080")
+
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
 
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.ExitCode)

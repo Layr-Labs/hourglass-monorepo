@@ -63,6 +63,7 @@ func systemPrivateKeyCommand() *cli.Command {
 			ctx.SystemSignerKeys.ECDSA = &signer.ECDSAKeyConfig{
 				PrivateKey: true,
 			}
+			ctx.SystemSignerKeys.BN254 = nil
 
 			// Save config
 			if err := config.SaveConfig(cfg); err != nil {
@@ -167,10 +168,12 @@ func systemKeystoreCommand() *cli.Command {
 				ctx.SystemSignerKeys.ECDSA = &signer.ECDSAKeyConfig{
 					Keystore: keystoreRef,
 				}
+				ctx.SystemSignerKeys.BN254 = nil
 				fmt.Printf("✅ System ECDSA configured with keystore '%s' for context '%s'\n",
 					keystoreName, contextName)
 			} else {
 				ctx.SystemSignerKeys.BN254 = keystoreRef
+				ctx.SystemSignerKeys.ECDSA = nil
 				fmt.Printf("✅ System BN254 configured with keystore '%s' for context '%s'\n",
 					keystoreName, contextName)
 			}

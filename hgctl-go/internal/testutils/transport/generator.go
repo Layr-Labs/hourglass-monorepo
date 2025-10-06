@@ -169,7 +169,7 @@ func updateGeneratorFromContext(
 	info := BN254OperatorInfo{Pubkey: pkG1, Weights: []*big.Int{big.NewInt(1)}}
 
 	// Calculate the root leaf
-	root, err := calcOperatorInfoLeaf(ctx, logger, chain.RPCClient, common.HexToAddress("0x3F55654b2b2b86bB11bE2f72657f9C33bf88120A"), info)
+	root, err := calcOperatorInfoLeaf(ctx, logger, chain.RPCClient, common.HexToAddress("0xff58a373c18268f483c1f5ca03cf885c0c43373a"), info)
 	if err != nil {
 		return fmt.Errorf("calc operatorInfo leaf: %w", err)
 	}
