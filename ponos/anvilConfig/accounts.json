@@ -63,10 +63,5 @@
     "name": "exec_staker4",
     "address": "0x0B4e7eAA62CD95b3f9720b86E79d3234fB0A1B81",
     "private_key": "ad627fb2d5dab5f1ea83e44ef11f549609a82ef52d50385edb2437451c88582f"
-  },
-  {
-    "name": "unregistered_operator",
-    "address": "0x5C6d3e7b8F9A2e4D1C0B3A7F8E6D5C4B3A2E1D0C",
-    "private_key": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
   }
 ]
