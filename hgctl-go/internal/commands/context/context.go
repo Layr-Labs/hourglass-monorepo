@@ -12,6 +12,7 @@ func Command() *cli.Command {
 		Subcommands: []*cli.Command{
 			createCommand(),
 			copyCommand(),
+			deleteCommand(),
 			listCommand(),
 			useCommand(),
 			setCommand(),
