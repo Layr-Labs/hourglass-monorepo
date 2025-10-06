@@ -74,7 +74,7 @@ jobs:
           make test
 
   hgctl-test-integration:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,18 +89,13 @@ jobs:
         with:
           version: stable
 
-      - name: Set up Docker
-        run: |
-          # Install Docker CLI and Colima
-          brew install docker docker-compose colima
-          # Start Colima with Docker runtime
-          colima start --cpu 2 --memory 4
-          # Wait for Docker to be ready
-          sleep 5
-          docker ps
-
       - name: Run integration tests
         run: |
+          DEVKIT_VERSION=$(curl -fsSL https://raw.githubusercontent.com/Layr-Labs/devkit-cli/main/VERSION)
+          DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
+          echo "Testing URL: $DEVKIT_URL"
+          curl -I "$DEVKIT_URL"
+          
           cd hgctl-go
           # Generate test chain state with AVS setup
           make generate-test-state
