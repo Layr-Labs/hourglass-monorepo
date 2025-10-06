@@ -1052,3 +1052,6 @@ echo "  - Deployed AVS contracts"
 echo "  - Configured operator sets"
 echo "  - All multichain setup complete"
 
+echo "Cleaning up test avs content"
+cd "$PROJECT_ROOT"
+rm -rf integration-test-avs
