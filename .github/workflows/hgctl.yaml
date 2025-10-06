@@ -87,9 +87,6 @@ jobs:
       - name: Install Zeus
         run: npm install -g @layr-labs/zeus@1.5.9
 
-      - name: Verify Zeus installation
-        run: zeus --version
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
