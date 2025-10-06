@@ -577,10 +577,20 @@ devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metada
 devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
 
 # -----------------------------------------------------------------------------
+# Authenticate with Docker Hub for publishing
+# -----------------------------------------------------------------------------
+if [ -n "$DOCKERHUB_TOKEN" ]; then
+    echo "Authenticating with Docker Hub..."
+    echo "$DOCKERHUB_TOKEN" | docker login --username eigenlayer --password-stdin
+else
+    echo "Warning: DOCKERHUB_TOKEN not set, skipping Docker authentication"
+fi
+
+# -----------------------------------------------------------------------------
 # Publish AVS release to ReleaseManager
 # -----------------------------------------------------------------------------
 echo "Publishing AVS release..."
-devkit avs release publish --registry ghcr.io/bdchatham/hgctl-integ --upgrade-by-time 1759793679
+devkit avs release publish --registry eigenlayer/hgctl-integration --upgrade-by-time 2759793679
 
 # -----------------------------------------------------------------------------
 # Allowlist aggregator operator for operator set 0 (permissioned set)
