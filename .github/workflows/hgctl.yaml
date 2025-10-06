@@ -91,9 +91,13 @@ jobs:
 
       - name: Set up Docker
         run: |
-          # Install Colima for Docker runtime on macOS
-          brew install colima
+          # Install Docker CLI and Colima
+          brew install docker docker-compose colima
+          # Start Colima with Docker runtime
           colima start --cpu 2 --memory 4
+          # Wait for Docker to be ready
+          sleep 5
+          docker ps
 
       - name: Run integration tests
         run: |
