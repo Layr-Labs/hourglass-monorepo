@@ -130,7 +130,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
         run: |
           cd hgctl-go
-          make generate-test-state
+          make generate-test-state ENV=staging
           make test-integration
 
   # Quick build test for PRs - only builds Linux AMD64

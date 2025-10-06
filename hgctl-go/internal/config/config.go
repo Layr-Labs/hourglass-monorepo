@@ -14,8 +14,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Define custom types for context keys to avoid collisions
 type contextKey string
+
+var configDirOverride string
+
+func SetConfigDir(dir string) {
+	configDirOverride = dir
+}
+
+func GetConfigDir() string {
+	if configDirOverride != "" {
+		return configDirOverride
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".hgctl")
+}
 
 var (
 	ContextKey          contextKey = "currentContext"
@@ -26,8 +39,8 @@ var (
 	TelemetryContextKey contextKey = "telemetryContextKey"
 	MetricsContextKey   contextKey = "metricsContextKey"
 
-	KeystoreName     string = "KEYSTORE_NAME"
-	KeystorePassword string = "KEYSTORE_PASSWORD"
+	KeystoreName     = "KEYSTORE_NAME"
+	KeystorePassword = "KEYSTORE_PASSWORD"
 )
 
 type ContractOverrides struct {
@@ -312,11 +325,6 @@ func GetCurrentContext() (*Context, error) {
 	}
 
 	return ctx, nil
-}
-
-func GetConfigDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".hgctl")
 }
 
 func getConfigPath() string {

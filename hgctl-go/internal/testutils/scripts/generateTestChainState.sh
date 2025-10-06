@@ -20,15 +20,35 @@ trap cleanup EXIT ERR INT TERM
 
 set -ex
 
+# -----------------------------------------------------------------------------
+# Validate required parameters
+# -----------------------------------------------------------------------------
+if [ -z "$ENVIRONMENT" ]; then
+    echo "Error: ENVIRONMENT variable must be set (local or staging)"
+    exit 1
+fi
+
+if [ "$ENVIRONMENT" != "local" ] && [ "$ENVIRONMENT" != "staging" ]; then
+    echo "Error: ENVIRONMENT must be 'local' or 'staging', got: $ENVIRONMENT"
+    exit 1
+fi
+
+if [ -z "$REGISTRY_URL" ]; then
+    echo "Error: REGISTRY_URL variable must be set"
+    exit 1
+fi
+
 # Navigate to the project root (where contracts directory exists)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Script is in hgctl-go/internal/testutils/scripts
 HGCTL_ROOT="$SCRIPT_DIR/../../.."  # Go up to hgctl-go root
 PROJECT_ROOT="$HGCTL_ROOT/.."       # Go up to hourglass-monorepo root
+TEST_CONFIG_DIR="$HGCTL_ROOT/internal/testdata/.hgctl"  # Test-specific config directory
 
 echo "Script dir: $SCRIPT_DIR"
 echo "HGCTL root: $HGCTL_ROOT"
 echo "Project root: $PROJECT_ROOT"
+echo "Test config dir: $TEST_CONFIG_DIR"
 
 # Check for existing anvil processes
 echo "Checking for existing anvil processes..."
@@ -265,7 +285,7 @@ create_keystore() {
     local password=$4
 
     # Create new keystore
-    "$HGCTL" keystore create \
+    "$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore create \
         --name "$name" \
         --type "$type" \
         --key "$key" \
@@ -278,16 +298,15 @@ EXECUTOR_ADDRESS=$(cast wallet address --private-key 0x$EXECUTOR_ECDSA_PK)
 
 # Delete existing test context if it exists (ignore errors)
 echo "Removing any existing test context..."
-rm -rf "$HOME/.hgctl/test" 2>/dev/null || true
-rm -rf "$HOME/.config/hgctl/test" 2>/dev/null || true
+rm -rf "$TEST_CONFIG_DIR/" 2>/dev/null || true
 
 # Create context with non-interactive flags
 echo "Creating hgctl context 'test' with L1 RPC URL and operator address..."
-"$HGCTL" context create \
+"$HGCTL" --config-dir "$TEST_CONFIG_DIR" context create \
     --l1-rpc-url "$anvilL1RpcUrl" \
     --l2-rpc-url "$anvilL2RpcUrl" \
     test
-"$HGCTL" context set --operator-address "$AGGREGATOR_ADDRESS"
+"$HGCTL" --config-dir "$TEST_CONFIG_DIR" context set --operator-address "$AGGREGATOR_ADDRESS"
 
 # Create BN254 keystores using hgctl
 echo "Creating BN254 keystore for aggregator..."
@@ -336,22 +355,19 @@ create_keystore "unregistered2-system-bn254" "bn254" "" "$EXECUTOR_PASSWORD"
 create_keystore "unregistered2-system-ecdsa" "ecdsa" "" "$EXECUTOR_PASSWORD"
 
 # Debug: Show where keystores are created
-echo "Checking for keystores in possible locations..."
-ls -la "$HOME/.hgctl/test/keystores/" 2>/dev/null || echo "No keystores in ~/.hgctl/test/keystores/"
+echo "Checking for keystores..."
+ls -la "$TEST_CONFIG_DIR/test/keystores/" 2>/dev/null || echo "No keystores found in $TEST_CONFIG_DIR/test/keystores/"
 
 # Function to copy keystore with error checking
 copy_keystore() {
     local name=$1
     local dest=$2
 
-    if [ -f "$HOME/.hgctl/test/keystores/$name/key.json" ]; then
-        cp "$HOME/.hgctl/test/keystores/$name/key.json" "$dest"
-        echo "Copied $name keystore to $dest"
-    elif [ -f "$HOME/.config/hgctl/test/keystores/$name/key.json" ]; then
-        cp "$HOME/.config/hgctl/test/keystores/$name/key.json" "$dest"
+    if [ -f "$TEST_CONFIG_DIR/test/keystores/$name/key.json" ]; then
+        cp "$TEST_CONFIG_DIR/test/keystores/$name/key.json" "$dest"
         echo "Copied $name keystore to $dest"
     else
-        echo "ERROR: Could not find $name keystore"
+        echo "ERROR: Could not find $name keystore at $TEST_CONFIG_DIR/test/keystores/$name/key.json"
         exit 1
     fi
 }
@@ -383,17 +399,17 @@ copy_keystore "unregistered2-system-ecdsa" "$KEYS_DIR/unregistered2-system-ecdsa
 
 # Extract system key information using hgctl keystore show
 echo "Extracting system key information for registered operators..."
-AGGREGATOR_SYSTEM_PK=$("$HGCTL" keystore show --name aggregator-system --password "$AGGREGATOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-EXECUTOR_SYSTEM_PK=$("$HGCTL" keystore show --name executor-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-EXECUTOR2_SYSTEM_PK=$("$HGCTL" keystore show --name executor2-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-EXECUTOR3_SYSTEM_PK=$("$HGCTL" keystore show --name executor3-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-EXECUTOR4_SYSTEM_PK=$("$HGCTL" keystore show --name executor4-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+AGGREGATOR_SYSTEM_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name aggregator-system --password "$AGGREGATOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR_SYSTEM_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name executor-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR2_SYSTEM_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name executor2-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR3_SYSTEM_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name executor3-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+EXECUTOR4_SYSTEM_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name executor4-system --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
 
 echo "Extracting system key information for unregistered operators..."
-UNREGISTERED1_SYSTEM_BN254_PK=$("$HGCTL" keystore show --name unregistered1-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-UNREGISTERED1_SYSTEM_ECDSA_PK=$("$HGCTL" keystore show --name unregistered1-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-UNREGISTERED2_SYSTEM_BN254_PK=$("$HGCTL" keystore show --name unregistered2-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
-UNREGISTERED2_SYSTEM_ECDSA_PK=$("$HGCTL" keystore show --name unregistered2-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED1_SYSTEM_BN254_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name unregistered1-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED1_SYSTEM_ECDSA_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name unregistered1-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED2_SYSTEM_BN254_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name unregistered2-system-bn254 --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
+UNREGISTERED2_SYSTEM_ECDSA_PK=$("$HGCTL" --config-dir "$TEST_CONFIG_DIR" keystore show --name unregistered2-system-ecdsa --password "$EXECUTOR_PASSWORD" | grep "Private key:" | awk '{print $3}')
 
 # Derive addresses from system keys
 AGGREGATOR_SYSTEM_ADDRESS=$(cast wallet address --private-key 0x$AGGREGATOR_SYSTEM_PK)
@@ -577,20 +593,24 @@ devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metada
 devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
 
 # -----------------------------------------------------------------------------
-# Authenticate with Docker Hub for publishing
+# Authenticate with Docker registry for publishing
 # -----------------------------------------------------------------------------
-if [ -n "$DOCKERHUB_TOKEN" ]; then
-    echo "Authenticating with Docker Hub..."
-    echo "$DOCKERHUB_TOKEN" | docker login --username eigenlayer --password-stdin
-else
-    echo "Warning: DOCKERHUB_TOKEN not set, skipping Docker authentication"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    # Staging: use Docker Hub authentication
+    if [ -n "$DOCKERHUB_TOKEN" ]; then
+        echo "Authenticating with Docker Hub (staging)..."
+        echo "$DOCKERHUB_TOKEN" | docker login --username eigenlayer --password-stdin
+    else
+        echo "Error: DOCKERHUB_TOKEN not set for staging environment"
+        exit 1
+    fi
 fi
 
 # -----------------------------------------------------------------------------
 # Publish AVS release to ReleaseManager
 # -----------------------------------------------------------------------------
-echo "Publishing AVS release..."
-devkit avs release publish --registry docker.io/v2/eigenlayer/hgctl-integration --upgrade-by-time 2759793679
+echo "Publishing AVS release to $REGISTRY_URL..."
+devkit avs release publish --registry "$REGISTRY_URL" --upgrade-by-time 2759793679
 
 # -----------------------------------------------------------------------------
 # Allowlist aggregator operator for operator set 0 (permissioned set)
