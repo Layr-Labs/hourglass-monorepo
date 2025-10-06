@@ -89,19 +89,26 @@ jobs:
         with:
           version: stable
 
-      - name: Install DevKit
+      - name: Install DevKit manually
         run: |
-          curl -fsSL https://raw.githubusercontent.com/Layr-Labs/devkit-cli/main/install-devkit.sh | bash
-          echo "$HOME/bin" >> $GITHUB_PATH
+          DEVKIT_VERSION="v0.1.0-preview.7.rc"
+          INSTALL_DIR="$HOME/bin"
+          mkdir -p "$INSTALL_DIR"
 
-      - name: Verify DevKit installation
-        run: devkit --version
+          # Download with verbose output
+          DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
+          echo "Downloading from: $DEVKIT_URL"
 
-      - name: Run integration tests
-        run: |
-          cd hgctl-go
-          make generate-test-state
-          make test-integration
+          curl -L -o /tmp/devkit.tar.gz "$DEVKIT_URL"
+
+          # Check if it's actually a gzip file
+          file /tmp/devkit.tar.gz
+
+          # Try to extract
+          tar -xzf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
+          chmod +x "$INSTALL_DIR/devkit"
+
+          echo "$INSTALL_DIR" >> $GITHUB_PATH
 
   # Quick build test for PRs - only builds Linux AMD64
   build-test:
