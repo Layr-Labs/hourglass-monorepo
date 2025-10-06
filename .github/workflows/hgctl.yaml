@@ -128,6 +128,7 @@ jobs:
       - name: Run integration tests
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_HGCTL_CI_USERNAME }}
         run: |
           cd hgctl-go
           make generate-test-state ENV=staging

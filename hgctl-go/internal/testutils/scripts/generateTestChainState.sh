@@ -599,7 +599,7 @@ if [ "$ENVIRONMENT" = "staging" ]; then
     # Staging: use Docker Hub authentication
     if [ -n "$DOCKERHUB_TOKEN" ]; then
         echo "Authenticating with Docker Hub (staging)..."
-        echo "$DOCKERHUB_TOKEN" | docker login --username eigenlayer --password-stdin
+        echo "$DOCKERHUB_TOKEN" | docker login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
     else
         echo "Error: DOCKERHUB_TOKEN not set for staging environment"
         exit 1
