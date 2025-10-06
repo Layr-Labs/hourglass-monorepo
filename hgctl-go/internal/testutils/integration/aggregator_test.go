@@ -26,8 +26,14 @@ func TestAggregatorDeployment(t *testing.T) {
 	// Clean up any existing test contexts from previous runs
 	aggregatorContext = "aggregator-context"
 	executorContext = "executor-context"
-	h.ExecuteCLI("context", "delete", aggregatorContext)
-	h.ExecuteCLI("context", "delete", executorContext)
+	_, err := h.ExecuteCLI("context", "delete", aggregatorContext)
+	if err != nil {
+		return
+	}
+	_, err = h.ExecuteCLI("context", "delete", executorContext)
+	if err != nil {
+		return
+	}
 
 	t.Run("Create Aggregator Context", func(t *testing.T) {
 		// Copy default context to aggregator-context
@@ -47,6 +53,8 @@ func TestAggregatorDeployment(t *testing.T) {
 			"use",
 			aggregatorContext,
 		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, result.ExitCode)
 
 		// Set aggregator-specific configuration
 		result, err = h.ExecuteCLI(

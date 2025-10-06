@@ -92,8 +92,6 @@ jobs:
       - name: Run integration tests
         run: |
           cd hgctl-go
-          # Generate test chain state with AVS setup
-          make generate-test-state
           # Run integration tests
           make test-integration
 
