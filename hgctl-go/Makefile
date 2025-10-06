@@ -46,11 +46,6 @@ clean-test-state: ## Clean up test data and keystores
 	@echo "Cleaning test data..."
 	@./internal/testutils/scripts/clean_test_data.sh
 
-.PHONY: run-transport
-run-transport: ## Run operator table transport (requires anvil chains to be running)
-	@echo "Running operator table transport..."
-	@./internal/testutils/scripts/testTransport.sh
-
 fmt: ## Format code
 	@go fmt $(GO_PACKAGES)
 

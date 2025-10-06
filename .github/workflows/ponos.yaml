@@ -56,7 +56,7 @@ jobs:
           version: stable
       - name: Run Forge build
         run: |
-          forge build --sizes
+          forge build --sizes --via-ir
         working-directory: ./contracts
         id: build
       - name: Set up QEMU
