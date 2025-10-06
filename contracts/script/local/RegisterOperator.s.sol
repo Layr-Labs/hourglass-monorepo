@@ -42,18 +42,13 @@ contract RegisterOperator is Script {
         DELEGATION_MANAGER.registerAsOperator(address(0), allocationDelay, metadataURI);
         console.log("Operator registered:", operator, DELEGATION_MANAGER.isOperator(operator));
 
-
         // 2. Register ECDSA system key with KeyRegistrar (required before registering for operator set)
         // Switch to system key for key registration
         OperatorSet memory operatorSet = OperatorSet({avs: avsAddr, id: operatorSetId});
 
         // Get the message hash for ECDSA key registration
         // The system key signs a message that registers itself for the operator
-        bytes32 messageHash = KEY_REGISTRAR.getECDSAKeyRegistrationMessageHash(
-            operator,
-            operatorSet,
-            systemKey
-        );
+        bytes32 messageHash = KEY_REGISTRAR.getECDSAKeyRegistrationMessageHash(operator, operatorSet, systemKey);
 
         // Sign the message hash with the system private key
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(uint256(systemPrivateKey), messageHash);
