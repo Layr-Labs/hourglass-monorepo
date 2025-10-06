@@ -89,6 +89,14 @@ jobs:
         with:
           version: stable
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          # Install yq (YAML processor)
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - name: Install DevKit manually
         run: |
           DEVKIT_VERSION="v0.1.0-preview.7.rc"
