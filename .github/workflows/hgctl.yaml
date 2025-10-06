@@ -89,17 +89,18 @@ jobs:
         with:
           version: stable
 
+      - name: Install DevKit
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/Layr-Labs/devkit-cli/main/install-devkit.sh | bash
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Verify DevKit installation
+        run: devkit --version
+
       - name: Run integration tests
         run: |
-          DEVKIT_VERSION=$(curl -fsSL https://raw.githubusercontent.com/Layr-Labs/devkit-cli/main/VERSION)
-          DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
-          echo "Testing URL: $DEVKIT_URL"
-          curl -I "$DEVKIT_URL"
-          
           cd hgctl-go
-          # Generate test chain state with AVS setup
           make generate-test-state
-          # Run integration tests
           make test-integration
 
   # Quick build test for PRs - only builds Linux AMD64
