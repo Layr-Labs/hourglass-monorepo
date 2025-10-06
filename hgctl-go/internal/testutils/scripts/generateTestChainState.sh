@@ -590,7 +590,7 @@ fi
 # Publish AVS release to ReleaseManager
 # -----------------------------------------------------------------------------
 echo "Publishing AVS release..."
-devkit avs release publish --registry eigenlayer/hgctl-integration --upgrade-by-time 2759793679
+devkit avs release publish --registry docker.io/v2/eigenlayer/hgctl-integration --upgrade-by-time 2759793679
 
 # -----------------------------------------------------------------------------
 # Allowlist aggregator operator for operator set 0 (permissioned set)
