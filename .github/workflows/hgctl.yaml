@@ -126,6 +126,8 @@ jobs:
         run: devkit version
 
       - name: Run integration tests
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
         run: |
           cd hgctl-go
           make generate-test-state
