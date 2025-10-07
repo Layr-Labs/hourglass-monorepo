@@ -39,8 +39,9 @@ type TestHarness struct {
 	ChainConfig  *config.ChainConfig
 
 	// Test environment
-	TestDir     string
-	ContextName string
+	TestDir       string
+	ContextName   string
+	TestConfigDir string
 
 	// Clients for verification
 	L1Client *ethclient.Client
@@ -117,6 +118,11 @@ func NewTestHarness(t *testing.T) *TestHarness {
 func (h *TestHarness) Setup() error {
 	h.Logger.Info("Setting up test harness")
 
+	// 0. Set up test-specific config directory
+	if err := h.setupTestConfigDir(); err != nil {
+		return fmt.Errorf("failed to setup test config directory: %w", err)
+	}
+
 	// 1. Initialize chain manager
 	h.chainManager = NewChainManager(h.Logger)
 
@@ -181,6 +187,34 @@ func (h *TestHarness) StartChains() error {
 		return fmt.Errorf("L2 not ready: %w", err)
 	}
 
+	return nil
+}
+
+// setupTestConfigDir determines the test config directory path
+func (h *TestHarness) setupTestConfigDir() error {
+	// Get the current working directory (should be the project root when running tests)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Navigate up to find the project root (hgctl-go directory)
+	projectRoot := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(projectRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(projectRoot)
+		if parent == projectRoot {
+			return fmt.Errorf("could not find project root (go.mod not found)")
+		}
+		projectRoot = parent
+	}
+
+	// Set test config directory to internal/testdata/.hgctl
+	h.TestConfigDir = filepath.Join(projectRoot, "internal", "testdata", ".hgctl")
+
+	h.Logger.Info("Test config directory", zap.String("path", h.TestConfigDir))
 	return nil
 }
 
@@ -366,7 +400,7 @@ func (h *TestHarness) ConfigureSystemKey(keystoreName string) error {
 		if err != nil {
 			return err
 		}
-		signerArgs := []string{"hgctl", "signer", "system", "privatekey"}
+		signerArgs := []string{"hgctl", "--config-dir", h.TestConfigDir, "signer", "system", "privatekey"}
 		if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
 			return fmt.Errorf("failed to configure system keystore: %w", err)
 		}
@@ -380,7 +414,7 @@ func (h *TestHarness) ConfigureSystemKey(keystoreName string) error {
 	}
 
 	// Configure the system signer with this keystore
-	signerArgs := []string{"hgctl", "signer", "system", "keystore", "--name", keystoreName, "--type", keystore.Type}
+	signerArgs := []string{"hgctl", "--config-dir", h.TestConfigDir, "signer", "system", "keystore", "--name", keystoreName, "--type", keystore.Type}
 	if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
 		return fmt.Errorf("failed to configure system keystore: %w", err)
 	}
@@ -410,7 +444,7 @@ func (h *TestHarness) ExecuteCLIWithOperatorKeystore(keystoreName string, args .
 		}
 
 		// Update context with the operator address for this keystore
-		contextArgs := []string{"hgctl", "context", "set", "--operator-address", keystore.Address}
+		contextArgs := []string{"hgctl", "--config-dir", h.TestConfigDir, "context", "set", "--operator-address", keystore.Address}
 		if err := h.app.RunContext(context.Background(), contextArgs); err != nil {
 			return nil, fmt.Errorf("failed to set operator address in context: %w", err)
 		}
@@ -421,7 +455,7 @@ func (h *TestHarness) ExecuteCLIWithOperatorKeystore(keystoreName string, args .
 		os.Setenv("OPERATOR_KEYSTORE_PASSWORD", keystore.Password)
 
 		// Configure the operator signer with this keystore
-		signerArgs := []string{"hgctl", "signer", "operator", "keystore", "--name", keystoreName}
+		signerArgs := []string{"hgctl", "--config-dir", h.TestConfigDir, "signer", "operator", "keystore", "--name", keystoreName}
 		if err := h.app.RunContext(context.Background(), signerArgs); err != nil {
 			return nil, fmt.Errorf("failed to configure operator keystore: %w", err)
 		}
@@ -434,7 +468,8 @@ func (h *TestHarness) ExecuteCLIWithOperatorKeystore(keystoreName string, args .
 	h.app.ErrWriter = outputBuf
 
 	// Run the command
-	allArgs := append([]string{"hgctl"}, args...)
+	allArgs := []string{"hgctl", "--config-dir", h.TestConfigDir}
+	allArgs = append(allArgs, args...)
 	err := h.app.RunContext(context.Background(), allArgs)
 
 	// Build result

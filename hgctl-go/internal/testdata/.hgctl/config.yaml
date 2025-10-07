@@ -1,0 +1,76 @@
+currentContext: test
+contexts:
+    default:
+        envSecretsPath: ""
+    test:
+        executorEndpoint: 127.0.0.1:9090
+        avsAddress: 0x8e14dB002737F89745bc98F987caeB18D0d47635
+        operatorAddress: 0x77bF74ED0d350bcfD198445E4F379C8fc88029e4
+        operatorSetId: 1
+        l1ChainId: 31337
+        l1RpcUrl: http://localhost:8545
+        l2ChainId: 31338
+        l2RpcUrl: http://localhost:9545
+        envSecretsPath: ""
+        keystores:
+            - name: aggregator
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/aggregator/key.json
+              type: bn254
+            - name: executor
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor/key.json
+              type: bn254
+            - name: aggregator-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/aggregator-ecdsa/key.json
+              type: ecdsa
+            - name: executor-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor-ecdsa/key.json
+              type: ecdsa
+            - name: executor2-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor2-ecdsa/key.json
+              type: ecdsa
+            - name: executor3-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor3-ecdsa/key.json
+              type: ecdsa
+            - name: executor4-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor4-ecdsa/key.json
+              type: ecdsa
+            - name: unregistered-operator1-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered-operator1-ecdsa/key.json
+              type: ecdsa
+            - name: unregistered-operator2-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered-operator2-ecdsa/key.json
+              type: ecdsa
+            - name: aggregator-system
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/aggregator-system/key.json
+              type: ecdsa
+            - name: executor-system
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor-system/key.json
+              type: ecdsa
+            - name: executor2-system
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor2-system/key.json
+              type: ecdsa
+            - name: executor3-system
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor3-system/key.json
+              type: ecdsa
+            - name: executor4-system
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/executor4-system/key.json
+              type: ecdsa
+            - name: unregistered1-system-bn254
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered1-system-bn254/key.json
+              type: bn254
+            - name: unregistered1-system-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered1-system-ecdsa/key.json
+              type: ecdsa
+            - name: unregistered2-system-bn254
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered2-system-bn254/key.json
+              type: bn254
+            - name: unregistered2-system-ecdsa
+              path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered2-system-ecdsa/key.json
+              type: ecdsa
+        systemSigner:
+            bn254:
+                name: aggregator
+                path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/aggregator/key.json
+                type: bn254
+        operatorSigner:
+            privateKey: true

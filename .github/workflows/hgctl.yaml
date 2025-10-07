@@ -76,8 +76,43 @@ jobs:
   hgctl-test-integration:
     runs-on: ubuntu-latest
     steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_HGCTL_CI_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
+
+      - name: Normalize Docker config for registry
+        run: |
+          CONFIG_FILE=~/.docker/config.json
+
+          # Get the auth value from the existing Docker Hub entry
+          AUTH_VALUE=$(jq -r '.auths["https://index.docker.io/v1/"].auth' $CONFIG_FILE)
+
+          # Add entries for common Docker Hub registry hostnames
+          jq --arg auth "$AUTH_VALUE" '
+            .auths["docker.io"] = {"auth": $auth} |
+            .auths["registry-1.docker.io"] = {"auth": $auth}
+          ' $CONFIG_FILE > $CONFIG_FILE.tmp
+
+          mv $CONFIG_FILE.tmp $CONFIG_FILE
+
+          echo "Docker config updated"
+          cat $CONFIG_FILE
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Zeus
+        run: npm install -g @layr-labs/zeus@1.5.9
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -89,10 +124,57 @@ jobs:
         with:
           version: stable
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          # Install yq (YAML processor)
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Install DevKit manually
+        run: |
+          # Tar-based installation:
+          # DEVKIT_VERSION="v0.1.0-preview.7.rc"
+          # INSTALL_DIR="$HOME/bin"
+          # mkdir -p "$INSTALL_DIR"
+          # DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
+          # echo "Downloading from: $DEVKIT_URL"
+          # curl -L -o /tmp/devkit.tar.gz "$DEVKIT_URL"
+          # tar -xf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
+          # chmod +x "$INSTALL_DIR/devkit"
+          # echo "$INSTALL_DIR" >> $GITHUB_PATH
+
+          # Build from source at specific commit
+          DEVKIT_REPO="https://github.com/Layr-Labs/devkit-cli.git"
+          DEVKIT_COMMIT="f7b5137bebd8644fd45ed0f800045995c7c162b0"
+          INSTALL_DIR="$HOME/bin"
+          BUILD_DIR="/tmp/devkit-build"
+
+          echo "Cloning DevKit from ${DEVKIT_REPO}..."
+          git clone "$DEVKIT_REPO" "$BUILD_DIR"
+          cd "$BUILD_DIR"
+
+          echo "Checking out commit ${DEVKIT_COMMIT}..."
+          git checkout "$DEVKIT_COMMIT"
+
+          echo "Building DevKit..."
+          make build
+
+          echo "Installing DevKit binary..."
+          mkdir -p "$INSTALL_DIR"
+          cp bin/devkit "$INSTALL_DIR/devkit"
+          chmod +x "$INSTALL_DIR/devkit"
+
+          echo "$INSTALL_DIR" >> $GITHUB_PATH
+
       - name: Run integration tests
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_HGCTL_CI_USERNAME }}
         run: |
           cd hgctl-go
-          # Run integration tests
+          make generate-test-state ENV=staging
           make test-integration
 
   # Quick build test for PRs - only builds Linux AMD64

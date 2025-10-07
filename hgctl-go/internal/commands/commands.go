@@ -43,9 +43,19 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 				Usage:   "Output format (table|json|yaml)",
 				Value:   "table",
 			},
+			&cli.StringFlag{
+				Name:   "config-dir",
+				Usage:  "Override the config directory (default: ~/.hgctl)",
+				Hidden: true,
+			},
 		},
 		Before: middleware.ChainBeforeFuncs(
 			func(c *cli.Context) error {
+				// Set config directory override if provided (before any config operations)
+				if configDir := c.String("config-dir"); configDir != "" {
+					config.SetConfigDir(configDir)
+				}
+
 				verbose := c.Bool("verbose")
 				logger.InitGlobalLoggerWithWriter(verbose, c.App.Writer)
 				l := logger.GetLogger()

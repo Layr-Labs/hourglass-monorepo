@@ -38,8 +38,21 @@ test-integration: ## Run all integration tests with automatic setup
 # Test Environment Management
 .PHONY: generate-test-state
 generate-test-state: ## Generate fresh test chain state with AVS setup
-	@echo "Generating test chain state..."
-	@./internal/testutils/scripts/generateTestChainState.sh
+	@if [ -z "$(ENV)" ]; then \
+		echo "Error: ENV parameter required. Use ENV=local or ENV=staging"; \
+		exit 1; \
+	fi; \
+	if [ "$(ENV)" = "local" ] && [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY parameter required for local environment"; \
+		echo "Example: make generate-test-state ENV=local REGISTRY=ghcr.io/myorg/myavs"; \
+		exit 1; \
+	fi; \
+	echo "Generating test chain state for $(ENV) environment..."; \
+	if [ "$(ENV)" = "staging" ]; then \
+		ENVIRONMENT=staging REGISTRY_URL=docker.io/eigenlayer/hgctl-integration ./internal/testutils/scripts/generateTestChainState.sh; \
+	else \
+		ENVIRONMENT=$(ENV) REGISTRY_URL=$(REGISTRY) ./internal/testutils/scripts/generateTestChainState.sh; \
+	fi
 
 .PHONY: clean-test-state
 clean-test-state: ## Clean up test data and keystores

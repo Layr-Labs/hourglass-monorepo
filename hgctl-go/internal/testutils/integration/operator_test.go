@@ -23,6 +23,29 @@ func TestOperatorRegistration(t *testing.T) {
 	require.NoError(t, h.Setup())
 	defer h.Teardown()
 
+	// Create a copy of the test context for this test suite
+	testContextName := "operator-registration-context"
+	result, err := h.ExecuteCLI("context", "copy", "--copy-name", testContextName, "--use", "test")
+	require.NoError(t, err, "Failed to copy test context")
+	require.Equal(t, 0, result.ExitCode, "Context copy should succeed")
+
+	// Verify we're using the new context
+	showResult, err := h.ExecuteCLI("context", "show")
+	require.NoError(t, err)
+	t.Logf("Current context after copy: %s", showResult.Stdout)
+
+	// Clean up the test context when done
+	defer func() {
+		// Switch back to original test context before deleting
+		_, _ = h.ExecuteCLI("context", "use", "test")
+
+		// Delete the copied context
+		result, err := h.ExecuteCLI("context", "delete", testContextName)
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Warning: failed to delete test context %s: %v", testContextName, err)
+		}
+	}()
+
 	t.Run("Operator_Registration_Allocation", func(t *testing.T) {
 		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "register-operator",
