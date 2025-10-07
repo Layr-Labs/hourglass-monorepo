@@ -82,6 +82,24 @@ jobs:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_HGCTL_CI_USERNAME }}
           password: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
+
+      - name: Normalize Docker config for registry
+        run: |
+          CONFIG_FILE=~/.docker/config.json
+
+          # Get the auth value from the existing Docker Hub entry
+          AUTH_VALUE=$(jq -r '.auths["https://index.docker.io/v1/"].auth' $CONFIG_FILE)
+
+          # Add entries for common Docker Hub registry hostnames
+          jq --arg auth "$AUTH_VALUE" '
+            .auths["docker.io"] = {"auth": $auth} |
+            .auths["registry-1.docker.io"] = {"auth": $auth}
+          ' $CONFIG_FILE > $CONFIG_FILE.tmp
+
+          mv $CONFIG_FILE.tmp $CONFIG_FILE
+
+          echo "Docker config updated"
+          cat $CONFIG_FILE
         
       - name: Checkout
         uses: actions/checkout@v4
