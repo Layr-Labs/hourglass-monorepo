@@ -14,42 +14,12 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
 )
 
-func performerCommand() *cli.Command {
-	return &cli.Command{
-		Name:      "performer",
-		Usage:     "Deploy the AVS performer component",
-		ArgsUsage: "",
-		Description: `Deploy the performer component from a release.
-
-The AVS address must be configured in the context before running this command.`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "release-id",
-				Usage: "Release ID to deploy (defaults to latest)",
-			},
-			&cli.StringSliceFlag{
-				Name:  "env",
-				Usage: "Set environment variables (can be used multiple times)",
-			},
-			&cli.StringFlag{
-				Name:  "env-file",
-				Usage: "Load environment variables from file",
-			},
-			&cli.BoolFlag{
-				Name:  "dry-run",
-				Usage: "Validate configuration without starting the container",
-			},
-		},
-		Action: deployPerformerAction,
-	}
-}
-
-// PerformerDeployer handles performer-specific deployment logic
 type PerformerDeployer struct {
 	*PlatformDeployer
 	dryRun bool
 }
 
+//nolint:unused
 func deployPerformerAction(c *cli.Context) error {
 	currentCtx := c.Context.Value(config.ContextKey).(*config.Context)
 	log := config.LoggerFromContext(c.Context)
