@@ -134,7 +134,7 @@ jobs:
 
       - name: Install DevKit manually
         run: |
-          # Original tar-based installation (commented out):
+          # Tar-based installation:
           # DEVKIT_VERSION="v0.1.0-preview.7.rc"
           # INSTALL_DIR="$HOME/bin"
           # mkdir -p "$INSTALL_DIR"
@@ -147,7 +147,7 @@ jobs:
 
           # Build from source at specific commit
           DEVKIT_REPO="https://github.com/Layr-Labs/devkit-cli.git"
-          DEVKIT_COMMIT="abcfa047f4de539cc80539aff275e40ada5df044"
+          DEVKIT_COMMIT="f7b5137bebd8644fd45ed0f800045995c7c162b0"
           INSTALL_DIR="$HOME/bin"
           BUILD_DIR="/tmp/devkit-build"
 
@@ -168,8 +168,8 @@ jobs:
 
           echo "$INSTALL_DIR" >> $GITHUB_PATH
 
-      - name: Verify DevKit installation
-        run: devkit version
+      - name: Disable DevKit telemetry
+        run: devkit telemetry --disable
 
       - name: Run integration tests
         env:
