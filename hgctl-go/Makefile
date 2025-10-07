@@ -49,7 +49,7 @@ generate-test-state: ## Generate fresh test chain state with AVS setup
 	fi; \
 	echo "Generating test chain state for $(ENV) environment..."; \
 	if [ "$(ENV)" = "staging" ]; then \
-		ENVIRONMENT=staging REGISTRY_URL=index.docker.io/eigenlayer/hgctl-integration ./internal/testutils/scripts/generateTestChainState.sh; \
+		ENVIRONMENT=staging REGISTRY_URL=index.docker.io/v1/eigenlayer/hgctl-integration ./internal/testutils/scripts/generateTestChainState.sh; \
 	else \
 		ENVIRONMENT=$(ENV) REGISTRY_URL=$(REGISTRY) ./internal/testutils/scripts/generateTestChainState.sh; \
 	fi
