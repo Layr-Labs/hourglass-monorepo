@@ -3,10 +3,7 @@ contexts:
     default:
         envSecretsPath: ""
     test:
-        executorEndpoint: 127.0.0.1:9090
-        avsAddress: 0x8e14dB002737F89745bc98F987caeB18D0d47635
         operatorAddress: 0x77bF74ED0d350bcfD198445E4F379C8fc88029e4
-        operatorSetId: 1
         l1ChainId: 31337
         l1RpcUrl: http://localhost:8545
         l2ChainId: 31338
@@ -67,10 +64,3 @@ contexts:
             - name: unregistered2-system-ecdsa
               path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/unregistered2-system-ecdsa/key.json
               type: ecdsa
-        systemSigner:
-            bn254:
-                name: aggregator
-                path: /Users/brandonchatham/sandbox/ponos/hourglass-monorepo/hgctl-go/internal/testdata/.hgctl/test/keystores/aggregator/key.json
-                type: bn254
-        operatorSigner:
-            privateKey: true

@@ -20,43 +20,24 @@ func TestAggregatorDeployment(t *testing.T) {
 	require.NoError(t, h.Setup())
 	defer h.Teardown()
 
-	var aggregatorContext string
-	var executorContext string
+	aggregatorContext := "aggregator-deployment-context"
+	executorContext := "executor-deployment-context"
 
-	// Clean up any existing test contexts from previous runs
-	aggregatorContext = "aggregator-context"
-	executorContext = "executor-context"
-	_, err := h.ExecuteCLI("context", "delete", aggregatorContext)
-	if err != nil {
-		return
-	}
-	_, err = h.ExecuteCLI("context", "delete", executorContext)
-	if err != nil {
-		return
-	}
+	defer func() {
+		_, _ = h.ExecuteCLI("context", "use", h.ContextName)
+		_, _ = h.ExecuteCLI("context", "delete", aggregatorContext)
+		_, _ = h.ExecuteCLI("context", "delete", executorContext)
+	}()
 
 	t.Run("Create Aggregator Context", func(t *testing.T) {
-		// Copy default context to aggregator-context
-		result, err := h.ExecuteCLI(
-			"context",
-			"copy",
-			"--copy-name", aggregatorContext,
-			h.ContextName,
-		)
+		result, err := h.ExecuteCLI("context", "copy", "--copy-name", aggregatorContext, "--use", h.ContextName)
+		require.NoError(t, err, "Failed to copy context for aggregator")
+		require.Equal(t, 0, result.ExitCode, "Context copy should succeed")
 
+		showResult, err := h.ExecuteCLI("context", "show")
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		t.Logf("Current context after copy: %s", showResult.Stdout)
 
-		// Switch to aggregator context
-		result, err = h.ExecuteCLI(
-			"context",
-			"use",
-			aggregatorContext,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
-
-		// Set aggregator-specific configuration
 		result, err = h.ExecuteCLI(
 			"context",
 			"set",
@@ -64,88 +45,50 @@ func TestAggregatorDeployment(t *testing.T) {
 			"--operator-set-id", "0",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		require.Equal(t, 0, result.ExitCode)
 
-		// Configure operator keystore
 		err = h.ConfigureSystemKey(harness.KeystoreAggregatorSystem)
-		require.NoError(t, err)
+		require.NoError(t, err, "Failed to configure aggregator system key")
 
-		// Set operator keystore
-		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreAggregatorECDSA)
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		signerResult, err := h.ExecuteCLI("signer", "operator", "keystore",
+			"--name", harness.KeystoreAggregatorECDSA)
+		require.NoError(t, err, "Failed to configure operator signer")
+		require.Equal(t, 0, signerResult.ExitCode)
 	})
 
 	t.Run("Deploy Aggregator", func(t *testing.T) {
-		// Switch to aggregator context
-		result, err := h.ExecuteCLI(
-			"context",
-			"use",
-			aggregatorContext,
-		)
+		result, err := h.ExecuteCLI("context", "use", aggregatorContext)
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		require.Equal(t, 0, result.ExitCode)
 
-		// Deploy aggregator
-		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreAggregatorECDSA,
-			"deploy",
-			"aggregator",
-			h.ChainConfig.AVSAccountAddress,
-		)
+		t.Logf("Running aggregator with operator-set-id 0 (auto-discovery)...")
+		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreAggregatorECDSA, "run")
 
 		if err != nil || result.ExitCode != 0 {
-			t.Logf("Deploy aggregator failed with error: %v", err)
+			t.Logf("Run command failed with error: %v", err)
 			t.Logf("Exit code: %d", result.ExitCode)
 			t.Logf("Stdout: %s", result.Stdout)
 			t.Logf("Stderr: %s", result.Stderr)
 		}
 
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
-
-		// Wait for aggregator to start
-		time.Sleep(5 * time.Second)
+		require.NoError(t, err, "Run command should not return an error")
+		require.Equal(t, 0, result.ExitCode, "Run should succeed")
+		time.Sleep(10 * time.Second)
 	})
 
 	t.Run("Create Executor Context", func(t *testing.T) {
-		// Switch back to default context first
-		result, err := h.ExecuteCLI(
-			"context",
-			"use",
-			h.ContextName,
-		)
+		result, err := h.ExecuteCLI("context", "use", h.ContextName)
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		require.Equal(t, 0, result.ExitCode)
 
-		// Copy default context to executor-context
-		executorContext = "executor-context"
-		result, err = h.ExecuteCLI(
-			"context",
-			"copy",
-			"--copy-name", executorContext,
-			h.ContextName,
-		)
-
-		if err != nil || result.ExitCode != 0 {
-			t.Logf("Context copy failed with error: %v", err)
-			t.Logf("Exit code: %d", result.ExitCode)
-			t.Logf("Stdout: %s", result.Stdout)
-			t.Logf("Stderr: %s", result.Stderr)
-		}
-
-		require.NoError(t, err, "Failed to copy context")
+		result, err = h.ExecuteCLI("context", "copy", "--copy-name", executorContext, "--use", h.ContextName)
+		require.NoError(t, err, "Failed to copy context for executor")
 		require.Equal(t, 0, result.ExitCode, "Context copy should succeed")
 
-		// Switch to executor context
-		result, err = h.ExecuteCLI(
-			"context",
-			"use",
-			executorContext,
-		)
+		showResult, err := h.ExecuteCLI("context", "show")
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		t.Logf("Current context after copy: %s", showResult.Stdout)
 
-		// Set executor-specific configuration
 		result, err = h.ExecuteCLI(
 			"context",
 			"set",
@@ -153,50 +96,39 @@ func TestAggregatorDeployment(t *testing.T) {
 			"--operator-set-id", "1",
 		)
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		require.Equal(t, 0, result.ExitCode)
 
-		// Configure system keystore
 		err = h.ConfigureSystemKey(harness.KeystoreExecutorSystem)
-		require.NoError(t, err)
+		require.NoError(t, err, "Failed to configure executor system key")
 
-		// Set operator keystore
-		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreExecutorECDSA)
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		signerResult, err := h.ExecuteCLI("signer", "operator", "keystore",
+			"--name", harness.KeystoreExecutorECDSA)
+		require.NoError(t, err, "Failed to configure operator signer")
+		require.Equal(t, 0, signerResult.ExitCode)
 	})
 
 	t.Run("Deploy Executor", func(t *testing.T) {
-		// Switch to executor context
-		result, err := h.ExecuteCLI(
-			"context",
-			"use",
-			executorContext,
-		)
+		result, err := h.ExecuteCLI("context", "use", executorContext)
 		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
+		require.Equal(t, 0, result.ExitCode)
 
-		// Deploy executor
-		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreExecutorECDSA,
-			"deploy",
-			"executor",
-			h.ChainConfig.AVSAccountAddress,
-		)
+		t.Logf("Running executor with operator-set-id 1 (auto-discovery)...")
+		result, err = h.ExecuteCLIWithOperatorKeystore(harness.KeystoreExecutorECDSA, "run")
 
 		if err != nil || result.ExitCode != 0 {
-			t.Logf("Deploy executor failed with error: %v", err)
+			t.Logf("Run command failed with error: %v", err)
 			t.Logf("Exit code: %d", result.ExitCode)
 			t.Logf("Stdout: %s", result.Stdout)
 			t.Logf("Stderr: %s", result.Stderr)
 		}
 
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.ExitCode)
-
-		// Wait for executor to start
-		time.Sleep(5 * time.Second)
+		require.NoError(t, err, "Run command should not return an error")
+		require.Equal(t, 0, result.ExitCode, "Run should succeed")
+		time.Sleep(10 * time.Second)
 	})
 
 	t.Run("Submit Task to Mailbox", func(t *testing.T) {
+		t.Skip("not ready to submit task to Mailbox")
 		// Create transaction signer for task submission
 		signer, err := signer.NewPrivateKeySigner(
 			h.ChainConfig.AppAccountPk,

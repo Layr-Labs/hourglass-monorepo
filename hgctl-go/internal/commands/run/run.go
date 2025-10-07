@@ -63,10 +63,6 @@ func Run(c *cli.Context) error {
 		return fmt.Errorf("AVS address not configured. Run 'hgctl context set --avs-address <address>' first")
 	}
 
-	if currentCtx.OperatorSetID == 0 {
-		return fmt.Errorf("operator-set-id not configured. Run 'hgctl context set --operator-set-id <id>' first")
-	}
-
 	contractClient, err := middleware.GetContractClient(c)
 	if err != nil {
 		return fmt.Errorf("failed to get contract client: %w", err)

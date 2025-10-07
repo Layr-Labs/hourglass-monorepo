@@ -633,7 +633,7 @@ forge script script/local/RegisterOperator.s.sol \
     "https://example.com/aggregator/metadata.json" \
     "$avsAccountAddress" \
     0 \
-    "localhost:7070"
+    "localhost:9010"
 
 # Register executor operator 1 for operator set 1
 echo "Registering executor operator 1 (operator set 1)..."
@@ -648,7 +648,7 @@ forge script script/local/RegisterOperator.s.sol \
     "https://example.com/executor1/metadata.json" \
     "$avsAccountAddress" \
     1 \
-    "localhost:7071"
+    "localhost:9090"
 
 # Register executor operator 2 for operator set 1
 echo "Registering executor operator 2 (operator set 1)..."
@@ -663,7 +663,7 @@ forge script script/local/RegisterOperator.s.sol \
     "https://example.com/executor2/metadata.json" \
     "$avsAccountAddress" \
     1 \
-    "localhost:7072"
+    "localhost:9080"
 
 # Register executor operator 3 for operator set 1
 echo "Registering executor operator 3 (operator set 1)..."
@@ -678,7 +678,7 @@ forge script script/local/RegisterOperator.s.sol \
     "https://example.com/executor3/metadata.json" \
     "$avsAccountAddress" \
     1 \
-    "localhost:7073"
+    "localhost:9070"
 
 # Register executor operator 4 for operator set 1
 echo "Registering executor operator 4 (operator set 1)..."
@@ -693,7 +693,7 @@ forge script script/local/RegisterOperator.s.sol \
     "https://example.com/executor4/metadata.json" \
     "$avsAccountAddress" \
     1 \
-    "localhost:7074"
+    "localhost:9060"
 
 # -----------------------------------------------------------------------------
 # Stake tokens for operators (WETH for aggregator, stETH for executors)
