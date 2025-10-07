@@ -145,7 +145,7 @@ jobs:
 
           # Build from source at specific commit
           DEVKIT_REPO="https://github.com/Layr-Labs/devkit-cli.git"
-          DEVKIT_COMMIT="bc3577f12697dd92e64cde9fffd80025fa4b3acb"
+          DEVKIT_COMMIT="b8546185197a99590f876db6cdec3c42841747d9"
           INSTALL_DIR="$HOME/bin"
           BUILD_DIR="/tmp/devkit-build"
 
