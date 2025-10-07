@@ -82,9 +82,6 @@ jobs:
           registry: docker.io
           username: ${{ secrets.DOCKERHUB_HGCTL_CI_USERNAME }}
           password: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}
-
-      - name: Check Docker config
-        run: cat ~/.docker/config.json
         
       - name: Checkout
         uses: actions/checkout@v4
