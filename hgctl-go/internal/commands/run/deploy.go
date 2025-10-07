@@ -1,4 +1,4 @@
-package deploy
+package run
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 
-	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/client"
@@ -20,19 +19,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/runtime"
 )
-
-// Command returns the deploy command
-func Command() *cli.Command {
-	return &cli.Command{
-		Name:  "deploy",
-		Usage: "Deploy hourglass components",
-		Subcommands: []*cli.Command{
-			performerCommand(),
-			executorCommand(),
-			aggregatorCommand(),
-		},
-	}
-}
 
 // PlatformDeployer provides shared deployment functionality for all components
 type PlatformDeployer struct {

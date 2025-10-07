@@ -6,13 +6,13 @@ import (
 	"os"
 
 	contextcmd "github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/context"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/deploy"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/describe"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/get"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/run"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/telemetry"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/config"
@@ -135,7 +135,7 @@ func DescribeCommand() *cli.Command {
 }
 
 func DeployCommand() *cli.Command {
-	cmd := deploy.Command()
+	cmd := run.Command()
 	cmd.Before = middleware.RequireContext
 	return cmd
 }
