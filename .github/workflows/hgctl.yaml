@@ -132,17 +132,36 @@ jobs:
 
       - name: Install DevKit manually
         run: |
-          DEVKIT_VERSION="v0.1.0-preview.7.rc"
+          # Original tar-based installation (commented out):
+          # DEVKIT_VERSION="v0.1.0-preview.7.rc"
+          # INSTALL_DIR="$HOME/bin"
+          # mkdir -p "$INSTALL_DIR"
+          # DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
+          # echo "Downloading from: $DEVKIT_URL"
+          # curl -L -o /tmp/devkit.tar.gz "$DEVKIT_URL"
+          # tar -xf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
+          # chmod +x "$INSTALL_DIR/devkit"
+          # echo "$INSTALL_DIR" >> $GITHUB_PATH
+
+          # Build from source at specific commit
+          DEVKIT_REPO="https://github.com/Layr-Labs/devkit-cli.git"
+          DEVKIT_COMMIT="bd2893addb82a18c90a07fe0a666559fbc75f931"
           INSTALL_DIR="$HOME/bin"
+          BUILD_DIR="/tmp/devkit-build"
+
+          echo "Cloning DevKit from ${DEVKIT_REPO}..."
+          git clone "$DEVKIT_REPO" "$BUILD_DIR"
+          cd "$BUILD_DIR"
+
+          echo "Checking out commit ${DEVKIT_COMMIT}..."
+          git checkout "$DEVKIT_COMMIT"
+
+          echo "Building DevKit..."
+          make build
+
+          echo "Installing DevKit binary..."
           mkdir -p "$INSTALL_DIR"
-
-          DEVKIT_URL="https://s3.amazonaws.com/eigenlayer-devkit-releases/${DEVKIT_VERSION}/devkit-linux-amd64-${DEVKIT_VERSION}.tar.gz"
-          echo "Downloading from: $DEVKIT_URL"
-
-          curl -L -o /tmp/devkit.tar.gz "$DEVKIT_URL"
-
-          # Extract without gzip decompression (file is already uncompressed tar)
-          tar -xf /tmp/devkit.tar.gz -C "$INSTALL_DIR"
+          cp bin/devkit "$INSTALL_DIR/devkit"
           chmod +x "$INSTALL_DIR/devkit"
 
           echo "$INSTALL_DIR" >> $GITHUB_PATH
