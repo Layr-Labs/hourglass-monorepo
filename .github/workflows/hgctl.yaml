@@ -168,9 +168,6 @@ jobs:
 
           echo "$INSTALL_DIR" >> $GITHUB_PATH
 
-      - name: Disable DevKit telemetry
-        run: devkit telemetry --disable
-
       - name: Run integration tests
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_HGCTL_CI_TOKEN }}

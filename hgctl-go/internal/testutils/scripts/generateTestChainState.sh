@@ -543,6 +543,8 @@ devkit avs create integration-test-avs
 
 cd "$AVS_PROJECT_DIR"
 
+devkit telemetry --disable
+
 # -----------------------------------------------------------------------------
 # Configure DevKit context for local anvil chains
 # -----------------------------------------------------------------------------
