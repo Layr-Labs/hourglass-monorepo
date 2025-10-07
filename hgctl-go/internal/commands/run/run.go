@@ -85,11 +85,11 @@ func Run(c *cli.Context) error {
 
 	switch role {
 	case "aggregator":
-		fmt.Printf("🔍 Discovered role: aggregator\n")
+		fmt.Printf("Discovered role: aggregator\n")
 		fmt.Printf("   Deploying aggregator for operator-set-id %d...\n\n", currentCtx.OperatorSetID)
 		return deployAggregatorAction(c)
 	case "executor":
-		fmt.Printf("🔍 Discovered role: executor\n")
+		fmt.Printf("Discovered role: executor\n")
 		fmt.Printf("   Deploying executor for operator-set-id %d...\n\n", currentCtx.OperatorSetID)
 		return deployExecutorAction(c)
 	default:
