@@ -585,18 +585,18 @@ if [ -z "$avsTaskRegistrarAddress" ] || [ "$avsTaskRegistrarAddress" = "\"\"" ];
     exit 1
 fi
 
-## -----------------------------------------------------------------------------
-## Set release metadata URIs for operator sets
-## -----------------------------------------------------------------------------
-#echo "Setting release metadata URIs..."
-#devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-0"
-#devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
-#
-## -----------------------------------------------------------------------------
-## Publish AVS release to ReleaseManager
-## -----------------------------------------------------------------------------
-#echo "Publishing AVS release to $REGISTRY_URL..."
-#devkit avs release publish --registry "$REGISTRY_URL" --upgrade-by-time 2759793679
+# -----------------------------------------------------------------------------
+# Set release metadata URIs for operator sets
+# -----------------------------------------------------------------------------
+echo "Setting release metadata URIs..."
+devkit avs release uri --operator-set-id 0 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-0"
+devkit avs release uri --operator-set-id 1 --avs-address "$AVS_ADDRESS" --metadata-uri "http://integration-test-uri/operator-set-1"
+
+# -----------------------------------------------------------------------------
+# Publish AVS release to ReleaseManager
+# -----------------------------------------------------------------------------
+echo "Publishing AVS release to $REGISTRY_URL..."
+devkit avs release publish --registry "$REGISTRY_URL" --upgrade-by-time 2759793679
 
 # -----------------------------------------------------------------------------
 # Allowlist aggregator operator for operator set 0 (permissioned set)
