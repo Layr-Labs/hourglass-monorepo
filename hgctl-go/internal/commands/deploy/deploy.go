@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/signer"
 
 	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"

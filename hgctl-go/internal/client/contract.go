@@ -1091,6 +1091,20 @@ func (c *ContractClient) DeregisterOperatorFromAVS(ctx context.Context, operator
 	return nil
 }
 
+// GetAvsRegistrar retrieves the AVS registrar address
+func (c *ContractClient) GetAvsRegistrar(avs string) (*common.Address, error) {
+	if c.allocationManager == nil {
+		return nil, fmt.Errorf("allocation manager not initialized")
+	}
+
+	registrarAddress, err := c.allocationManager.GetAVSRegistrar(nil, common.HexToAddress(avs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to deregister operator from AVS: %w", err)
+	}
+
+	return &registrarAddress, nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }
