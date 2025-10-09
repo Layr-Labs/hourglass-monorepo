@@ -40,6 +40,8 @@ type PerformerContainer struct {
 	eventChan       <-chan containerManager.ContainerEvent
 	performerHealth *avsPerformer.PerformerHealth
 	statusChan      chan avsPerformer.PerformerStatusEvent
+	statusCancel    context.CancelFunc
+	statusContext   context.Context
 	image           avsPerformer.PerformerImage
 	status          avsPerformer.PerformerResourceStatus
 }
@@ -205,9 +207,13 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 		return nil, errors.Wrap(err, "failed to create performer client")
 	}
 
+	// Create a child context for managing status channel lifecycle
+	statusCtx, statusCancel := context.WithCancel(ctx)
+
 	// Start liveness monitoring for this container
-	eventChan, err := aps.containerManager.StartLivenessMonitoring(ctx, updatedInfo.ID, livenessConfig)
+	eventChan, err := aps.containerManager.StartLivenessMonitoring(statusCtx, updatedInfo.ID, livenessConfig)
 	if err != nil {
+		statusCancel()
 		// Clean up on failure
 		aps.cleanupFailedContainer(updatedInfo.ID, "failed to start liveness monitoring")
 		return nil, errors.Wrap(err, "failed to start liveness monitoring")
@@ -220,14 +226,17 @@ func (aps *AvsContainerPerformer) createAndStartContainer(
 		zap.String("containerID", updatedInfo.ID),
 		zap.String("endpoint", endpoint),
 	)
+
 	// Create the container instance with all components
 	return &PerformerContainer{
-		performerID: performerID,
-		info:        updatedInfo,
-		client:      perfClient,
-		eventChan:   eventChan,
-		image:       image,
-		statusChan:  make(chan avsPerformer.PerformerStatusEvent, 10),
+		performerID:   performerID,
+		info:          updatedInfo,
+		client:        perfClient,
+		eventChan:     eventChan,
+		image:         image,
+		statusChan:    make(chan avsPerformer.PerformerStatusEvent, 10),
+		statusCancel:  statusCancel,
+		statusContext: statusCtx,
 		performerHealth: &avsPerformer.PerformerHealth{
 			ContainerIsHealthy: true,
 			LastHealthCheck:    time.Now(),
@@ -272,7 +281,7 @@ func (aps *AvsContainerPerformer) Initialize(ctx context.Context) error {
 	aps.currentContainer.Store(performerContainer)
 
 	// Start monitoring events for the new container
-	go aps.monitorContainerEvents(ctx, performerContainer)
+	go aps.monitorContainerEvents(performerContainer.statusContext, performerContainer)
 
 	return nil
 }
@@ -414,6 +423,8 @@ func (aps *AvsContainerPerformer) handleContainerEvent(ctx context.Context, even
 	// Only reach this point if the event indicates an unhealthy container.
 	if targetContainer.statusChan != nil {
 		select {
+		case <-ctx.Done():
+			return
 		case targetContainer.statusChan <- avsPerformer.PerformerStatusEvent{
 			Status:      avsPerformer.PerformerUnhealthy,
 			PerformerID: targetContainer.performerID,
@@ -433,6 +444,7 @@ func (aps *AvsContainerPerformer) handleContainerEvent(ctx context.Context, even
 func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetContainer *PerformerContainer) {
 	// Stop monitoring the old container
 	aps.containerManager.StopLivenessMonitoring(targetContainer.info.ID)
+	targetContainer.statusCancel()
 
 	aps.logger.Info("Starting container recreation",
 		zap.String("avsAddress", aps.config.AvsAddress),
@@ -445,7 +457,8 @@ func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetC
 
 	// Create and start new container
 	newContainer, err := aps.createAndStartContainer(
-		ctx, aps.config.AvsAddress,
+		ctx,
+		aps.config.AvsAddress,
 		targetContainer.image,
 		containerManager.CreateDefaultContainerConfig(
 			aps.config.AvsAddress,
@@ -471,6 +484,9 @@ func (aps *AvsContainerPerformer) recreateContainer(ctx context.Context, targetC
 	targetContainer.client = newContainer.client
 	targetContainer.eventChan = newContainer.eventChan
 	targetContainer.performerHealth = newContainer.performerHealth
+	targetContainer.statusChan = newContainer.statusChan
+	targetContainer.statusCancel = newContainer.statusCancel
+	targetContainer.statusContext = newContainer.statusContext
 
 	aps.logger.Info("Container recreation completed successfully",
 		zap.String("avsAddress", aps.config.AvsAddress),
@@ -611,7 +627,7 @@ func (aps *AvsContainerPerformer) CreatePerformer(
 	)
 
 	// Start monitoring events for the new container
-	go aps.monitorContainerEvents(ctx, newContainer)
+	go aps.monitorContainerEvents(newContainer.statusContext, newContainer)
 
 	// Get endpoint for logging
 	endpoint, _ := containerManager.GetContainerEndpoint(newContainer.info, internalContainerPort, aps.config.PerformerNetworkName)
@@ -667,9 +683,9 @@ func (aps *AvsContainerPerformer) RemovePerformer(ctx context.Context, performer
 		return fmt.Errorf("performer with DeploymentID %s not found", performerID)
 	}
 
-	// Close the status channel if it exists
-	if targetContainer.statusChan != nil {
-		close(targetContainer.statusChan)
+	// Cancel the status context to signal health monitoring goroutines to stop sending
+	if targetContainer.statusCancel != nil {
+		targetContainer.statusCancel()
 	}
 
 	// Shutdown the container (this will stop monitoring and remove it)
@@ -1327,6 +1343,9 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 		})
 	}
 
+	// Create a child context for managing status channel lifecycle
+	statusCtx, statusCancel := context.WithCancel(ctx)
+
 	container := &PerformerContainer{
 		performerID: state.PerformerId,
 		info:        containerInfo,
@@ -1337,7 +1356,9 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 			ApplicationIsHealthy: state.ApplicationHealthy,
 			LastHealthCheck:      state.LastHealthCheck,
 		},
-		statusChan: make(chan avsPerformer.PerformerStatusEvent, 10),
+		statusChan:    make(chan avsPerformer.PerformerStatusEvent, 10),
+		statusCancel:  statusCancel,
+		statusContext: statusCtx,
 		image: avsPerformer.PerformerImage{
 			Repository: state.ArtifactRegistry,
 			Tag:        state.ArtifactTag,
@@ -1355,7 +1376,7 @@ func (aps *AvsContainerPerformer) RehydrateFromState(ctx context.Context, state 
 	aps.taskWaitGroups[state.PerformerId] = &sync.WaitGroup{}
 	aps.taskWaitGroupsMu.Unlock()
 
-	go aps.monitorContainerEvents(ctx, container)
+	go aps.monitorContainerEvents(container.statusContext, container)
 
 	aps.logger.Info("Successfully rehydrated performer from state",
 		zap.String("performerID", state.PerformerId),
