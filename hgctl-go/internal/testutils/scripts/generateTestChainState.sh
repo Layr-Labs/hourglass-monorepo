@@ -18,8 +18,6 @@ function cleanup() {
 }
 trap cleanup EXIT ERR INT TERM
 
-set -ex
-
 # -----------------------------------------------------------------------------
 # Validate required parameters
 # -----------------------------------------------------------------------------
@@ -543,6 +541,8 @@ devkit avs create integration-test-avs
 
 cd "$AVS_PROJECT_DIR"
 
+devkit version
+
 devkit telemetry --disable
 
 # -----------------------------------------------------------------------------
@@ -876,8 +876,12 @@ echo "Mining initial blocks..."
 cast rpc --rpc-url $L1_RPC_URL anvil_mine 10
 cast rpc --rpc-url $L2_RPC_URL anvil_mine 10
 
-echo "Current block number: "
-cast block-number --rpc-url $L1_RPC_URL
+echo "Getting final block heights..."
+FINAL_L1_BLOCK=$(cast block-number --rpc-url $L1_RPC_URL)
+FINAL_L2_BLOCK=$(cast block-number --rpc-url $L2_RPC_URL)
+
+echo "Final L1 block: $FINAL_L1_BLOCK"
+echo "Final L2 block: $FINAL_L2_BLOCK"
 
 # Kill anvil processes
 kill $anvilL1Pid
@@ -1015,14 +1019,16 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "delegationManagerAddress": "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
       "allocationManagerAddress": "0x42583067658071247ec8CE0A516A58f682002d07",
       "strategyManagerAddress": "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
-      "taskMailboxAddress": "0x132b466d9d5723531f68797519dfed701ac2c749",
+      "taskMailboxAddress": "0xb99cc53e8db7018f557606c2a5b066527bf96b26",
       "destinationEnv": "anvil",
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock,
       "l1ChainId": $anvilL1ChainId,
       "l2ChainId": $anvilL2ChainId,
       "l1RPC": "$L1_RPC_URL",
-      "l2RPC": "$L2_RPC_URL"
+      "l2RPC": "$L2_RPC_URL",
+      "stateDumpL1Block": $FINAL_L1_BLOCK,
+      "stateDumpL2Block": $FINAL_L2_BLOCK
 }
 EOF
 

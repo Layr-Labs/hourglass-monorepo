@@ -7,26 +7,26 @@
         "n": 262144,
         "p": 1,
         "r": 8,
-        "salt": "cd266cc16cb1e9efed4ec1696b26799d3af5d5ae8ab65dd778148c39735cb730"
+        "salt": "539d7643904a8c96fed5826e39bd2983ae86ffc0a96a0bb34430c08ab7a72cfd"
       },
       "message": ""
     },
     "checksum": {
       "function": "sha256",
       "params": {},
-      "message": "64109120a3f7898b13e14e19e94fd2a77dd7b0fe27780862cdcb01f591d13ec8"
+      "message": "55279703553eb740639bed8c389150a18feca6b9112694f166cf263f933c8aee"
     },
     "cipher": {
       "function": "aes-128-ctr",
       "params": {
-        "iv": "e3061e2993052721ebf9724ea179b68b"
+        "iv": "b23452ec364047939ba84bdf33b96303"
       },
-      "message": "377e014acc0278229f94a0977d4143874aa461c7900c98e84f488c70406fb03d"
+      "message": "b9b1919406ba6c0a22378d2c628531dca70ad672ac430e2ef8c238aa5d6f3ddc"
     }
   },
-  "pubkey": "242a687711d2a648540abc81683ea796f9274a208c4e9cc9aa1230ef7b6d6e5921d9088f0c99582235cc8eb77ff2422f6079b8ec0fec59b0546fca5c88c6bb162d8af2876b74358c1de2026c05485d21a740775334588d556f89546e2ff6c2b80d9f5bf52b0f830495a2a419b677357ac521642e5e6fca8fa96338721bdc6b15",
+  "pubkey": "12b4d4566c21233b1b9e1c5e99263e36f75a734392f0a0ee904b94f0f02e3db21d9d8ef0b8e352147184eeb082d4bc59e35a6f347e17a0644c809484ae51cf592b03bf3ee8f978caa3e3a699c823da351bc74d52c74504925b9facfa36184c031376baae585e3958a7532bd80a36959d2800f14cb5351958e303edd9b1eadc66",
   "path": "m/1/0/0",
-  "uuid": "106587a4-672d-4295-af44-430e9a30436f",
+  "uuid": "13a965a7-b57e-42f7-98e6-a8c17bd477d4",
   "version": 4,
   "curveType": "bn254"
 }

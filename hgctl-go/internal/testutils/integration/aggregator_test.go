@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -128,29 +129,24 @@ func TestAggregatorDeployment(t *testing.T) {
 	})
 
 	t.Run("Submit Task to Mailbox", func(t *testing.T) {
-		t.Skip("not ready to submit task to Mailbox")
-		// Create transaction signer for task submission
-		signer, err := signer.NewPrivateKeySigner(
+		s, err := signer.NewPrivateKeySigner(
 			h.ChainConfig.AppAccountPk,
 			h.L2Client,
 			zap.NewNop(),
 		)
 		require.NoError(t, err)
 
-		// Create chain caller
 		chainCaller, err := client.NewChainCaller(
 			h.L2Client,
-			signer,
+			s,
 			*h.ChainConfig,
 			h.Logger,
 		)
 		require.NoError(t, err)
 
-		// Create task payload (simple test payload)
 		payload := []byte("test task payload for integration test")
 
-		// Submit task with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 260*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		t.Logf("Submitting task to mailbox...")
@@ -171,21 +167,21 @@ func TestAggregatorDeployment(t *testing.T) {
 
 		t.Logf("Successfully submitted task. Transaction hash: %s", receipt.TxHash.Hex())
 
-		// Wait for task to be processed by aggregator and executor
 		t.Logf("Waiting for task to be processed...")
 
 		select {
-		case <-time.After(240 * time.Second):
+		case <-time.After(10 * time.Second):
 			t.Logf("Task processing timeout reached")
+			t.FailNow()
 		case <-ctx.Done():
-			if ctx.Err() == context.Canceled {
+			if errors.Is(ctx.Err(), context.Canceled) {
 				t.Logf("Test completed")
+				t.FailNow()
 			} else {
 				t.Logf("Context done with error: %v", ctx.Err())
 			}
 		}
 
-		// TODO: Add validation of task completion by checking logs or state
 		t.Logf("Task submission and processing test completed")
 	})
 }
