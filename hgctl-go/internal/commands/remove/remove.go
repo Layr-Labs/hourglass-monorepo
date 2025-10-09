@@ -24,7 +24,7 @@ The command queries the AVS to determine which operator sets have which roles:
 - If your operator-set-id matches an executor operator set, it removes the performer
 
 This removes the need to manually specify which component to remove.`,
-		Flags: []cli.Flag{},
+		Flags:  []cli.Flag{},
 		Action: Run,
 	}
 }
