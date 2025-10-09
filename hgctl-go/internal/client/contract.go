@@ -1091,6 +1091,54 @@ func (c *ContractClient) DeregisterOperatorFromAVS(ctx context.Context, operator
 	return nil
 }
 
+// GetAvsExecutorOperatorSetIds retrieves the AVS Executor operator set ids
+func (c *ContractClient) GetAvsExecutorOperatorSetIds(avs string) ([]uint32, error) {
+	if c.allocationManager == nil {
+		return nil, fmt.Errorf("allocation manager not initialized")
+	}
+
+	registrarAddress, err := c.allocationManager.GetAVSRegistrar(nil, common.HexToAddress(avs))
+	if err != nil {
+		return nil, fmt.Errorf("failed to deregister operator from AVS: %w", err)
+	}
+
+	avsRegistrar, err := ITaskAVSRegistrarBase.NewITaskAVSRegistrarBase(registrarAddress, c.ethClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AVS registrar operator set: %w", err)
+	}
+
+	avsConfig, err := avsRegistrar.GetAvsConfig(&bind.CallOpts{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get avs config: %w", err)
+	}
+
+	return avsConfig.ExecutorOperatorSetIds, nil
+}
+
+// GetAvsAggregatorOperatorSetId the AVS Aggregator operator set id
+func (c *ContractClient) GetAvsAggregatorOperatorSetId(avs string) (uint32, error) {
+	if c.allocationManager == nil {
+		return 0, fmt.Errorf("allocation manager not initialized")
+	}
+
+	registrarAddress, err := c.allocationManager.GetAVSRegistrar(nil, common.HexToAddress(avs))
+	if err != nil {
+		return 0, fmt.Errorf("failed to deregister operator from AVS: %w", err)
+	}
+
+	avsRegistrar, err := ITaskAVSRegistrarBase.NewITaskAVSRegistrarBase(registrarAddress, c.ethClient)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create AVS registrar operator set: %w", err)
+	}
+
+	avsConfig, err := avsRegistrar.GetAvsConfig(&bind.CallOpts{})
+	if err != nil {
+		return 0, fmt.Errorf("failed to get avs config: %w", err)
+	}
+
+	return avsConfig.AggregatorOperatorSetId, nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }

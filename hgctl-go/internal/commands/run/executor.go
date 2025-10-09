@@ -1,4 +1,4 @@
-package deploy
+package run
 
 import (
 	"bytes"
@@ -20,41 +20,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/templates"
 )
 
-func executorCommand() *cli.Command {
-	return &cli.Command{
-		Name:      "executor",
-		Usage:     "Deploy the executor component",
-		ArgsUsage: "",
-		Description: `Deploy the executor component from a release.
-
-The AVS address must be configured in the context before running this command.`,
-		Flags: []cli.Flag{
-			&cli.Uint64Flag{
-				Name:  "operator-set-id",
-				Usage: "Operator set ID",
-			},
-			&cli.StringFlag{
-				Name:  "release-id",
-				Usage: "Release ID to deploy (defaults to latest)",
-			},
-			&cli.StringSliceFlag{
-				Name:  "env",
-				Usage: "Set environment variables (can be used multiple times)",
-			},
-			&cli.StringFlag{
-				Name:  "env-file",
-				Usage: "Load environment variables from file",
-			},
-			&cli.BoolFlag{
-				Name:  "dry-run",
-				Usage: "Validate configuration without starting the container",
-			},
-		},
-		Action: deployExecutorAction,
-	}
-}
-
-// ExecutorDeployer handles executor-specific deployment logic
 type ExecutorDeployer struct {
 	*PlatformDeployer
 	dryRun bool
@@ -101,15 +66,12 @@ func deployExecutorAction(c *cli.Context) error {
 	return deployer.Deploy(c.Context)
 }
 
-// Deploy executes the executor deployment
 func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	containerName := fmt.Sprintf("hgctl-executor-%s-%s", d.Context.Name, d.Context.AVSAddress)
 
-	// Check if an executor container is already running
 	isRunning, containerID, err := d.CheckContainerRunning(containerName)
 	if err != nil {
 		d.Log.Warn("Error checking container status, proceeding with deployment", zap.Error(err))
-		// Continue with normal deployment
 	}
 
 	if isRunning {
@@ -117,14 +79,12 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 			zap.String("container", containerName),
 			zap.String("containerID", containerID[:12]))
 
-		// Deploy performer to the existing executor
 		if err = d.deployPerformerToExistingExecutor(ctx, containerName, containerID); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	// No existing container, proceed with normal deployment
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
@@ -175,7 +135,6 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Merge configs
 	cfg.TempDir = tempCfg.TempDir
 	cfg.ConfigDir = tempCfg.ConfigDir
 	cfg.KeystoreDir = tempCfg.KeystoreDir
@@ -187,7 +146,6 @@ func (d *ExecutorDeployer) Deploy(ctx context.Context) error {
 	return d.deployContainer(component, keystore, cfg)
 }
 
-// generateConfiguration generates executor configuration files
 func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	executorConfig, err := templates.BuildExecutorConfig(cfg.Env)
 	if err != nil {
@@ -210,15 +168,12 @@ func (d *ExecutorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	return nil
 }
 
-// ensureDockerNetwork checks if a Docker network exists and creates it if it doesn't
 func (d *ExecutorDeployer) ensureDockerNetwork(networkName string) error {
-	// Check if network exists
 	cmd := exec.Command("docker", "network", "inspect", networkName)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		// Network doesn't exist, create it
 		d.Log.Info("Docker network not found, creating it", zap.String("network", networkName))
 
 		createCmd := exec.Command("docker", "network", "create", networkName)
@@ -237,7 +192,6 @@ func (d *ExecutorDeployer) ensureDockerNetwork(networkName string) error {
 	return nil
 }
 
-// deployContainer handles the executor-specific container deployment
 func (d *ExecutorDeployer) deployContainer(
 	component *runtime.ComponentSpec,
 	keystore *signer.KeystoreReference,
@@ -254,11 +208,9 @@ func (d *ExecutorDeployer) deployContainer(
 
 	dockerArgs := d.BuildDockerArgs(containerName, component, cfg)
 
-	// Mount Docker socket so the executor can create performer containers
 	dockerArgs = append(dockerArgs, "-v", "/var/run/docker.sock:/var/run/docker.sock")
 	d.Log.Info("Mounting Docker socket for performer container management")
 
-	// Ensure the hourglass-local network exists and connect to it
 	networkName := "hourglass-local_hourglass-network"
 	if err := d.ensureDockerNetwork(networkName); err != nil {
 		return fmt.Errorf("failed to ensure Docker network: %w", err)
@@ -286,7 +238,6 @@ func (d *ExecutorDeployer) deployContainer(
 		}
 	}
 
-	// Mount system keystores if configured
 	d.MountSystemKeystores(&dockerArgs, cfg)
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
@@ -310,7 +261,6 @@ func (d *ExecutorDeployer) deployContainer(
 	return nil
 }
 
-// handleDryRun handles the dry-run scenario
 func (d *ExecutorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
 	d.Log.Info("✅ Dry run successful - executor configuration is valid")
 
@@ -360,19 +310,15 @@ func (d *ExecutorDeployer) saveExecutorEndpoint(cfg *DeploymentConfig) error {
 	return nil
 }
 
-// deployPerformerToExistingExecutor deploys a performer to an existing executor container via gRPC
 func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context, containerName string, containerID string) error {
-	// Try to get the management port from the running container
 	mgmtPort, err := d.GetContainerPort(containerName, "9091")
 	if err != nil {
-		// Try default port if we can't get it from Docker
 		mgmtPort = "9091"
 		d.Log.Warn("Could not get management port from container, using default",
 			zap.String("port", mgmtPort),
 			zap.Error(err))
 	}
 
-	// Create executor client
 	executorEndpoint := fmt.Sprintf("localhost:%s", mgmtPort)
 	executorClient, err := client.NewExecutorClient(executorEndpoint, d.Log)
 	if err != nil {
@@ -380,7 +326,6 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 	}
 	defer executorClient.Close()
 
-	// Fetch the performer spec from the runtime spec
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch runtime spec: %w", err)
@@ -391,10 +336,12 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 		return fmt.Errorf("failed to extract performer component: %w", err)
 	}
 
-	// Load environment variables for the performer
 	envVars := d.LoadEnvironmentVariables()
 
-	// Deploy the performer via gRPC
+	if err := ValidateComponentSpec(performerComponent, envVars); err != nil {
+		return err
+	}
+
 	d.Log.Info("Deploying performer to existing executor via gRPC",
 		zap.String("executor", executorEndpoint),
 		zap.String("avsAddress", d.Context.AVSAddress),
@@ -412,7 +359,6 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 		return fmt.Errorf("failed to deploy performer via gRPC: %w", err)
 	}
 
-	// Update executor address in context if needed
 	if d.Context.ExecutorEndpoint != executorEndpoint {
 		configData, err := config.LoadConfig()
 		if err == nil {
@@ -426,7 +372,6 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 		}
 	}
 
-	// Success - print confirmation
 	d.Log.Info("Successfully deployed performer to existing executor")
 	fmt.Printf("\n✅ Performer deployed to existing executor via gRPC\n")
 	fmt.Printf("Container Name: %s\n", containerName)
@@ -444,7 +389,6 @@ func (d *ExecutorDeployer) deployPerformerToExistingExecutor(ctx context.Context
 	return nil
 }
 
-// printSuccessMessage prints a user-friendly success message
 func (d *ExecutorDeployer) printSuccessMessage(containerName, containerID string, cfg *DeploymentConfig) {
 	d.Log.Info("✅ Executor deployed successfully",
 		zap.String("container", containerName),

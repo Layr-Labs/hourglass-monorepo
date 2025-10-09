@@ -49,11 +49,6 @@ func systemPrivateKeyCommand() *cli.Command {
 				return fmt.Errorf("context '%s' not found", contextName)
 			}
 
-			// Check that operator keys are configured first
-			if ctx.OperatorKeys == nil {
-				return fmt.Errorf("operator keys must be configured before system keys. Run 'hgctl signer operator' first")
-			}
-
 			// Initialize SystemSignerKeys if nil
 			if ctx.SystemSignerKeys == nil {
 				ctx.SystemSignerKeys = &signer.SigningKeys{}
@@ -114,11 +109,6 @@ func systemKeystoreCommand() *cli.Command {
 			ctx, ok := cfg.Contexts[contextName]
 			if !ok {
 				return fmt.Errorf("context '%s' not found", contextName)
-			}
-
-			// Check that operator keys are configured first
-			if ctx.OperatorKeys == nil {
-				return fmt.Errorf("operator keys must be configured before system keys. Run 'hgctl signer operator' first")
 			}
 
 			// Find keystore in context

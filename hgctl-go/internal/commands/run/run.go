@@ -1,4 +1,4 @@
-package remove
+package run
 
 import (
 	"fmt"
@@ -14,17 +14,39 @@ import (
 
 func Command() *cli.Command {
 	return &cli.Command{
-		Name:  "remove",
-		Usage: "Remove hourglass components",
-		Description: `Automatically discovers and removes the appropriate component
+		Name:  "run",
+		Usage: "Run hourglass components",
+		Description: `Automatically discovers and run the appropriate component (aggregator or executor)
 based on the operator-set-id and AVS address in your context.
 
 The command queries the AVS to determine which operator sets have which roles:
-- If your operator-set-id matches the aggregator operator set, it deregisters the AVS from the aggregator
-- If your operator-set-id matches an executor operator set, it removes the performer
+- If your operator-set-id matches the aggregator operator set, it deploys an aggregator
+- If your operator-set-id matches an executor operator set, it deploys an executor
 
-This removes the need to manually specify which component to remove.`,
-		Flags:  []cli.Flag{},
+This removes the need to manually specify which component to deploy.`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "release-id",
+				Usage: "Release ID to deploy (defaults to latest)",
+			},
+			&cli.StringSliceFlag{
+				Name:  "env",
+				Usage: "Set environment variables (can be used multiple times)",
+			},
+			&cli.StringFlag{
+				Name:  "env-file",
+				Usage: "Load environment variables from file",
+			},
+			&cli.StringFlag{
+				Name:  "network",
+				Usage: "Docker network mode for aggregator (e.g., host, bridge)",
+				Value: "bridge",
+			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "Validate configuration without deploying",
+			},
+		},
 		Action: Run,
 	}
 }
@@ -60,12 +82,12 @@ func Run(c *cli.Context) error {
 	switch role {
 	case "aggregator":
 		fmt.Printf("Discovered role: aggregator\n")
-		fmt.Printf("   Deregistering AVS from aggregator...\n\n")
-		return removeAggregatorAction(c, currentCtx, log)
+		fmt.Printf("   Deploying aggregator for operator-set-id %d...\n\n", currentCtx.OperatorSetID)
+		return deployAggregatorAction(c)
 	case "executor":
 		fmt.Printf("Discovered role: executor\n")
-		fmt.Printf("   Removing performer...\n\n")
-		return removePerformerAction(c)
+		fmt.Printf("   Deploying executor for operator-set-id %d...\n\n", currentCtx.OperatorSetID)
+		return deployExecutorAction(c)
 	default:
 		return fmt.Errorf("unknown role: %s", role)
 	}
@@ -100,35 +122,4 @@ func discoverOperatorRole(contractClient *client.ContractClient, ctx *config.Con
 
 	return "", fmt.Errorf("operator-set-id %d does not match any known role for AVS %s (aggregator: %d, executors: %v)",
 		ctx.OperatorSetID, ctx.AVSAddress, aggregatorOpSetId, executorOpSetIds)
-}
-
-func removeAggregatorAction(c *cli.Context, currentCtx *config.Context, log logger.Logger) error {
-	if currentCtx.AggregatorEndpoint == "" {
-		return fmt.Errorf("aggregator endpoint not configured in context")
-	}
-
-	aggregatorClient, err := client.NewAggregatorClient(currentCtx.AggregatorEndpoint, log)
-	if err != nil {
-		return fmt.Errorf("failed to create aggregator client: %w", err)
-	}
-	defer func() {
-		if err := aggregatorClient.Close(); err != nil {
-			log.Warn("Failed to close aggregator client", zap.Error(err))
-		}
-	}()
-
-	log.Info("Deregistering AVS from aggregator",
-		zap.String("avsAddress", currentCtx.AVSAddress),
-		zap.String("aggregatorEndpoint", currentCtx.AggregatorEndpoint))
-
-	err = aggregatorClient.DeRegisterAvs(c.Context, currentCtx.AVSAddress)
-	if err != nil {
-		return fmt.Errorf("failed to deregister AVS: %w", err)
-	}
-
-	fmt.Printf("\n✅ AVS deregistered from aggregator successfully\n")
-	fmt.Printf("   AVS Address: %s\n", currentCtx.AVSAddress)
-	fmt.Printf("   Aggregator Endpoint: %s\n\n", currentCtx.AggregatorEndpoint)
-
-	return nil
 }

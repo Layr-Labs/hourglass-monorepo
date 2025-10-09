@@ -1,4 +1,4 @@
-package deploy
+package run
 
 import (
 	"context"
@@ -16,42 +16,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/templates"
 )
 
-func aggregatorCommand() *cli.Command {
-	return &cli.Command{
-		Name:      "aggregator",
-		Usage:     "Deploy the aggregator component",
-		ArgsUsage: "",
-		Description: `Deploy the aggregator component from a release.
-
-The AVS address must be configured in the context before running this command.`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "release-id",
-				Usage: "Release ID to deploy (defaults to latest)",
-			},
-			&cli.StringSliceFlag{
-				Name:  "env",
-				Usage: "Set environment variables (can be used multiple times)",
-			},
-			&cli.StringFlag{
-				Name:  "env-file",
-				Usage: "Load environment variables from file",
-			},
-			&cli.StringFlag{
-				Name:  "network",
-				Usage: "Docker network mode (e.g., host, bridge)",
-				Value: "bridge",
-			},
-			&cli.BoolFlag{
-				Name:  "dry-run",
-				Usage: "Validate configuration without deploying",
-			},
-		},
-		Action: deployAggregatorAction,
-	}
-}
-
-// AggregatorDeployer handles aggregator-specific deployment logic
 type AggregatorDeployer struct {
 	*PlatformDeployer
 	networkMode string
@@ -95,11 +59,9 @@ func deployAggregatorAction(c *cli.Context) error {
 	return deployer.Deploy(c.Context)
 }
 
-// Deploy executes the aggregator deployment
 func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	containerName := fmt.Sprintf("hgctl-aggregator-%s-%s", d.Context.Name, d.Context.AVSAddress)
 
-	// Fetch runtime spec first to determine required chain IDs
 	spec, err := d.FetchRuntimeSpec(ctx)
 	if err != nil {
 		return err
@@ -110,13 +72,11 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	// Determine which chain IDs are required based on the runtime spec
 	chainIDs, err := d.extractChainIDsFromSpec(component)
 	if err != nil {
 		return err
 	}
 
-	// Check if an aggregator container is already running
 	isRunning, containerID, err := d.CheckContainerRunning(containerName)
 	if err != nil {
 		return fmt.Errorf("failed to check aggregator container status: %w", err)
@@ -141,7 +101,6 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	// Validate that required passwords are set for system keystores
 	if cfg.Env["SYSTEM_BN254_KEYSTORE_PATH"] != "" || cfg.Env["SYSTEM_ECDSA_KEYSTORE_PATH"] != "" {
 		if cfg.Env["SYSTEM_KEYSTORE_PASSWORD"] == "" {
 			return fmt.Errorf("SYSTEM_KEYSTORE_PASSWORD environment variable required for system keystores")
@@ -156,7 +115,6 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Merge configs
 	cfg.TempDir = tempCfg.TempDir
 	cfg.ConfigDir = tempCfg.ConfigDir
 	cfg.KeystoreDir = tempCfg.KeystoreDir
@@ -169,7 +127,6 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 		return err
 	}
 
-	// Save aggregator endpoint to context
 	if err := d.saveAggregatorEndpoint(cfg); err != nil {
 		d.Log.Warn("Failed to save aggregator endpoint to context", zap.Error(err))
 	}
@@ -182,7 +139,6 @@ func (d *AggregatorDeployer) Deploy(ctx context.Context) error {
 	return nil
 }
 
-// extractChainIDsFromSpec determines which chain IDs are required based on the runtime spec
 func (d *AggregatorDeployer) extractChainIDsFromSpec(component *runtime.ComponentSpec) ([]uint32, error) {
 	hasL2ChainID := false
 	for _, envVar := range component.Env {
@@ -192,7 +148,6 @@ func (d *AggregatorDeployer) extractChainIDsFromSpec(component *runtime.Componen
 		}
 	}
 
-	// Build chain IDs slice based on what's required
 	chainIDs := []uint32{d.Context.L1ChainID}
 
 	if hasL2ChainID {
@@ -211,24 +166,20 @@ func (d *AggregatorDeployer) extractChainIDsFromSpec(component *runtime.Componen
 	return chainIDs, nil
 }
 
-// registerAvsWithAggregator registers the AVS with an aggregator
 func (d *AggregatorDeployer) registerAvsWithAggregator(
 	ctx context.Context,
 	containerName string,
 	containerID string,
 	chainIDs []uint32,
 ) error {
-	// Try to get the management port from the running container
 	mgmtPort, err := d.GetContainerPort(containerName, "9010")
 	if err != nil {
-		// Try default port if we can't get it from Docker
 		mgmtPort = "9010"
 		d.Log.Warn("Could not get management port from container, using default",
 			zap.String("port", mgmtPort),
 			zap.Error(err))
 	}
 
-	// Create aggregator client
 	aggregatorAddr := fmt.Sprintf("localhost:%s", mgmtPort)
 	aggregatorClient, err := client.NewAggregatorClient(aggregatorAddr, d.Log)
 	if err != nil {
@@ -240,7 +191,6 @@ func (d *AggregatorDeployer) registerAvsWithAggregator(
 		}
 	}()
 
-	// Register AVS with the aggregator
 	if err := aggregatorClient.RegisterAvs(ctx, d.Context.AVSAddress, chainIDs); err != nil {
 		return fmt.Errorf("failed to register AVS with aggregator: %w", err)
 	}
@@ -253,7 +203,6 @@ func (d *AggregatorDeployer) registerAvsWithAggregator(
 	return nil
 }
 
-// saveAggregatorEndpoint saves the aggregator management gRPC address to the context configuration
 func (d *AggregatorDeployer) saveAggregatorEndpoint(cfg *DeploymentConfig) error {
 	aggregatorMgmtPort := cfg.Env["AGGREGATOR_MGMT_PORT"]
 	if aggregatorMgmtPort == "" {
@@ -282,7 +231,6 @@ func (d *AggregatorDeployer) saveAggregatorEndpoint(cfg *DeploymentConfig) error
 	return nil
 }
 
-// generateConfiguration generates aggregator configuration files
 func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error {
 	aggregatorConfig, err := templates.BuildAggregatorConfig(cfg.Env)
 	if err != nil {
@@ -305,7 +253,6 @@ func (d *AggregatorDeployer) generateConfiguration(cfg *DeploymentConfig) error 
 	return nil
 }
 
-// deployContainer handles the aggregator-specific container deployment
 func (d *AggregatorDeployer) deployContainer(
 	component *runtime.ComponentSpec,
 	cfg *DeploymentConfig,
@@ -333,7 +280,6 @@ func (d *AggregatorDeployer) deployContainer(
 	dockerArgs = append(dockerArgs, "-p", fmt.Sprintf("%s:%s", mgmtPort, mgmtPort))
 	d.Log.Info("Exposing aggregator management port", zap.String("port", mgmtPort))
 
-	// Mount system keystores if configured (operator keystores are converted to private keys)
 	d.MountSystemKeystores(&dockerArgs, cfg)
 
 	dockerArgs = d.InjectFileContentsAsEnvVars(dockerArgs)
@@ -351,7 +297,6 @@ func (d *AggregatorDeployer) deployContainer(
 	return nil
 }
 
-// handleDryRun handles the dry-run scenario
 func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string, digest string) error {
 	d.Log.Info("✅ Dry run successful - aggregator configuration is valid")
 
@@ -367,7 +312,6 @@ func (d *AggregatorDeployer) handleDryRun(cfg *DeploymentConfig, registry string
 	return nil
 }
 
-// printSuccessMessage prints a user-friendly success message
 func (d *AggregatorDeployer) printSuccessMessage(containerName, containerID string, cfg *DeploymentConfig) {
 	fmt.Printf("\n✅ Aggregator container deployed successfully\n")
 	fmt.Printf("   Container ID: %s\n", containerID[:12])
