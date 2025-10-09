@@ -15,7 +15,6 @@ chains:                                          # List of chains the aggregator
     network: mainnet                             # Network identifier
     chainId: 1                                   # EIP-155 chain ID
     rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}"
-    wsUrl: "wss://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_KEY}"  # Optional WebSocket URL
     blockConfirmations: 12                       # Blocks to wait before processing
     pollInterval: 12000                          # Milliseconds between polls
     maxBlockRange: 1000                          # Max blocks to query at once
