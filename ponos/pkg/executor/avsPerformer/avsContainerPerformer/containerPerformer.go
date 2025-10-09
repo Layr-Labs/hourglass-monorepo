@@ -423,8 +423,6 @@ func (aps *AvsContainerPerformer) handleContainerEvent(ctx context.Context, even
 	// Only reach this point if the event indicates an unhealthy container.
 	if targetContainer.statusChan != nil {
 		select {
-		case <-ctx.Done():
-			return
 		case targetContainer.statusChan <- avsPerformer.PerformerStatusEvent{
 			Status:      avsPerformer.PerformerUnhealthy,
 			PerformerID: targetContainer.performerID,
