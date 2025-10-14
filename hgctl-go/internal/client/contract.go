@@ -1139,6 +1139,39 @@ func (c *ContractClient) GetAvsAggregatorOperatorSetId(avs string) (uint32, erro
 	return avsConfig.AggregatorOperatorSetId, nil
 }
 
+func (c *ContractClient) DeregisterKey(ctx context.Context, operatorSetID uint32) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.keyRegistrar == nil {
+		return fmt.Errorf("key registrar not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	operatorSet := IKeyRegistrar.OperatorSet{Avs: c.avsAddress, Id: operatorSetID}
+
+	tx, err := c.keyRegistrar.DeregisterKey(opts, c.operatorAddress, operatorSet)
+	if err != nil {
+		return fmt.Errorf("failed to deregister key: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	return nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }

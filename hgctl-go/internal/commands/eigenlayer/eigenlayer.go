@@ -25,6 +25,7 @@ deposits, allocations, and AVS registration.`,
 			register.DeregisterAVSCommand(),
 			register.RegisterOperatorCommand(),
 			register.RegisterKeyCommand(),
+			register.DeregisterKeyCommand(),
 		},
 	}
 }
