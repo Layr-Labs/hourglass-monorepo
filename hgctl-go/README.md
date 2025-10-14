@@ -101,6 +101,7 @@ hgctl --help
 | `hgctl el register-avs`         | Register operator with an AVS |
 | `hgctl el deregister-avs`       | Deregister operator from an AVS |
 | `hgctl el register-key`         | Register signing keys (BLS/ECDSA) with AVS |
+| `hgctl el deregister-key`       | Deregister signing keys from AVS |
 | **Keystore Management**         |
 | `hgctl keystore create`         | Create new BLS or ECDSA keystores |
 | `hgctl keystore import`         | Import existing keystore files |
@@ -169,6 +170,10 @@ hgctl el register-avs --operator-set-ids 0 --socket https://operator.example.com
 
 # 8. Allocate stake (after configuration delay)
 hgctl el allocate --operator-set-id 0 --strategy 0x424246eF71b01ee33aA33aC590fd9a0855F5eFbc --magnitude 1e13
+
+# 9. Deregister when done
+hgctl el deregister-avs      # First deregister from AVS
+hgctl el deregister-key      # Then deregister keys once the operator is no longer slashable
 ```
 
 ---
@@ -481,6 +486,9 @@ hgctl el register-key [options]       # Register signing keys
   --key-type <bn254|ecdsa>           # Key type
   --keystore-path <path>              # Path to keystore file
   --password <password>               # Keystore password
+
+hgctl el deregister-key               # Deregister signing keys
+                                      # Uses operator-set-id from context
 
 # Stake allocation
 hgctl el allocate [options]          # Allocate to operator sets

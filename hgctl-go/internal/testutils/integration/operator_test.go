@@ -281,6 +281,64 @@ func TestOperatorRegistration(t *testing.T) {
 		assert.Equal(t, 0, result.ExitCode)
 		assert.Contains(t, result.Stdout, "Successfully registered operator with AVS")
 	})
+
+	t.Run("Deregister from AVS", func(t *testing.T) {
+		// Set context with unregistered operator 1 for operator set 1
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
+			"--operator-address", h.ChainConfig.UnregisteredOperator1AccountAddress,
+			"--operator-set-id", "1",
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
+		// Deregister from AVS (no operator-set-ids flag needed - uses context)
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
+			"eigenlayer", "deregister-avs")
+
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, result.ExitCode)
+		assert.Contains(t, result.Stdout, "Successfully deregistered operator from AVS")
+
+		// Mine blocks to pass the deallocation delay (operator remains slashable during this period)
+		err = h.MineBlocks(51)
+		require.NoError(t, err)
+	})
+
+	t.Run("Deregister Key", func(t *testing.T) {
+		// Set context with unregistered operator 1 for operator set 1
+		contextResult, err := h.ExecuteCLI(
+			"context",
+			"set",
+			"--operator-address", h.ChainConfig.UnregisteredOperator1AccountAddress,
+			"--operator-set-id", "1",
+		)
+		require.NoError(t, err)
+		assert.Equal(t, 0, contextResult.ExitCode)
+
+		// Deregister key (no flags needed - uses context)
+		result, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
+			"eigenlayer", "deregister-key")
+
+		if err != nil || result.ExitCode != 0 {
+			t.Logf("Command failed with error: %v", err)
+			t.Logf("Exit code: %d", result.ExitCode)
+			t.Logf("Stdout: %s", result.Stdout)
+			t.Logf("Stderr: %s", result.Stderr)
+		}
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, result.ExitCode)
+		assert.Contains(t, result.Stdout, "Successfully deregistered key")
+	})
 }
 
 // Helper function to skip tests in short mode
