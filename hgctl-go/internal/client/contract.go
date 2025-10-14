@@ -19,6 +19,7 @@ import (
 
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IPermissionController"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IStrategyManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
@@ -61,11 +62,12 @@ type ContractConfig struct {
 	OperatorAddress string
 
 	// Optional contract addresses (will use defaults if not provided)
-	DelegationManager string
-	AllocationManager string
-	StrategyManager   string
-	KeyRegistrar      string
-	ReleaseManager    string
+	DelegationManager    string
+	AllocationManager    string
+	StrategyManager      string
+	KeyRegistrar         string
+	ReleaseManager       string
+	PermissionController string
 }
 
 type ContractClient struct {
@@ -77,19 +79,21 @@ type ContractClient struct {
 	operatorAddress   common.Address
 	allocationManager *IAllocationManager.IAllocationManager
 	delegationManager *IDelegationManager.IDelegationManager
-	strategyManager   *IStrategyManager.IStrategyManager
-	keyRegistrar      *IKeyRegistrar.IKeyRegistrar
-	releaseManager    *IReleaseManager.IReleaseManager
-	contractConfig    *ContractConfig
+	strategyManager      *IStrategyManager.IStrategyManager
+	keyRegistrar         *IKeyRegistrar.IKeyRegistrar
+	releaseManager       *IReleaseManager.IReleaseManager
+	permissionController *IPermissionController.IPermissionController
+	contractConfig       *ContractConfig
 }
 
 // DefaultContractAddresses contains the default contract addresses for a chain
 type DefaultContractAddresses struct {
-	DelegationManager string
-	AllocationManager string
-	StrategyManager   string
-	KeyRegistrar      string
-	ReleaseManager    string
+	DelegationManager    string
+	AllocationManager    string
+	StrategyManager      string
+	KeyRegistrar         string
+	ReleaseManager       string
+	PermissionController string
 }
 
 // getDefaultContractAddresses returns the default contract addresses for a given chain ID
@@ -97,11 +101,12 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 	switch chainID {
 	case 1:
 		return &DefaultContractAddresses{
-			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
-			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
-			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
-			KeyRegistrar:      "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
-			ReleaseManager:    "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+			DelegationManager:    "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+			AllocationManager:    "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+			StrategyManager:      "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+			KeyRegistrar:         "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+			ReleaseManager:       "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+			PermissionController: "0x2520A392C59B4BC83798cDDB18BA485eE16fEDA8",
 		}, nil
 	case 11155111: // Sepolia Testnet
 		return &DefaultContractAddresses{
@@ -113,11 +118,12 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 		}, nil
 	case 31337: // Local Anvil (testnet fork)
 		return &DefaultContractAddresses{
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
-			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			DelegationManager:    "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+			AllocationManager:    "0x42583067658071247ec8ce0a516a58f682002d07",
+			StrategyManager:      "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+			KeyRegistrar:         "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+			ReleaseManager:       "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			PermissionController: "0x24dF2CB2FD9db43e2b00e08261e32A0D86B19730",
 		}, nil
 	default:
 		return nil, fmt.Errorf("default contract addresses not found for chain")
@@ -175,6 +181,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	config.StrategyManager = defaultAddresses.StrategyManager
 	config.KeyRegistrar = defaultAddresses.KeyRegistrar
 	config.AllocationManager = defaultAddresses.AllocationManager
+	config.PermissionController = defaultAddresses.PermissionController
 
 	contractClient := &ContractClient{
 		ethClient:       client,
@@ -235,6 +242,16 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to create release manager at %s: %w", config.ReleaseManager, err)
 	}
 	log.Debug("Initialized release manager", zap.String("address", config.ReleaseManager))
+
+	// Permission Controller
+	contractClient.permissionController, err = IPermissionController.NewIPermissionController(
+		common.HexToAddress(config.PermissionController),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create permission controller at %s: %w", config.PermissionController, err)
+	}
+	log.Debug("Initialized permission controller", zap.String("address", config.PermissionController))
 
 	return contractClient, nil
 }
@@ -1170,6 +1187,140 @@ func (c *ContractClient) DeregisterKey(ctx context.Context, operatorSetID uint32
 	}
 
 	return nil
+}
+
+// AcceptAdmin accepts admin privileges for an account in the PermissionController
+func (c *ContractClient) AcceptAdmin(ctx context.Context, accountAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.AcceptAdmin(opts, accountAddress)
+	if err != nil {
+		return fmt.Errorf("failed to accept admin: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully accepted admin role",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("acceptor", c.operatorAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// AddPendingAdmin adds a pending admin for an account in the PermissionController
+func (c *ContractClient) AddPendingAdmin(ctx context.Context, accountAddress common.Address, adminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.AddPendingAdmin(opts, accountAddress, adminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to add pending admin: %w", err)
+	}
+
+	// Wait for transaction
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully added pending admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("admin", adminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+// IsAdmin checks if a caller is an admin for an account in the PermissionController
+func (c *ContractClient) IsAdmin(ctx context.Context, accountAddress common.Address, callerAddress common.Address) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	isAdmin, err := c.permissionController.IsAdmin(&bind.CallOpts{Context: ctx}, accountAddress, callerAddress)
+	if err != nil {
+		return false, fmt.Errorf("failed to check admin status: %w", err)
+	}
+
+	return isAdmin, nil
+}
+
+// IsPendingAdmin checks if an address is a pending admin for an account in the PermissionController
+func (c *ContractClient) IsPendingAdmin(ctx context.Context, accountAddress common.Address, pendingAdminAddress common.Address) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	isPending, err := c.permissionController.IsPendingAdmin(&bind.CallOpts{Context: ctx}, accountAddress, pendingAdminAddress)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pending admin status: %w", err)
+	}
+
+	return isPending, nil
+}
+
+// GetAdmins gets all admins for an account from the PermissionController
+func (c *ContractClient) GetAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	admins, err := c.permissionController.GetAdmins(&bind.CallOpts{Context: ctx}, accountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admins: %w", err)
+	}
+
+	return admins, nil
+}
+
+// GetPendingAdmins gets all pending admins for an account from the PermissionController
+func (c *ContractClient) GetPendingAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	pendingAdmins, err := c.permissionController.GetPendingAdmins(&bind.CallOpts{Context: ctx}, accountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending admins: %w", err)
+	}
+
+	return pendingAdmins, nil
 }
 
 func (c *ContractClient) Close() {
