@@ -1189,7 +1189,6 @@ func (c *ContractClient) DeregisterKey(ctx context.Context, operatorSetID uint32
 	return nil
 }
 
-// AcceptAdmin accepts admin privileges for an account in the PermissionController
 func (c *ContractClient) AcceptAdmin(ctx context.Context, accountAddress common.Address) error {
 	if err := c.checkPrivateKey(); err != nil {
 		return err
@@ -1209,7 +1208,6 @@ func (c *ContractClient) AcceptAdmin(ctx context.Context, accountAddress common.
 		return fmt.Errorf("failed to accept admin: %w", err)
 	}
 
-	// Wait for transaction
 	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
 	if err != nil {
 		return fmt.Errorf("failed to wait for transaction: %w", err)
@@ -1228,7 +1226,6 @@ func (c *ContractClient) AcceptAdmin(ctx context.Context, accountAddress common.
 	return nil
 }
 
-// AddPendingAdmin adds a pending admin for an account in the PermissionController
 func (c *ContractClient) AddPendingAdmin(ctx context.Context, accountAddress common.Address, adminAddress common.Address) error {
 	if err := c.checkPrivateKey(); err != nil {
 		return err
@@ -1248,7 +1245,6 @@ func (c *ContractClient) AddPendingAdmin(ctx context.Context, accountAddress com
 		return fmt.Errorf("failed to add pending admin: %w", err)
 	}
 
-	// Wait for transaction
 	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
 	if err != nil {
 		return fmt.Errorf("failed to wait for transaction: %w", err)
@@ -1267,7 +1263,6 @@ func (c *ContractClient) AddPendingAdmin(ctx context.Context, accountAddress com
 	return nil
 }
 
-// IsAdmin checks if a caller is an admin for an account in the PermissionController
 func (c *ContractClient) IsAdmin(ctx context.Context, accountAddress common.Address, callerAddress common.Address) (bool, error) {
 	if c.permissionController == nil {
 		return false, fmt.Errorf("permission controller not initialized")
@@ -1281,7 +1276,6 @@ func (c *ContractClient) IsAdmin(ctx context.Context, accountAddress common.Addr
 	return isAdmin, nil
 }
 
-// IsPendingAdmin checks if an address is a pending admin for an account in the PermissionController
 func (c *ContractClient) IsPendingAdmin(ctx context.Context, accountAddress common.Address, pendingAdminAddress common.Address) (bool, error) {
 	if c.permissionController == nil {
 		return false, fmt.Errorf("permission controller not initialized")
@@ -1295,7 +1289,6 @@ func (c *ContractClient) IsPendingAdmin(ctx context.Context, accountAddress comm
 	return isPending, nil
 }
 
-// GetAdmins gets all admins for an account from the PermissionController
 func (c *ContractClient) GetAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
 	if c.permissionController == nil {
 		return nil, fmt.Errorf("permission controller not initialized")
@@ -1309,7 +1302,6 @@ func (c *ContractClient) GetAdmins(ctx context.Context, accountAddress common.Ad
 	return admins, nil
 }
 
-// GetPendingAdmins gets all pending admins for an account from the PermissionController
 func (c *ContractClient) GetPendingAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
 	if c.permissionController == nil {
 		return nil, fmt.Errorf("permission controller not initialized")
@@ -1321,6 +1313,80 @@ func (c *ContractClient) GetPendingAdmins(ctx context.Context, accountAddress co
 	}
 
 	return pendingAdmins, nil
+}
+
+func (c *ContractClient) RemoveAdmin(ctx context.Context, accountAddress common.Address, adminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemoveAdmin(opts, accountAddress, adminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to remove admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("admin", adminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) RemovePendingAdmin(ctx context.Context, accountAddress common.Address, pendingAdminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemovePendingAdmin(opts, accountAddress, pendingAdminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to remove pending admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed pending admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("pendingAdmin", pendingAdminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
 }
 
 func (c *ContractClient) Close() {

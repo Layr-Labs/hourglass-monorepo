@@ -16,6 +16,8 @@ func Command() *cli.Command {
 			IsPendingCommand(),
 			ListAdminsCommand(),
 			ListPendingCommand(),
+			RemoveAdminCommand(),
+			RemovePendingCommand(),
 		},
 	}
 }
