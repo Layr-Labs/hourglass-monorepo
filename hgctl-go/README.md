@@ -1,16 +1,16 @@
-# hgctl - Hourglass Control CLI 🚀
+# hgctl - Hourglass Control CLI
 
-**A comprehensive CLI toolkit for deploying and managing Hourglass AVS (Actively Validated Services) and EigenLayer operator operations.**
+A CLI toolkit for deploying and managing Hourglass AVS (Actively Validated Services) and EigenLayer operator operations.
 
-`hgctl` streamlines AVS operations, enabling you to:
-* Deploy and manage AVS components (aggregator, executor, performer) using EigenRuntime specifications
-* Register and manage EigenLayer operators with full lifecycle support
-* Handle keystores and signing operations (BLS/ECDSA, Web3Signer integration)
-* Manage operator allocations, delegations, and deposits
-* Configure multiple environments through contexts with hierarchical configuration
-* Fetch and deploy AVS releases from OCI registries via ReleaseManager contracts
+## Key Features
 
-**✨ Mainnet Support**: Version `v0.1.0.mainnet-rc.1` includes full support for Ethereum mainnet, Sepolia testnet, and local development with Anvil.
+* **Simple Deployment**: Just run `hgctl deploy` - automatically provisions components by your configured operator-set-id
+* **EigenLayer Integration**: Full operator lifecycle support including registration, delegation, deposits, and allocations
+* **Interactive Wizards**: Guided setup for signing keys and telemetry configuration
+* **Context Management**: Switch between multiple environments (mainnet, testnet, local)
+* **OCI Registry Support**: Fetch and deploy AVS releases from OCI registries via ReleaseManager contracts
+
+**Mainnet Support**: Version `v0.1.0.mainnet-rc.1` includes full support for Ethereum mainnet, Sepolia testnet, and local development with Anvil.
 
 ## 📦 Installation
 
@@ -75,49 +75,48 @@ hgctl --help
 
 ## 🌟 Key Commands Overview
 
-| Command | Description |
-|---------|-------------|
-| **Context Management** |
-| `hgctl context create` | Create a new context for environment configuration |
-| `hgctl context list` | List all available contexts |
-| `hgctl context use` | Switch to a different context |
-| `hgctl context set` | Configure context properties (RPC URLs, addresses, env vars) |
-| `hgctl context show` | Display current context configuration |
-| `hgctl context copy` | Copy an existing context |
-| `hgctl context remove` | Remove a context |
-| **AVS Deployment** |
-| `hgctl deploy aggregator` | Deploy the aggregator component from OCI registry |
-| `hgctl deploy executor` | Deploy the executor component from OCI registry |
-| `hgctl deploy performer` | Deploy performer via executor gRPC interface |
-| **Release Management** |
-| `hgctl get release` | List available releases for an AVS |
-| `hgctl describe release` | Get detailed information about a specific release |
-| `hgctl get operator-set` | List operator sets for an AVS |
-| `hgctl describe operator-set` | Get detailed operator set information |
-| **Operator Management** |
-| `hgctl el register-operator` | Register operator with EigenLayer |
-| `hgctl el delegate` | Self-delegate stake as an operator |
-| `hgctl el allocate` | Allocate stake to AVS operator sets |
+| Command                         | Description |
+|---------------------------------|-------------|
+| **Context Management**          |
+| `hgctl context create`          | Create a new context for environment configuration |
+| `hgctl context list`            | List all available contexts |
+| `hgctl context use`             | Switch to a different context |
+| `hgctl context set`             | Configure context properties (RPC URLs, addresses, env vars) |
+| `hgctl context show`            | Display current context configuration |
+| `hgctl context copy`            | Copy an existing context |
+| `hgctl context remove`          | Remove a context |
+| **AVS Deployment**              |
+| `hgctl run`                     | Auto-discover and run your component based on operator-set-id |
+| **Release Management**          |
+| `hgctl get release`             | List available releases for an AVS |
+| `hgctl describe release`        | Get detailed information about a specific release |
+| `hgctl get operator-set`        | List operator sets for an AVS |
+| `hgctl describe operator-set`   | Get detailed operator set information |
+| **Operator Management**         |
+| `hgctl el register-operator`    | Register operator with EigenLayer |
+| `hgctl el delegate`             | Self-delegate stake as an operator |
+| `hgctl el allocate`             | Allocate stake to AVS operator sets |
 | `hgctl el set-allocation-delay` | Configure allocation delay period |
-| `hgctl el deposit` | Deposit tokens into EigenLayer strategies |
-| `hgctl el register-avs` | Register operator with an AVS |
-| `hgctl el register-key` | Register signing keys (BLS/ECDSA) with AVS |
-| **Keystore Management** |
-| `hgctl keystore create` | Create new BLS or ECDSA keystores |
-| `hgctl keystore import` | Import existing keystore files |
-| `hgctl keystore list` | List all registered keystores |
-| `hgctl keystore show` | Display keystore details and export private key |
-| **Signer Configuration** |
-| `hgctl signer operator` | Configure operator signing keys |
-| `hgctl signer system` | Configure system signing keys |
-| **Telemetry Configuration** |
-| `hgctl telemetry` | Configure telemetry settings with interactive wizard |
-| `hgctl telemetry enable` | Enable telemetry data collection |
-| `hgctl telemetry disable` | Disable telemetry completely |
-| `hgctl telemetry status` | Show current telemetry configuration |
-| **Performer Management** |
-| `hgctl get performer` | List deployed performers |
-| `hgctl remove performer` | Remove a deployed performer |
+| `hgctl el deposit`              | Deposit tokens into EigenLayer strategies |
+| `hgctl el register-avs`         | Register operator with an AVS |
+| `hgctl el deregister-avs`       | Deregister operator from an AVS |
+| `hgctl el register-key`         | Register signing keys (BLS/ECDSA) with AVS |
+| **Keystore Management**         |
+| `hgctl keystore create`         | Create new BLS or ECDSA keystores |
+| `hgctl keystore import`         | Import existing keystore files |
+| `hgctl keystore list`           | List all registered keystores |
+| `hgctl keystore show`           | Display keystore details and export private key |
+| **Signer Configuration**        |
+| `hgctl signer operator`         | Configure operator signing keys |
+| `hgctl signer system`           | Configure system signing keys |
+| **Telemetry Configuration**     |
+| `hgctl telemetry`               | Configure telemetry settings with interactive wizard |
+| `hgctl telemetry enable`        | Enable telemetry data collection |
+| `hgctl telemetry disable`       | Disable telemetry completely |
+| `hgctl telemetry status`        | Show current telemetry configuration |
+| **Performer Management**        |
+| `hgctl get performer`           | List deployed performers |
+| `hgctl remove performer`        | Remove a deployed performer |
 
 ---
 
@@ -135,14 +134,11 @@ hgctl --help
 ```bash
 # 1. Create and configure a context
 hgctl context create production
-hgctl context use production
-hgctl context set --rpc-url https://mainnet.infura.io/v3/YOUR-KEY
 hgctl context set --avs-address 0xYourAVSAddress
+hgctl context set --operator-set-id 0
 
-# 2. Deploy AVS components
-hgctl deploy aggregator --operator-set-id 0
-hgctl deploy executor --operator-set-id 0
-hgctl deploy performer --operator-set-id 0 --env-file performer.env
+# 2. Run your component (auto-discovers aggregator or executor)
+hgctl run
 ```
 
 ### 🔑 Quick Start - Operator Registration
@@ -211,32 +207,43 @@ hgctl context set --env L1_CHAIN_ID=1 --env L2_CHAIN_ID=8453
 hgctl context show
 ```
 
-### 2️⃣ Keystore Management
+### 2️⃣ Keystore & Signer Configuration
 
-Before operating, you need to set up your signing keys:
+#### Interactive Signer Wizard (Recommended)
+
+Use the interactive wizard to configure both operator and system signing keys:
+
+```bash
+# Launch the interactive signer configuration wizard
+hgctl signer
+
+# The wizard will guide you through:
+# 1. Operator key setup (ECDSA via private key, keystore, or Web3Signer)
+# 2. System signer setup (ECDSA or BN254)
+# 3. Web3Signer configuration with TLS support (if experimental features enabled)
+```
+
+#### Manual Keystore Management
 
 ```bash
 # Create a new ECDSA keystore
-hgctl keystore create \
-  --name operator-ecdsa \
-  --type ecdsa
+hgctl keystore create --name operator-ecdsa --type ecdsa
 
 # Create a new BN254 keystore for BLS signatures
-hgctl keystore create \
-  --name operator-bls \
-  --type bn254
+hgctl keystore create --name operator-bls --type bn254
 
 # Import an existing keystore
-hgctl keystore import \
-  --name existing-key \
-  --path /path/to/keystore.json \
-  --type ecdsa
+hgctl keystore import --name existing-key --path /path/to/keystore.json --type ecdsa
 
 # List all keystores
 hgctl keystore list
 
-# Show keystore details and export private key
+# Show keystore details
 hgctl keystore show --name operator-ecdsa
+
+# Configure signer to use a keystore (non-interactive)
+hgctl signer operator keystore --keystore-name operator-ecdsa
+hgctl signer system keystore --keystore-name operator-bls --type bn254
 ```
 
 ### 3️⃣ Operator Registration Flow
@@ -245,7 +252,7 @@ hgctl keystore show --name operator-ecdsa
 ```bash
 hgctl el register-operator \
   --metadata-uri https://example.com/operator/metadata.json \
-  --allocation-delay 0  # 0 for testnet, 86400 for mainnet (24 hours)
+  --allocation-delay 0
 ```
 
 #### Step 2: Self-Delegate
@@ -296,60 +303,56 @@ hgctl el allocate \
   --magnitude 1e13  # Allocation amount
 ```
 
-### 4️⃣ AVS Component Deployment
+### 4️⃣ Running Your AVS Component
 
-Deploy AVS components using runtime specifications from OCI registries:
+The `hgctl run` command automatically discovers which component to run based on your operator-set-id:
 
-#### List Available Releases
+#### How Auto-Discovery Works
+
 ```bash
-# List all releases for your AVS
+# Just run - hgctl figures out the rest
+hgctl run
+
+# The command:
+# 1. Queries the AVS contract using your configured operator-set-id
+# 2. Determines if you're the aggregator operator set → runs aggregator
+# 3. Or if you're an executor operator set → runs executor + performer
+# 4. Deploys the appropriate component with proper configuration
+```
+
+#### Running with Options
+
+```bash
+# Run with specific release version
+hgctl run --release-id 1
+
+# Run with environment overrides
+hgctl run --env-file secrets.env
+
+# Run with custom environment variables
+hgctl run \
+  --env L1_RPC_URL=https://mainnet.infura.io/v3/KEY \
+  --env L2_RPC_URL=https://base.infura.io/v3/KEY \
+  --env-file additional-config.env
+
+# Validate configuration without deploying
+hgctl run --dry-run
+```
+
+#### Managing Deployments
+
+```bash
+# List available releases
 hgctl get release
 
 # Get detailed release information
-hgctl describe release --release-id 0 --operator-set-id 0
-```
+hgctl describe release --release-id 0
 
-#### Deploy Aggregator
-```bash
-# Deploy latest aggregator release
-hgctl deploy aggregator --operator-set-id 0
-
-# Deploy specific release version
-hgctl deploy aggregator --operator-set-id 0 --release-id 1
-
-# With custom environment variables
-hgctl deploy aggregator \
-  --operator-set-id 0 \
-  --env L1_RPC_URL=https://mainnet.infura.io/v3/KEY \
-  --env L2_RPC_URL=https://base.infura.io/v3/KEY \
-  --env-file aggregator-secrets.env
-```
-
-#### Deploy Executor
-```bash
-# Deploy executor (hosts gRPC API for performers)
-hgctl deploy executor --operator-set-id 0
-
-# With specific release and environment
-hgctl deploy executor \
-  --operator-set-id 0 \
-  --release-id 1 \
-  --env-file executor-config.env
-```
-
-#### Deploy Performer
-```bash
-# Deploy via executor gRPC (executor must be running)
-hgctl deploy performer \
-  --operator-set-id 0 \
-  --env DATABASE_URL=postgres://localhost/avs_db \
-  --env API_KEY=$API_KEY
-
-# List deployed performers
+# List deployed performers (if you're an executor operator)
 hgctl get performer
 
 # Remove a performer
-hgctl remove performer --id performer-123
+hgctl remove --id performer-123
 ```
 
 ### 5️⃣ Environment Configuration
@@ -377,9 +380,8 @@ EOF
 # Set secrets file in context (loaded with highest priority)
 hgctl context set --env-secrets-path ~/secrets.env
 
-# Deploy with additional environment overrides
-hgctl deploy aggregator \
-  --operator-set-id 0 \
+# Run with additional environment overrides
+hgctl run \
   --env-file additional-config.env \
   --env DEBUG=true
 ```
@@ -422,33 +424,32 @@ hgctl context remove <name>        # Remove a context
 --avs-address <address>            # AVS contract address
 --operator-address <address>       # Operator address
 --operator-set-id <id>             # Default operator set ID
---release-manager <address>        # Release manager contract
---env KEY=VALUE                    # Set environment variables
---env-secrets-path <path>          # Path to secrets file
 ```
 
-### Deployment Commands
+### Run Command
 ```bash
-# Component deployment
-hgctl deploy aggregator [options]  # Deploy aggregator from OCI registry
-hgctl deploy executor [options]    # Deploy executor from OCI registry
-hgctl deploy performer [options]   # Deploy performer via executor gRPC
+# Run your AVS component
 
-# Common deployment options:
---operator-set-id <id>            # Operator set ID (required)
---release-id <id>                 # Specific release ID (optional, uses latest if not specified)
+# Options:
+--release-id <id>                 # Specific release (default: latest)
 --env KEY=VALUE                   # Set environment variable
 --env-file <path>                 # Load environment from file
+--network <mode>                  # Docker network mode (default: bridge)
+--dry-run                         # Validate configuration without deploying
+```
 
-# Release management
+### Release Management
+```bash
 hgctl get release                 # List available releases
 hgctl describe release [options]  # Get detailed release info
 hgctl get operator-set           # List operator sets
 hgctl describe operator-set      # Get operator set details
+```
 
-# Performer management
+### Performer Management
+```bash
 hgctl get performer               # List deployed performers
-hgctl remove performer --id <id>  # Remove a performer
+hgctl remove --id <id>            # Remove a performer
 ```
 
 ### EigenLayer Commands
@@ -471,6 +472,9 @@ hgctl el deposit [options]            # Deposit into strategies
 hgctl el register-avs [options]       # Register with AVS
   --operator-set-ids <ids>            # Comma-separated operator set IDs
   --socket <url>                      # Operator socket URL
+
+hgctl el deregister-avs               # Deregister operator from AVS
+                                      # Uses operator-set-id from context
 
 hgctl el register-key [options]       # Register signing keys
   --operator-set-id <id>              # Operator set ID
