@@ -14,6 +14,7 @@ func Command() *cli.Command {
 			ListAppointeesCommand(),
 			ListPermissionsCommand(),
 			RemoveAppointeeCommand(),
+			SetAppointeeCommand(),
 		},
 	}
 }

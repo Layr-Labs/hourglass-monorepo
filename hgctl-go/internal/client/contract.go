@@ -1472,6 +1472,45 @@ func (c *ContractClient) RemoveAppointee(ctx context.Context, accountAddress com
 	return nil
 }
 
+func (c *ContractClient) SetAppointee(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.SetAppointee(opts, accountAddress, appointeeAddress, target, selector)
+	if err != nil {
+		return fmt.Errorf("failed to set appointee: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully set appointee",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("appointee", appointeeAddress.Hex()),
+		zap.String("target", target.Hex()),
+		zap.String("selector", fmt.Sprintf("0x%x", selector)),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }
