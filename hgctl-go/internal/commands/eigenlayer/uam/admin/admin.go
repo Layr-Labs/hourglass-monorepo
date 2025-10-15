@@ -6,8 +6,8 @@ import (
 
 func Command() *cli.Command {
 	return &cli.Command{
-		Name:    "admin",
-		Usage:   "Admin management operations",
+		Name:        "admin",
+		Usage:       "Admin management operations",
 		Description: `Manage Admin Access Management operations.`,
 		Subcommands: []*cli.Command{
 			AcceptAdminCommand(),
