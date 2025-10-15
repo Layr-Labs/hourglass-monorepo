@@ -5,6 +5,7 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/delegate"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/deposit"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/register"
+	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/rewards"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/eigenlayer/uam"
 	"github.com/urfave/cli/v2"
 )
@@ -28,6 +29,7 @@ deposits, allocations, and AVS registration.`,
 			register.RegisterKeyCommand(),
 			register.DeregisterKeyCommand(),
 			uam.Command(),
+			rewards.Command(),
 		},
 	}
 }

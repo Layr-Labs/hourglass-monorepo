@@ -1,6 +1,7 @@
 package rewards
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/urfave/cli/v2"
@@ -42,19 +43,11 @@ func showRewardsAction(c *cli.Context) error {
 	if earnerAddress == "" && c.NArg() > 0 {
 		earnerAddress = c.Args().Get(0)
 	}
-	if earnerAddress == "" {
-		earnerAddress = currentCtx.OperatorAddress
-	}
-	if earnerAddress == "" {
-		return fmt.Errorf("earner address not provided (use --earner-address flag, arg, or set operator-address in context)")
-	}
 
 	sidecarURL := c.String("sidecar-url")
 	if sidecarURL == "" {
 		return fmt.Errorf("sidecar URL not provided (use --sidecar-url flag or set in context)")
 	}
-
-	log.Info("Fetching rewards", zap.String("earner", earnerAddress))
 
 	rewardsClient, err := client.NewRewardsClient(sidecarURL, log)
 	if err != nil {
@@ -62,7 +55,22 @@ func showRewardsAction(c *cli.Context) error {
 	}
 	defer rewardsClient.Close()
 
-	summary, err := rewardsClient.GetSummarizedRewards(c.Context, earnerAddress)
+	return executeShowRewards(c.Context, rewardsClient, log, currentCtx, earnerAddress)
+}
+
+func executeShowRewards(ctx context.Context, rewardsClient interface {
+	GetSummarizedRewards(context.Context, string) (*client.RewardsSummary, error)
+}, log interface{ Info(string, ...zap.Field) }, currentCtx *config.Context, earnerAddress string) error {
+	if earnerAddress == "" {
+		earnerAddress = currentCtx.OperatorAddress
+	}
+	if earnerAddress == "" {
+		return fmt.Errorf("earner address not provided (use --earner-address flag, arg, or set operator-address in context)")
+	}
+
+	log.Info("Fetching rewards", zap.String("earner", earnerAddress))
+
+	summary, err := rewardsClient.GetSummarizedRewards(ctx, earnerAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get rewards: %w", err)
 	}

@@ -1,6 +1,7 @@
 package rewards
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/urfave/cli/v2"
@@ -49,21 +50,12 @@ func claimRewardsAction(c *cli.Context) error {
 	}
 
 	earnerAddress := c.String("earner-address")
-	if earnerAddress == "" {
-		earnerAddress = currentCtx.OperatorAddress
-	}
-	if earnerAddress == "" {
-		return fmt.Errorf("earner address not provided (use --earner-address flag or set operator-address in context)")
-	}
-
 	rewardsCoordinator := c.String("rewards-coordinator")
-
 	sidecarURL := c.String("sidecar-url")
+
 	if sidecarURL == "" {
 		return fmt.Errorf("sidecar URL not provided (use --sidecar-url flag or set in context)")
 	}
-
-	log.Info("Fetching claim proof from rewards endpoint", zap.String("earner", earnerAddress))
 
 	rewardsClient, err := client.NewRewardsClient(sidecarURL, log)
 	if err != nil {
@@ -71,7 +63,24 @@ func claimRewardsAction(c *cli.Context) error {
 	}
 	defer rewardsClient.Close()
 
-	proof, err := rewardsClient.GetClaimProof(c.Context, earnerAddress)
+	return executeClaim(c.Context, rewardsClient, contractClient, log, currentCtx, earnerAddress, rewardsCoordinator)
+}
+
+func executeClaim(ctx context.Context, rewardsClient interface {
+	GetClaimProof(context.Context, string) (*client.ClaimProof, error)
+}, contractClient interface {
+	ProcessClaim(context.Context, string, *client.ClaimProof) (string, error)
+}, log interface{ Info(string, ...zap.Field) }, currentCtx *config.Context, earnerAddress, rewardsCoordinator string) error {
+	if earnerAddress == "" {
+		earnerAddress = currentCtx.OperatorAddress
+	}
+	if earnerAddress == "" {
+		return fmt.Errorf("earner address not provided (use --earner-address flag or set operator-address in context)")
+	}
+
+	log.Info("Fetching claim proof from rewards endpoint", zap.String("earner", earnerAddress))
+
+	proof, err := rewardsClient.GetClaimProof(ctx, earnerAddress)
 	if err != nil {
 		return fmt.Errorf("failed to get claim proof: %w", err)
 	}
@@ -81,7 +90,7 @@ func claimRewardsAction(c *cli.Context) error {
 		zap.Int("tokenCount", len(proof.TokenLeaves)),
 		zap.String("rewardsCoordinator", rewardsCoordinator))
 
-	txHash, err := contractClient.ProcessClaim(c.Context, rewardsCoordinator, proof)
+	txHash, err := contractClient.ProcessClaim(ctx, rewardsCoordinator, proof)
 	if err != nil {
 		return fmt.Errorf("failed to process claim: %w", err)
 	}

@@ -1,6 +1,7 @@
 package rewards
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/urfave/cli/v2"
@@ -49,6 +50,13 @@ func setClaimerAction(c *cli.Context) error {
 	}
 
 	earnerAddress := c.String("earner-address")
+	claimerAddress := c.String("claimer-address")
+	rewardsCoordinator := c.String("rewards-coordinator")
+
+	return executeSetClaimer(c.Context, contractClient, log, currentCtx, earnerAddress, claimerAddress, rewardsCoordinator)
+}
+
+func executeSetClaimer(ctx context.Context, contractClient interface{ SetClaimerFor(context.Context, string, string, string) (string, error) }, log interface{ Info(string, ...zap.Field) }, currentCtx *config.Context, earnerAddress, claimerAddress, rewardsCoordinator string) error {
 	if earnerAddress == "" {
 		earnerAddress = currentCtx.OperatorAddress
 	}
@@ -56,15 +64,12 @@ func setClaimerAction(c *cli.Context) error {
 		return fmt.Errorf("earner address not provided (use --earner-address flag or set operator-address in context)")
 	}
 
-	claimerAddress := c.String("claimer-address")
-	rewardsCoordinator := c.String("rewards-coordinator")
-
 	log.Info("Setting claimer for earner",
 		zap.String("earner", earnerAddress),
 		zap.String("claimer", claimerAddress),
 		zap.String("rewardsCoordinator", rewardsCoordinator))
 
-	txHash, err := contractClient.SetClaimerFor(c.Context, rewardsCoordinator, earnerAddress, claimerAddress)
+	txHash, err := contractClient.SetClaimerFor(ctx, rewardsCoordinator, earnerAddress, claimerAddress)
 	if err != nil {
 		return fmt.Errorf("failed to set claimer: %w", err)
 	}
