@@ -10,6 +10,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/PermissionController"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IAllocationManager"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IDelegationManager"
-	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IPermissionController"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IStrategyManager"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
@@ -71,18 +71,18 @@ type ContractConfig struct {
 }
 
 type ContractClient struct {
-	ethClient         *ethclient.Client
-	logger            logger.Logger
-	privateKey        *ecdsa.PrivateKey
-	chainID           *big.Int
-	avsAddress        common.Address
-	operatorAddress   common.Address
-	allocationManager *IAllocationManager.IAllocationManager
-	delegationManager *IDelegationManager.IDelegationManager
+	ethClient            *ethclient.Client
+	logger               logger.Logger
+	privateKey           *ecdsa.PrivateKey
+	chainID              *big.Int
+	avsAddress           common.Address
+	operatorAddress      common.Address
+	allocationManager    *IAllocationManager.IAllocationManager
+	delegationManager    *IDelegationManager.IDelegationManager
 	strategyManager      *IStrategyManager.IStrategyManager
 	keyRegistrar         *IKeyRegistrar.IKeyRegistrar
 	releaseManager       *IReleaseManager.IReleaseManager
-	permissionController *IPermissionController.IPermissionController
+	permissionController *PermissionController.PermissionController
 	contractConfig       *ContractConfig
 }
 
@@ -130,7 +130,6 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 	}
 }
 
-// NewContractClient creates a new contract client with the given configuration
 func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *ContractConfig) (*ContractClient, error) {
 	if rpcURL == "" {
 		return nil, fmt.Errorf("RPC URL is required")
@@ -153,7 +152,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to connect to Ethereum node: %w", err)
 	}
 
-	// Parse private key if provided - don't fail if not provided
 	var privateKey *ecdsa.PrivateKey
 	if privateKeyHex != "" {
 		privateKey, err = crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))
@@ -164,13 +162,11 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		log.Debug("Private key not configured - read-only mode enabled")
 	}
 
-	// Get chain ID
 	chainID, err := client.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
-	// Get default addresses for this chain if not provided in config
 	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
@@ -193,7 +189,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		contractConfig:  config,
 	}
 
-	// Delegation Manager
 	contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
 		common.HexToAddress(config.DelegationManager),
 		client,
@@ -203,7 +198,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized delegation manager", zap.String("address", config.DelegationManager))
 
-	// Allocation Manager
 	contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
 		common.HexToAddress(config.AllocationManager),
 		client,
@@ -213,7 +207,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized allocation manager", zap.String("address", config.AllocationManager))
 
-	// Strategy Manager
 	contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
 		common.HexToAddress(config.StrategyManager),
 		client,
@@ -223,7 +216,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized strategy manager", zap.String("address", config.StrategyManager))
 
-	// Key Registrar
 	contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
 		common.HexToAddress(config.KeyRegistrar),
 		client,
@@ -233,7 +225,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized key registrar", zap.String("address", config.KeyRegistrar))
 
-	// Release Manager
 	contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
 		common.HexToAddress(config.ReleaseManager),
 		client,
@@ -243,8 +234,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized release manager", zap.String("address", config.ReleaseManager))
 
-	// Permission Controller
-	contractClient.permissionController, err = IPermissionController.NewIPermissionController(
+	contractClient.permissionController, err = PermissionController.NewPermissionController(
 		common.HexToAddress(config.PermissionController),
 		client,
 	)
@@ -1383,6 +1373,99 @@ func (c *ContractClient) RemovePendingAdmin(ctx context.Context, accountAddress 
 	c.logger.Info("Successfully removed pending admin",
 		zap.String("account", accountAddress.Hex()),
 		zap.String("pendingAdmin", pendingAdminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) CanCall(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	result, err := c.permissionController.CanCall(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		appointeeAddress,
+		target,
+		selector,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to check canCall: %w", err)
+	}
+
+	return result, nil
+}
+
+func (c *ContractClient) GetAppointees(ctx context.Context, accountAddress common.Address, target common.Address, selector [4]byte) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	result, err := c.permissionController.GetAppointees(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		target,
+		selector,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get appointees: %w", err)
+	}
+
+	return result, nil
+}
+
+func (c *ContractClient) GetAppointeePermissions(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address) ([]common.Address, [][4]byte, error) {
+	if c.permissionController == nil {
+		return nil, nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	targets, selectors, err := c.permissionController.GetAppointeePermissions(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		appointeeAddress,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get appointee permissions: %w", err)
+	}
+
+	return targets, selectors, nil
+}
+
+func (c *ContractClient) RemoveAppointee(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemoveAppointee(opts, accountAddress, appointeeAddress, target, selector)
+	if err != nil {
+		return fmt.Errorf("failed to remove appointee: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed appointee",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("appointee", appointeeAddress.Hex()),
+		zap.String("target", target.Hex()),
+		zap.String("selector", fmt.Sprintf("0x%x", selector)),
 		zap.String("txHash", receipt.TxHash.Hex()),
 	)
 

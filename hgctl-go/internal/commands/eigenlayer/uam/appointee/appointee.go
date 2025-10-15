@@ -9,6 +9,11 @@ func Command() *cli.Command {
 		Name:        "appointee",
 		Usage:       "Appointee management operations",
 		Description: `Manage Appointee Access Management operations.`,
-		Subcommands: []*cli.Command{},
+		Subcommands: []*cli.Command{
+			CanCallCommand(),
+			ListAppointeesCommand(),
+			ListPermissionsCommand(),
+			RemoveAppointeeCommand(),
+		},
 	}
 }
