@@ -56,7 +56,9 @@ func setClaimerAction(c *cli.Context) error {
 	return executeSetClaimer(c.Context, contractClient, log, currentCtx, earnerAddress, claimerAddress, rewardsCoordinator)
 }
 
-func executeSetClaimer(ctx context.Context, contractClient interface{ SetClaimerFor(context.Context, string, string, string) (string, error) }, log interface{ Info(string, ...zap.Field) }, currentCtx *config.Context, earnerAddress, claimerAddress, rewardsCoordinator string) error {
+func executeSetClaimer(ctx context.Context, contractClient interface {
+	SetClaimerFor(context.Context, string, string, string) (string, error)
+}, log interface{ Info(string, ...zap.Field) }, currentCtx *config.Context, earnerAddress, claimerAddress, rewardsCoordinator string) error {
 	if earnerAddress == "" {
 		earnerAddress = currentCtx.OperatorAddress
 	}

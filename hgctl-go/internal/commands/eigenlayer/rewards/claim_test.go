@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	errFailedToGetProof  = "failed to get proof"
-	errFailedToClaim     = "failed to claim"
+	errFailedToGetProof = "failed to get proof"
+	errFailedToClaim    = "failed to claim"
 )
 
 func TestClaimAction_Success(t *testing.T) {

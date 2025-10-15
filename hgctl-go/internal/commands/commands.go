@@ -12,7 +12,6 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/keystore"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/middleware"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/remove"
-	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/rewards"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/run"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/signer"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/commands/telemetry"
@@ -110,7 +109,6 @@ and deploy AVS artifacts including EigenRuntime specifications.`,
 			SignerCommand(),
 			EigenLayerCommand(),
 			TelemetryCommand(),
-			RewardsCommand(),
 		},
 		ExitErrHandler: middleware.ExitErrHandler,
 	}
@@ -172,10 +170,4 @@ func EigenLayerCommand() *cli.Command {
 
 func TelemetryCommand() *cli.Command {
 	return telemetry.Command()
-}
-
-func RewardsCommand() *cli.Command {
-	cmd := rewards.Command()
-	cmd.Before = middleware.RequireContext
-	return cmd
 }
