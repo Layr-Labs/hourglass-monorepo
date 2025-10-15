@@ -16,7 +16,10 @@ contract DeployTaskMailbox is Script {
 
     IAllocationManager public ALLOCATION_MANAGER = IAllocationManager(0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39);
 
-    function run(address bn254CertVerifier, address ecdsaCertVerifier) public {
+    function run(
+        address bn254CertVerifier,
+        address ecdsaCertVerifier
+    ) public {
         // Load the private key from the environment variable
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY_DEPLOYER");
         address deployer = vm.addr(deployerPrivateKey);

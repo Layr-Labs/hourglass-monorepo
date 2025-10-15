@@ -65,9 +65,7 @@ contract RegisterOperator is Script {
         ALLOCATION_MANAGER.registerForOperatorSets(
             operator,
             IAllocationManagerTypes.RegisterParams({
-                avs: avsAddr,
-                operatorSetIds: operatorSetIds,
-                data: abi.encode(socket)
+                avs: avsAddr, operatorSetIds: operatorSetIds, data: abi.encode(socket)
             })
         );
         console.log(
