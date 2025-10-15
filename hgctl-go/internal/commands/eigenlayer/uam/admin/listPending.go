@@ -74,19 +74,22 @@ func listPendingAction(c *cli.Context) error {
 	}
 
 	if len(pendingAdmins) == 0 {
-		fmt.Printf("No pending admins found for account %s\n", accountAddress.Hex())
+		log.Info("No pending admins found",
+			zap.String("accountAddress", accountAddress.Hex()),
+		)
 		return nil
 	}
 
-	fmt.Printf("Pending admins for account %s:\n", accountAddress.Hex())
-	for i, admin := range pendingAdmins {
-		fmt.Printf("  %d. %s\n", i+1, admin.Hex())
-	}
-
-	log.Info("Successfully fetched pending admins",
+	log.Info("Pending admins",
 		zap.String("accountAddress", accountAddress.Hex()),
 		zap.Int("count", len(pendingAdmins)),
 	)
+	for i, admin := range pendingAdmins {
+		log.Info("Pending admin",
+			zap.Int("index", i+1),
+			zap.String("address", admin.Hex()),
+		)
+	}
 
 	return nil
 }

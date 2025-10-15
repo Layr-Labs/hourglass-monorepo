@@ -12,18 +12,18 @@ import (
 
 func ListAppointeesCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "list-appointees",
+		Name:  "list",
 		Usage: "List all appointees for a specific function permission",
 		Description: `List all appointees that have been granted permission to call a specific function on a target contract.
 
 Flags:
---account-address  The account address that owns the permission (defaults to operator address from context)
---target           The target contract address
---selector         The function selector (e.g., 0x12345678)
+--account-address   The account address that owns the permission (defaults to operator address from context)
+--contract-address  The target contract address
+--selector          The function selector (e.g., 0x12345678)
 
 Usage:
-  hgctl eigenlayer user appointee list-appointees --target 0xABCD... --selector 0x12345678
-  hgctl eigenlayer user appointee list-appointees --account-address 0x1234... --target 0xABCD... --selector 0x12345678`,
+  hgctl eigenlayer user appointee list --contract-address 0xABCD... --selector 0x12345678
+  hgctl eigenlayer user appointee list --account-address 0x1234... --contract-address 0xABCD... --selector 0x12345678`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",
@@ -31,7 +31,7 @@ Usage:
 				Required: false,
 			},
 			&cli.StringFlag{
-				Name:     "target",
+				Name:     "contract-address",
 				Usage:    "Target contract address",
 				Required: true,
 			},
@@ -73,11 +73,11 @@ func listAppointeesAction(c *cli.Context) error {
 	}
 	accountAddress := common.HexToAddress(accountAddressStr)
 
-	targetAddressStr := c.String("target")
-	if !common.IsHexAddress(targetAddressStr) {
-		return fmt.Errorf("invalid target address: %s", targetAddressStr)
+	contractAddressStr := c.String("contract-address")
+	if !common.IsHexAddress(contractAddressStr) {
+		return fmt.Errorf("invalid contract address: %s", contractAddressStr)
 	}
-	targetAddress := common.HexToAddress(targetAddressStr)
+	contractAddress := common.HexToAddress(contractAddressStr)
 
 	selectorStr := c.String("selector")
 	selector, err := parseSelector(selectorStr)
@@ -87,29 +87,31 @@ func listAppointeesAction(c *cli.Context) error {
 
 	log.Debug("Listing appointees",
 		zap.String("accountAddress", accountAddress.Hex()),
-		zap.String("target", targetAddress.Hex()),
+		zap.String("contractAddress", contractAddress.Hex()),
 		zap.String("selector", selectorStr),
 	)
 
-	appointees, err := contractClient.GetAppointees(c.Context, accountAddress, targetAddress, selector)
+	appointees, err := contractClient.GetAppointees(c.Context, accountAddress, contractAddress, selector)
 	if err != nil {
 		log.Error("Failed to get appointees", zap.Error(err))
 		return fmt.Errorf("failed to get appointees: %w", err)
 	}
 
-	// Output format matching eigenlayer-cli
-	fmt.Printf("Target, Selector and Appointer: %s, %s, %s\n",
-		targetAddress.Hex(),
-		selectorStr,
-		accountAddress.Hex(),
+	log.Info("Appointees for contract and selector",
+		zap.String("contractAddress", contractAddress.Hex()),
+		zap.String("selector", selectorStr),
+		zap.String("appointer", accountAddress.Hex()),
+		zap.Int("count", len(appointees)),
 	)
-	fmt.Println("============================================================")
 
 	if len(appointees) == 0 {
-		fmt.Println("No appointees found")
+		log.Info("No appointees found")
 	} else {
-		for _, appointee := range appointees {
-			fmt.Println(appointee.Hex())
+		for i, appointee := range appointees {
+			log.Info("Appointee",
+				zap.Int("index", i+1),
+				zap.String("address", appointee.Hex()),
+			)
 		}
 	}
 

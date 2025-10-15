@@ -18,11 +18,11 @@ func RemovePendingCommand() *cli.Command {
 
 Flags:
 --account-address  The account address to remove pending admin from (defaults to operator address from context)
---user-address     The address of the pending admin to remove (required)
+--admin-address    The address of the pending admin to remove (required)
 
 Usage:
-  hgctl eigenlayer user admin remove-pending --user-address 0x5678...  # Uses operator address from context
-  hgctl eigenlayer user admin remove-pending --account-address 0x1234... --user-address 0x5678...`,
+  hgctl eigenlayer user admin remove-pending --admin-address 0x5678...  # Uses operator address from context
+  hgctl eigenlayer user admin remove-pending --account-address 0x1234... --admin-address 0x5678...`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",
@@ -30,7 +30,7 @@ Usage:
 				Required: false,
 			},
 			&cli.StringFlag{
-				Name:     "user-address",
+				Name:     "admin-address",
 				Usage:    "Address of the pending admin to remove",
 				Required: true,
 			},
@@ -67,24 +67,24 @@ func removePendingAction(c *cli.Context) error {
 	}
 	accountAddress := common.HexToAddress(accountAddressStr)
 
-	userAddressStr := c.String("user-address")
-	if !common.IsHexAddress(userAddressStr) {
-		return fmt.Errorf("invalid user address: %s", userAddressStr)
+	adminAddressStr := c.String("admin-address")
+	if !common.IsHexAddress(adminAddressStr) {
+		return fmt.Errorf("invalid admin address: %s", adminAddressStr)
 	}
-	userAddress := common.HexToAddress(userAddressStr)
+	adminAddress := common.HexToAddress(adminAddressStr)
 
 	log.Debug("Removing pending admin",
 		zap.String("accountAddress", accountAddress.Hex()),
-		zap.String("userAddress", userAddress.Hex()),
+		zap.String("adminAddress", adminAddress.Hex()),
 	)
 
-	err = contractClient.RemovePendingAdmin(c.Context, accountAddress, userAddress)
+	err = contractClient.RemovePendingAdmin(c.Context, accountAddress, adminAddress)
 	if err != nil {
 		log.Error("Failed to remove pending admin", zap.Error(err))
 		return fmt.Errorf("failed to remove pending admin: %w", err)
 	}
 
-	fmt.Printf("Successfully removed pending admin %s from account %s\n", userAddress.Hex(), accountAddress.Hex())
+	fmt.Printf("Successfully removed pending admin %s from account %s\n", adminAddress.Hex(), accountAddress.Hex())
 
 	return nil
 }

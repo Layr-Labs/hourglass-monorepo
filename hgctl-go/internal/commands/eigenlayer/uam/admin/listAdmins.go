@@ -74,19 +74,31 @@ func listAdminsAction(c *cli.Context) error {
 	}
 
 	if len(admins) == 0 {
-		fmt.Printf("No admins found for account %s\n", accountAddress.Hex())
+		log.Info("Account has NO admins set",
+			zap.String("accountAddress", accountAddress.Hex()),
+		)
+		log.Info("In this state, only the account itself can manage its permissions")
+		log.Info("To add an admin, use: hgctl eigenlayer user admin add --admin-address <address>")
 		return nil
 	}
 
-	fmt.Printf("Admins for account %s:\n", accountAddress.Hex())
-	for i, admin := range admins {
-		fmt.Printf("  %d. %s\n", i+1, admin.Hex())
-	}
-
-	log.Info("Successfully fetched admins",
+	log.Info("Account admins",
 		zap.String("accountAddress", accountAddress.Hex()),
 		zap.Int("count", len(admins)),
 	)
+	for i, admin := range admins {
+		if admin == accountAddress {
+			log.Info("Admin (self)",
+				zap.Int("index", i+1),
+				zap.String("address", admin.Hex()),
+			)
+		} else {
+			log.Info("Admin",
+				zap.Int("index", i+1),
+				zap.String("address", admin.Hex()),
+			)
+		}
+	}
 
 	return nil
 }

@@ -84,16 +84,21 @@ func listPermissionsAction(c *cli.Context) error {
 		return fmt.Errorf("failed to get appointee permissions: %w", err)
 	}
 
-	// Output format matching eigenlayer-cli
-	fmt.Printf("Appointee address: %s\n", appointeeAddress.Hex())
-	fmt.Printf("Appointed by: %s\n", accountAddress.Hex())
-	fmt.Println("============================================================")
+	log.Info("Appointee permissions",
+		zap.String("appointeeAddress", appointeeAddress.Hex()),
+		zap.String("appointedBy", accountAddress.Hex()),
+		zap.Int("count", len(targets)),
+	)
 
 	if len(targets) == 0 {
-		fmt.Println("No permissions found")
+		log.Info("No permissions found")
 	} else {
 		for i := range targets {
-			fmt.Printf("Target: %s, Selector: 0x%x\n", targets[i].Hex(), selectors[i])
+			log.Info("Permission",
+				zap.Int("index", i+1),
+				zap.String("target", targets[i].Hex()),
+				zap.String("selector", fmt.Sprintf("0x%x", selectors[i])),
+			)
 		}
 	}
 

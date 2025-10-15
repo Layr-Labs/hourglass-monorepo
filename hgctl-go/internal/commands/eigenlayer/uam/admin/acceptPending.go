@@ -25,7 +25,7 @@ Flags:
 --account-address  The account address whose admin privileges are being accepted (required)
 
 Usage:
-  hgctl eigenlayer uam accept --account-address 0x1234...`,
+  hgctl eigenlayer user accept --account-address 0x1234...`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",

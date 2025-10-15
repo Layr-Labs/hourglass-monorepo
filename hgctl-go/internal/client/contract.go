@@ -110,11 +110,12 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 		}, nil
 	case 11155111: // Sepolia Testnet
 		return &DefaultContractAddresses{
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
-			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			DelegationManager:    "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+			AllocationManager:    "0x42583067658071247ec8ce0a516a58f682002d07",
+			StrategyManager:      "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+			KeyRegistrar:         "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+			ReleaseManager:       "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			PermissionController: "0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37",
 		}, nil
 	case 31337: // Local Anvil (testnet fork)
 		return &DefaultContractAddresses{
@@ -123,7 +124,7 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 			StrategyManager:      "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
 			KeyRegistrar:         "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
 			ReleaseManager:       "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
-			PermissionController: "0x24dF2CB2FD9db43e2b00e08261e32A0D86B19730",
+			PermissionController: "0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37",
 		}, nil
 	default:
 		return nil, fmt.Errorf("default contract addresses not found for chain")

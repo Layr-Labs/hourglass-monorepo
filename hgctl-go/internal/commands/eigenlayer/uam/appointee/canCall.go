@@ -21,12 +21,12 @@ func CanCallCommand() *cli.Command {
 Flags:
 --account-address   The account address that owns the permission (defaults to operator address from context)
 --appointee-address The address of the appointee to check
---target            The target contract address
+--contract-address  The target contract address
 --selector          The function selector (e.g., 0x12345678)
 
 Usage:
-  hgctl eigenlayer user appointee can-call --appointee-address 0x5678... --target 0xABCD... --selector 0x12345678
-  hgctl eigenlayer user appointee can-call --account-address 0x1234... --appointee-address 0x5678... --target 0xABCD... --selector 0x12345678`,
+  hgctl eigenlayer user appointee can-call --appointee-address 0x5678... --contract-address 0xABCD... --selector 0x12345678
+  hgctl eigenlayer user appointee can-call --account-address 0x1234... --appointee-address 0x5678... --contract-address 0xABCD... --selector 0x12345678`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",
@@ -39,7 +39,7 @@ Usage:
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:     "target",
+				Name:     "contract-address",
 				Usage:    "Target contract address",
 				Required: true,
 			},
@@ -87,11 +87,11 @@ func canCallAction(c *cli.Context) error {
 	}
 	appointeeAddress := common.HexToAddress(appointeeAddressStr)
 
-	targetAddressStr := c.String("target")
-	if !common.IsHexAddress(targetAddressStr) {
-		return fmt.Errorf("invalid target address: %s", targetAddressStr)
+	contractAddressStr := c.String("contract-address")
+	if !common.IsHexAddress(contractAddressStr) {
+		return fmt.Errorf("invalid contract address: %s", contractAddressStr)
 	}
-	targetAddress := common.HexToAddress(targetAddressStr)
+	contractAddress := common.HexToAddress(contractAddressStr)
 
 	selectorStr := c.String("selector")
 	selector, err := parseSelector(selectorStr)
@@ -102,21 +102,21 @@ func canCallAction(c *cli.Context) error {
 	log.Debug("Checking canCall permission",
 		zap.String("accountAddress", accountAddress.Hex()),
 		zap.String("appointeeAddress", appointeeAddress.Hex()),
-		zap.String("target", targetAddress.Hex()),
+		zap.String("contractAddress", contractAddress.Hex()),
 		zap.String("selector", selectorStr),
 	)
 
-	canCall, err := contractClient.CanCall(c.Context, accountAddress, appointeeAddress, targetAddress, selector)
+	canCall, err := contractClient.CanCall(c.Context, accountAddress, appointeeAddress, contractAddress, selector)
 	if err != nil {
 		log.Error("Failed to check canCall", zap.Error(err))
 		return fmt.Errorf("failed to check canCall: %w", err)
 	}
 
-	fmt.Printf("CanCall Result: %t\n", canCall)
-	fmt.Printf("Target, Selector and Appointee: %s, %s, %s\n",
-		targetAddress.Hex(),
-		selectorStr,
-		appointeeAddress.Hex(),
+	log.Info("CanCall result",
+		zap.Bool("result", canCall),
+		zap.String("contractAddress", contractAddress.Hex()),
+		zap.String("selector", selectorStr),
+		zap.String("appointeeAddress", appointeeAddress.Hex()),
 	)
 
 	return nil

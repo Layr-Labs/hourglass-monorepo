@@ -16,11 +16,15 @@ func AddPendingAdminCommand() *cli.Command {
 		Usage: "Add a pending admin for an account",
 		Description: `Add a pending admin for an account in the PermissionController.
 
-The transaction sender (operator) will add a pending admin for the specified account.
-The pending admin must then accept the role using the accept command.
+Once an admin is added and accepts, the account loses its default
+admin privileges. If you want to retain admin access for your account address,
+you should first add yourself as an admin before adding others.
+
+The pending admin must accept the role using the 'accept' command before becoming an admin.
 
 Prerequisites:
-- Operator must have permission to add admins for the account
+- If account has NO admins: Only the account itself can add admins
+- If account has admins: Only existing admins can add admins
 - Operator signer must be configured with a private key
 
 Flags:
@@ -28,8 +32,8 @@ Flags:
 --admin-address    The address of the admin being appointed (required)
 
 Usage:
-  hgctl eigenlayer uam admin add --admin-address 0x5678...  # Uses operator address from context
-  hgctl eigenlayer uam admin add --account-address 0x1234... --admin-address 0x5678...`,
+  hgctl eigenlayer user admin add --admin-address 0x5678... 
+  hgctl eigenlayer user admin add --account-address 0x1234... --admin-address 0x5678...`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",
@@ -54,10 +58,9 @@ func addPendingAdminAction(c *cli.Context) error {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Get account address - default to operator address from context if not provided
 	accountAddressStr := c.String("account-address")
+
 	if accountAddressStr == "" {
-		// Get operator address from context
 		ctx, ok := c.Context.Value(config.ContextKey).(*config.Context)
 		if !ok || ctx == nil {
 			return fmt.Errorf("context not found")
@@ -76,12 +79,26 @@ func addPendingAdminAction(c *cli.Context) error {
 	}
 	accountAddress := common.HexToAddress(accountAddressStr)
 
-	// Get admin address
 	adminAddressStr := c.String("admin-address")
 	if !common.IsHexAddress(adminAddressStr) {
 		return fmt.Errorf("invalid admin address: %s", adminAddressStr)
 	}
 	adminAddress := common.HexToAddress(adminAddressStr)
+
+	if accountAddress == adminAddress {
+		log.Info("Self-appointment detected: Adding yourself as an admin",
+			zap.String("address", accountAddress.Hex()),
+		)
+
+		admins, err := contractClient.GetAdmins(c.Context, accountAddress)
+		if err != nil {
+			log.Warn("Could not check existing admins", zap.Error(err))
+		} else if len(admins) == 0 {
+			log.Info("This is recommended for first-time setup to retain control after adding other admins")
+			fmt.Println("✓ Self-appointment detected - this is the recommended first step")
+			fmt.Println("  After accepting, you can safely add other admins while retaining control")
+		}
+	}
 
 	log.Info("Adding pending admin",
 		zap.String("accountAddress", accountAddress.Hex()),
@@ -89,7 +106,6 @@ func addPendingAdminAction(c *cli.Context) error {
 	)
 
 	if err := contractClient.AddPendingAdmin(c.Context, accountAddress, adminAddress); err != nil {
-		log.Error("Failed to add pending admin", zap.Error(err))
 		return fmt.Errorf("failed to add pending admin: %w", err)
 	}
 

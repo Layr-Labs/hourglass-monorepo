@@ -14,15 +14,15 @@ func IsPendingCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "is-pending",
 		Usage: "Check if an address is a pending admin for an account",
-		Description: `Check if a user address is a pending admin for an account in the PermissionController.
+		Description: `Check if an address is a pending admin for an account in the PermissionController.
 
 Flags:
 --account-address  The account address to check pending admin status for (defaults to operator address from context)
---user-address     The address to check if it's a pending admin (required)
+--admin-address    The address to check if it's a pending admin (required)
 
 Usage:
-  hgctl eigenlayer user admin is-pending --user-address 0x5678...  # Uses operator address from context
-  hgctl eigenlayer user admin is-pending --account-address 0x1234... --user-address 0x5678...`,
+  hgctl eigenlayer user admin is-pending --admin-address 0x5678...  # Uses operator address from context
+  hgctl eigenlayer user admin is-pending --account-address 0x1234... --admin-address 0x5678...`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "account-address",
@@ -30,7 +30,7 @@ Usage:
 				Required: false,
 			},
 			&cli.StringFlag{
-				Name:     "user-address",
+				Name:     "admin-address",
 				Usage:    "Address to check if it's a pending admin",
 				Required: true,
 			},
@@ -47,10 +47,8 @@ func isPendingAction(c *cli.Context) error {
 		return fmt.Errorf("failed to get contract client: %w", err)
 	}
 
-	// Get account address - default to operator address from context if not provided
 	accountAddressStr := c.String("account-address")
 	if accountAddressStr == "" {
-		// Get operator address from context
 		ctx, ok := c.Context.Value(config.ContextKey).(*config.Context)
 		if !ok || ctx == nil {
 			return fmt.Errorf("context not found")
@@ -69,19 +67,18 @@ func isPendingAction(c *cli.Context) error {
 	}
 	accountAddress := common.HexToAddress(accountAddressStr)
 
-	// Get user address
-	userAddressStr := c.String("user-address")
-	if !common.IsHexAddress(userAddressStr) {
-		return fmt.Errorf("invalid user address: %s", userAddressStr)
+	adminAddressStr := c.String("admin-address")
+	if !common.IsHexAddress(adminAddressStr) {
+		return fmt.Errorf("invalid admin address: %s", adminAddressStr)
 	}
-	userAddress := common.HexToAddress(userAddressStr)
+	adminAddress := common.HexToAddress(adminAddressStr)
 
 	log.Debug("Checking pending admin status",
 		zap.String("accountAddress", accountAddress.Hex()),
-		zap.String("userAddress", userAddress.Hex()),
+		zap.String("adminAddress", adminAddress.Hex()),
 	)
 
-	isPending, err := contractClient.IsPendingAdmin(c.Context, accountAddress, userAddress)
+	isPending, err := contractClient.IsPendingAdmin(c.Context, accountAddress, adminAddress)
 	if err != nil {
 		log.Error("Failed to check pending admin status", zap.Error(err))
 		return fmt.Errorf("failed to check pending admin status: %w", err)
@@ -90,15 +87,15 @@ func isPendingAction(c *cli.Context) error {
 	if isPending {
 		log.Info("Address is a pending admin",
 			zap.String("accountAddress", accountAddress.Hex()),
-			zap.String("userAddress", userAddress.Hex()),
+			zap.String("adminAddress", adminAddress.Hex()),
 		)
-		fmt.Printf("✓ %s is a pending admin for account %s\n", userAddress.Hex(), accountAddress.Hex())
+		fmt.Printf("✓ %s is a pending admin for account %s\n", adminAddress.Hex(), accountAddress.Hex())
 	} else {
 		log.Info("Address is not a pending admin",
 			zap.String("accountAddress", accountAddress.Hex()),
-			zap.String("userAddress", userAddress.Hex()),
+			zap.String("adminAddress", adminAddress.Hex()),
 		)
-		fmt.Printf("✗ %s is not a pending admin for account %s\n", userAddress.Hex(), accountAddress.Hex())
+		fmt.Printf("✗ %s is not a pending admin for account %s\n", adminAddress.Hex(), accountAddress.Hex())
 	}
 
 	return nil
