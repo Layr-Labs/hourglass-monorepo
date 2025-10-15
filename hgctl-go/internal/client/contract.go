@@ -10,6 +10,7 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IRewardsCoordinator"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/PermissionController"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -1519,4 +1520,155 @@ func (c *ContractClient) Close() {
 // getERC20 returns an ERC20 bound contract instance
 func (c *ContractClient) getERC20(address common.Address) (*bind.BoundContract, error) {
 	return contracts.NewERC20Contract(address, c.ethClient)
+}
+
+func (c *ContractClient) SetClaimerFor(ctx context.Context, rewardsCoordinatorAddress, earnerAddress, claimerAddress string) (string, error) {
+	if err := c.checkPrivateKey(); err != nil {
+		return "", err
+	}
+
+	rewardsCoordinator, err := IRewardsCoordinator.NewIRewardsCoordinator(
+		common.HexToAddress(rewardsCoordinatorAddress),
+		c.ethClient,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create rewards coordinator at %s: %w", rewardsCoordinatorAddress, err)
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	claimer := common.HexToAddress(claimerAddress)
+
+	tx, err := rewardsCoordinator.SetClaimerFor(opts, claimer)
+	if err != nil {
+		return "", fmt.Errorf("failed to set claimer: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully set claimer",
+		zap.String("earner", earnerAddress),
+		zap.String("claimer", claimerAddress),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return receipt.TxHash.Hex(), nil
+}
+
+func (c *ContractClient) ProcessClaim(ctx context.Context, rewardsCoordinatorAddress string, proof *ClaimProof) (string, error) {
+	if err := c.checkPrivateKey(); err != nil {
+		return "", err
+	}
+
+	rewardsCoordinator, err := IRewardsCoordinator.NewIRewardsCoordinator(
+		common.HexToAddress(rewardsCoordinatorAddress),
+		c.ethClient,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create rewards coordinator at %s: %w", rewardsCoordinatorAddress, err)
+	}
+
+	claim, err := convertToRewardsMerkleClaim(proof)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert claim proof: %w", err)
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := rewardsCoordinator.ProcessClaim(opts, *claim, common.HexToAddress(proof.EarnerLeaf.Earner))
+	if err != nil {
+		return "", fmt.Errorf("failed to process claim: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully processed claim",
+		zap.String("earner", proof.EarnerLeaf.Earner),
+		zap.Int("tokenCount", len(proof.TokenLeaves)),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return receipt.TxHash.Hex(), nil
+}
+
+func convertToRewardsMerkleClaim(proof *ClaimProof) (*IRewardsCoordinator.IRewardsCoordinatorTypesRewardsMerkleClaim, error) {
+	earnerTreeProof, err := decodeHexString(proof.EarnerTreeProof)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode earner tree proof: %w", err)
+	}
+
+	earnerTokenRoot, err := decodeHexTo32Bytes(proof.EarnerLeaf.EarnerTokenRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode earner token root: %w", err)
+	}
+
+	tokenTreeProofs := make([][]byte, len(proof.TokenTreeProofs))
+	for i, proofStr := range proof.TokenTreeProofs {
+		proofBytes, err := decodeHexString(proofStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode token tree proof %d: %w", i, err)
+		}
+		tokenTreeProofs[i] = proofBytes
+	}
+
+	tokenLeaves := make([]IRewardsCoordinator.IRewardsCoordinatorTypesTokenTreeMerkleLeaf, len(proof.TokenLeaves))
+	for i, leaf := range proof.TokenLeaves {
+		earnings := new(big.Int)
+		earnings.SetString(strings.TrimPrefix(leaf.CumulativeEarnings, "0x"), 16)
+
+		tokenLeaves[i] = IRewardsCoordinator.IRewardsCoordinatorTypesTokenTreeMerkleLeaf{
+			Token:              common.HexToAddress(leaf.Token),
+			CumulativeEarnings: earnings,
+		}
+	}
+
+	return &IRewardsCoordinator.IRewardsCoordinatorTypesRewardsMerkleClaim{
+		RootIndex:       proof.RootIndex,
+		EarnerIndex:     proof.EarnerIndex,
+		EarnerTreeProof: earnerTreeProof,
+		EarnerLeaf: IRewardsCoordinator.IRewardsCoordinatorTypesEarnerTreeMerkleLeaf{
+			Earner:          common.HexToAddress(proof.EarnerLeaf.Earner),
+			EarnerTokenRoot: earnerTokenRoot,
+		},
+		TokenIndices:    proof.TokenIndices,
+		TokenTreeProofs: tokenTreeProofs,
+		TokenLeaves:     tokenLeaves,
+	}, nil
+}
+
+func decodeHexString(hexStr string) ([]byte, error) {
+	if hexStr == "" {
+		return []byte{}, nil
+	}
+	return common.FromHex(hexStr), nil
+}
+
+func decodeHexTo32Bytes(hexStr string) ([32]byte, error) {
+	bytes := common.FromHex(hexStr)
+	if len(bytes) != 32 {
+		return [32]byte{}, fmt.Errorf("expected 32 bytes, got %d", len(bytes))
+	}
+	var result [32]byte
+	copy(result[:], bytes)
+	return result, nil
 }
