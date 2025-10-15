@@ -340,7 +340,7 @@ func TestAdminErrorCases(t *testing.T) {
 		require.Equal(t, 0, addResult.ExitCode)
 
 		// Try to add same admin again (should fail)
-		duplicateResult, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
+		duplicateResult, _ := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered1ECDSA,
 			"eigenlayer", "user", "admin", "add",
 			"--admin-address", firstAdminAddress)
 
@@ -363,7 +363,7 @@ func TestAdminErrorCases(t *testing.T) {
 		require.Equal(t, 0, contextResult.ExitCode)
 
 		// Try to accept without being added as pending
-		acceptResult, err := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered2ECDSA,
+		acceptResult, _ := h.ExecuteCLIWithOperatorKeystore(harness.KeystoreUnregistered2ECDSA,
 			"eigenlayer", "user", "admin", "accept",
 			"--account-address", accountAddress)
 
