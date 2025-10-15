@@ -26,6 +26,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
 )
 
+type ContractClientInterface interface {
+	SetClaimerFor(ctx context.Context, rewardsCoordinatorAddress, earnerAddress, claimerAddress string) (string, error)
+	ProcessClaim(ctx context.Context, rewardsCoordinatorAddress string, proof *ClaimProof) (string, error)
+}
+
 // Release types
 type OperatorSetRelease struct {
 	Digest   string `json:"digest"`

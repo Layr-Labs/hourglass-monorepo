@@ -12,6 +12,12 @@ import (
 	"go.uber.org/zap"
 )
 
+type RewardsClientInterface interface {
+	GetSummarizedRewards(ctx context.Context, earnerAddress string) (*RewardsSummary, error)
+	GetClaimProof(ctx context.Context, earnerAddress string) (*ClaimProof, error)
+	Close()
+}
+
 type RewardsClient struct {
 	baseURL    string
 	httpClient *http.Client
@@ -19,11 +25,11 @@ type RewardsClient struct {
 }
 
 type TokenReward struct {
-	Token      string `json:"token"`
-	Earned     string `json:"earned"`
-	Claimed    string `json:"claimed"`
-	Claimable  string `json:"claimable"`
-	TokenName  string `json:"tokenName,omitempty"`
+	Token     string `json:"token"`
+	Earned    string `json:"earned"`
+	Claimed   string `json:"claimed"`
+	Claimable string `json:"claimable"`
+	TokenName string `json:"tokenName,omitempty"`
 }
 
 type RewardsSummary struct {
@@ -32,13 +38,13 @@ type RewardsSummary struct {
 }
 
 type ClaimProof struct {
-	RootIndex       uint32          `json:"rootIndex"`
-	EarnerIndex     uint32          `json:"earnerIndex"`
-	EarnerTreeProof string          `json:"earnerTreeProof"`
-	EarnerLeaf      EarnerLeaf      `json:"earnerLeaf"`
-	TokenIndices    []uint32        `json:"tokenIndices"`
-	TokenTreeProofs []string        `json:"tokenTreeProofs"`
-	TokenLeaves     []TokenLeaf     `json:"tokenLeaves"`
+	RootIndex       uint32      `json:"rootIndex"`
+	EarnerIndex     uint32      `json:"earnerIndex"`
+	EarnerTreeProof string      `json:"earnerTreeProof"`
+	EarnerLeaf      EarnerLeaf  `json:"earnerLeaf"`
+	TokenIndices    []uint32    `json:"tokenIndices"`
+	TokenTreeProofs []string    `json:"tokenTreeProofs"`
+	TokenLeaves     []TokenLeaf `json:"tokenLeaves"`
 }
 
 type EarnerLeaf struct {
