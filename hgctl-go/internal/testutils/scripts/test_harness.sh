@@ -37,7 +37,7 @@ case "$TEST_PATTERN" in
         echo -e "${GREEN}Running all integration tests...${NC}"
         # Don't use -skip-setup flag, let tests handle chain reuse
         # TODO: add |TestAggregatorDeployment
-        go test -v ./internal/testutils/integration/... -run "TestOperatorRegistration"
+        go test -v ./internal/testutils/integration/... -run "TestOperatorRegistration|TestAdminLifecycle|TestAppointeeLifecycle"
         ;;
     "quick")
         echo -e "${GREEN}Running quick tests (no chain setup)...${NC}"

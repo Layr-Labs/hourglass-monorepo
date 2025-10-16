@@ -9,7 +9,10 @@ import {ITaskMailbox, ITaskMailboxTypes} from "@eigenlayer-contracts/src/contrac
 contract CreateTask is Script {
     function setUp() public {}
 
-    function run(address taskMailbox, address avs) public {
+    function run(
+        address taskMailbox,
+        address avs
+    ) public {
         // Load the private key from the environment variable
         uint256 appPrivateKey = vm.envUint("PRIVATE_KEY_APP");
         address app = vm.addr(appPrivateKey);
@@ -20,9 +23,7 @@ contract CreateTask is Script {
         // Call createTask
         OperatorSet memory executorOperatorSet = OperatorSet({avs: avs, id: 1});
         ITaskMailboxTypes.TaskParams memory taskParams = ITaskMailboxTypes.TaskParams({
-            refundCollector: app,
-            executorOperatorSet: executorOperatorSet,
-            payload: bytes("Hello World")
+            refundCollector: app, executorOperatorSet: executorOperatorSet, payload: bytes("Hello World")
         });
         bytes32 taskHash = ITaskMailbox(taskMailbox).createTask(taskParams);
         console.log("Created task with hash:");

@@ -13,7 +13,10 @@ import {IAVSTaskHook} from "@eigenlayer-contracts/src/contracts/interfaces/IAVST
 contract SetupAVSTaskMailboxConfig is Script {
     function setUp() public {}
 
-    function run(address taskMailbox, address taskHook) public {
+    function run(
+        address taskMailbox,
+        address taskHook
+    ) public {
         // Load the private key from the environment variable
         uint256 avsPrivateKey = vm.envUint("PRIVATE_KEY_AVS");
         address avs = vm.addr(avsPrivateKey);
@@ -22,19 +25,19 @@ contract SetupAVSTaskMailboxConfig is Script {
         console.log("AVS address:", avs);
 
         // Set the Executor Operator Set Task Config
-        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig = ITaskMailboxTypes
-            .ExecutorOperatorSetTaskConfig({
-            taskHook: IAVSTaskHook(taskHook),
-            taskSLA: 60,
-            feeToken: IERC20(address(0)),
-            curveType: IKeyRegistrarTypes.CurveType.BN254,
-            feeCollector: address(0),
-            consensus: ITaskMailboxTypes.Consensus({
-                consensusType: ITaskMailboxTypes.ConsensusType.STAKE_PROPORTION_THRESHOLD,
-                value: abi.encode(uint16(10_000))
-            }),
-            taskMetadata: bytes("")
-        });
+        ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfig =
+            ITaskMailboxTypes.ExecutorOperatorSetTaskConfig({
+                taskHook: IAVSTaskHook(taskHook),
+                taskSLA: 60,
+                feeToken: IERC20(address(0)),
+                curveType: IKeyRegistrarTypes.CurveType.BN254,
+                feeCollector: address(0),
+                consensus: ITaskMailboxTypes.Consensus({
+                    consensusType: ITaskMailboxTypes.ConsensusType.STAKE_PROPORTION_THRESHOLD,
+                    value: abi.encode(uint16(10_000))
+                }),
+                taskMetadata: bytes("")
+            });
         ITaskMailbox(taskMailbox).setExecutorOperatorSetTaskConfig(OperatorSet(avs, 1), executorOperatorSetTaskConfig);
         ITaskMailboxTypes.ExecutorOperatorSetTaskConfig memory executorOperatorSetTaskConfigStored =
             ITaskMailbox(taskMailbox).getExecutorOperatorSetTaskConfig(OperatorSet(avs, 1));

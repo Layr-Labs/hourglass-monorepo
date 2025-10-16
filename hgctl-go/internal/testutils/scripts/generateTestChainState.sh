@@ -1020,6 +1020,7 @@ cat <<EOF > $HGCTL_ROOT/internal/testutils/chainData/chain-config.json
       "allocationManagerAddress": "0x42583067658071247ec8CE0A516A58f682002d07",
       "strategyManagerAddress": "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
       "taskMailboxAddress": "0xb99cc53e8db7018f557606c2a5b066527bf96b26",
+      "permissionControllerAddress": "0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37",
       "destinationEnv": "anvil",
       "forkL1Block": $anvilL1StartBlock,
       "forkL2Block": $anvilL2StartBlock,

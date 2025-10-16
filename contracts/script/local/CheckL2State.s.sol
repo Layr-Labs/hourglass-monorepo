@@ -80,9 +80,9 @@ contract CheckL2State is Script {
 
         IBN254CertificateVerifier verifier = IBN254CertificateVerifier(bn254Verifier);
 
-        try verifier.getOperatorSetInfo(bn254OpSet, timestamp) returns (
-            IBN254CertificateVerifier.BN254OperatorSetInfo memory info
-        ) {
+        try verifier.getOperatorSetInfo(
+            bn254OpSet, timestamp
+        ) returns (IBN254CertificateVerifier.BN254OperatorSetInfo memory info) {
             console.log("\nOperator Set Info Retrieved:");
             console.log("  Number of operators:", info.numOperators);
 

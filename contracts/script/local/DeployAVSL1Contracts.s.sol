@@ -37,8 +37,7 @@ contract DeployAVSL1Contracts is Script {
         uint32[] memory executorOperatorSetIds = new uint32[](1);
         executorOperatorSetIds[0] = 1;
         ITaskAVSRegistrarBaseTypes.AvsConfig memory initialConfig = ITaskAVSRegistrarBaseTypes.AvsConfig({
-            aggregatorOperatorSetId: 0,
-            executorOperatorSetIds: executorOperatorSetIds
+            aggregatorOperatorSetId: 0, executorOperatorSetIds: executorOperatorSetIds
         });
 
         // Deploy ProxyAdmin

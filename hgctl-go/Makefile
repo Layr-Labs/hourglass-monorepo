@@ -66,6 +66,20 @@ lint: ## Run linter
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@golangci-lint run $(GO_PACKAGES)
 
+.PHONY: deps
+deps: ## Install development dependencies
+	@echo "Installing mockgen..."
+	@$(GO) install go.uber.org/mock/mockgen@latest
+	@echo "Dependencies installed"
+
+.PHONY: gen-mocks
+gen-mocks: ## Generate mocks for testing
+	@echo "Generating mocks..."
+	@mkdir -p internal/mocks
+	@mockgen -source=internal/client/rewards.go -destination=internal/mocks/mock_rewards_client.go -package=mocks RewardsClientInterface
+	@mockgen -source=internal/client/contract.go -destination=internal/mocks/mock_contract_client.go -package=mocks ContractClientInterface
+	@echo "Mocks generated successfully"
+
 install: build ## Install binary
 	@mkdir -p ~/bin
 	@cp $(BIN)/$(APP_NAME) ~/bin/

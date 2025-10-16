@@ -108,7 +108,10 @@ contract CheckL1State is Script {
         console.log("");
     }
 
-    function checkOperatorSetConfig(address avs, uint32 operatorSetId) internal view {
+    function checkOperatorSetConfig(
+        address avs,
+        uint32 operatorSetId
+    ) internal view {
         OperatorSet memory operatorSet = OperatorSet({avs: avs, id: operatorSetId});
 
         // Check if table calculator is configured
@@ -170,7 +173,10 @@ contract CheckL1State is Script {
         console.log("");
     }
 
-    function checkStakerState(address staker, IStrategy strategy) internal view {
+    function checkStakerState(
+        address staker,
+        IStrategy strategy
+    ) internal view {
         console.log("Address:", staker);
 
         // Check deposited shares
@@ -215,7 +221,11 @@ contract CheckL1State is Script {
         console.log("");
     }
 
-    function checkOperatorState(address operator, address avs, uint32 operatorSetId) internal view {
+    function checkOperatorState(
+        address operator,
+        address avs,
+        uint32 operatorSetId
+    ) internal view {
         console.log("Address:", operator);
 
         OperatorSet memory operatorSet = OperatorSet({avs: avs, id: operatorSetId});
@@ -228,9 +238,9 @@ contract CheckL1State is Script {
         }
 
         // Check allocated magnitude for STETH strategy
-        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, STETH_STRATEGY) returns (
-            IAllocationManager.Allocation memory allocation
-        ) {
+        try ALLOCATION_MANAGER.getAllocation(
+            operator, operatorSet, STETH_STRATEGY
+        ) returns (IAllocationManager.Allocation memory allocation) {
             console.log("STETH allocation - current magnitude:", allocation.currentMagnitude);
             console.log("STETH allocation - pending diff:", uint256(uint128(allocation.pendingDiff)));
             console.log("STETH allocation - effect block:", allocation.effectBlock);
@@ -239,9 +249,9 @@ contract CheckL1State is Script {
         }
 
         // Check allocated magnitude for WETH strategy
-        try ALLOCATION_MANAGER.getAllocation(operator, operatorSet, WETH_STRATEGY) returns (
-            IAllocationManager.Allocation memory allocation
-        ) {
+        try ALLOCATION_MANAGER.getAllocation(
+            operator, operatorSet, WETH_STRATEGY
+        ) returns (IAllocationManager.Allocation memory allocation) {
             console.log("WETH allocation - current magnitude:", allocation.currentMagnitude);
             console.log("WETH allocation - pending diff:", uint256(uint128(allocation.pendingDiff)));
             console.log("WETH allocation - effect block:", allocation.effectBlock);
@@ -274,9 +284,10 @@ contract CheckL1State is Script {
         console.log("\n--- Executor Operator Set (ID: 1) ---");
 
         // Try to get operator infos
-        try IBN254TableCalculator(BN254_TABLE_CALCULATOR).getOperatorInfos(executorOpSet) returns (
-            IOperatorTableCalculatorTypes.BN254OperatorInfo[] memory operatorInfos
-        ) {
+        try IBN254TableCalculator(BN254_TABLE_CALCULATOR)
+            .getOperatorInfos(
+                executorOpSet
+            ) returns (IOperatorTableCalculatorTypes.BN254OperatorInfo[] memory operatorInfos) {
             console.log("Number of operators with BN254 keys:", operatorInfos.length);
 
             if (operatorInfos.length == 0) {
@@ -301,9 +312,10 @@ contract CheckL1State is Script {
 
         // Try to calculate the full operator table
         console.log("\n--- Calculated Operator Table ---");
-        try IBN254TableCalculator(BN254_TABLE_CALCULATOR).calculateOperatorTable(executorOpSet) returns (
-            IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo
-        ) {
+        try IBN254TableCalculator(BN254_TABLE_CALCULATOR)
+            .calculateOperatorTable(
+                executorOpSet
+            ) returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo) {
             console.log("Operator Info Tree Root:");
             console.logBytes32(opSetInfo.operatorInfoTreeRoot);
             console.log("Number of operators:", opSetInfo.numOperators);
@@ -341,10 +353,11 @@ contract CheckL1State is Script {
         for (uint256 i = 0; i < potentialVerifiers.length && verifierAddress == address(0); i++) {
             if (potentialVerifiers[i] == address(0)) continue;
 
-            try IBN254CertificateVerifier(potentialVerifiers[i]).getOperatorSetInfo(
-                executorOpSet,
-                0 // timestamp 0 as a probe
-            ) returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory) {
+            try IBN254CertificateVerifier(potentialVerifiers[i])
+                .getOperatorSetInfo(
+                    executorOpSet,
+                    0 // timestamp 0 as a probe
+                ) returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory) {
                 verifierAddress = potentialVerifiers[i];
             } catch {
                 // This address doesn't work, try next
@@ -372,9 +385,10 @@ contract CheckL1State is Script {
         }
 
         // Try to get operator set info for the executor operator set
-        try IBN254CertificateVerifier(verifierAddress).getOperatorSetInfo(executorOpSet, latestTimestamp) returns (
-            IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo
-        ) {
+        try IBN254CertificateVerifier(verifierAddress)
+            .getOperatorSetInfo(
+                executorOpSet, latestTimestamp
+            ) returns (IOperatorTableCalculatorTypes.BN254OperatorSetInfo memory opSetInfo) {
             console.log("\n--- Stored Operator Set Info ---");
             console.log("Operator Info Tree Root:");
             console.logBytes32(opSetInfo.operatorInfoTreeRoot);

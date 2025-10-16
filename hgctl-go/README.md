@@ -102,6 +102,15 @@ hgctl --help
 | `hgctl el deregister-avs`       | Deregister operator from an AVS |
 | `hgctl el register-key`         | Register signing keys (BLS/ECDSA) with AVS |
 | `hgctl el deregister-key`       | Deregister signing keys from AVS |
+| **User Access Management (UAM)** |
+| `hgctl el user admin add`       | Add a pending admin to an account |
+| `hgctl el user admin accept`    | Accept admin role for an account |
+| `hgctl el user admin remove-admin` | Remove an admin from an account |
+| `hgctl el user admin list-admins` | List all admins for an account |
+| `hgctl el user appointee set`   | Grant appointee permission for specific function |
+| `hgctl el user appointee remove` | Revoke appointee permission |
+| `hgctl el user appointee list`  | List appointees for a specific function |
+| `hgctl el user appointee can-call` | Check if appointee can call a function |
 | **Keystore Management**         |
 | `hgctl keystore create`         | Create new BLS or ECDSA keystores |
 | `hgctl keystore import`         | Import existing keystore files |
@@ -546,6 +555,150 @@ Telemetry helps improve hgctl by collecting anonymous usage data. All data is pr
 - Error patterns help us improve reliability
 - Performance data helps us optimize operations
 - Optional anonymous mode excludes operator addresses for additional privacy
+
+### User Access Management (UAM)
+
+Manage admin privileges and appointee permissions for accounts in the PermissionController.
+
+#### Admin Management
+
+Admins have full control over an account's permissions. The account owner can grant admin privileges to other addresses.
+
+```bash
+# Add a pending admin (requires acceptance)
+hgctl eigenlayer user admin add \
+  --admin-address 0x5678...
+
+# Accept admin role (called by the pending admin)
+hgctl eigenlayer user admin accept \
+  --account-address 0x1234...
+
+# Check if an address is an admin
+hgctl eigenlayer user admin is-admin \
+  --admin-address 0x5678...
+
+# Check if an address is a pending admin
+hgctl eigenlayer user admin is-pending \
+  --admin-address 0x5678...
+
+# List all admins for an account
+hgctl eigenlayer user admin list-admins \
+  --account-address 0x1234...
+
+# List all pending admins
+hgctl eigenlayer user admin list-pending \
+  --account-address 0x1234...
+
+# Remove an admin
+hgctl eigenlayer user admin remove-admin \
+  --admin-address 0x5678...
+
+# Remove a pending admin
+hgctl eigenlayer user admin remove-pending \
+  --admin-address 0x5678...
+```
+
+**Admin Lifecycle Example:**
+```bash
+# 1. Account adds first admin
+hgctl context set --operator-address 0xAccountAddress
+hgctl eigenlayer user admin add --admin-address 0xAdmin1
+
+# 2. Admin accepts the role
+hgctl context set --operator-address 0xAdmin1
+hgctl eigenlayer user admin accept --account-address 0xAccountAddress
+
+# 3. Admin adds another admin
+hgctl eigenlayer user admin add \
+  --account-address 0xAccountAddress \
+  --admin-address 0xAdmin2
+
+# 4. Remove an admin (requires at least one admin to remain)
+hgctl context set --operator-address 0xAccountAddress
+hgctl eigenlayer user admin remove-admin --admin-address 0xAdmin1
+```
+
+#### Appointee Management
+
+Appointees are granted permission to call specific functions on target contracts on behalf of an account.
+
+```bash
+# Grant permission to an appointee
+hgctl eigenlayer user appointee set \
+  --appointee-address 0x5678... \
+  --contract-address 0xABCD... \
+  --selector 0x12345678
+
+# Remove appointee permission
+hgctl eigenlayer user appointee remove \
+  --appointee-address 0x5678... \
+  --contract-address 0xABCD... \
+  --selector 0x12345678
+
+# List all appointees for a specific function
+hgctl eigenlayer user appointee list \
+  --contract-address 0xABCD... \
+  --selector 0x12345678
+
+# List all permissions granted to an appointee
+hgctl eigenlayer user appointee list-permissions \
+  --appointee-address 0x5678...
+
+# Check if an appointee can call a specific function
+hgctl eigenlayer user appointee can-call \
+  --appointee-address 0x5678... \
+  --contract-address 0xABCD... \
+  --selector 0x12345678
+```
+
+**Appointee Lifecycle Example:**
+```bash
+# 1. Grant multiple appointees permission for the same function
+hgctl eigenlayer user appointee set \
+  --appointee-address 0xAppointee1 \
+  --contract-address 0xTargetContract \
+  --selector 0x12345678
+
+hgctl eigenlayer user appointee set \
+  --appointee-address 0xAppointee2 \
+  --contract-address 0xTargetContract \
+  --selector 0x12345678
+
+# 2. List all appointees with permission
+hgctl eigenlayer user appointee list \
+  --contract-address 0xTargetContract \
+  --selector 0x12345678
+
+# 3. Check specific appointee's permissions
+hgctl eigenlayer user appointee list-permissions \
+  --appointee-address 0xAppointee1
+
+# 4. Verify permission before delegated call
+hgctl eigenlayer user appointee can-call \
+  --appointee-address 0xAppointee1 \
+  --contract-address 0xTargetContract \
+  --selector 0x12345678
+
+# 5. Revoke permission
+hgctl eigenlayer user appointee remove \
+  --appointee-address 0xAppointee1 \
+  --contract-address 0xTargetContract \
+  --selector 0x12345678
+```
+
+**Key Concepts:**
+- **Admin**: Full control over an account's permissions (requires acceptance)
+- **Appointee**: Limited permission to call specific functions on specific contracts
+- **Selector**: 4-byte function signature (e.g., `0x12345678`)
+- **Self-Appointment**: Account can add itself as admin directly
+- **Last Admin Protection**: Contract prevents removal of the last admin
+
+**Common Options:**
+- `--account-address`: Account to manage (defaults to operator address from context)
+- `--admin-address`: Address of the admin
+- `--appointee-address`: Address of the appointee
+- `--contract-address`: Target contract for appointee permissions
+- `--selector`: Function selector for appointee permissions
 
 ---
 

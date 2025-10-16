@@ -16,7 +16,7 @@ set -e
 L1_FORK_RPC_URL=https://late-crimson-dew.quiknode.pro/56c000eadf175378343de407c56e0ccd62801fe9
 
 anvilL1ChainId=1
-anvilL1StartBlock=23477799
+anvilL1StartBlock=23478040
 anvilL1DumpStatePath=./anvil-l1.json
 anvilL1ConfigPath=./anvil-l1-config.json
 anvilL1RpcPort=8545
@@ -26,7 +26,7 @@ anvilL1RpcUrl="http://localhost:${anvilL1RpcPort}"
 L2_FORK_RPC_URL=https://still-attentive-slug.base-mainnet.quiknode.pro/91bfa66d45c9f3ac7ef9e9ca35b2acc8ba41160a/
 
 anvilL2ChainId=8453
-anvilL2StartBlock=36235532
+anvilL2StartBlock=36235694
 anvilL2DumpStatePath=./anvil-l2.json
 anvilL2ConfigPath=./anvil-l2-config.json
 anvilL2RpcPort=9545

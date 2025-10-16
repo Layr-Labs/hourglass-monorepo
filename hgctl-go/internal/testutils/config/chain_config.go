@@ -116,15 +116,16 @@ type ChainConfig struct {
 	ExecStaker4AccountPublicKey string `json:"execStaker4AccountPublicKey"`
 
 	// Contract addresses
-	AVSTaskRegistrarAddress  string `json:"avsTaskRegistrarAddress"`
-	AVSTaskHookAddressL1     string `json:"avsTaskHookAddressL1"`
-	AVSTaskHookAddressL2     string `json:"avsTaskHookAddressL2"`
-	KeyRegistrarAddress      string `json:"keyRegistrarAddress"`
-	ReleaseManagerAddress    string `json:"releaseManagerAddress"`
-	DelegationManagerAddress string `json:"delegationManagerAddress"`
-	AllocationManagerAddress string `json:"allocationManagerAddress"`
-	StrategyManagerAddress   string `json:"strategyManagerAddress"`
-	TaskMailboxAddress       string `json:"taskMailboxAddress"`
+	AVSTaskRegistrarAddress     string `json:"avsTaskRegistrarAddress"`
+	AVSTaskHookAddressL1        string `json:"avsTaskHookAddressL1"`
+	AVSTaskHookAddressL2        string `json:"avsTaskHookAddressL2"`
+	KeyRegistrarAddress         string `json:"keyRegistrarAddress"`
+	ReleaseManagerAddress       string `json:"releaseManagerAddress"`
+	DelegationManagerAddress    string `json:"delegationManagerAddress"`
+	AllocationManagerAddress    string `json:"allocationManagerAddress"`
+	StrategyManagerAddress      string `json:"strategyManagerAddress"`
+	PermissionControllerAddress string `json:"permissionControllerAddress"`
+	TaskMailboxAddress          string `json:"taskMailboxAddress"`
 
 	// Chain configuration
 	L1ChainID int    `json:"l1ChainId,omitempty"`

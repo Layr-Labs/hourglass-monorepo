@@ -10,6 +10,8 @@ import (
 	"github.com/Layr-Labs/crypto-libs/pkg/bn254"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IKeyRegistrar"
 	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IReleaseManager"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/IRewardsCoordinator"
+	"github.com/Layr-Labs/eigenlayer-contracts/pkg/bindings/PermissionController"
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/contracts"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,6 +25,11 @@ import (
 	"github.com/Layr-Labs/hourglass-monorepo/hgctl-go/internal/logger"
 	"github.com/Layr-Labs/hourglass-monorepo/ponos/pkg/middleware-bindings/ITaskAVSRegistrarBase"
 )
+
+type ContractClientInterface interface {
+	SetClaimerFor(ctx context.Context, rewardsCoordinatorAddress, earnerAddress, claimerAddress string) (string, error)
+	ProcessClaim(ctx context.Context, rewardsCoordinatorAddress string, proof *ClaimProof) (string, error)
+}
 
 // Release types
 type OperatorSetRelease struct {
@@ -61,35 +68,38 @@ type ContractConfig struct {
 	OperatorAddress string
 
 	// Optional contract addresses (will use defaults if not provided)
-	DelegationManager string
-	AllocationManager string
-	StrategyManager   string
-	KeyRegistrar      string
-	ReleaseManager    string
+	DelegationManager    string
+	AllocationManager    string
+	StrategyManager      string
+	KeyRegistrar         string
+	ReleaseManager       string
+	PermissionController string
 }
 
 type ContractClient struct {
-	ethClient         *ethclient.Client
-	logger            logger.Logger
-	privateKey        *ecdsa.PrivateKey
-	chainID           *big.Int
-	avsAddress        common.Address
-	operatorAddress   common.Address
-	allocationManager *IAllocationManager.IAllocationManager
-	delegationManager *IDelegationManager.IDelegationManager
-	strategyManager   *IStrategyManager.IStrategyManager
-	keyRegistrar      *IKeyRegistrar.IKeyRegistrar
-	releaseManager    *IReleaseManager.IReleaseManager
-	contractConfig    *ContractConfig
+	ethClient            *ethclient.Client
+	logger               logger.Logger
+	privateKey           *ecdsa.PrivateKey
+	chainID              *big.Int
+	avsAddress           common.Address
+	operatorAddress      common.Address
+	allocationManager    *IAllocationManager.IAllocationManager
+	delegationManager    *IDelegationManager.IDelegationManager
+	strategyManager      *IStrategyManager.IStrategyManager
+	keyRegistrar         *IKeyRegistrar.IKeyRegistrar
+	releaseManager       *IReleaseManager.IReleaseManager
+	permissionController *PermissionController.PermissionController
+	contractConfig       *ContractConfig
 }
 
 // DefaultContractAddresses contains the default contract addresses for a chain
 type DefaultContractAddresses struct {
-	DelegationManager string
-	AllocationManager string
-	StrategyManager   string
-	KeyRegistrar      string
-	ReleaseManager    string
+	DelegationManager    string
+	AllocationManager    string
+	StrategyManager      string
+	KeyRegistrar         string
+	ReleaseManager       string
+	PermissionController string
 }
 
 // getDefaultContractAddresses returns the default contract addresses for a given chain ID
@@ -97,34 +107,36 @@ func getDefaultContractAddresses(chainID uint64) (*DefaultContractAddresses, err
 	switch chainID {
 	case 1:
 		return &DefaultContractAddresses{
-			DelegationManager: "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
-			AllocationManager: "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
-			StrategyManager:   "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
-			KeyRegistrar:      "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
-			ReleaseManager:    "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+			DelegationManager:    "0x39053D51B77DC0d36036Fc1fCc8Cb819df8Ef37A",
+			AllocationManager:    "0x948a420b8CC1d6BFd0B6087C2E7c344a2CD0bc39",
+			StrategyManager:      "0x858646372CC42E1A627fcE94aa7A7033e7CF075A",
+			KeyRegistrar:         "0x54f4bC6bDEbe479173a2bbDc31dD7178408A57A4",
+			ReleaseManager:       "0xeDA3CAd031c0cf367cF3f517Ee0DC98F9bA80C8F",
+			PermissionController: "0x2520A392C59B4BC83798cDDB18BA485eE16fEDA8",
 		}, nil
 	case 11155111: // Sepolia Testnet
 		return &DefaultContractAddresses{
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
-			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			DelegationManager:    "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+			AllocationManager:    "0x42583067658071247ec8ce0a516a58f682002d07",
+			StrategyManager:      "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+			KeyRegistrar:         "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+			ReleaseManager:       "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			PermissionController: "0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37",
 		}, nil
 	case 31337: // Local Anvil (testnet fork)
 		return &DefaultContractAddresses{
-			DelegationManager: "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
-			AllocationManager: "0x42583067658071247ec8ce0a516a58f682002d07",
-			StrategyManager:   "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
-			KeyRegistrar:      "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
-			ReleaseManager:    "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			DelegationManager:    "0xD4A7E1Bd8015057293f0D0A557088c286942e84b",
+			AllocationManager:    "0x42583067658071247ec8ce0a516a58f682002d07",
+			StrategyManager:      "0x2E3D6c0744b10eb0A4e6F679F71554a39Ec47a5D",
+			KeyRegistrar:         "0xA4dB30D08d8bbcA00D40600bee9F029984dB162a",
+			ReleaseManager:       "0x59c8D715DCa616e032B744a753C017c9f3E16bf4",
+			PermissionController: "0x44632dfBdCb6D3E21EF613B0ca8A6A0c618F5a37",
 		}, nil
 	default:
 		return nil, fmt.Errorf("default contract addresses not found for chain")
 	}
 }
 
-// NewContractClient creates a new contract client with the given configuration
 func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *ContractConfig) (*ContractClient, error) {
 	if rpcURL == "" {
 		return nil, fmt.Errorf("RPC URL is required")
@@ -147,7 +159,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to connect to Ethereum node: %w", err)
 	}
 
-	// Parse private key if provided - don't fail if not provided
 	var privateKey *ecdsa.PrivateKey
 	if privateKeyHex != "" {
 		privateKey, err = crypto.HexToECDSA(strings.TrimPrefix(privateKeyHex, "0x"))
@@ -158,13 +169,11 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		log.Debug("Private key not configured - read-only mode enabled")
 	}
 
-	// Get chain ID
 	chainID, err := client.ChainID(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
-	// Get default addresses for this chain if not provided in config
 	defaultAddresses, err := getDefaultContractAddresses(chainID.Uint64())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default contract addresses: %w", err)
@@ -175,6 +184,7 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	config.StrategyManager = defaultAddresses.StrategyManager
 	config.KeyRegistrar = defaultAddresses.KeyRegistrar
 	config.AllocationManager = defaultAddresses.AllocationManager
+	config.PermissionController = defaultAddresses.PermissionController
 
 	contractClient := &ContractClient{
 		ethClient:       client,
@@ -186,7 +196,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		contractConfig:  config,
 	}
 
-	// Delegation Manager
 	contractClient.delegationManager, err = IDelegationManager.NewIDelegationManager(
 		common.HexToAddress(config.DelegationManager),
 		client,
@@ -196,7 +205,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized delegation manager", zap.String("address", config.DelegationManager))
 
-	// Allocation Manager
 	contractClient.allocationManager, err = IAllocationManager.NewIAllocationManager(
 		common.HexToAddress(config.AllocationManager),
 		client,
@@ -206,7 +214,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized allocation manager", zap.String("address", config.AllocationManager))
 
-	// Strategy Manager
 	contractClient.strategyManager, err = IStrategyManager.NewIStrategyManager(
 		common.HexToAddress(config.StrategyManager),
 		client,
@@ -216,7 +223,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized strategy manager", zap.String("address", config.StrategyManager))
 
-	// Key Registrar
 	contractClient.keyRegistrar, err = IKeyRegistrar.NewIKeyRegistrar(
 		common.HexToAddress(config.KeyRegistrar),
 		client,
@@ -226,7 +232,6 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 	}
 	log.Debug("Initialized key registrar", zap.String("address", config.KeyRegistrar))
 
-	// Release Manager
 	contractClient.releaseManager, err = IReleaseManager.NewIReleaseManager(
 		common.HexToAddress(config.ReleaseManager),
 		client,
@@ -235,6 +240,15 @@ func NewContractClient(rpcURL, privateKeyHex string, log logger.Logger, config *
 		return nil, fmt.Errorf("failed to create release manager at %s: %w", config.ReleaseManager, err)
 	}
 	log.Debug("Initialized release manager", zap.String("address", config.ReleaseManager))
+
+	contractClient.permissionController, err = PermissionController.NewPermissionController(
+		common.HexToAddress(config.PermissionController),
+		client,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create permission controller at %s: %w", config.PermissionController, err)
+	}
+	log.Debug("Initialized permission controller", zap.String("address", config.PermissionController))
 
 	return contractClient, nil
 }
@@ -1172,6 +1186,338 @@ func (c *ContractClient) DeregisterKey(ctx context.Context, operatorSetID uint32
 	return nil
 }
 
+func (c *ContractClient) AcceptAdmin(ctx context.Context, accountAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.AcceptAdmin(opts, accountAddress)
+	if err != nil {
+		return fmt.Errorf("failed to accept admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully accepted admin role",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("acceptor", c.operatorAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) AddPendingAdmin(ctx context.Context, accountAddress common.Address, adminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.AddPendingAdmin(opts, accountAddress, adminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to add pending admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully added pending admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("admin", adminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) IsAdmin(ctx context.Context, accountAddress common.Address, callerAddress common.Address) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	isAdmin, err := c.permissionController.IsAdmin(&bind.CallOpts{Context: ctx}, accountAddress, callerAddress)
+	if err != nil {
+		return false, fmt.Errorf("failed to check admin status: %w", err)
+	}
+
+	return isAdmin, nil
+}
+
+func (c *ContractClient) IsPendingAdmin(ctx context.Context, accountAddress common.Address, pendingAdminAddress common.Address) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	isPending, err := c.permissionController.IsPendingAdmin(&bind.CallOpts{Context: ctx}, accountAddress, pendingAdminAddress)
+	if err != nil {
+		return false, fmt.Errorf("failed to check pending admin status: %w", err)
+	}
+
+	return isPending, nil
+}
+
+func (c *ContractClient) GetAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	admins, err := c.permissionController.GetAdmins(&bind.CallOpts{Context: ctx}, accountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admins: %w", err)
+	}
+
+	return admins, nil
+}
+
+func (c *ContractClient) GetPendingAdmins(ctx context.Context, accountAddress common.Address) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	pendingAdmins, err := c.permissionController.GetPendingAdmins(&bind.CallOpts{Context: ctx}, accountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending admins: %w", err)
+	}
+
+	return pendingAdmins, nil
+}
+
+func (c *ContractClient) RemoveAdmin(ctx context.Context, accountAddress common.Address, adminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemoveAdmin(opts, accountAddress, adminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to remove admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("admin", adminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) RemovePendingAdmin(ctx context.Context, accountAddress common.Address, pendingAdminAddress common.Address) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemovePendingAdmin(opts, accountAddress, pendingAdminAddress)
+	if err != nil {
+		return fmt.Errorf("failed to remove pending admin: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed pending admin",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("pendingAdmin", pendingAdminAddress.Hex()),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) CanCall(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) (bool, error) {
+	if c.permissionController == nil {
+		return false, fmt.Errorf("permission controller not initialized")
+	}
+
+	result, err := c.permissionController.CanCall(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		appointeeAddress,
+		target,
+		selector,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to check canCall: %w", err)
+	}
+
+	return result, nil
+}
+
+func (c *ContractClient) GetAppointees(ctx context.Context, accountAddress common.Address, target common.Address, selector [4]byte) ([]common.Address, error) {
+	if c.permissionController == nil {
+		return nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	result, err := c.permissionController.GetAppointees(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		target,
+		selector,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get appointees: %w", err)
+	}
+
+	return result, nil
+}
+
+func (c *ContractClient) GetAppointeePermissions(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address) ([]common.Address, [][4]byte, error) {
+	if c.permissionController == nil {
+		return nil, nil, fmt.Errorf("permission controller not initialized")
+	}
+
+	targets, selectors, err := c.permissionController.GetAppointeePermissions(
+		&bind.CallOpts{Context: ctx},
+		accountAddress,
+		appointeeAddress,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get appointee permissions: %w", err)
+	}
+
+	return targets, selectors, nil
+}
+
+func (c *ContractClient) RemoveAppointee(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.RemoveAppointee(opts, accountAddress, appointeeAddress, target, selector)
+	if err != nil {
+		return fmt.Errorf("failed to remove appointee: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully removed appointee",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("appointee", appointeeAddress.Hex()),
+		zap.String("target", target.Hex()),
+		zap.String("selector", fmt.Sprintf("0x%x", selector)),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
+func (c *ContractClient) SetAppointee(ctx context.Context, accountAddress common.Address, appointeeAddress common.Address, target common.Address, selector [4]byte) error {
+	if err := c.checkPrivateKey(); err != nil {
+		return err
+	}
+
+	if c.permissionController == nil {
+		return fmt.Errorf("permission controller not initialized")
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to build transaction options: %w", err)
+	}
+
+	tx, err := c.permissionController.SetAppointee(opts, accountAddress, appointeeAddress, target, selector)
+	if err != nil {
+		return fmt.Errorf("failed to set appointee: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully set appointee",
+		zap.String("account", accountAddress.Hex()),
+		zap.String("appointee", appointeeAddress.Hex()),
+		zap.String("target", target.Hex()),
+		zap.String("selector", fmt.Sprintf("0x%x", selector)),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return nil
+}
+
 func (c *ContractClient) Close() {
 	c.ethClient.Close()
 }
@@ -1179,4 +1525,155 @@ func (c *ContractClient) Close() {
 // getERC20 returns an ERC20 bound contract instance
 func (c *ContractClient) getERC20(address common.Address) (*bind.BoundContract, error) {
 	return contracts.NewERC20Contract(address, c.ethClient)
+}
+
+func (c *ContractClient) SetClaimerFor(ctx context.Context, rewardsCoordinatorAddress, earnerAddress, claimerAddress string) (string, error) {
+	if err := c.checkPrivateKey(); err != nil {
+		return "", err
+	}
+
+	rewardsCoordinator, err := IRewardsCoordinator.NewIRewardsCoordinator(
+		common.HexToAddress(rewardsCoordinatorAddress),
+		c.ethClient,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create rewards coordinator at %s: %w", rewardsCoordinatorAddress, err)
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	claimer := common.HexToAddress(claimerAddress)
+
+	tx, err := rewardsCoordinator.SetClaimerFor(opts, claimer)
+	if err != nil {
+		return "", fmt.Errorf("failed to set claimer: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully set claimer",
+		zap.String("earner", earnerAddress),
+		zap.String("claimer", claimerAddress),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return receipt.TxHash.Hex(), nil
+}
+
+func (c *ContractClient) ProcessClaim(ctx context.Context, rewardsCoordinatorAddress string, proof *ClaimProof) (string, error) {
+	if err := c.checkPrivateKey(); err != nil {
+		return "", err
+	}
+
+	rewardsCoordinator, err := IRewardsCoordinator.NewIRewardsCoordinator(
+		common.HexToAddress(rewardsCoordinatorAddress),
+		c.ethClient,
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to create rewards coordinator at %s: %w", rewardsCoordinatorAddress, err)
+	}
+
+	claim, err := convertToRewardsMerkleClaim(proof)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert claim proof: %w", err)
+	}
+
+	opts, err := c.buildTxOpts(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := rewardsCoordinator.ProcessClaim(opts, *claim, common.HexToAddress(proof.EarnerLeaf.Earner))
+	if err != nil {
+		return "", fmt.Errorf("failed to process claim: %w", err)
+	}
+
+	receipt, err := bind.WaitMined(ctx, c.ethClient, tx)
+	if err != nil {
+		return "", fmt.Errorf("failed to wait for transaction: %w", err)
+	}
+
+	if receipt.Status == 0 {
+		return "", fmt.Errorf("transaction reverted")
+	}
+
+	c.logger.Info("Successfully processed claim",
+		zap.String("earner", proof.EarnerLeaf.Earner),
+		zap.Int("tokenCount", len(proof.TokenLeaves)),
+		zap.String("txHash", receipt.TxHash.Hex()),
+	)
+
+	return receipt.TxHash.Hex(), nil
+}
+
+func convertToRewardsMerkleClaim(proof *ClaimProof) (*IRewardsCoordinator.IRewardsCoordinatorTypesRewardsMerkleClaim, error) {
+	earnerTreeProof, err := decodeHexString(proof.EarnerTreeProof)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode earner tree proof: %w", err)
+	}
+
+	earnerTokenRoot, err := decodeHexTo32Bytes(proof.EarnerLeaf.EarnerTokenRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode earner token root: %w", err)
+	}
+
+	tokenTreeProofs := make([][]byte, len(proof.TokenTreeProofs))
+	for i, proofStr := range proof.TokenTreeProofs {
+		proofBytes, err := decodeHexString(proofStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode token tree proof %d: %w", i, err)
+		}
+		tokenTreeProofs[i] = proofBytes
+	}
+
+	tokenLeaves := make([]IRewardsCoordinator.IRewardsCoordinatorTypesTokenTreeMerkleLeaf, len(proof.TokenLeaves))
+	for i, leaf := range proof.TokenLeaves {
+		earnings := new(big.Int)
+		earnings.SetString(strings.TrimPrefix(leaf.CumulativeEarnings, "0x"), 16)
+
+		tokenLeaves[i] = IRewardsCoordinator.IRewardsCoordinatorTypesTokenTreeMerkleLeaf{
+			Token:              common.HexToAddress(leaf.Token),
+			CumulativeEarnings: earnings,
+		}
+	}
+
+	return &IRewardsCoordinator.IRewardsCoordinatorTypesRewardsMerkleClaim{
+		RootIndex:       proof.RootIndex,
+		EarnerIndex:     proof.EarnerIndex,
+		EarnerTreeProof: earnerTreeProof,
+		EarnerLeaf: IRewardsCoordinator.IRewardsCoordinatorTypesEarnerTreeMerkleLeaf{
+			Earner:          common.HexToAddress(proof.EarnerLeaf.Earner),
+			EarnerTokenRoot: earnerTokenRoot,
+		},
+		TokenIndices:    proof.TokenIndices,
+		TokenTreeProofs: tokenTreeProofs,
+		TokenLeaves:     tokenLeaves,
+	}, nil
+}
+
+func decodeHexString(hexStr string) ([]byte, error) {
+	if hexStr == "" {
+		return []byte{}, nil
+	}
+	return common.FromHex(hexStr), nil
+}
+
+func decodeHexTo32Bytes(hexStr string) ([32]byte, error) {
+	bytes := common.FromHex(hexStr)
+	if len(bytes) != 32 {
+		return [32]byte{}, fmt.Errorf("expected 32 bytes, got %d", len(bytes))
+	}
+	var result [32]byte
+	copy(result[:], bytes)
+	return result, nil
 }
