@@ -1,0 +1,73 @@
+{
+  "name": "@layr-labs/hourglass-performer",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for building Hourglass AVS performers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "npm run generate:proto && tsc",
+    "build:watch": "tsc --watch",
+    "dev": "ts-node-dev --respawn --transpile-only src/templates/basic-performer.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "clean": "rm -rf dist generated typechain-types",
+    "generate:proto": "mkdir -p generated && grpc_tools_node_protoc --js_out=import_style=commonjs,binary:generated --grpc_out=grpc_js:generated --ts_out=grpc_js:generated -I proto proto/performer.proto",
+    "typechain": "typechain --target ethers-v6 --out-dir typechain-types 'contracts/*.json'",
+    "docker:build": "docker build -t hourglass-performer .",
+    "docker:run": "docker run -p 8080:8080 hourglass-performer",
+    "docker:dev": "docker-compose up -d",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "prebuild": "npm run clean",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "hourglass",
+    "eigenlayer",
+    "avs",
+    "performer",
+    "grpc",
+    "typescript"
+  ],
+  "author": "Hourglass Team",
+  "license": "MIT",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.9.14",
+    "@grpc/proto-loader": "^0.7.10",
+    "winston": "^3.11.0",
+    "ethers": "^6.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11",
+    "ts-jest": "^29.1.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3",
+    "grpc-tools": "^1.12.4",
+    "grpc_tools_node_protoc_ts": "^5.3.3",
+    "typechain": "^8.3.0",
+    "@typechain/ethers-v6": "^0.5.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Layr-Labs/hourglass-monorepo.git",
+    "directory": "sdk/typescript"
+  },
+  "files": [
+    "dist/**/*",
+    "proto/**/*",
+    "generated/**/*",
+    "README.md",
+    "LICENSE"
+  ]
+}
