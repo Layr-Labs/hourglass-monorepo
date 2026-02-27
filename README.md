@@ -68,3 +68,6 @@ The Executor is responsible for:
 The Performer is the component the AVS is responsible for building. At a high level, it is a simple gRPC server that listens for tasks, runs them and returns the results to the Executor.
 
 The Hourglass framework provides all of the boilerplate and server code for your Performer; you simply need to fill in the logic to handle tasks for your AVS!
+
+#### Disclaimer
+🚧 This is under development and has not been fully audited and should be used only for testing purposes and not in production 🚧
